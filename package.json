@@ -2,14 +2,14 @@
   "name": "bolt-vault",
   "private": true,
   "version": "0.0.0",
-  "description": "BoltVault — Electroneum wallet & ElectroSwap uber-app (one brain, two bodies, one face)",
+  "description": "BoltVault \u2014 Electroneum wallet & ElectroSwap uber-app (one brain, two bodies, one face)",
   "scripts": {
     "typecheck": "pnpm -r --no-bail typecheck",
     "test": "vitest run --passWithNoTests",
     "test:ci": "pnpm -r --no-bail test",
     "build": "pnpm -r build",
-    "ci": "pnpm -r --no-bail typecheck && pnpm -r --no-bail test && pnpm --filter @boltvault/extension build",
-    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\""
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
+    "verify": "pnpm -r --no-bail typecheck && pnpm -r --no-bail test && pnpm --filter @boltvault/extension build"
   },
   "devDependencies": {
     "prettier": "^3.3.3",
