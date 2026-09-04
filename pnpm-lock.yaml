@@ -257,6 +257,22 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)
 
+  packages/token-info:
+    dependencies:
+      '@boltvault/chains':
+        specifier: workspace:*
+        version: link:../chains
+      viem:
+        specifier: ^2.56.3
+        version: 2.56.3(typescript@5.9.3)
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)
+
 packages:
 
   '@1natsu/wait-element@4.2.0':
