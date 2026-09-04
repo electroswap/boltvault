@@ -1,0 +1,104 @@
+/**
+ * Settings (T6.6) — normalization + per-origin chain editor.
+ *
+ * `normalizeSettings` turns stored (possibly partial/corrupt) JSON into a valid
+ * `BoltVaultSettings`, applying defaults field-by-field and clamping enums. The
+ * per-origin chain editor re-seats a connected site's `chainId` (design:
+ * per-origin re-seat) and the connected-sites list is origin-scoped.
+ */
+import type { AutoLock, BoltVaultSettings, ConnectedSite } from '@boltvault/core'
+import { DEFAULT_SETTINGS } from '@boltvault/core'
+
+const AUTO_LOCKS: readonly AutoLock[] = ['immediately', '1min', '5min', '30min', 'never']
+const CURRENCIES = ['USD', 'ETN'] as const
+
+/**
+ * Normalize a raw stored settings object (string JSON or object) into a valid
+ * `BoltVaultSettings`. Unknown/missing fields fall back to `DEFAULT_SETTINGS`;
+ * enums are clamped to their valid set. `reducedMotion` comes from the OS
+ * (readonly) — passed in separately, defaulting to false.
+ */
+export function normalizeSettings(
+  raw: string | Record<string, unknown> | null | undefined,
+  os: { reducedMotion?: boolean } = {},
+): BoltVaultSettings {
+  let obj: Record<string, unknown>
+  if (raw == null) obj = {}
+  else if (typeof raw === 'string') {
+    try {
+      obj = JSON.parse(raw) as Record<string, unknown>
+    } catch {
+      obj = {}
+    }
+  } else {
+    obj = raw
+  }
+
+  const bool = (k: keyof BoltVaultSettings, dflt: boolean): boolean => {
+    const v = obj[k]
+    return typeof v === 'boolean' ? v : dflt
+  }
+
+  const autoLockRaw = obj['autoLock']
+  const autoLock: AutoLock =
+    typeof autoLockRaw === 'string' && (AUTO_LOCKS as readonly string[]).includes(autoLockRaw)
+      ? (autoLockRaw as AutoLock)
+      : DEFAULT_SETTINGS.autoLock
+
+  const curRaw = obj['displayCurrency']
+  const displayCurrency =
+    typeof curRaw === 'string' && (CURRENCIES as readonly string[]).includes(curRaw)
+      ? (curRaw as 'USD' | 'ETN')
+      : DEFAULT_SETTINGS.displayCurrency
+
+  return {
+    defaultWallet: bool('defaultWallet', DEFAULT_SETTINGS.defaultWallet),
+    metaMaskCompat: bool('metaMaskCompat', DEFAULT_SETTINGS.metaMaskCompat),
+    ethSignEnabled: bool('ethSignEnabled', DEFAULT_SETTINGS.ethSignEnabled),
+    exactApprovals: bool('exactApprovals', DEFAULT_SETTINGS.exactApprovals),
+    sendWhitelist: bool('sendWhitelist', DEFAULT_SETTINGS.sendWhitelist),
+    autoLock,
+    displayCurrency,
+    reducedMotion: typeof os.reducedMotion === 'boolean' ? os.reducedMotion : DEFAULT_SETTINGS.reducedMotion,
+  }
+}
+
+/** Serialize settings to the canonical JSON blob for the KV store. */
+export function serializeSettings(s: BoltVaultSettings): string {
+  return JSON.stringify(s)
+}
+
+// --- per-origin chain editor -------------------------------------------------
+
+/** A single site re-seat (design: per-origin chain, never global). */
+export interface ChainReseat {
+  readonly origin: string
+  readonly chainId: number
+}
+
+/**
+ * Re-seat the `chainId` for ONE origin, leaving every other origin untouched.
+ * Unknown origins are appended (a newly-connected site). Pure.
+ */
+export function reseatOriginChain(sites: readonly ConnectedSite[], reseat: ChainReseat): ConnectedSite[] {
+  const exists = sites.some((s) => s.origin === reseat.origin)
+  if (exists) {
+    return sites.map((s) => (s.origin === reseat.origin ? { ...s, chainId: reseat.chainId } : s))
+  }
+  return [
+    ...sites,
+    {
+      origin: reseat.origin,
+      chainId: reseat.chainId,
+      accountId: null,
+      connected: false,
+      permissions: [],
+      connectedAt: 0,
+    },
+  ]
+}
+
+/** Drop an origin's session (disconnect). Pure. */
+export function removeOrigin(sites: readonly ConnectedSite[], origin: string): ConnectedSite[] {
+  return sites.filter((s) => s.origin !== origin)
+}
