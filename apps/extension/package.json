@@ -12,7 +12,9 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@boltvault/core": "workspace:*"
+    "@boltvault/chains": "workspace:*",
+    "@boltvault/core": "workspace:*",
+    "@boltvault/provider-protocol": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^18.3.31",

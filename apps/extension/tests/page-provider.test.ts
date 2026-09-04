@@ -4,6 +4,7 @@ import {
   installProvider,
   providerInfo,
   PROVIDER_RDNS,
+  ProviderError,
   type Relay,
 } from '../src/page-provider'
 
@@ -82,6 +83,24 @@ describe('BoltVaultProvider (T3.4 page-provider)', () => {
     reply(1, '0xcb2e')
     const result = await promise
     expect(result).toBe('0xcb2e')
+  })
+
+  it('a relay error carries the MetaMask code through as ProviderError (T3.5)', async () => {
+    const win = fakeWindow()
+    // A relay that answers with a JSON-RPC error (e.g. user rejected, 4001).
+    const errorRelay: Relay = {
+      request: async (payload) => ({ jsonrpc: '2.0', id: payload.id, error: { code: 4001, message: 'User rejected' } }),
+    }
+    const p = new BoltVaultProvider({ relay: errorRelay, win })
+    let caught: unknown
+    try {
+      await p.request({ method: 'eth_requestAccounts' })
+    } catch (e) {
+      caught = e
+    }
+    expect(caught).toBeInstanceOf(ProviderError)
+    expect((caught as ProviderError).code).toBe(4001)
+    expect((caught as ProviderError).message).toBe('User rejected')
   })
 
   it('eth_accounts updates selectedAddress (EIP-1193 state auto-apply)', async () => {

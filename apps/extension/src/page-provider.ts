@@ -40,6 +40,20 @@ export interface Relay {
   request(payload: { jsonrpc: string; id: number; method: string; params?: unknown[] }): Promise<unknown>
 }
 
+/**
+ * Error thrown to the dApp. `.code` is the MetaMask-compatible numeric code
+ * (4001 / 4100 / 4200 / 4902 / -32002 / -32603 ...). dApps branch on `.code`,
+ * so it must survive the page→SW→page round trip (T3.5).
+ */
+export class ProviderError extends Error {
+  code: number
+  constructor(code: number, message: string) {
+    super(message)
+    this.name = 'ProviderError'
+    this.code = code
+  }
+}
+
 export type EmitterEvents =
   | { event: 'chainChanged'; chainId: string }
   | { event: 'accountsChanged'; accounts: string[] }
@@ -150,7 +164,7 @@ export class BoltVaultProvider {
     if (msg.jsonrpc === '2.0' && typeof msg.id === 'number' && this.pending.has(msg.id)) {
       const { resolve, reject } = this.pending.get(msg.id)!
       this.pending.delete(msg.id)
-      if (msg.error) reject(new Error(msg.error.message ?? 'rpc error'))
+      if (msg.error) reject(new ProviderError(msg.error.code ?? -32603, msg.error.message ?? 'rpc error'))
       else resolve(msg.result)
       return
     }
@@ -166,7 +180,7 @@ export class BoltVaultProvider {
       const pending = this.pending.get(id)
       if (pending) {
         this.pending.delete(id)
-        if (resp.error) pending.reject(new Error(resp.error.message ?? 'rpc error'))
+        if (resp.error) pending.reject(new ProviderError(resp.error.code ?? -32603, resp.error.message ?? 'rpc error'))
         else pending.resolve(resp.result)
       }
     } else {

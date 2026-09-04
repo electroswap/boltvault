@@ -20,9 +20,15 @@ importers:
 
   apps/extension:
     dependencies:
+      '@boltvault/chains':
+        specifier: workspace:*
+        version: link:../../packages/chains
       '@boltvault/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@boltvault/provider-protocol':
+        specifier: workspace:*
+        version: link:../../packages/provider-protocol
     devDependencies:
       '@types/react':
         specifier: ^18.3.31
@@ -170,6 +176,22 @@ importers:
       '@noble/hashes':
         specifier: ^1.5.0
         version: 1.8.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22
+        version: 22.20.1
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)
+
+  packages/provider-protocol:
+    dependencies:
+      '@boltvault/chains':
+        specifier: workspace:*
+        version: link:../chains
     devDependencies:
       '@types/node':
         specifier: ^22

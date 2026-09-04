@@ -1,5 +1,13 @@
 import { defineBackground } from '#imports'
 import {
+  RpcFlow,
+  RpcError,
+  SiteRegistry,
+  type RpcContext,
+  type ProviderEvent,
+} from '@boltvault/provider-protocol'
+import { ExtensionRpcContext, localSitesStore } from '../src/provider-context'
+import {
   VaultService,
   WrongPasswordError,
   type CreatedVault,
@@ -8,29 +16,49 @@ import {
 import { localStore, sessionStore } from '../src/storage'
 
 /**
- * MV3 service worker (T3.1 skeleton + T3.3 vault lifecycle).
+ * MV3 service worker (T3.1 skeleton + T3.3 vault + T3.5 rpcFlow).
  *
- * Single SW entry. T3.3 layers the vault on top of the ping liveness probe:
- *   bv:vault:create  { password, bits? }      -> CreatedVault (mnemonic to reveal)
- *   bv:vault:import  { mnemonic, password }   -> CreatedVault
- *   bv:vault:unlock  { password }             -> accounts[]
- *   bv:vault:lock    {}                       -> { ok }
- *   bv:vault:reveal  { password }             -> mnemonic
- *   bv:vault:state   {}                       -> { hasVault, unlocked }
+ * Two inbound surfaces, one funnel:
+ *  - `browser.runtime.onMessage` (popup/extension-internal): bv:ping, bv:vault:*
+ *  - `browser.runtime.onConnect`   (the page-provider Port): JSON-RPC → rpcFlow
  *
- * T3.5 replaces the ad-hoc onMessage switch with the rpcFlow router + per-origin
- * sessions. Keep this file the single SW entry.
+ * T3.5 wires the per-origin sessions + the pure RpcFlow (provider-protocol).
+ * The origin is taken from the Port `sender` (the frame URL), never the payload
+ * — a dApp can forge postMessage but not the Chrome sender (design §injection).
  */
 
 // In the SW WXT exposes the chrome/browser API as `browser`.
 export default defineBackground(() => {
   const stores: VaultStores = { secret: localStore, session: sessionStore }
   const vault = VaultService.connect(stores, '5min')
+  const registry = new SiteRegistry(localSitesStore(localStore))
+  void registry.hydrate()
+
+  // Live provider Ports, keyed by origin, so `emit` can push chainChanged /
+  // accountsChanged to exactly the right tab (design: chainChanged only to
+  // tabs whose origin matches).
+  const livePorts = new Map<string, any>()
+  const emit = (origin: string, event: ProviderEvent) => {
+    for (const port of livePorts.values()) {
+      if ((port as { origin?: string }).origin === origin) {
+        port.postMessage({ jsonrpc: '2.0', event: event.event, data: event.event === 'chainChanged' ? { chainId: event.chainId } : { accounts: event.accounts } })
+      }
+    }
+  }
+
+  const ctx = new ExtensionRpcContext({
+    vault,
+    registry,
+    emit,
+    settings: { ethSignEnabled: false },
+  })
+  const flow = new RpcFlow(ctx)
 
   browser.runtime.onInstalled.addListener((details) => {
     console.log('[BoltVault] installed', details.reason)
   })
 
+  // --- extension-internal messages (popup) -----------------------------------
   browser.runtime.onMessage.addListener(
     (message: any, _sender: any, sendResponse: (resp: unknown) => void) => {
       void (async () => {
@@ -38,12 +66,21 @@ export default defineBackground(() => {
           switch (message?.type) {
             case 'bv:ping':
               return { ok: true, pong: true, ts: Date.now() }
-            case 'bv:vault:create':
-              return (await vault.createVault(message.password, { bits: message.bits })) as unknown as object
-            case 'bv:vault:import':
-              return (await vault.importVault(message.mnemonic, message.password)) as unknown as object
-            case 'bv:vault:unlock':
-              return { accounts: await vault.unlock(message.password) }
+            case 'bv:vault:create': {
+              const c = await vault.createVault(message.password, { bits: message.bits })
+              ctx.setAccounts?.([])
+              return c as unknown as object
+            }
+            case 'bv:vault:import': {
+              const c = await vault.importVault(message.mnemonic, message.password)
+              ctx.setAccounts?.([])
+              return c as unknown as object
+            }
+            case 'bv:vault:unlock': {
+              const accounts = await vault.unlock(message.password)
+              ctx.setAccounts?.(accounts)
+              return { accounts }
+            }
             case 'bv:vault:lock':
               await vault.lock()
               return { ok: true }
@@ -62,6 +99,44 @@ export default defineBackground(() => {
       return true // async response
     },
   )
+
+  // --- page-provider Port relay (T3.5 rpcFlow) ------------------------------
+  browser.runtime.onConnect.addListener((port: any) => {
+    if (port.name !== 'bolt-provider') return
+    const sender = port as any
+    // Origin = the frame URL (sender.url), per design. All frames of an origin
+    // share the port namespace; we key on origin.
+    const origin = originOf(sender)
+    ;(port as { origin?: string }).origin = origin
+    livePorts.set(origin + '#' + (port.id ?? Math.random().toString(36).slice(2)), port)
+
+    port.onMessage.addListener(async (msg: any) => {
+      const { jsonrpc, id, method, params } = msg ?? {}
+      if (!method) return
+      try {
+        const result = await flow.request(origin, method, params ?? [])
+        port.postMessage({ jsonrpc, id, result })
+      } catch (e) {
+        const code = e instanceof RpcError ? e.code : -32603
+        port.postMessage({ jsonrpc, id, error: { code, message: (e as Error).message } })
+      }
+    })
+
+    port.onDisconnect.addListener(() => {
+      for (const [k, p] of livePorts) if (p === port) livePorts.delete(k)
+    })
+  })
 })
+
+/** The frame origin for a Port sender. Chrome sets sender.url to the frame. */
+function originOf(sender: any): string {
+  try {
+    const url = sender?.url ?? sender?.tab?.url
+    if (!url) return 'unknown'
+    return new URL(url).origin
+  } catch {
+    return sender?.tab?.url ?? 'unknown'
+  }
+}
 
 export type { CreatedVault }
