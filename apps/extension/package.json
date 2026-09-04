@@ -15,7 +15,8 @@
     "@boltvault/chains": "workspace:*",
     "@boltvault/core": "workspace:*",
     "@boltvault/electroswap": "workspace:*",
-    "@boltvault/provider-protocol": "workspace:*"
+    "@boltvault/provider-protocol": "workspace:*",
+    "@boltvault/swap": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^18.3.31",

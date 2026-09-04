@@ -1,4 +1,6 @@
 import type { CSSProperties } from 'react'
+import { useState } from 'react'
+import { SwapView } from './SwapView'
 
 /**
  * The popup — the v1 product is the popup (design §Layout).
@@ -92,6 +94,7 @@ function BusBar({ symbol, share, selected }: { symbol: string; share: number; se
 }
 
 export default function App() {
+  const [tab, setTab] = useState<'home' | 'swap' | 'activity' | 'settings'>('home')
   return (
     <div
       data-testid="chamber"
@@ -118,6 +121,19 @@ export default function App() {
       </header>
 
       <main style={{ flex: 1, padding: '0 var(--bv-inset)', overflowY: 'auto' }}>
+        {tab === 'swap' ? (
+          <SwapView
+            chainId={52014}
+            tokenIn={{ address: '0x138DAFbDA0CCB3d8E39C19edb0510Fc31b7C1c77', symbol: 'ETN' }}
+            tokenOut={{ address: '0x3187deAd7A2Bd6770F5Fe81495D1B715926AAe6e', symbol: 'USDC' }}
+            quote={null}
+            now={Date.now()}
+            priceImpactPct={0.4}
+            sink={null}
+            amountInDisplay="0"
+          />
+        ) : (
+        <>
         {/* Big total — Oxanium, left-aligned */}
         <div
           data-testid="total"
@@ -157,6 +173,8 @@ export default function App() {
         >
           WETN/BOLT 1.41x · Collect 12 DYNO
         </div>
+        </>
+        )}
       </main>
 
       {/* Home primary */}
@@ -189,16 +207,17 @@ export default function App() {
           background: 'var(--bv-void)',
         }}
       >
-        {TABS.map((t, i) => (
+        {TABS.map((t) => (
           <button
             key={t.id}
             data-testid={`tab-${t.id}`}
+            onClick={() => setTab(t.id as typeof tab)}
             style={{
               flex: 1,
               padding: '10px 0',
               background: 'transparent',
               border: 'none',
-              color: i === 0 ? 'var(--bv-arc)' : 'var(--bv-mute)',
+              color: tab === t.id ? 'var(--bv-arc)' : 'var(--bv-mute)',
               fontFamily: 'var(--bv-font-sora)',
               fontSize: '12px',
               cursor: 'pointer',

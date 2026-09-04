@@ -32,6 +32,9 @@ importers:
       '@boltvault/provider-protocol':
         specifier: workspace:*
         version: link:../../packages/provider-protocol
+      '@boltvault/swap':
+        specifier: workspace:*
+        version: link:../../packages/swap
     devDependencies:
       '@types/react':
         specifier: ^18.3.31
