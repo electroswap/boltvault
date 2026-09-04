@@ -12,6 +12,11 @@
     "test": "vitest run --passWithNoTests"
   },
   "devDependencies": {
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^19.2.7",
+    "happy-dom": "^20.14.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "typescript": "^5.6.3",
     "vite": "^6.4.3",
     "vitest": "^2.1.8",

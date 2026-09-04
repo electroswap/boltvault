@@ -1,0 +1,56 @@
+/**
+ * @boltvault/design — the face contract.
+ *
+ * The design doc mandates Tamagui so popup/tab/iPhone/Android are one product.
+ * MV3 has no `eval` (CSP), so Tamagui must be compiled at build time
+ * (`@tamagui/static`); if a runtime `eval` slips in, the doc says abandon
+ * Tamagui in the extension and keep the token contract with a DOM
+ * implementation. This file IS that contract: the 8 named colors + type scale
+ * as CSS custom properties, used by the DOM implementation below. Tokens are
+ * the source of truth either way — porting to Tamagui later is a mechanical
+ * rename.
+ */
+:root {
+  /* Palette (named, 6 + ink + mute) */
+  --bv-void: #05060c;
+  --bv-glass: #0c1424;
+  --bv-arc: #5ce1ff;
+  --bv-plasma: #b794ff;
+  --bv-ember: #e8c36a;
+  --bv-burn: #ff6b4a;
+  --bv-ink: #d7e0f0;
+  --bv-mute: #8b9bb4;
+
+  /* Type scale */
+  --bv-font-sora: 'Sora', system-ui, -apple-system, sans-serif;
+  --bv-font-oxanium: 'Oxanium', 'Sora', system-ui, sans-serif;
+  --bv-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  /* Metrics */
+  --bv-inset: 24px;
+  --bv-filament: 2px;
+  --bv-bus-bar-height: 44px;
+  --bv-hit: 44px;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bv-void);
+  color: var(--bv-ink);
+  font-family: var(--bv-font-sora);
+  font-size: 14px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
