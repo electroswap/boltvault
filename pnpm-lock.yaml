@@ -228,11 +228,49 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)
 
+  packages/ledger:
+    dependencies:
+      viem:
+        specifier: ^2.56.3
+        version: 2.56.3(typescript@5.9.3)
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)
+
+  packages/market-data:
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)
+
   packages/passkey:
     devDependencies:
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)
+
+  packages/portfolio:
+    dependencies:
+      '@boltvault/token-catalog':
+        specifier: workspace:*
+        version: link:../token-catalog
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      viem:
+        specifier: ^2.56.3
+        version: 2.56.3(typescript@5.9.3)
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)
@@ -319,6 +357,15 @@ importers:
       viem:
         specifier: ^2.56.3
         version: 2.56.3(typescript@5.9.3)
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)
+
+  packages/trezor:
     devDependencies:
       typescript:
         specifier: ^5.6.3
