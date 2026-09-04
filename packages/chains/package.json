@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "viem": "^2.21.54"
+    "viem": "^2"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",

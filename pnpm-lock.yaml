@@ -39,7 +39,7 @@ importers:
   packages/chains:
     dependencies:
       viem:
-        specifier: ^2.21.54
+        specifier: ^2
         version: 2.56.3(typescript@5.9.3)
     devDependencies:
       '@types/node':
