@@ -7,11 +7,14 @@
   "types": "src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests",
-    "build": "echo \"build: no-op until T3.1 (WXT)\""
+    "build": "wxt build",
+    "dev": "wxt",
+    "test": "vitest run --passWithNoTests"
   },
   "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^6.4.3",
     "vitest": "^2.1.8",
-    "typescript": "^5.6.3"
+    "wxt": "^0.21.4"
   }
 }

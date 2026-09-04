@@ -9,6 +9,7 @@ coverage/
 apps/mobile/android/
 apps/mobile/ios/
 pnpm-lock.yaml.lock
+apps/extension/.output/
 
 # Internal working documents, not published
 internal-docs/

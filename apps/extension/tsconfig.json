@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["vitest/globals"]
   },
-  "include": ["src", "tests", "wxt.config.ts"]
+  "include": [".wxt/wxt.d.ts", "src", "tests", "entrypoints", "wxt.config.ts"]
 }
