@@ -1,1 +1,1 @@
-// @boltvault/core — types only; see accounts.ts etc.
+export * from './types.js'
