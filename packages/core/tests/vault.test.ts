@@ -19,6 +19,7 @@ const addr0 = '0x138DAFbDA0CCB3d8E39C19edb0510Fc31b7C1c77'
 function samplePlaintext(): VaultPlaintext {
   return {
     seedHex,
+    mnemonic: null,
     importedKeys: {},
     accounts: [
       {

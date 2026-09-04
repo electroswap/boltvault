@@ -181,5 +181,5 @@ export function addImportedKey(
 }
 
 export function emptyPlaintext(): VaultPlaintext {
-  return { seedHex: null, importedKeys: {}, accounts: [] }
+  return { seedHex: null, mnemonic: null, importedKeys: {}, accounts: [] }
 }

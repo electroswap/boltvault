@@ -52,6 +52,8 @@ export interface VaultFileV1 {
 export interface VaultPlaintext {
   /** BIP-39 seed, 128/256-bit, hex — present when any HD account exists. */
   readonly seedHex: string | null
+  /** The BIP-39 mnemonic itself (space-joined) — stored so the seed can be re-revealed. */
+  readonly mnemonic: string | null
   /** Imported 32-byte keys, hex, keyed by AccountId. */
   readonly importedKeys: Record<AccountId, string>
   readonly accounts: readonly VaultAccountMeta[]
