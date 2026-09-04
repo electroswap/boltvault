@@ -26,6 +26,9 @@ importers:
       '@boltvault/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@boltvault/electroswap':
+        specifier: workspace:*
+        version: link:../../packages/electroswap
       '@boltvault/provider-protocol':
         specifier: workspace:*
         version: link:../../packages/provider-protocol
