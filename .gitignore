@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.out/
+build/
+*.log
+.DS_Store
+coverage/
+.turbo/
+apps/mobile/android/
+apps/mobile/ios/
+pnpm-lock.yaml.lock
+
+# Internal working documents, not published
+internal-docs/
