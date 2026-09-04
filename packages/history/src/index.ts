@@ -1,2 +1,2 @@
-// @boltvault/history — populated in T1.4
-export {}
+export * from './store.js'
+export type { HistoryCategory, HistoryEntry, VaultFileV1 } from '@boltvault/core'

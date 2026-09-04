@@ -10,11 +10,12 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@boltvault/core": "workspace:*",
     "@noble/ciphers": "^1.0.0",
     "@noble/hashes": "^1.5.0"
   },
   "devDependencies": {
-    "@types/node": "^22.20.1",
+    "@types/node": "^22",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"
   }
