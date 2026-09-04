@@ -10,7 +10,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@boltvault/chains": "workspace:*"
+    "@boltvault/chains": "workspace:*",
+    "viem": "^2.56.3"
   },
   "devDependencies": {
     "@types/node": "^22",

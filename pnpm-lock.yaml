@@ -154,6 +154,9 @@ importers:
       '@boltvault/chains':
         specifier: workspace:*
         version: link:../chains
+      viem:
+        specifier: ^2.56.3
+        version: 2.56.3(typescript@5.9.3)
     devDependencies:
       '@types/node':
         specifier: ^22
