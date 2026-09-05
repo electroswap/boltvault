@@ -1,6 +1,16 @@
 import { type CSSProperties } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { SwapView } from './SwapView'
+import { SendView } from './Send'
+import { ReceiveView } from './Receive'
+import { BridgeView } from './Bridge'
+import { TokenView } from './Token'
+import { FarmView } from './Farm'
+import { LaunchpadView } from './Launchpad'
+import { NftView } from './Nft'
+import { ActivityView, type ActivityItem } from './Activity'
+import { ApprovalsView, type ApprovalFuse } from './Approvals'
+import { SettingsView } from './Settings'
 import { useBlockHeartbeat, usePortfolio, type SafeRow } from './data-layer'
 import {
   type VaultAccount,
@@ -18,6 +28,13 @@ import {
   IconSettings,
   IconFlask,
   IconScan,
+  IconSend,
+  IconReceive,
+  IconCable,
+  IconToken,
+  IconRocket,
+  IconLayers,
+  IconPlug,
   type IconProps,
 } from '@boltvault/design'
 
@@ -35,27 +52,47 @@ import {
  * them their own surfaces + empty states so the tabs are not Home clones).
  */
 
-const TABS: { id: 'home' | 'swap' | 'activity' | 'settings'; label: string; icon: (p: IconProps) => any }[] = [
+type TabId =
+  | 'home'
+  | 'swap'
+  | 'send'
+  | 'receive'
+  | 'bridge'
+  | 'token'
+  | 'farm'
+  | 'launchpad'
+  | 'nft'
+  | 'activity'
+  | 'approvals'
+  | 'settings'
+
+const TABS: { id: TabId; label: string; icon: (p: IconProps) => any }[] = [
   { id: 'home', label: 'Home', icon: IconHome },
   { id: 'swap', label: 'Swap', icon: IconSwap },
+  { id: 'send', label: 'Send', icon: IconSend },
+  { id: 'receive', label: 'Recv', icon: IconReceive },
+  { id: 'bridge', label: 'Warp', icon: IconCable },
+  { id: 'token', label: 'Token', icon: IconToken },
+  { id: 'farm', label: 'Farm', icon: IconFlask },
+  { id: 'launchpad', label: 'Pad', icon: IconRocket },
+  { id: 'nft', label: 'NFT', icon: IconLayers },
   { id: 'activity', label: 'Act', icon: IconActivity },
+  { id: 'approvals', label: 'Fuse', icon: IconPlug },
   { id: 'settings', label: 'Set', icon: IconSettings },
 ]
 
-/** Placeholder history — @boltvault/activity merge fills this (T6.1). */
-const ACTIVITY_STUB = [
-  { id: 'a1', label: 'Swap · ETN → USDC', sub: '2m ago · 0x1F9…C277', usd: -42.1 },
-  { id: 'a2', label: 'Received 12.4 ETN', sub: '1h ago · Hyperlane', usd: null },
-  { id: 'a3', label: 'Approval · WETN', sub: '2d ago', usd: null },
-] as const
+/** Placeholder approvals — @boltvault/approvals fuse-box rows (T6.4). */
+const APPROVALS_STUB: ApprovalFuse[] = [
+  { id: 'ap1', token: 'ETN', spender: '0x9fE4…99a9', unlimited: true },
+  { id: 'ap2', token: 'USDC', spender: '0x3187…6e6e', unlimited: false },
+]
 
-/** Placeholder settings groups — @boltvault/settings normalize (T6.6). */
-const SETTINGS_STUB = [
-  { group: 'Keys', rows: ['Vault · Argon2id + XChaCha20', 'Passkey · not enrolled'] },
-  { group: 'Permissions', rows: ['Connected sites · 2'] },
-  { group: 'Networks', rows: ['ETN · 52014 (default)', 'Ethereum · 1', 'Base · 8453'] },
-  { group: 'Feel', rows: ['Motion · full', 'Sound · off (extension)'] },
-] as const
+/** Placeholder activity — @boltvault/activity merge fills this (T6.1). */
+const ACTIVITY: ActivityItem[] = [
+  { id: 'a1', label: 'Swap · ETN → USDC', sub: '2m ago · 0x1F9…C277', usd: -42.1 },
+  { id: 'a2', label: 'Received 12.4 ETN', sub: '1h ago · Hyperlane', usd: null, pending: true },
+  { id: 'a3', label: 'Approval · WETN', sub: '2d ago', usd: null },
+]
 
 function Filament({ active }: { active: boolean }) {
   return (
@@ -135,7 +172,7 @@ function BusBar({
 }
 
 export default function App() {
-  const [tab, setTab] = useState<'home' | 'swap' | 'activity' | 'settings'>('home')
+  const [tab, setTab] = useState<TabId>('home')
   const [selectedBar, setSelectedBar] = useState<string>('ETN')
   const [account, setAccount] = useState<string | null>(null)
   const [vaultState, setVaultState] = useState<{ has: boolean; unlocked: boolean } | null>(null)
@@ -329,72 +366,50 @@ export default function App() {
           />
         )}
 
-        {tab === 'activity' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{ color: 'var(--bv-mute)', fontSize: '12px', marginBottom: '4px' }}>
-              Discharges · ETN 52014
-            </div>
-            {ACTIVITY_STUB.map((a) => (
-              <div
-                key={a.id}
-                data-testid={`activity-${a.id}`}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '12px',
-                  background: 'var(--bv-glass)',
-                  borderRadius: '8px',
-                  color: 'var(--bv-ink)',
-                  fontSize: '13px',
-                  fontFamily: 'var(--bv-font-sora)',
-                }}
-              >
-                <div>
-                  <div>{a.label}</div>
-                  <div style={{ color: 'var(--bv-mute)', fontSize: '11px', marginTop: '2px' }}>{a.sub}</div>
-                </div>
-                {a.usd != null && (
-                  <div style={{ color: a.usd >= 0 ? 'var(--bv-ember)' : 'var(--bv-burn)', fontSize: '12px' }}>
-                    {a.usd >= 0 ? '+' : ''}
-                    {a.usd.toFixed(2)}
-                  </div>
-                )}
-              </div>
-            ))}
-            {/* Design: "Other-chain incoming gaps explained once, not per row." */}
-            <div style={{ color: 'var(--bv-mute)', fontSize: '11px', marginTop: '8px' }}>
-              Other chains show incoming only when bounded getLogs returns — no indexer here.
-            </div>
-          </div>
+        {tab === 'activity' && <ActivityView items={ACTIVITY} />}
+
+        {tab === 'approvals' && <ApprovalsView approvals={APPROVALS_STUB} />}
+
+        {tab === 'settings' && <SettingsView />}
+
+        {tab === 'send' && (
+          <SendView
+            account={account ?? '0x0000000000000000000000000000000000000000'}
+            onSent={() => setTab('home')}
+          />
         )}
 
-        {tab === 'settings' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {SETTINGS_STUB.map((g) => (
-              <div key={g.group}>
-                <div style={{ color: 'var(--bv-mute)', fontSize: '11px', textTransform: 'none', marginBottom: '4px' }}>
-                  {g.group}
-                </div>
-                {g.rows.map((r) => (
-                  <div
-                    key={r}
-                    style={{
-                      padding: '12px',
-                      background: 'var(--bv-glass)',
-                      borderRadius: '8px',
-                      color: 'var(--bv-ink)',
-                      fontSize: '13px',
-                      fontFamily: 'var(--bv-font-sora)',
-                      marginBottom: '4px',
-                    }}
-                  >
-                    {r}
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
+        {tab === 'receive' && (
+          <ReceiveView address={account ?? '0x0000000000000000000000000000000000000000'} chainId={52014} chainName="ETN" />
+        )}
+
+        {tab === 'bridge' && <BridgeView />}
+
+        {tab === 'token' && (
+          <TokenView
+            token={{
+              symbol: 'ETN',
+              name: 'ElectroSwap Token',
+              address: '0x138DAFbDA0CCB3d8E39C19edb0510Fc31b7C1c77',
+              chainId: 52014,
+              lockPct: 0,
+              tags: ['native', 'ETN 52014'],
+            }}
+            priceUsd={null}
+          />
+        )}
+
+        {tab === 'farm' && <FarmView farms={[{ name: 'WETN/BOLT', startBlock: null, nowBlock: 0, boltDeposited: 0 }]} />}
+
+        {tab === 'launchpad' && <LaunchpadView campaigns={[{ pool: '0x4b7a…99c0', status: 'live', min: 100n, max: 100000n, raised: 12450n, yourFill: 0n, name: 'BOLT Pad #3' }]} />}
+
+        {tab === 'nft' && (
+          <NftView
+            assets={[
+              { collection: '0x8a3f…77c1', tokenId: '#12', name: 'Volt #12', floor: 4.2, listed: true },
+              { collection: '0x8a3f…77c1', tokenId: '#40', name: 'Volt #40', floor: 3.1 },
+            ]}
+          />
         )}
       </main>
 

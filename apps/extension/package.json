@@ -16,8 +16,12 @@
     "@boltvault/core": "workspace:*",
     "@boltvault/design": "workspace:*",
     "@boltvault/electroswap": "workspace:*",
+    "@boltvault/farm": "workspace:*",
+    "@boltvault/launchpad": "workspace:*",
+    "@boltvault/nft": "workspace:*",
     "@boltvault/portfolio": "workspace:*",
     "@boltvault/provider-protocol": "workspace:*",
+    "@boltvault/security": "workspace:*",
     "@boltvault/swap": "workspace:*",
     "@boltvault/token-catalog": "workspace:*"
   },
