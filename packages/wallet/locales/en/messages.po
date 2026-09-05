@@ -3,15 +3,140 @@ msgstr ""
 "Language: en\n"
 "Content-Type: text/plain; charset=utf-8\n"
 
-#: packages/wallet/src/navigation/TabShell.tsx
-msgctxt "accounts.soon"
-msgid "The accounts sheet — every seed, key, device and watch address — lands with the M2 milestone."
-msgstr "The accounts sheet — every seed, key, device and watch address — lands with the M2 milestone."
-
-#: packages/wallet/src/navigation/TabShell.tsx
+#: packages/wallet/src/screens/Accounts.tsx
 msgctxt "accounts.title"
 msgid "Accounts"
 msgstr "Accounts"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.active"
+msgid "Active"
+msgstr "Active"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.add"
+msgid "Add"
+msgstr "Add"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.add.hardware"
+msgid "Hardware"
+msgstr "Hardware"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.add.key"
+msgid "Private key"
+msgstr "Private key"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.add.key.key"
+msgid "Import key"
+msgstr "Import key"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.add.key.note"
+msgid "This key is not part of any recovery phrase. Back it up separately."
+msgstr "This key is not part of any recovery phrase. Back it up separately."
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.add.seed"
+msgid "Seed"
+msgstr "Seed"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.add.seed.key"
+msgid "Add seed"
+msgstr "Add seed"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.add.watch"
+msgid "Watch"
+msgstr "Watch"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.add.watch.key"
+msgid "Watch address"
+msgstr "Watch address"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.backedUp"
+msgid "Backed up"
+msgstr "Backed up"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.backup"
+msgid "Back up now"
+msgstr "Back up now"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.derive"
+msgid "+ Next account from this seed"
+msgstr "+ Next account from this seed"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.hardware"
+msgid "Hardware"
+msgstr "Hardware"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.hardware.soon"
+msgid "Ledger over USB (extension) lands with M5; Ledger Bluetooth, Trezor and Keystone with M8. Until then you can watch the device address."
+msgstr "Ledger over USB (extension) lands with M5; Ledger Bluetooth, Trezor and Keystone with M8. Until then you can watch the device address."
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.hidden"
+msgid "hidden"
+msgstr "hidden"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.hide"
+msgid "Hide"
+msgstr "Hide"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.imported"
+msgid "Imported keys"
+msgstr "Imported keys"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.openTab"
+msgid "Continue in a full tab"
+msgstr "Continue in a full tab"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.remove"
+msgid "Remove"
+msgstr "Remove"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.reveal"
+msgid "Reveal"
+msgstr "Reveal"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.show"
+msgid "Show"
+msgstr "Show"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.sync.hint"
+msgid "Sync accounts to paired devices"
+msgstr "Sync accounts to paired devices"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.sync.hint.body"
+msgid "Watch and hardware accounts sync; seeds and keys never do. Pair in Settings › Devices."
+msgstr "Watch and hardware accounts sync; seeds and keys never do. Pair in Settings › Devices."
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.use"
+msgid "Use"
+msgstr "Use"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.watch"
+msgid "Watching"
+msgstr "Watching"
 
 #: packages/wallet/src/screens/shells.tsx
 msgctxt "activity.empty"
@@ -23,10 +148,300 @@ msgctxt "activity.title"
 msgid "Activity"
 msgstr "Activity"
 
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "al.never"
+msgid "Never"
+msgstr "Never"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "al.now"
+msgid "On close"
+msgstr "On close"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.accept"
+msgid "Accept"
+msgstr "Accept"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.blocked"
+msgid "BoltVault will not sign this. See why above."
+msgstr "BoltVault will not sign this. See why above."
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.connect"
+msgid "Connect"
+msgstr "Connect"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.connect.body"
+msgid "The site will see this address and can ask you to sign. It cannot move anything without a signature."
+msgstr "The site will see this address and can ask you to sign. It cannot move anything without a signature."
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.connectAs"
+msgid "Connect as"
+msgstr "Connect as"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.fee"
+msgid "Network fee up to"
+msgstr "Network fee up to"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.firstTime"
+msgid "First time here"
+msgstr "First time here"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.more"
+msgid "{n} more waiting"
+msgstr "{n} more waiting"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.none"
+msgid "Nothing to sign"
+msgstr "Nothing to sign"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.none.body"
+msgid "This request was already decided or has expired."
+msgstr "This request was already decided or has expired."
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.nopreview"
+msgid "No balance preview on this network — only the revert check ran."
+msgstr "No balance preview on this network — only the revert check ran."
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.preview"
+msgid "Preview of what moves"
+msgstr "Preview of what moves"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.raw.hide"
+msgid "Hide the raw message"
+msgstr "Hide the raw message"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.raw.show"
+msgid "Show the raw message ({type})"
+msgstr "Show the raw message ({type})"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.reject"
+msgid "Reject"
+msgstr "Reject"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.selected"
+msgid "Selected"
+msgstr "Selected"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.sign"
+msgid "Sign"
+msgstr "Sign"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.switch"
+msgid "Switch"
+msgstr "Switch"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.switch.body"
+msgid "Switch this site to {chain}"
+msgstr "Switch this site to {chain}"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.typed"
+msgid "Type {word} to continue"
+msgstr "Type {word} to continue"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.watch.body"
+msgid "Add a token this site suggests to your list. Its details are checked against the chain before it shows."
+msgstr "Add a token this site suggests to your list. Its details are checked against the chain before it shows."
+
 #: packages/wallet/src/screens/shells.tsx
 msgctxt "back"
 msgid "Back"
 msgstr "Back"
+
+#: packages/wallet/src/screens/Backup.tsx
+msgctxt "backup.body"
+msgid "Enter your password to show the words, write them down, then confirm three of them."
+msgstr "Enter your password to show the words, write them down, then confirm three of them."
+
+#: packages/wallet/src/screens/Backup.tsx
+msgctxt "backup.done"
+msgid "Backed up. Swapping and signing are unlocked."
+msgstr "Backed up. Swapping and signing are unlocked."
+
+#: packages/wallet/src/screens/Backup.tsx
+msgctxt "backup.home"
+msgid "Back to Home"
+msgstr "Back to Home"
+
+#: packages/wallet/src/screens/Backup.tsx
+msgctxt "backup.none"
+msgid "Every seed in this vault is backed up."
+msgstr "Every seed in this vault is backed up."
+
+#: packages/wallet/src/screens/Backup.tsx
+msgctxt "backup.show"
+msgid "Show words"
+msgstr "Show words"
+
+#: packages/wallet/src/screens/Backup.tsx
+msgctxt "backup.title"
+msgid "Back up your recovery phrase"
+msgstr "Back up your recovery phrase"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "cancel"
+msgid "Cancel"
+msgstr "Cancel"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "close"
+msgid "Close"
+msgstr "Close"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "continue"
+msgid "Continue"
+msgstr "Continue"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.answer.paste"
+msgid "Paste the answer code"
+msgstr "Paste the answer code"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.answer.show"
+msgid "Show this to the first device, then compare the codes."
+msgstr "Show this to the first device, then compare the codes."
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.answer.title"
+msgid "Scan the other device’s code"
+msgstr "Scan the other device’s code"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.none"
+msgid "None yet."
+msgstr "None yet."
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.offer.paste"
+msgid "Paste the pairing code"
+msgstr "Paste the pairing code"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.offer.then"
+msgid "Then scan (or paste) the answer it shows."
+msgstr "Then scan (or paste) the answer it shows."
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.offer.title"
+msgid "Scan this on the other device"
+msgstr "Scan this on the other device"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.pair.join"
+msgid "Join from a code"
+msgstr "Join from a code"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.pair.new"
+msgid "Pair a new device"
+msgstr "Pair a new device"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.paired"
+msgid "Paired devices"
+msgstr "Paired devices"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.pull"
+msgid "Fetch changes"
+msgstr "Fetch changes"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.pulled"
+msgid "Applied {n} records."
+msgstr "Applied {n} records."
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.push"
+msgid "Send changes"
+msgstr "Send changes"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.pushed"
+msgid "Sent {n} records."
+msgstr "Sent {n} records."
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.sas.body"
+msgid "Both devices show a six-digit code. Confirm only if they match exactly."
+msgstr "Both devices show a six-digit code. Confirm only if they match exactly."
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.sas.match"
+msgid "They match"
+msgstr "They match"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.sas.no"
+msgid "They differ"
+msgstr "They differ"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.sas.title"
+msgid "Compare the codes"
+msgstr "Compare the codes"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.scan"
+msgid "Scan answer"
+msgstr "Scan answer"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.scan.code"
+msgid "Scan"
+msgstr "Scan"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.this"
+msgid "This device"
+msgstr "This device"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.title"
+msgid "Devices & sync"
+msgstr "Devices & sync"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.unpair"
+msgid "Unpair"
+msgstr "Unpair"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.use"
+msgid "Use answer"
+msgstr "Use answer"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.use.code"
+msgid "Use code"
+msgstr "Use code"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.what"
+msgid "Paired devices share settings, per-site chains and watch/hardware accounts. Seeds and keys never sync — move a vault with the export code in Security."
+msgstr "Paired devices share settings, per-site chains and watch/hardware accounts. Seeds and keys never sync — move a vault with the export code in Security."
 
 #: packages/wallet/src/screens/shells.tsx
 msgctxt "explore.collectibles"
@@ -57,6 +472,21 @@ msgstr "Explore Electroneum"
 msgctxt "explore.tokens"
 msgid "Tokens"
 msgstr "Tokens"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.backup.body"
+msgid "Swapping and signing stay locked until you confirm three words. Watching and receiving work now."
+msgstr "Swapping and signing stay locked until you confirm three words. Watching and receiving work now."
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.backup.key"
+msgid "Back up"
+msgstr "Back up"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.backup.title"
+msgid "Back up your recovery phrase"
+msgstr "Back up your recovery phrase"
 
 #: packages/wallet/src/screens/Home.tsx
 msgctxt "home.collectibles.empty"
@@ -150,8 +580,8 @@ msgstr "today"
 
 #: packages/wallet/src/screens/Home.tsx
 msgctxt "home.unpriced"
-msgid "${portfolio.snapshot.unpricedCount} without price"
-msgstr "${portfolio.snapshot.unpricedCount} without price"
+msgid "{n} without price"
+msgstr "{n} without price"
 
 #: packages/wallet/src/screens/Home.tsx
 msgctxt "key.bridge"
@@ -188,15 +618,215 @@ msgctxt "moments.title"
 msgid "Signature moments"
 msgstr "Signature moments"
 
-#: packages/wallet/src/navigation/TabShell.tsx
-msgctxt "onboarding.soon"
-msgid "Onboarding, backup quiz and passkeys land with the M2 milestone."
-msgstr "Onboarding, backup quiz and passkeys land with the M2 milestone."
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.confirm"
+msgid "Confirm password"
+msgstr "Confirm password"
 
-#: packages/wallet/src/navigation/TabShell.tsx
-msgctxt "onboarding.title"
-msgid "Create your vault"
-msgstr "Create your vault"
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.create"
+msgid "Create a new vault"
+msgstr "Create a new vault"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.create.key"
+msgid "Create vault"
+msgstr "Create vault"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.done.body"
+msgid "Send ETN here from an exchange that supports the smart chain, or bridge USDC from Ethereum — you will need a little ETN for fees. Do not send from the old Electroneum app."
+msgstr "Send ETN here from an exchange that supports the smart chain, or bridge USDC from Ethereum — you will need a little ETN for fees. Do not send from the old Electroneum app."
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.done.key"
+msgid "Open my wallet"
+msgstr "Open my wallet"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.done.title"
+msgid "This is Electroneum Smart Chain (52014)"
+msgstr "This is Electroneum Smart Chain (52014)"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.hardware.note"
+msgid "Ledger, Trezor and Keystone accounts are added from the Accounts sheet after your vault exists."
+msgstr "Ledger, Trezor and Keystone accounts are added from the Accounts sheet after your vault exists."
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.import"
+msgid "Import a recovery phrase"
+msgstr "Import a recovery phrase"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.import.key"
+msgid "Import"
+msgstr "Import"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.import.ph"
+msgid "12 or 24 words, separated by spaces"
+msgstr "12 or 24 words, separated by spaces"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.import.preview"
+msgid "Preview addresses"
+msgstr "Preview addresses"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.import.title"
+msgid "Enter your recovery phrase"
+msgstr "Enter your recovery phrase"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.mismatch"
+msgid "The passwords differ."
+msgstr "The passwords differ."
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.passkey.body"
+msgid "Your face or fingerprint unlocks the vault on this device. Your password still works, and it is still needed to reveal or export the phrase."
+msgstr "Your face or fingerprint unlocks the vault on this device. Your password still works, and it is still needed to reveal or export the phrase."
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.passkey.noprf"
+msgid "This browser created a passkey without the PRF feature, so it cannot unlock the vault on its own. Use your password."
+msgstr "This browser created a passkey without the PRF feature, so it cannot unlock the vault on its own. Use your password."
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.passkey.skip"
+msgid "Not now"
+msgstr "Not now"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.passkey.title"
+msgid "Unlock with a passkey?"
+msgstr "Unlock with a passkey?"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.passkey.yes"
+msgid "Add passkey"
+msgstr "Add passkey"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.passphrase"
+msgid "BIP-39 passphrase (optional, advanced)"
+msgstr "BIP-39 passphrase (optional, advanced)"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.password"
+msgid "Password"
+msgstr "Password"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.password.body"
+msgid "It seals your vault on this device. A few unrelated words beat a short string of symbols. We cannot reset it."
+msgstr "It seals your vault on this device. A few unrelated words beat a short string of symbols. We cannot reset it."
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.password.title"
+msgid "Choose a password"
+msgstr "Choose a password"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.preview.body"
+msgid "Wallets derive accounts along two common trees. BoltVault uses the standard (BIP-44) tree; Ledger Live uses another. Both agree on the first address."
+msgstr "Wallets derive accounts along two common trees. BoltVault uses the standard (BIP-44) tree; Ledger Live uses another. Both agree on the first address."
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.preview.title"
+msgid "Which addresses do you recognise?"
+msgstr "Which addresses do you recognise?"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.quiz.body"
+msgid "Type the words at these positions. This is the backup check that unlocks swapping and signing."
+msgstr "Type the words at these positions. This is the backup check that unlocks swapping and signing."
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.quiz.confirm"
+msgid "Confirm backup"
+msgstr "Confirm backup"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.quiz.title"
+msgid "Confirm three words"
+msgstr "Confirm three words"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.quiz.word"
+msgid "Word {n}"
+msgstr "Word {n}"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.watch"
+msgid "Watch an address"
+msgstr "Watch an address"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.watch.body"
+msgid "You will see balances and activity but cannot send or sign. Add a key or pair a device later."
+msgstr "You will see balances and activity but cannot send or sign. Add a key or pair a device later."
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.watch.key"
+msgid "Watch"
+msgstr "Watch"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.watch.title"
+msgid "Watch an address"
+msgstr "Watch an address"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.welcome.body"
+msgid "BoltVault keeps your recovery phrase on this device, sealed with your password. Nothing leaves it unless you export it."
+msgstr "BoltVault keeps your recovery phrase on this device, sealed with your password. Nothing leaves it unless you export it."
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.welcome.title"
+msgid "Your keys, your Electroneum"
+msgstr "Your keys, your Electroneum"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.words.body"
+msgid "This is the only copy. Anyone with these words controls your funds; BoltVault will never ask for them except on this screen and the quiz."
+msgstr "This is the only copy. Anyone with these words controls your funds; BoltVault will never ask for them except on this screen and the quiz."
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.words.done"
+msgid "I wrote them down"
+msgstr "I wrote them down"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.words.title"
+msgid "Write these 12 words down, in order"
+msgstr "Write these 12 words down, in order"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "pw.good"
+msgid "Good"
+msgstr "Good"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "pw.ok"
+msgid "Usable — a longer phrase is stronger"
+msgstr "Usable — a longer phrase is stronger"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "pw.short"
+msgid "At least {n} characters"
+msgstr "At least {n} characters"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "pw.strong"
+msgid "Strong"
+msgstr "Strong"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "quiz.wrong"
+msgid "Those words do not match your phrase. Check the numbers and try again."
+msgstr "Those words do not match your phrase. Check the numbers and try again."
 
 #: packages/wallet/src/navigation/TabShell.tsx
 msgctxt "receive.soon"
@@ -207,6 +837,136 @@ msgstr "Receive lands with the M4 milestone."
 msgctxt "receive.title"
 msgid "Receive"
 msgstr "Receive"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "remove"
+msgid "Remove"
+msgstr "Remove"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "reveal.body"
+msgid "Enter your password. Make sure nobody can see your screen."
+msgstr "Enter your password. Make sure nobody can see your screen."
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "reveal.hide"
+msgid "Hide"
+msgstr "Hide"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "reveal.key"
+msgid "Reveal"
+msgstr "Reveal"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "reveal.title"
+msgid "Recovery phrase · {label}"
+msgstr "Recovery phrase · {label}"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "save"
+msgid "Save"
+msgstr "Save"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.about"
+msgid "Encryption: Argon2id → XChaCha20-Poly1305, one data key per vault, wrapped per unlock factor."
+msgstr "Encryption: Argon2id → XChaCha20-Poly1305, one data key per vault, wrapped per unlock factor."
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.autolock"
+msgid "Auto-lock"
+msgstr "Auto-lock"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.current"
+msgid "Current password"
+msgstr "Current password"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.export"
+msgid "Move this vault to another device"
+msgstr "Move this vault to another device"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.export.body"
+msgid "An animated code the other device scans, sealed under a one-time phrase you type there. Your seeds never touch the internet."
+msgstr "An animated code the other device scans, sealed under a one-time phrase you type there. Your seeds never touch the internet."
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.export.code"
+msgid "One-time phrase (3+ words)"
+msgstr "One-time phrase (3+ words)"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.export.done"
+msgid "Done"
+msgstr "Done"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.export.hint"
+msgid "Type this on the other device. It is not shown there."
+msgstr "Type this on the other device. It is not shown there."
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.export.key"
+msgid "Show export code"
+msgstr "Show export code"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.export.tab"
+msgid "Export vault (opens a full tab)"
+msgstr "Export vault (opens a full tab)"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.new"
+msgid "New password (12+ characters)"
+msgstr "New password (12+ characters)"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.passkey.row"
+msgid "Passkey"
+msgstr "Passkey"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.passkeys"
+msgid "Passkeys"
+msgstr "Passkeys"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.passkeys.add"
+msgid "Add passkey"
+msgstr "Add passkey"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.passkeys.none"
+msgid "No passkey enrolled. A passkey unlocks the vault with your face or fingerprint on this device; the password stays required for reveal and export."
+msgstr "No passkey enrolled. A passkey unlocks the vault with your face or fingerprint on this device; the password stays required for reveal and export."
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.passkeys.unsupported"
+msgid "Passkeys with the PRF feature are not available in this browser or on this device."
+msgstr "Passkeys with the PRF feature are not available in this browser or on this device."
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.password"
+msgid "Change password"
+msgstr "Change password"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.password.done"
+msgid "Password changed."
+msgstr "Password changed."
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.password.key"
+msgid "Change password"
+msgstr "Change password"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.title"
+msgid "Security"
+msgstr "Security"
 
 #: packages/wallet/src/navigation/TabShell.tsx
 msgctxt "send.soon"
@@ -239,6 +999,16 @@ msgid "Seeds, backups, identity"
 msgstr "Seeds, backups, identity"
 
 #: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.devices"
+msgid "Devices & sync"
+msgstr "Devices & sync"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.devices.rows"
+msgid "Pair a phone or browser; move your vault"
+msgstr "Pair a phone or browser; move your vault"
+
+#: packages/wallet/src/screens/shells.tsx
 msgctxt "settings.feel"
 msgid "Appearance & feel"
 msgstr "Appearance & feel"
@@ -247,6 +1017,11 @@ msgstr "Appearance & feel"
 msgctxt "settings.feel.rows"
 msgid "Motion, haptics, sound, currency"
 msgstr "Motion, haptics, sound, currency"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.lock"
+msgid "Lock"
+msgstr "Lock"
 
 #: packages/wallet/src/screens/shells.tsx
 msgctxt "settings.networks"
@@ -288,15 +1063,30 @@ msgctxt "settings.spending.rows"
 msgid "Slippage, approvals, step-ups, wallet fee schedule"
 msgstr "Slippage, approvals, step-ups, wallet fee schedule"
 
-#: packages/wallet/src/navigation/TabShell.tsx
-msgctxt "sign.soon"
-msgid "The signing sheet lands with the M3 milestone."
-msgstr "The signing sheet lands with the M3 milestone."
+#: packages/wallet/src/screens/ConnectedSites.tsx
+msgctxt "sites.disconnect"
+msgid "Disconnect"
+msgstr "Disconnect"
 
-#: packages/wallet/src/navigation/TabShell.tsx
-msgctxt "sign.title"
-msgid "Sign"
-msgstr "Sign"
+#: packages/wallet/src/screens/ConnectedSites.tsx
+msgctxt "sites.noaccount"
+msgid "No account"
+msgstr "No account"
+
+#: packages/wallet/src/screens/ConnectedSites.tsx
+msgctxt "sites.none"
+msgid "No site is connected. When a site asks to connect, it appears here with the account and chain it sees."
+msgstr "No site is connected. When a site asks to connect, it appears here with the account and chain it sees."
+
+#: packages/wallet/src/screens/ConnectedSites.tsx
+msgctxt "sites.note"
+msgid "Each site keeps its own chain. Changing the Home chain never changes a site."
+msgstr "Each site keeps its own chain. Changing the Home chain never changes a site."
+
+#: packages/wallet/src/screens/ConnectedSites.tsx
+msgctxt "sites.title"
+msgid "Connected sites"
+msgstr "Connected sites"
 
 #: packages/wallet/src/screens/shells.tsx
 msgctxt "swap.fee"
@@ -362,4 +1152,44 @@ msgstr "The token dossier lands with the M4 milestone."
 msgctxt "token.title"
 msgid "Token"
 msgstr "Token"
+
+#: packages/wallet/src/screens/Unlock.tsx
+msgctxt "unlock.help"
+msgid "Forgot the password? There is no reset. Restore from your recovery phrase on a fresh install instead."
+msgstr "Forgot the password? There is no reset. Restore from your recovery phrase on a fresh install instead."
+
+#: packages/wallet/src/screens/Unlock.tsx
+msgctxt "unlock.key"
+msgid "Unlock"
+msgstr "Unlock"
+
+#: packages/wallet/src/screens/Unlock.tsx
+msgctxt "unlock.passkey"
+msgid "Unlock with passkey"
+msgstr "Unlock with passkey"
+
+#: packages/wallet/src/screens/Unlock.tsx
+msgctxt "unlock.passkey.fail"
+msgid "The passkey did not unlock the vault. Use your password."
+msgstr "The passkey did not unlock the vault. Use your password."
+
+#: packages/wallet/src/screens/Unlock.tsx
+msgctxt "unlock.ph"
+msgid "Password"
+msgstr "Password"
+
+#: packages/wallet/src/screens/Unlock.tsx
+msgctxt "unlock.title"
+msgid "Unlock BoltVault"
+msgstr "Unlock BoltVault"
+
+#: packages/wallet/src/screens/Unlock.tsx
+msgctxt "unlock.wrong"
+msgid "That password does not open this vault."
+msgstr "That password does not open this vault."
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "watch.label"
+msgid "Watch address"
+msgstr "Watch address"
 

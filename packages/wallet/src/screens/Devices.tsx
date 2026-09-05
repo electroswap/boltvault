@@ -105,7 +105,7 @@ export function Devices({ body }: { body: 'extension-popup' | 'extension-tab' | 
           <Body size="title">{t({ id: 'devices.answer.title', message: 'Scan the other device’s code' })}</Body>
           {!host.scanQr ? <Input value={pasted} onChange={setPasted} multiline mono placeholder={t({ id: 'devices.offer.paste', message: 'Paste the pairing code' })} /> : null}
           {!answer ? (
-            <Key label={host.scanQr ? t({ id: 'devices.scan', message: 'Scan' }) : t({ id: 'devices.use.code', message: 'Use code' })} onPress={() => run(async () => { const r = await engine.sync.acceptOffer({ offer: await scanOrPaste() }); setAnswer(r.answer); setPasted('') })} testID="accept-offer" />
+            <Key label={host.scanQr ? t({ id: 'devices.scan.code', message: 'Scan' }) : t({ id: 'devices.use.code', message: 'Use code' })} onPress={() => run(async () => { const r = await engine.sync.acceptOffer({ offer: await scanOrPaste() }); setAnswer(r.answer); setPasted('') })} testID="accept-offer" />
           ) : (
             <>
               <Body tone="mute" size="caption">
