@@ -11,6 +11,7 @@ import type { Platform } from '@boltvault/platform'
 import { formatUnits, parseAbi, type Hex } from 'viem'
 import { z } from 'zod'
 import { EngineError } from '../errors'
+import type { PriceSource } from '../prices'
 import type { EventBus, NamespaceSpec } from '../host'
 import { readMany } from '../multicall'
 import { AccountIdSchema, PortfolioSnapshotSchema, type PortfolioRow, type PortfolioSnapshot, type TokenView } from '../schema'
@@ -54,6 +55,8 @@ export interface PortfolioDeps {
   readonly vault: VaultManager
   /** Display prices for Electroneum (§9); null when the API key is not configured. */
   readonly electroswap?: ElectroSwapClient | null
+  /** Display prices off Electroneum (§10.4); null disables them. */
+  readonly prices?: PriceSource | null
 }
 
 export class PortfolioService {
@@ -179,7 +182,8 @@ export class PortfolioService {
   private async prices(chainId: number, owner: Hex): Promise<Map<string, PriceRow>> {
     const out = new Map<string, PriceRow>()
     const es = this.deps.electroswap
-    if (!es || (chainId !== 52014 && chainId !== 5201420)) return out
+    if (chainId !== 52014 && chainId !== 5201420) return this.otherPrices(chainId)
+    if (!es) return out
     try {
       const p = await es.portfolio(chainId, owner)
       for (const b of p.tokenBalances) {
@@ -191,6 +195,21 @@ export class PortfolioService {
       }
     } catch {
       // Display data is optional: unpriced rows, never a shrinking hero.
+    }
+    return out
+  }
+
+  /** Off Electroneum only token addresses leave the wallet — never the account (§3.8). */
+  private async otherPrices(chainId: number): Promise<Map<string, PriceRow>> {
+    const out = new Map<string, PriceRow>()
+    const source = this.deps.prices
+    if (!source) return out
+    try {
+      const universe = await this.deps.tokens.universe(chainId)
+      const priced = await source.prices(chainId, universe.map((t) => t.address))
+      for (const [k, v] of priced) out.set(k, { price: v.price, change24h: v.change24h, apiQuantity: null, spam: false })
+    } catch {
+      // Unpriced rows, never a shrinking hero.
     }
     return out
   }

@@ -4,7 +4,7 @@
  * `funded` scenario) a portfolio namespace answering from fixture rows. No
  * network, no service worker, byte-identical output run to run.
  */
-import { createEngine, type ActivityEntry, type AllowanceView, type Engine, type FeeScheduleView, type HeadSource, type HolderTier, type PortfolioSnapshot, type SwapQuote, type TokenView, type AssetView, type CollectionView, type ExploreToken, type FarmView, type CampaignView, type LegendsStatus, type Positions, type WatchItem, type Inventory, type OffersInbox } from '@boltvault/engine'
+import { createEngine, type ActivityEntry, type AllowanceView, type Engine, type FeeScheduleView, type HeadSource, type HolderTier, type PortfolioSnapshot, type SwapQuote, type TokenView, type AssetView, type CollectionView, type ExploreToken, type FarmView, type CampaignView, type LegendsStatus, type Positions, type WatchItem, type Inventory, type OffersInbox, type BridgeRoute, type BridgeStatus } from '@boltvault/engine'
 import { createMemoryPlatform } from '@boltvault/platform/memory'
 import { z } from 'zod'
 
@@ -258,6 +258,34 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
       tier: { input: AccountArg, handler: async () => tierView },
       schedule: { input: z.object({}).passthrough(), handler: async () => schedule },
       addresses: { input: z.object({}).passthrough(), handler: async () => ({ sink: SINK, schedule: schedule.address }) },
+    })
+    // M7: verified Hyperlane corridors from Electroneum, a quote, and one USDC transfer mid-flight.
+    const USDC_ETN = '0x3187deAd7A2Bd6770F5Fe81495D1B715926AAe6e'
+    const USDT_ETN = '0x48E722f1458b253c2FB0E573F939318D7Dbd54e7'
+    const routes: BridgeRoute[] = [
+      { symbol: 'USDC', fromChainId: 52014, toChainId: 1, token: USDC_ETN, router: USDC_ETN, standard: 'synthetic', decimals: 6, verified: true, reason: null },
+      { symbol: 'USDC', fromChainId: 52014, toChainId: 8453, token: USDC_ETN, router: USDC_ETN, standard: 'synthetic', decimals: 6, verified: true, reason: null },
+      { symbol: 'USDC', fromChainId: 52014, toChainId: 43114, token: USDC_ETN, router: USDC_ETN, standard: 'synthetic', decimals: 6, verified: true, reason: null },
+      { symbol: 'USDT', fromChainId: 52014, toChainId: 1, token: USDT_ETN, router: USDT_ETN, standard: 'synthetic', decimals: 6, verified: true, reason: null },
+    ]
+    const transfers: BridgeStatus[] = [
+      { id: `0x${'d1'.repeat(32)}`, accountId, fromChainId: 52014, toChainId: 8453, symbol: 'USDC', amountRaw: '250000000', decimals: 6, recipient: address, originHash: `0x${'d1'.repeat(32)}`, messageId: `0x${'ee'.repeat(32)}`, destinationHash: null, state: 'dispatched', startedAt: FIXED_NOW - 90_000, updatedAt: FIXED_NOW - 15_000, scanFrom: 21_000_000 },
+      { id: `0x${'d2'.repeat(32)}`, accountId, fromChainId: 1, toChainId: 52014, symbol: 'USDC', amountRaw: '1000000000', decimals: 6, recipient: address, originHash: `0x${'d2'.repeat(32)}`, messageId: `0x${'ef'.repeat(32)}`, destinationHash: `0x${'d3'.repeat(32)}`, state: 'delivered', startedAt: FIXED_NOW - 86_400_000, updatedAt: FIXED_NOW - 86_000_000, scanFrom: null },
+    ]
+    engine.host.override('bridge', {
+      routes: { input: Any, handler: async (arg) => routes.filter((r) => r.fromChainId === (arg as { fromChainId: number }).fromChainId && (!(arg as { token?: string }).token || r.token.toLowerCase() === ((arg as { token?: string }).token ?? '').toLowerCase())) },
+      quote: {
+        input: Any,
+        handler: async (arg) => {
+          const a = arg as { toChainId: number; token: string; amount: string; recipient?: string }
+          const r = routes.find((x) => x.toChainId === a.toChainId && x.token.toLowerCase() === a.token.toLowerCase()) ?? routes[0]
+          const amountRaw = BigInt(Math.round(Number(a.amount || '0') * 1e6))
+          const problems = amountRaw <= 0n ? ['Enter an amount above zero.'] : amountRaw > 1_248_000_000n ? ['Not enough USDC.'] : []
+          return { fromChainId: 52014, toChainId: r?.toChainId ?? 8453, symbol: r?.symbol ?? 'USDC', token: a.token, decimals: 6, amountRaw: amountRaw.toString(), balanceRaw: '1248000000', recipient: a.recipient ?? address, gasQuoteWei: '1250000000000000000', txFeeWei: '220000000000000', feeSymbol: 'ETN', etaMinutes: r?.toChainId === 1 ? 20 : 5, steps: ['submit'], recipientCode: { origin: false, destination: false }, ok: problems.length === 0, problems }
+        },
+      },
+      list: { input: Any, handler: async () => transfers },
+      status: { input: Any, handler: async (arg) => transfers.find((x) => x.id === (arg as { id: string }).id) ?? null },
     })
   }
   return engine

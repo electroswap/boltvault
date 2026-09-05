@@ -8,6 +8,8 @@ import { decodeMessage, type DecodedCall, type ParsedTypedData } from './decode'
 import { knownContract } from './registry'
 import type { AssessmentContext, SignRequest, Simulation, Statement } from './types'
 
+const DOMAIN_NAMES: Readonly<Record<number, string>> = { 52014: 'Electroneum', 1: 'Ethereum', 8453: 'Base', 43114: 'Avalanche' }
+
 function who(ctx: AssessmentContext, chainId: number, address: string): string {
   const l = ctx.labels[address.toLowerCase()]
   if (l) return l
@@ -118,6 +120,15 @@ export function explainCall(decoded: DecodedCall, ctx: AssessmentContext, chainI
       return decoded.action === 'register'
         ? [{ text: `Activate dividends for ${decoded.tokenIds.length} Electric Legend${decoded.tokenIds.length === 1 ? '' : 's'}`, tone: 'neutral' }]
         : [{ text: `Claim marketplace dividends for ${decoded.tokenIds.length} Electric Legend${decoded.tokenIds.length === 1 ? '' : 's'}`, tone: 'in' }]
+    case 'bridge': {
+      const known = knownContract(chainId, decoded.router)
+      const symbol = known?.name.includes('USDT') ? 'USDT' : 'USDC'
+      const dest = DOMAIN_NAMES[decoded.destinationDomain] ?? `chain ${decoded.destinationDomain}`
+      return [
+        { text: `Bridge ${trim(formatUnits(decoded.amount, 6))} ${symbol} to ${dest} for ${who(ctx, chainId, decoded.recipient)}`, tone: 'out' },
+        { text: `Pays ${amount(ctx, 'native', decoded.value, chainId)} of interchain gas to Hyperlane`, tone: 'neutral' },
+      ]
+    }
     case 'nft_mint':
       return [{ text: `Mint ${decoded.count.toString()} from ${who(ctx, chainId, decoded.collection)} for ${amount(ctx, 'native', decoded.value, chainId)}`, tone: 'out' }]
     case 'limit_order': {

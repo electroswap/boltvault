@@ -7,6 +7,7 @@
 import {
   Body,
   BusBar,
+  Chip,
   Column,
   Field,
   Icon,
@@ -25,13 +26,13 @@ import {
   useWindowDimensions,
 } from '@boltvault/ui'
 // Column is also the Field's host; content sits above it via zIndex.
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useActivity } from '../hooks/useActivity'
 import { usePositions } from '../hooks/usePositions'
 import { LegendsVault } from '../components/LegendsVault'
 import { Rack } from './Rack'
-import type { CampaignView, HolderTier } from '@boltvault/engine'
+import type { BridgeStatus, CampaignView, ChainView, HolderTier, Settings } from '@boltvault/engine'
 import { formatRaw } from '../format'
 import { useChainHead } from '../hooks/useChainHead'
 import { usePortfolio } from '../hooks/usePortfolio'
@@ -55,7 +56,12 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   const reducedMotion = useReducedMotion(reducedMotionOverride)
   const { vault, active, loading } = useWalletState()
   const head = useChainHead(ETN)
-  const portfolio = usePortfolio(active?.id ?? null)
+  const [scope, setScope] = useState<'all' | number>(ETN)
+  const [settings, setSettings] = useState<Settings | null>(null)
+  const [chains, setChains] = useState<ChainView[]>([])
+  const [bridges, setBridges] = useState<BridgeStatus[]>([])
+  const scopeIds = useMemo(() => (scope === 'all' ? [ETN, ...(settings?.enabledChains ?? [])] : [scope]), [scope, settings])
+  const portfolio = usePortfolio(active?.id ?? null, 5_000, scopeIds)
   const { entries } = useActivity(active?.id ?? null)
   const engine = useEngine()
   const [segment, setSegment] = useState<'tokens' | 'collectibles' | 'positions'>('tokens')
@@ -65,6 +71,34 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   const [live, setLive] = useState<CampaignView | null>(null)
   const { positions } = usePositions(active?.id ?? null, !!vault?.unlocked)
   const pendingTx = entries.filter((e) => e.status === 'pending').length
+
+  // Chain scope (§8.2): Electroneum by default; All chains or one enabled chain. Never a site's session.
+  useEffect(() => {
+    engine.settings.get().then(setSettings, () => undefined)
+    engine.chains.list().then(setChains, () => undefined)
+  }, [engine])
+  useEffect(() => {
+    if (!active || !vault?.unlocked) return
+    let alive = true
+    const load = (): void => {
+      engine.bridge.list({ accountId: active.id }).then((xs) => alive && setBridges(xs), () => undefined)
+    }
+    load()
+    const off = engine.events.subscribe((e) => {
+      if (e.type === 'bridge.changed') load()
+    })
+    return () => {
+      alive = false
+      off()
+    }
+  }, [engine, active, vault?.unlocked])
+  const cycleScope = (): void => {
+    const order: Array<'all' | number> = ['all', ETN, ...(settings?.enabledChains ?? [])]
+    const i = order.indexOf(scope)
+    setScope(order[(i + 1) % order.length] ?? ETN)
+  }
+  const scopeLabel = scope === 'all' ? t({ id: 'home.scope.all', message: 'All chains' }) : scope === ETN ? t({ id: 'home.scope.etn', message: 'Electroneum' }) : (chains.find((c) => c.chainId === scope)?.name ?? `Chain ${scope}`)
+  const bridgeInFlight = bridges.find((b) => b.state === 'pending' || b.state === 'dispatched') ?? null
 
   // "Since you last looked" (§7.13) and the approvals fuse count, once per open.
   useEffect(() => {
@@ -151,9 +185,17 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
               <Column gap="$2">
                 <RollingReadout value={totalText} hero reducedMotion={reducedMotion} testID="total" />
                 <Row gap="$3">
-                  <Body tone="mute" size="caption">
-                    {portfolio.snapshot ? t({ id: 'home.scope.etn', message: 'Electroneum' }) : t({ id: 'home.scope.none', message: 'No balances yet' })}
-                  </Body>
+                  {portfolio.snapshot ? (
+                    <Chip onPress={cycleScope} cursor="pointer" minHeight={28} justifyContent="center" testID="home-scope">
+                      <Body tone={scope === ETN ? 'mute' : 'arc'} size="caption">
+                        {scopeLabel} ▾
+                      </Body>
+                    </Chip>
+                  ) : (
+                    <Body tone="mute" size="caption">
+                      {t({ id: 'home.scope.none', message: 'No balances yet' })}
+                    </Body>
+                  )}
                   {change ? (
                     <Body tone={change.startsWith('+') ? 'ember' : change.startsWith('−') ? 'burn' : 'mute'} size="caption">
                       {change} {t({ id: 'home.today', message: 'today' })}
@@ -278,8 +320,15 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
               </Plate>
             ) : null}
 
-            {/* One accessory (§8.2): pending tx > rewards/dividends to collect > unlimited approvals. */}
-            {pendingTx > 0 ? (
+            {/* One accessory (§8.2): bridge in flight > pending tx > rewards/dividends to collect > unlimited approvals. */}
+            {bridgeInFlight ? (
+              <Plate gap={2} onPress={() => router.navigate('bridge')} cursor="pointer" testID="accessory-bridge">
+                <Row gap="$2" alignItems="center">
+                  <Icon name="bridge" size={16} color={paint.arc} />
+                  <Body size="caption">{t({ id: 'home.acc.bridge', message: 'Hyperlane {s} arriving on {c} · about {m} min', values: { s: bridgeInFlight.symbol, c: chains.find((c) => c.chainId === bridgeInFlight.toChainId)?.name ?? `chain ${bridgeInFlight.toChainId}`, m: bridgeInFlight.toChainId === 1 || bridgeInFlight.fromChainId === 1 ? 20 : 5 } })}</Body>
+                </Row>
+              </Plate>
+            ) : pendingTx > 0 ? (
               <Plate gap={2} onPress={() => router.setTab('activity')} cursor="pointer" testID="accessory-pending">
                 <Row gap="$2" alignItems="center">
                   <Icon name="clock" size={16} color={paint.arc} />
@@ -306,7 +355,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
               <ActionKey icon="send" label={t({ id: 'key.send', message: 'Send' })} onPress={() => router.navigate('send')} />
               <ActionKey icon="receive" label={t({ id: 'key.receive', message: 'Receive' })} onPress={() => router.navigate('receive')} />
               <ActionKey icon="swap" label={t({ id: 'key.swap', message: 'Swap' })} onPress={() => router.setTab('swap')} />
-              <ActionKey icon="bridge" label={t({ id: 'key.bridge', message: 'Bridge' })} onPress={() => router.navigate('explore')} />
+              <ActionKey icon="bridge" label={t({ id: 'key.bridge', message: 'Bridge' })} onPress={() => router.navigate('bridge', scope !== 'all' && scope !== ETN ? { chainId: scope } : undefined)} />
             </Row>
           </>
         ) : null}

@@ -36,10 +36,17 @@ export class NamesService {
     return RESOLVERS[chainId] !== undefined
   }
 
-  /** True when the input is a name this chain can resolve (not an address). */
+  /** The chain a name resolves on: `.etn` on Electroneum, `.eth` on Ethereum — from any chain's recipient field (§8.1); none on the testnet. */
+  chainFor(chainId: number, input: string): number | null {
+    if (chainId === 5201420 || isAddress(input)) return null
+    const name = input.trim().toLowerCase()
+    for (const [id, suffix] of Object.entries(SUFFIX)) if (name.endsWith(suffix) && name.length > suffix.length) return Number(id)
+    return null
+  }
+
+  /** True when the input is a name that can be resolved for a send on this chain (not an address). */
   isName(chainId: number, input: string): boolean {
-    const suffix = SUFFIX[chainId]
-    return !!suffix && !isAddress(input) && input.trim().toLowerCase().endsWith(suffix) && input.trim().length > suffix.length
+    return this.chainFor(chainId, input) !== null
   }
 
   async lookup(chainId: number, addresses: readonly string[]): Promise<NameLookup[]> {
@@ -67,8 +74,10 @@ export class NamesService {
   }
 
   async resolve(chainId: number, name: string): Promise<string | null> {
-    const resolver = RESOLVERS[chainId]
-    if (!resolver || !this.isName(chainId, name)) return null
+    const on = this.chainFor(chainId, name)
+    const resolver = on === null ? undefined : RESOLVERS[on]
+    if (on === null || !resolver) return null
+    chainId = on
     const client = await this.chains.client(chainId)
     try {
       const address = await client.getEnsAddress({ name: normalize(name.trim()), universalResolverAddress: resolver })

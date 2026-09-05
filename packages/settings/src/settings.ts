@@ -57,6 +57,8 @@ export function normalizeSettings(
     ethSignEnabled: bool('ethSignEnabled', DEFAULT_SETTINGS.ethSignEnabled),
     exactApprovals: bool('exactApprovals', DEFAULT_SETTINGS.exactApprovals),
     slippageBips: typeof obj.slippageBips === 'number' && Number.isInteger(obj.slippageBips) && obj.slippageBips >= 1 && obj.slippageBips <= 5_000 ? obj.slippageBips : DEFAULT_SETTINGS.slippageBips,
+    enabledChains: Array.isArray(obj.enabledChains) ? obj.enabledChains.filter((c): c is number => typeof c === 'number' && Number.isInteger(c) && c > 0) : [...DEFAULT_SETTINGS.enabledChains],
+    showTestnet: bool('showTestnet', DEFAULT_SETTINGS.showTestnet),
     sendWhitelist: bool('sendWhitelist', DEFAULT_SETTINGS.sendWhitelist),
     autoLock,
     displayCurrency,

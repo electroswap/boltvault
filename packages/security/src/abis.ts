@@ -82,6 +82,9 @@ export const SEAPORT_ABI = parseAbi([
 export const DIVIDENDS_ABI = parseAbi(['function register(uint256[] tokenIds)', 'function claimDividends(uint256[] tokenIds)'])
 export const MINTER_ABI = parseAbi(['function mint(address collection, uint256 mintCount) payable'])
 
+/** Hyperlane TokenRouter (§8.7). */
+export const WARP_ROUTER_ABI = parseAbi(['function transferRemote(uint32 _destination, bytes32 _recipient, uint256 _amountOrId) payable returns (bytes32 messageId)'])
+
 /** Event topic0 hashes the simulator reads from traces. */
 export const TOPICS = {
   transfer: '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',

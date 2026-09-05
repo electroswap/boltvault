@@ -4,8 +4,8 @@
  * reason about. Unknown selectors are reported as unknown — never silently
  * "contract interaction".
  */
-import { decodeFunctionData, hexToString, isAddress, isHex, maxUint256, size, type Hex } from 'viem'
-import { DIVIDENDS_ABI, ERC1155_ABI, ERC20_ABI, ERC721_ABI, FARM_ABI, LAUNCHPAD_ABI, LIMIT_ORDERS_ABI, MINTER_ABI, MULTICALL3_ABI, PERMIT2_ABI, SEAPORT_ABI, WETH_ABI } from './abis'
+import { decodeFunctionData, getAddress, hexToString, isAddress, isHex, maxUint256, size, type Hex } from 'viem'
+import { DIVIDENDS_ABI, ERC1155_ABI, ERC20_ABI, ERC721_ABI, FARM_ABI, LAUNCHPAD_ABI, LIMIT_ORDERS_ABI, MINTER_ABI, MULTICALL3_ABI, PERMIT2_ABI, SEAPORT_ABI, WARP_ROUTER_ABI, WETH_ABI } from './abis'
 import { knownContract } from './registry'
 import { decodeUniversalRouter, type DecodedUniversalRouter } from './ur'
 
@@ -39,6 +39,7 @@ export type DecodedCall =
   | { readonly kind: 'seaport_cancel'; readonly marketplace: Hex; readonly count: number }
   | { readonly kind: 'dividends'; readonly distributor: Hex; readonly action: 'register' | 'claim'; readonly tokenIds: readonly bigint[] }
   | { readonly kind: 'nft_mint'; readonly minter: Hex; readonly collection: Hex; readonly count: bigint; readonly value: bigint }
+  | { readonly kind: 'bridge'; readonly router: Hex; readonly destinationDomain: number; readonly recipient: Hex; readonly amount: bigint; readonly value: bigint }
   | { readonly kind: 'contract_call'; readonly to: Hex; readonly selector: Hex; readonly functionName: string | null; readonly args: readonly unknown[] | null; readonly value: bigint }
 
 export interface DecodeCallInput {
@@ -48,7 +49,7 @@ export interface DecodeCallInput {
   readonly value: bigint
 }
 
-function tryDecode(abi: typeof ERC20_ABI | typeof ERC721_ABI | typeof ERC1155_ABI | typeof PERMIT2_ABI | typeof WETH_ABI | typeof MULTICALL3_ABI | typeof LIMIT_ORDERS_ABI | typeof FARM_ABI | typeof LAUNCHPAD_ABI | typeof SEAPORT_ABI | typeof DIVIDENDS_ABI | typeof MINTER_ABI, data: Hex): { functionName: string; args: readonly unknown[] } | null {
+function tryDecode(abi: typeof ERC20_ABI | typeof ERC721_ABI | typeof ERC1155_ABI | typeof PERMIT2_ABI | typeof WETH_ABI | typeof MULTICALL3_ABI | typeof LIMIT_ORDERS_ABI | typeof FARM_ABI | typeof LAUNCHPAD_ABI | typeof SEAPORT_ABI | typeof DIVIDENDS_ABI | typeof MINTER_ABI | typeof WARP_ROUTER_ABI, data: Hex): { functionName: string; args: readonly unknown[] } | null {
   try {
     const d = decodeFunctionData({ abi, data })
     return { functionName: d.functionName, args: (d.args ?? []) as readonly unknown[] }
@@ -122,6 +123,13 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
     if (d?.functionName === 'register' || d?.functionName === 'claimDividends') {
       const [ids] = d.args as [readonly bigint[]]
       return { kind: 'dividends', distributor: to, action: d.functionName === 'register' ? 'register' : 'claim', tokenIds: [...ids] }
+    }
+  }
+  if (known?.role === 'warp_router') {
+    const w = tryDecode(WARP_ROUTER_ABI, data)
+    if (w?.functionName === 'transferRemote') {
+      const [destination, recipient32, amount] = w.args as [number, Hex, bigint]
+      return { kind: 'bridge', router: to, destinationDomain: Number(destination), recipient: getAddress(`0x${recipient32.slice(-40)}`), amount, value }
     }
   }
   if (known?.role === 'minter') {

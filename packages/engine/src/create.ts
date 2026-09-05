@@ -20,6 +20,8 @@ import { chainsNamespace, ChainsService, type HeadSource } from './namespaces/ch
 import { ContactsStore, contactsNamespace } from './namespaces/contacts'
 import { NamesService, namesNamespace } from './namespaces/names'
 import { PortfolioService, portfolioNamespace } from './namespaces/portfolio'
+import { BridgeService, bridgeNamespace } from './namespaces/bridge'
+import { GeckoTerminalPrices } from './prices'
 import { ProviderService } from './namespaces/provider'
 import { SendService, sendNamespace } from './namespaces/send'
 import { FlowStore } from './namespaces/flows'
@@ -62,6 +64,8 @@ export interface EngineDeps {
   readonly fetch?: typeof fetch
   /** ElectroSwap GraphQL endpoint override (tests). `null` disables display prices. */
   readonly electroswapUrl?: string | null
+  /** GeckoTerminal base URL override (tests); `null` disables display prices off Electroneum (§10.4). */
+  readonly pricesUrl?: string | null
   /** WebHID (`navigator.hid`) in the extension worker; a BLE/USB shim on mobile; absent elsewhere (§2.7 S7). */
   readonly hid?: HidProvider | null
 }
@@ -95,6 +99,7 @@ export interface Engine {
   readonly launchpad: LaunchpadService
   readonly watchlist: WatchlistService
   readonly positions: PositionsService
+  readonly bridge: BridgeService
   readonly ready: Promise<void>
   dispose(): void
 }
@@ -142,7 +147,8 @@ export function createEngine(deps: EngineDeps): Engine {
   })
   const tokens = new TokensService(deps.platform, host.events, chains, fetchImpl)
   const electroswap = deps.electroswapUrl === null ? null : new ElectroSwapClient({ ...(deps.electroswapUrl ? { url: deps.electroswapUrl } : {}), ...(deps.clientKey ? { apiKey: deps.clientKey } : {}), fetchImpl })
-  const portfolio = new PortfolioService({ platform: deps.platform, bus: host.events, chains, tokens, vault, electroswap })
+  const prices = deps.pricesUrl === null ? null : new GeckoTerminalPrices(fetchImpl, () => deps.platform.now(), ...(deps.pricesUrl ? [deps.pricesUrl] : []))
+  const portfolio = new PortfolioService({ platform: deps.platform, bus: host.events, chains, tokens, vault, electroswap, prices })
   const names = new NamesService(chains, () => deps.platform.now())
   const allowances = new AllowancesService({ platform: deps.platform, bus: host.events, chains, tokens, vault, provider })
   const send = new SendService({ platform: deps.platform, chains, tokens, names, vault, provider })
@@ -158,6 +164,7 @@ export function createEngine(deps: EngineDeps): Engine {
   const farm = new FarmService({ platform: deps.platform, chains, tokens, vault, provider, flows, settings, electroswap })
   const launchpad = new LaunchpadService({ platform: deps.platform, chains, vault, provider, flows, electroswap, names, watchlist })
   const positions = new PositionsService({ platform: deps.platform, bus: host.events, farm, legends, limit, launchpad, tokens })
+  const bridge = new BridgeService({ platform: deps.platform, bus: host.events, chains, vault, provider, flows, settings, ...(deps.receiptPollMs !== undefined ? { receiptPollMs: deps.receiptPollMs } : {}) })
   watchlist.attach({
     tokens: (chainId) => explore.tokens(chainId),
     collections: (chainId) => explore.collections(chainId),
@@ -173,6 +180,7 @@ export function createEngine(deps: EngineDeps): Engine {
       contacts.forget()
     } else {
       void provider.resumeWatchers()
+      void bridge.resume()
     }
   })
 
@@ -226,6 +234,7 @@ export function createEngine(deps: EngineDeps): Engine {
   host.register('launchpad', launchpadNamespace(launchpad))
   host.register('watchlist', watchlistNamespace(watchlist))
   host.register('positions', positionsNamespace(positions))
+  host.register('bridge', bridgeNamespace(bridge))
 
   const ready = Promise.all([approvals.hydrate(), sites.hydrate(), settings.get(), provider.init(), watchlist.hydrate()]).then(() => undefined)
   const engine = createEngineClient(createInProcessTransport(host, 'internal'))
@@ -258,10 +267,12 @@ export function createEngine(deps: EngineDeps): Engine {
     launchpad,
     watchlist,
     positions,
+    bridge,
     ready,
     dispose: () => {
       vault.dispose()
       provider.dispose()
+      bridge.dispose()
     },
   }
 }

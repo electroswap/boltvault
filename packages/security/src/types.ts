@@ -119,6 +119,8 @@ export interface AssessmentContext {
   readonly now: number
   /** BOLT's address on this chain, for farm-boost statements; optional. */
   readonly boltToken?: Hex
+  /** For `internal:bridge`: whether the recipient is a contract on the origin and on the destination (§8.7). */
+  readonly bridgeRecipient?: { readonly hasCodeOnOrigin: boolean; readonly hasCodeOnDestination: boolean | null } | null
   /** For `internal:swap`: the fee the encoder must have written (T10). `bips: 0` means no PAY_PORTION at all. */
   readonly expectedFee?: { readonly sink: Hex; readonly bips: number } | null
 }

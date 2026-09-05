@@ -155,6 +155,9 @@ export const SettingsSchema = z.object({
   exactApprovals: z.boolean(),
   /** Default swap slippage in bips (§8.14 Spending). */
   slippageBips: z.number().int().min(1).max(5_000),
+  /** Networks the wallet shows besides Electroneum (§8.14 Networks). */
+  enabledChains: z.array(z.number().int().positive()),
+  showTestnet: z.boolean(),
   sendWhitelist: z.boolean(),
   autoLock: AutoLockSchema,
   displayCurrency: z.enum(['USD', 'ETN']),
@@ -412,7 +415,7 @@ export type SwapQuote = z.infer<typeof SwapQuoteSchema>
 export const FlowStepStatusSchema = z.enum(['pending', 'signing', 'submitted', 'confirmed', 'rejected', 'failed'])
 export const SwapFlowSchema = z.object({
   id: z.string(),
-  kind: z.enum(['swap', 'limit', 'limit_cancel', 'nft', 'farm', 'launchpad', 'legends']),
+  kind: z.enum(['swap', 'limit', 'limit_cancel', 'nft', 'farm', 'launchpad', 'legends', 'bridge']),
   accountId: AccountIdSchema,
   chainId: z.number().int().positive(),
   steps: z.array(z.object({ step: SwapStepSchema, requestId: z.string().nullable(), status: FlowStepStatusSchema, hash: z.string().nullable() })),
@@ -767,9 +770,70 @@ export const PositionsSchema = z.object({
 })
 export type Positions = z.infer<typeof PositionsSchema>
 
+// ---- M7: bridge (§8.7) and chain preferences (§8.14 Networks) --------------------------------
+
+export const BridgeRouteSchema = z.object({
+  symbol: z.enum(['USDC', 'USDT']),
+  fromChainId: z.number().int().positive(),
+  toChainId: z.number().int().positive(),
+  /** The token the user holds and bridges on the origin. */
+  token: z.string(),
+  router: z.string(),
+  standard: z.enum(['synthetic', 'collateral']),
+  decimals: z.number().int().nonnegative(),
+  /** Verified on chain at boot; a mismatch disables the corridor (kill-switch). */
+  verified: z.boolean(),
+  reason: z.string().nullable(),
+})
+export type BridgeRoute = z.infer<typeof BridgeRouteSchema>
+
+export const BridgeQuoteSchema = z.object({
+  fromChainId: z.number().int().positive(),
+  toChainId: z.number().int().positive(),
+  symbol: z.enum(['USDC', 'USDT']),
+  token: z.string(),
+  decimals: z.number().int().nonnegative(),
+  amountRaw: z.string(),
+  balanceRaw: z.string(),
+  recipient: z.string(),
+  /** The interchain gas payment the router quotes, in origin native wei. */
+  gasQuoteWei: z.string(),
+  /** The origin transaction's own gas, in wei. */
+  txFeeWei: z.string(),
+  feeSymbol: z.string(),
+  etaMinutes: z.number().int().positive(),
+  steps: z.array(SwapStepSchema),
+  /** Whether the recipient is a contract here and on the destination (null when the destination did not answer). */
+  recipientCode: z.object({ origin: z.boolean(), destination: z.boolean().nullable() }),
+  ok: z.boolean(),
+  problems: z.array(z.string()),
+})
+export type BridgeQuote = z.infer<typeof BridgeQuoteSchema>
+
+export const BridgeStatusSchema = z.object({
+  id: z.string(),
+  accountId: AccountIdSchema,
+  fromChainId: z.number().int().positive(),
+  toChainId: z.number().int().positive(),
+  symbol: z.enum(['USDC', 'USDT']),
+  amountRaw: z.string(),
+  decimals: z.number().int().nonnegative(),
+  recipient: z.string(),
+  originHash: z.string(),
+  messageId: z.string().nullable(),
+  destinationHash: z.string().nullable(),
+  state: z.enum(['pending', 'dispatched', 'delivered', 'failed', 'timeout']),
+  startedAt: z.number().int().nonnegative(),
+  updatedAt: z.number().int().nonnegative(),
+  /** Destination block the watcher scans from. */
+  scanFrom: z.number().int().nonnegative().nullable(),
+})
+export type BridgeStatus = z.infer<typeof BridgeStatusSchema>
+
 export const EngineEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('swap.progress'), flow: SwapFlowSchema }),
   z.object({ type: z.literal('positions.changed'), positions: PositionsSchema }),
+  z.object({ type: z.literal('bridge.changed'), transfers: z.array(BridgeStatusSchema) }),
   z.object({ type: z.literal('watchlist.changed'), items: z.array(WatchItemSchema) }),
   z.object({ type: z.literal('limit.changed'), accountId: AccountIdSchema, chainId: z.number().int().positive(), orders: z.array(LimitOrderViewSchema) }),
   z.object({ type: z.literal('tokens.changed'), chainId: z.number().int().positive() }),

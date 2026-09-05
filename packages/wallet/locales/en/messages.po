@@ -218,6 +218,86 @@ msgctxt "al.now"
 msgid "On close"
 msgstr "On close"
 
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.above"
+msgid "Above $"
+msgstr "Above $"
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.aboveEtn"
+msgid "Floor above (ETN)"
+msgstr "Floor above (ETN)"
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.below"
+msgid "Below $"
+msgstr "Below $"
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.belowEtn"
+msgid "Floor below (ETN)"
+msgstr "Floor below (ETN)"
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.body"
+msgid "Star a token, collection or campaign from Explore, then set what to tell you about. Rewards to collect and dividends to claim are mentioned once a day on their own. Nothing here nags."
+msgstr "Star a token, collection or campaign from Explore, then set what to tell you about. Rewards to collect and dividends to claim are mentioned once a day on their own. Nothing here nags."
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.campaign"
+msgid "Campaign"
+msgstr "Campaign"
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.check"
+msgid "Check now"
+msgstr "Check now"
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.collection"
+msgid "Collection"
+msgstr "Collection"
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.empty"
+msgid "Nothing starred yet."
+msgstr "Nothing starred yet."
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.explore"
+msgid "Explore"
+msgstr "Explore"
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.onLive"
+msgid "Tell me when it goes live"
+msgstr "Tell me when it goes live"
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.quiet"
+msgid "Nothing to tell you"
+msgstr "Nothing to tell you"
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.remove"
+msgid "Remove"
+msgstr "Remove"
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.sent"
+msgid "{n} sent"
+msgstr "{n} sent"
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.title"
+msgid "Notifications"
+msgstr "Notifications"
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.token"
+msgid "Token"
+msgstr "Token"
+
 #: packages/wallet/src/screens/Token.tsx
 msgctxt "allow.all"
 msgid "Every item"
@@ -438,7 +518,292 @@ msgctxt "backup.title"
 msgid "Back up your recovery phrase"
 msgstr "Back up your recovery phrase"
 
-#: packages/wallet/src/screens/Devices.tsx
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.approve"
+msgid "Two signatures: allow the Hyperlane router to take the tokens, then bridge."
+msgstr "Two signatures: allow the Hyperlane router to take the tokens, then bridge."
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.asset"
+msgid "Asset"
+msgstr "Asset"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.asset.name"
+msgid "Hyperlane {s}"
+msgstr "Hyperlane {s}"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.balance"
+msgid "Balance {b} {s}"
+msgstr "Balance {b} {s}"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.eta"
+msgid "Usually lands in"
+msgstr "Usually lands in"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.eta.min"
+msgid "about {m} minutes"
+msgstr "about {m} minutes"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.explorer"
+msgid "Look it up on explorer.hyperlane.xyz with message {id}"
+msgstr "Look it up on explorer.hyperlane.xyz with message {id}"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.fee.gas"
+msgid "Interchain gas"
+msgstr "Interchain gas"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.fee.tx"
+msgid "Network fee"
+msgstr "Network fee"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.flow.done"
+msgid "Bridged"
+msgstr "Bridged"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.flow.summary"
+msgid "{symbol} from {from} to {to}"
+msgstr "{symbol} from {from} to {to}"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.flow.working"
+msgid "Bridging"
+msgstr "Bridging"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.from"
+msgid "From"
+msgstr "From"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.getEtn"
+msgid "Get ETN for fees"
+msgstr "Get ETN for fees"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.inflight"
+msgid "In flight"
+msgstr "In flight"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.landed"
+msgid "Recent"
+msgstr "Recent"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.none"
+msgid "No Hyperlane corridor starts on this chain. USDC moves between Electroneum, Ethereum, Base and Avalanche; USDT between Electroneum and Ethereum."
+msgstr "No Hyperlane corridor starts on this chain. USDC moves between Electroneum, Ethereum, Base and Avalanche; USDT between Electroneum and Ethereum."
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.off"
+msgid "This corridor is switched off: {reason}."
+msgstr "This corridor is switched off: {reason}."
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.recipient"
+msgid "Arrives at"
+msgstr "Arrives at"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.recipient.contract"
+msgid "This address is a contract on both chains."
+msgstr "This address is a contract on both chains."
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.recipient.nocode"
+msgid "A contract here, nothing on the destination — the tokens would be stuck."
+msgstr "A contract here, nothing on the destination — the tokens would be stuck."
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.recipient.other"
+msgid "Someone else"
+msgstr "Someone else"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.state.delivered"
+msgid "Delivered"
+msgstr "Delivered"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.state.dispatched"
+msgid "Dispatched — watching the destination for delivery"
+msgstr "Dispatched — watching the destination for delivery"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.state.failed"
+msgid "Failed"
+msgstr "Failed"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.state.pending"
+msgid "Waiting for the origin block"
+msgstr "Waiting for the origin block"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.state.timeout"
+msgid "Taking longer than 30 minutes"
+msgstr "Taking longer than 30 minutes"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.title"
+msgid "Bridge"
+msgstr "Bridge"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.to"
+msgid "To"
+msgstr "To"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.transfer"
+msgid "{a} {s} · {from} → {to}"
+msgstr "{a} {s} · {from} → {to}"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.amount"
+msgid "Amount in ETN"
+msgstr "Amount in ETN"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.by"
+msgid "by {a}"
+msgstr "by {a}"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.cancelled"
+msgid "Cancelled by the team — contributions are refundable"
+msgstr "Cancelled by the team — contributions are refundable"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.claimable"
+msgid "Claimable"
+msgstr "Claimable"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.claimed"
+msgid "Claimed"
+msgstr "Claimed"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.claimReferral"
+msgid "Claim referral rewards"
+msgstr "Claim referral rewards"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.claimRefund"
+msgid "Claim refund"
+msgstr "Claim refund"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.claimTokens"
+msgid "Claim tokens"
+msgstr "Claim tokens"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.contribute"
+msgid "Contribute"
+msgstr "Contribute"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.contribute.body"
+msgid "Contributions are native ETN. If the campaign reaches its target you claim tokens after launch; if not, you claim a refund."
+msgstr "Contributions are native ETN. If the campaign reaches its target you claim tokens after launch; if not, you claim a refund."
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.contribute.title"
+msgid "Contribute ETN"
+msgstr "Contribute ETN"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.contributed"
+msgid "Contributed"
+msgstr "Contributed"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.failed"
+msgid "Did not reach its target — contributions are refundable"
+msgstr "Did not reach its target — contributions are refundable"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.launched"
+msgid "Launched — the token is trading"
+msgstr "Launched — the token is trading"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.live"
+msgid "Live — taking contributions until {d}"
+msgstr "Live — taking contributions until {d}"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.max"
+msgid "Max per wallet"
+msgstr "Max per wallet"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.min"
+msgid "Min per wallet"
+msgstr "Min per wallet"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.nomax"
+msgid "No limit"
+msgstr "No limit"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.range"
+msgid "Between {a} and {b} ETN per wallet"
+msgstr "Between {a} and {b} ETN per wallet"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.ref"
+msgid "Share your link — you earn {p}% of contributions"
+msgstr "Share your link — you earn {p}% of contributions"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.refEarned"
+msgid "{a} ETN in referral rewards to claim"
+msgstr "{a} ETN in referral rewards to claim"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.star"
+msgid "Tell me when it goes live"
+msgstr "Tell me when it goes live"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.starred"
+msgid "Alerts on"
+msgstr "Alerts on"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.target"
+msgid "{p}% of the {t} ETN launch target · {n} contributors"
+msgstr "{p}% of the {t} ETN launch target · {n} contributors"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.upcoming"
+msgid "Starts {d}"
+msgstr "Starts {d}"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.working"
+msgid "Working…"
+msgstr "Working…"
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.yours"
+msgid "Your contribution"
+msgstr "Your contribution"
+
+#: packages/wallet/src/screens/Networks.tsx
 msgctxt "cancel"
 msgid "Cancel"
 msgstr "Cancel"
@@ -447,6 +812,81 @@ msgstr "Cancel"
 msgctxt "close"
 msgid "Close"
 msgstr "Close"
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "collection.activity"
+msgid "Activity"
+msgstr "Activity"
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "collection.activity.hide"
+msgid "Hide activity"
+msgstr "Hide activity"
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "collection.dividends"
+msgid "Pays marketplace dividends to holders"
+msgstr "Pays marketplace dividends to holders"
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "collection.floor"
+msgid "Floor"
+msgstr "Floor"
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "collection.listed"
+msgid "Listed"
+msgstr "Listed"
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "collection.listedOnly"
+msgid "Listed only"
+msgstr "Listed only"
+
+#: packages/wallet/src/screens/Legends.tsx
+msgctxt "collection.mint"
+msgid "Mint a Legend"
+msgstr "Mint a Legend"
+
+#: packages/wallet/src/screens/Legends.tsx
+msgctxt "collection.mint.body"
+msgid "{p} ETN each · {n} left for you · {s} minted"
+msgstr "{p} ETN each · {n} left for you · {s} minted"
+
+#: packages/wallet/src/screens/Legends.tsx
+msgctxt "collection.mint.key"
+msgid "Mint"
+msgstr "Mint"
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "collection.more"
+msgid "More"
+msgstr "More"
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "collection.owners"
+msgid "Owners"
+msgstr "Owners"
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "collection.sort.price"
+msgid "Price"
+msgstr "Price"
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "collection.sort.rarity"
+msgid "Rarity"
+msgstr "Rarity"
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "collection.supply"
+msgid "Pieces"
+msgstr "Pieces"
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "collection.vol"
+msgid "24h volume"
+msgstr "24h volume"
 
 #: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "continue"
@@ -643,35 +1083,295 @@ msgctxt "devices.what"
 msgid "Paired devices share settings, per-site chains and watch/hardware accounts. Seeds and keys never sync — move a vault with the export code in Security."
 msgstr "Paired devices share settings, per-site chains and watch/hardware accounts. Seeds and keys never sync — move a vault with the export code in Security."
 
-#: packages/wallet/src/screens/shells.tsx
+#: packages/wallet/src/screens/Explore.tsx
 msgctxt "explore.collectibles"
 msgid "Collectibles"
 msgstr "Collectibles"
 
-#: packages/wallet/src/screens/shells.tsx
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.dividends"
+msgid "Pays dividends"
+msgstr "Pays dividends"
+
+#: packages/wallet/src/screens/Explore.tsx
 msgctxt "explore.farms"
 msgid "Farms"
 msgstr "Farms"
 
-#: packages/wallet/src/screens/shells.tsx
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.farms.empty"
+msgid "No farms to show."
+msgstr "No farms to show."
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.floor"
+msgid "Floor {f} ETN"
+msgstr "Floor {f} ETN"
+
+#: packages/wallet/src/screens/Explore.tsx
 msgctxt "explore.launch"
 msgid "Launch"
 msgstr "Launch"
 
-#: packages/wallet/src/screens/shells.tsx
-msgctxt "explore.soon"
-msgid "Markets are on Electroneum. This list fills in with the M6 milestone."
-msgstr "Markets are on Electroneum. This list fills in with the M6 milestone."
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.launch.live"
+msgid "Launch · {n}"
+msgstr "Launch · {n}"
 
-#: packages/wallet/src/screens/shells.tsx
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.listed"
+msgid "{p}% listed"
+msgstr "{p}% listed"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.none"
+msgid "Nothing matches."
+msgstr "Nothing matches."
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.off.body"
+msgid "Prices, collections and campaigns come from ElectroSwap, which this build cannot reach yet. Your balances, sends and swaps still work."
+msgstr "Prices, collections and campaigns come from ElectroSwap, which this build cannot reach yet. Your balances, sends and swaps still work."
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.off.title"
+msgid "Markets are on Electroneum"
+msgstr "Markets are on Electroneum"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.owned"
+msgid "you own {n}"
+msgstr "you own {n}"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.rack"
+msgid "Your collection →"
+msgstr "Your collection →"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.search"
+msgid "Search tokens, collections, campaigns"
+msgstr "Search tokens, collections, campaigns"
+
+#: packages/wallet/src/screens/Explore.tsx
 msgctxt "explore.title"
 msgid "Explore Electroneum"
 msgstr "Explore Electroneum"
 
-#: packages/wallet/src/screens/shells.tsx
+#: packages/wallet/src/screens/Explore.tsx
 msgctxt "explore.tokens"
 msgid "Tokens"
 msgstr "Tokens"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.tokens.empty"
+msgid "No market data yet."
+msgstr "No market data yet."
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.vol"
+msgid "Vol {v}"
+msgstr "Vol {v}"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.vol24"
+msgid "{v} ETN today"
+msgstr "{v} ETN today"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.apy"
+msgid "APY {a}%"
+msgstr "APY {a}%"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.apy.none"
+msgid "APY from ElectroSwap when reachable"
+msgstr "APY from ElectroSwap when reachable"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.apy3"
+msgid "+{a}% {s}"
+msgstr "+{a}% {s}"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.asNative"
+msgid "Receive ETN instead of WETN"
+msgstr "Receive ETN instead of WETN"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.boltBoost"
+msgid "BOLT boost (optional)"
+msgstr "BOLT boost (optional)"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.boost"
+msgid "{b} BOLT boosting at {m}×"
+msgstr "{b} BOLT boosting at {m}×"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.boost.none"
+msgid "No BOLT boost yet"
+msgstr "No BOLT boost yet"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.cb.body"
+msgid "Collect your DYNO, swap it for BOLT, then deposit BOLT as a boost with your next deposit. Boosts land on the 50,000 or 100,000 BOLT stairs — you need {b} more for {m}×."
+msgstr "Collect your DYNO, swap it for BOLT, then deposit BOLT as a boost with your next deposit. Boosts land on the 50,000 or 100,000 BOLT stairs — you need {b} more for {m}×."
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.cb.swap"
+msgid "Swap DYNO for BOLT"
+msgstr "Swap DYNO for BOLT"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.cb.title"
+msgid "Collect & boost"
+msgstr "Collect & boost"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.collect"
+msgid "Collect"
+msgstr "Collect"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.collected"
+msgid "Collected"
+msgstr "Collected"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.deposit"
+msgid "Deposit"
+msgstr "Deposit"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.deposit.title"
+msgid "Deposit"
+msgstr "Deposit"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.deposited"
+msgid "Deposited"
+msgstr "Deposited"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.dilution"
+msgid "A second deposit re-weights your duration bonus: {a}× today → {b}× after this deposit. It climbs again from there."
+msgstr "A second deposit re-weights your duration bonus: {a}× today → {b}× after this deposit. It climbs again from there."
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.farmers"
+msgid "{n} farmers"
+msgstr "{n} farmers"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.max"
+msgid "Full 2.5× duration bonus"
+msgstr "Full 2.5× duration bonus"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.nextStair"
+msgid "{b} more BOLT for {m}×"
+msgstr "{b} more BOLT for {m}×"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.none"
+msgid "Deposit both sides of the pair to start earning DYNO. Your multiplier grows with time and with BOLT deposited as a boost."
+msgstr "Deposit both sides of the pair to start earning DYNO. Your multiplier grows with time and with BOLT deposited as a boost."
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.pending"
+msgid "{d} DYNO to collect"
+msgstr "{d} DYNO to collect"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.ratio"
+msgid "The pool sets the ratio; unused amounts come back to you."
+msgstr "The pool sets the ratio; unused amounts come back to you."
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.share"
+msgid "{p}% of the farm"
+msgstr "{p}% of the farm"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.stair"
+msgid "{b} → {m}×"
+msgstr "{b} → {m}×"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.stair.land"
+msgid "Lands on the {b} BOLT stair · {m}×"
+msgstr "Lands on the {b} BOLT stair · {m}×"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.steps"
+msgid "{n} signature{s}: the farm is allowed to pull each token once, then the deposit."
+msgstr "{n} signature{s}: the farm is allowed to pull each token once, then the deposit."
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.title"
+msgid "Farm"
+msgstr "Farm"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.to2"
+msgid "2.0× on {d}"
+msgstr "2.0× on {d}"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.to25"
+msgid "2.5× on {d}"
+msgstr "2.5× on {d}"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.tvl"
+msgid "TVL {v}"
+msgstr "TVL {v}"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.w.bolt"
+msgid "{b} BOLT boost comes back — it only unlocks when you withdraw everything"
+msgstr "{b} BOLT boost comes back — it only unlocks when you withdraw everything"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.w.collected"
+msgid "{d} DYNO collected with it"
+msgstr "{d} DYNO collected with it"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.w.keeps"
+msgid "You keep your duration multiplier. BOLT unlocks only when you withdraw everything."
+msgstr "You keep your duration multiplier. BOLT unlocks only when you withdraw everything."
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.w.leaves"
+msgid "What leaves the farm"
+msgstr "What leaves the farm"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.withdraw"
+msgid "Withdraw"
+msgstr "Withdraw"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.withdraw.title"
+msgid "Withdraw"
+msgstr "Withdraw"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.withdrawn"
+msgid "Withdrawn"
+msgstr "Withdrawn"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.working"
+msgid "Working…"
+msgstr "Working…"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.yours"
+msgid "Your position"
+msgstr "Your position"
 
 #: packages/wallet/src/screens/FeeScheduleSheet.tsx
 msgctxt "fee.getBolt"
@@ -733,27 +1433,72 @@ msgctxt "fee.you"
 msgid "You: tier {t} · {p}"
 msgstr "You: tier {t} · {p}"
 
+#: packages/wallet/src/components/FlowPlate.tsx
+msgctxt "flow.accept"
+msgid "Accept the offer"
+msgstr "Accept the offer"
+
 #: packages/wallet/src/screens/Swap.tsx
 msgctxt "flow.again"
 msgid "Back to Swap"
 msgstr "Back to Swap"
 
-#: packages/wallet/src/screens/Swap.tsx
+#: packages/wallet/src/components/FlowPlate.tsx
 msgctxt "flow.approve"
-msgid "Allow Permit2"
-msgstr "Allow Permit2"
+msgid "Allow the contract to pull the tokens"
+msgstr "Allow the contract to pull the tokens"
 
-#: packages/wallet/src/screens/Swap.tsx
+#: packages/wallet/src/components/FlowPlate.tsx
+msgctxt "flow.approveCollection"
+msgid "Let the marketplace move this collection"
+msgstr "Let the marketplace move this collection"
+
+#: packages/wallet/src/components/FlowPlate.tsx
+msgctxt "flow.back"
+msgid "Back"
+msgstr "Back"
+
+#: packages/wallet/src/components/FlowPlate.tsx
+msgctxt "flow.buy"
+msgid "Buy"
+msgstr "Buy"
+
+#: packages/wallet/src/components/FlowPlate.tsx
 msgctxt "flow.cancel"
 msgid "Cancel order"
 msgstr "Cancel order"
 
-#: packages/wallet/src/screens/Swap.tsx
+#: packages/wallet/src/components/FlowPlate.tsx
+msgctxt "flow.cancelOrder"
+msgid "Cancel the order"
+msgstr "Cancel the order"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "flow.claim"
+msgid "Claim"
+msgstr "Claim"
+
+#: packages/wallet/src/components/FlowPlate.tsx
+msgctxt "flow.collect"
+msgid "Collect"
+msgstr "Collect"
+
+#: packages/wallet/src/components/FlowPlate.tsx
 msgctxt "flow.confirmed"
 msgid "Done"
 msgstr "Done"
 
-#: packages/wallet/src/screens/Swap.tsx
+#: packages/wallet/src/components/FlowPlate.tsx
+msgctxt "flow.contribute"
+msgid "Contribute"
+msgstr "Contribute"
+
+#: packages/wallet/src/components/FlowPlate.tsx
+msgctxt "flow.deposit"
+msgid "Deposit"
+msgstr "Deposit"
+
+#: packages/wallet/src/components/FlowPlate.tsx
 msgctxt "flow.failed"
 msgid "Failed"
 msgstr "Failed"
@@ -763,17 +1508,32 @@ msgctxt "flow.failed.title"
 msgid "The network refused it"
 msgstr "The network refused it"
 
-#: packages/wallet/src/screens/Swap.tsx
+#: packages/wallet/src/components/FlowPlate.tsx
+msgctxt "flow.mint"
+msgid "Mint"
+msgstr "Mint"
+
+#: packages/wallet/src/components/FlowPlate.tsx
 msgctxt "flow.pending"
 msgid "Next"
 msgstr "Next"
 
-#: packages/wallet/src/screens/Swap.tsx
+#: packages/wallet/src/components/FlowPlate.tsx
 msgctxt "flow.permit"
 msgid "Permit this amount"
 msgstr "Permit this amount"
 
-#: packages/wallet/src/screens/Swap.tsx
+#: packages/wallet/src/components/FlowPlate.tsx
+msgctxt "flow.postOrder"
+msgid "Publish to the marketplace"
+msgstr "Publish to the marketplace"
+
+#: packages/wallet/src/components/FlowPlate.tsx
+msgctxt "flow.register"
+msgid "Activate dividends"
+msgstr "Activate dividends"
+
+#: packages/wallet/src/components/FlowPlate.tsx
 msgctxt "flow.rejected"
 msgid "Rejected"
 msgstr "Rejected"
@@ -783,32 +1543,47 @@ msgctxt "flow.rejected.title"
 msgid "Nothing was signed"
 msgstr "Nothing was signed"
 
-#: packages/wallet/src/screens/Swap.tsx
+#: packages/wallet/src/components/FlowPlate.tsx
 msgctxt "flow.signing"
 msgid "Waiting for you"
 msgstr "Waiting for you"
 
-#: packages/wallet/src/screens/Swap.tsx
+#: packages/wallet/src/components/FlowPlate.tsx
+msgctxt "flow.signOrder"
+msgid "Sign the order"
+msgstr "Sign the order"
+
+#: packages/wallet/src/components/FlowPlate.tsx
 msgctxt "flow.submit"
 msgid "Place order"
 msgstr "Place order"
 
-#: packages/wallet/src/screens/Swap.tsx
+#: packages/wallet/src/components/FlowPlate.tsx
 msgctxt "flow.submitted"
 msgid "Confirming…"
 msgstr "Confirming…"
 
-#: packages/wallet/src/screens/Swap.tsx
+#: packages/wallet/src/components/FlowPlate.tsx
 msgctxt "flow.swap"
 msgid "Swap"
 msgstr "Swap"
+
+#: packages/wallet/src/components/FlowPlate.tsx
+msgctxt "flow.transfer"
+msgid "Send the piece"
+msgstr "Send the piece"
 
 #: packages/wallet/src/screens/Swap.tsx
 msgctxt "flow.tryAgain"
 msgid "Try again"
 msgstr "Try again"
 
-#: packages/wallet/src/screens/Swap.tsx
+#: packages/wallet/src/components/FlowPlate.tsx
+msgctxt "flow.withdraw"
+msgid "Withdraw"
+msgstr "Withdraw"
+
+#: packages/wallet/src/components/FlowPlate.tsx
 msgctxt "flow.wrap"
 msgid "Wrap ETN"
 msgstr "Wrap ETN"
@@ -817,6 +1592,11 @@ msgstr "Wrap ETN"
 msgctxt "hide"
 msgid "Hide"
 msgstr "Hide"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.acc.bridge"
+msgid "Hyperlane {s} arriving on {c} · about {m} min"
+msgstr "Hyperlane {s} arriving on {c} · about {m} min"
 
 #: packages/wallet/src/screens/Home.tsx
 msgctxt "home.acc.pending"
@@ -844,11 +1624,6 @@ msgid "Back up your recovery phrase"
 msgstr "Back up your recovery phrase"
 
 #: packages/wallet/src/screens/Home.tsx
-msgctxt "home.collectibles.empty"
-msgid "No collectibles yet. Explore collections on Electroneum."
-msgstr "No collectibles yet. Explore collections on Electroneum."
-
-#: packages/wallet/src/screens/Home.tsx
 msgctxt "home.create.body"
 msgid "Create a new recovery phrase or import one you already have. Electroneum is your home chain."
 msgstr "Create a new recovery phrase or import one you already have. Electroneum is your home chain."
@@ -874,6 +1649,11 @@ msgid "Receive ETN to get started"
 msgstr "Receive ETN to get started"
 
 #: packages/wallet/src/screens/Home.tsx
+msgctxt "home.launch"
+msgid "{s} is live on the launchpad"
+msgstr "{s} is live on the launchpad"
+
+#: packages/wallet/src/screens/Home.tsx
 msgctxt "home.locked.body"
 msgid "Unlock to see balances and sign."
 msgstr "Unlock to see balances and sign."
@@ -894,6 +1674,21 @@ msgid "Custom"
 msgstr "Custom"
 
 #: packages/wallet/src/screens/Home.tsx
+msgctxt "home.pos.campaign"
+msgid "{s}: {a} ETN contributed{k}"
+msgstr "{s}: {a} ETN contributed{k}"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.pos.order"
+msgid "Open order: {a} {s} → at least {b} {u}"
+msgstr "Open order: {a} {s} → at least {b} {u}"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.pos.pending"
+msgid "{d} DYNO to collect"
+msgstr "{d} DYNO to collect"
+
+#: packages/wallet/src/screens/Home.tsx
 msgctxt "home.positions.empty"
 msgid "No farm positions, open orders or bridges in flight."
 msgstr "No farm positions, open orders or bridges in flight."
@@ -902,6 +1697,11 @@ msgstr "No farm positions, open orders or bridges in flight."
 msgctxt "home.receive"
 msgid "Receive"
 msgstr "Receive"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.scope.all"
+msgid "All chains"
+msgstr "All chains"
 
 #: packages/wallet/src/screens/Home.tsx
 msgctxt "home.scope.etn"
@@ -943,6 +1743,11 @@ msgctxt "home.since.none"
 msgid "No priced change to report."
 msgstr "No priced change to report."
 
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.tier"
+msgid "Tier {t}"
+msgstr "Tier {t}"
+
 #: packages/wallet/src/screens/Token.tsx
 msgctxt "home.today"
 msgid "today"
@@ -953,7 +1758,7 @@ msgctxt "home.unpriced"
 msgid "{n} without price"
 msgstr "{n} without price"
 
-#: packages/wallet/src/screens/Home.tsx
+#: packages/wallet/src/screens/Token.tsx
 msgctxt "key.bridge"
 msgid "Bridge"
 msgstr "Bridge"
@@ -1038,6 +1843,96 @@ msgctxt "ledger.unavailable"
 msgid "Ledger over USB works from the full tab in Chrome. Bluetooth (phone), Trezor and Keystone arrive with M8. You can watch the device address meanwhile."
 msgstr "Ledger over USB works from the full tab in Chrome. Bluetooth (phone), Trezor and Keystone arrive with M8. You can watch the device address meanwhile."
 
+#: packages/wallet/src/components/LegendsVault.tsx
+msgctxt "legends.activate"
+msgid "Activate dividends"
+msgstr "Activate dividends"
+
+#: packages/wallet/src/components/LegendsVault.tsx
+msgctxt "legends.activate.body"
+msgid "{n} of your pieces are not earning yet — activate them once and they share every fee from then on."
+msgstr "{n} of your pieces are not earning yet — activate them once and they share every fee from then on."
+
+#: packages/wallet/src/screens/Legends.tsx
+msgctxt "legends.activated"
+msgid "Dividends activated"
+msgstr "Dividends activated"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "legends.activateVerb"
+msgid "Activate"
+msgstr "Activate"
+
+#: packages/wallet/src/components/LegendsVault.tsx
+msgctxt "legends.body"
+msgid "Marketplace fees shared with holders. Fees keep flowing in; the vessel fills until you claim."
+msgstr "Marketplace fees shared with holders. Fees keep flowing in; the vessel fills until you claim."
+
+#: packages/wallet/src/screens/Legends.tsx
+msgctxt "legends.browse"
+msgid "See the collection"
+msgstr "See the collection"
+
+#: packages/wallet/src/components/LegendsVault.tsx
+msgctxt "legends.claim"
+msgid "Claim"
+msgstr "Claim"
+
+#: packages/wallet/src/components/LegendsVault.tsx
+msgctxt "legends.claimable"
+msgid "{a} ETN to claim"
+msgstr "{a} ETN to claim"
+
+#: packages/wallet/src/screens/Legends.tsx
+msgctxt "legends.claimed"
+msgid "Claimed"
+msgstr "Claimed"
+
+#: packages/wallet/src/components/LegendsVault.tsx
+msgctxt "legends.count"
+msgid "{n} piece{s}"
+msgstr "{n} piece{s}"
+
+#: packages/wallet/src/screens/Legends.tsx
+msgctxt "legends.how"
+msgid "How it works: the marketplace fee receiver is the dividend distributor. It keeps two thirds for ElectroSwap and credits one third to every registered Legend. Claiming pays the ETN straight to you; there is no allowance involved."
+msgstr "How it works: the marketplace fee receiver is the dividend distributor. It keeps two thirds for ElectroSwap and credits one third to every registered Legend. Claiming pays the ETN straight to you; there is no allowance involved."
+
+#: packages/wallet/src/components/LegendsVault.tsx
+msgctxt "legends.lifetime"
+msgid "Lifetime paid to Legends holders: {a} ETN"
+msgstr "Lifetime paid to Legends holders: {a} ETN"
+
+#: packages/wallet/src/screens/Legends.tsx
+msgctxt "legends.minted"
+msgid "Minted"
+msgstr "Minted"
+
+#: packages/wallet/src/screens/Legends.tsx
+msgctxt "legends.none"
+msgid "You hold no Electric Legends yet. Every Legend shares a third of the marketplace fees, forever."
+msgstr "You hold no Electric Legends yet. Every Legend shares a third of the marketplace fees, forever."
+
+#: packages/wallet/src/screens/Legends.tsx
+msgctxt "legends.screen"
+msgid "Electric Legends"
+msgstr "Electric Legends"
+
+#: packages/wallet/src/components/LegendsVault.tsx
+msgctxt "legends.share"
+msgid "Your share of the next fee: {p}%"
+msgstr "Your share of the next fee: {p}%"
+
+#: packages/wallet/src/components/LegendsVault.tsx
+msgctxt "legends.title"
+msgid "Electric Legends dividends"
+msgstr "Electric Legends dividends"
+
+#: packages/wallet/src/screens/Legends.tsx
+msgctxt "legends.working"
+msgid "Working…"
+msgstr "Working…"
+
 #: packages/wallet/src/screens/Swap.tsx
 msgctxt "limit.above"
 msgid "{p}% above market — fills when the price gets there"
@@ -1103,6 +1998,11 @@ msgctxt "limit.working"
 msgid "Placing your order…"
 msgstr "Placing your order…"
 
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "max"
+msgid "Max"
+msgstr "Max"
+
 #: packages/wallet/src/screens/Moments.tsx
 msgctxt "moments.discharge"
 msgid "Fire discharge"
@@ -1117,6 +2017,86 @@ msgstr "Roll digits"
 msgctxt "moments.title"
 msgid "Signature moments"
 msgstr "Signature moments"
+
+#: packages/wallet/src/screens/Networks.tsx
+msgctxt "networks.body"
+msgid "Electroneum is home and always on. Other chains show balances, send, receive, activity and approvals through public RPCs; swaps and markets stay on Electroneum."
+msgstr "Electroneum is home and always on. Other chains show balances, send, receive, activity and approvals through public RPCs; swaps and markets stay on Electroneum."
+
+#: packages/wallet/src/screens/Networks.tsx
+msgctxt "networks.home"
+msgid "Home"
+msgstr "Home"
+
+#: packages/wallet/src/screens/Networks.tsx
+msgctxt "networks.rpc.add"
+msgid "Custom RPC"
+msgstr "Custom RPC"
+
+#: packages/wallet/src/screens/Networks.tsx
+msgctxt "networks.rpc.bad"
+msgid "That RPC did not answer with this chain id."
+msgstr "That RPC did not answer with this chain id."
+
+#: packages/wallet/src/screens/Networks.tsx
+msgctxt "networks.rpc.clear"
+msgid "Back to default"
+msgstr "Back to default"
+
+#: packages/wallet/src/screens/Networks.tsx
+msgctxt "networks.rpc.custom"
+msgid "custom RPC"
+msgstr "custom RPC"
+
+#: packages/wallet/src/screens/Networks.tsx
+msgctxt "networks.rpc.edit"
+msgid "Change RPC"
+msgstr "Change RPC"
+
+#: packages/wallet/src/screens/Networks.tsx
+msgctxt "networks.rpc.save"
+msgid "Use this RPC"
+msgstr "Use this RPC"
+
+#: packages/wallet/src/screens/Networks.tsx
+msgctxt "networks.testnet"
+msgid "Show Electroneum testnet"
+msgstr "Show Electroneum testnet"
+
+#: packages/wallet/src/screens/Networks.tsx
+msgctxt "networks.testnet.hint"
+msgid "Chain 5201420. Test ETN has no value; names do not resolve there."
+msgstr "Chain 5201420. Test ETN has no value; names do not resolve there."
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "nftact.listed"
+msgid "Listed"
+msgstr "Listed"
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "nftact.moved"
+msgid "Moved"
+msgstr "Moved"
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "nftact.offer"
+msgid "Offer on"
+msgstr "Offer on"
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "nftact.offerCancelled"
+msgid "Offer withdrawn on"
+msgstr "Offer withdrawn on"
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "nftact.sold"
+msgid "Sold"
+msgstr "Sold"
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "nftact.unlisted"
+msgid "Unlisted"
+msgstr "Unlisted"
 
 #: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "ob.confirm"
@@ -1303,6 +2283,236 @@ msgctxt "ob.words.title"
 msgid "Write these 12 words down, in order"
 msgstr "Write these 12 words down, in order"
 
+#: packages/wallet/src/screens/Offers.tsx
+msgctxt "offers.accept"
+msgid "Accept"
+msgstr "Accept"
+
+#: packages/wallet/src/screens/Offers.tsx
+msgctxt "offers.expires"
+msgid "until {d}"
+msgstr "until {d}"
+
+#: packages/wallet/src/screens/Offers.tsx
+msgctxt "offers.from"
+msgid "{p} WETN from {a}"
+msgstr "{p} WETN from {a}"
+
+#: packages/wallet/src/screens/Offers.tsx
+msgctxt "offers.made"
+msgid "Made by you"
+msgstr "Made by you"
+
+#: packages/wallet/src/screens/Offers.tsx
+msgctxt "offers.made.none"
+msgid "You have no open offers."
+msgstr "You have no open offers."
+
+#: packages/wallet/src/screens/Offers.tsx
+msgctxt "offers.obligation"
+msgid "Your open offers commit {o} WETN; you hold {b} WETN."
+msgstr "Your open offers commit {o} WETN; you hold {b} WETN."
+
+#: packages/wallet/src/screens/Offers.tsx
+msgctxt "offers.received"
+msgid "On your pieces"
+msgstr "On your pieces"
+
+#: packages/wallet/src/screens/Offers.tsx
+msgctxt "offers.received.none"
+msgid "No offers yet."
+msgstr "No offers yet."
+
+#: packages/wallet/src/screens/Offers.tsx
+msgctxt "offers.title"
+msgid "Offers"
+msgstr "Offers"
+
+#: packages/wallet/src/screens/Offers.tsx
+msgctxt "offers.working"
+msgid "Working…"
+msgstr "Working…"
+
+#: packages/wallet/src/screens/Offers.tsx
+msgctxt "offers.yours"
+msgid "{p} WETN · until {d}"
+msgstr "{p} WETN · until {d}"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.accept"
+msgid "Accept offer"
+msgstr "Accept offer"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.best"
+msgid "Best offer"
+msgstr "Best offer"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.bought"
+msgid "It is yours"
+msgstr "It is yours"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.buy"
+msgid "Buy"
+msgstr "Buy"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.cancelled"
+msgid "Cancelled"
+msgstr "Cancelled"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.cancelListing"
+msgid "Cancel listing"
+msgstr "Cancel listing"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.days"
+msgid "{d} days"
+msgstr "{d} days"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.done"
+msgid "Done"
+msgstr "Done"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.earns"
+msgid "This piece earns marketplace dividends — {a} ETN unclaimed"
+msgstr "This piece earns marketplace dividends — {a} ETN unclaimed"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.earns.none"
+msgid "This piece earns marketplace dividends (activate them after you hold it)."
+msgstr "This piece earns marketplace dividends (activate them after you hold it)."
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.last"
+msgid "Last sale"
+msgstr "Last sale"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.list"
+msgid "List"
+msgstr "List"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.list.title"
+msgid "List for sale"
+msgstr "List for sale"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.listed"
+msgid "Listed"
+msgstr "Listed"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.listing"
+msgid "Listed at"
+msgstr "Listed at"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.loading"
+msgid "Lighting it up…"
+msgstr "Lighting it up…"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.offer"
+msgid "Offer"
+msgstr "Offer"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.offer.body"
+msgid "Offers are made in WETN. If you are short, the wallet wraps ETN for you first. The owner can accept any time before it expires."
+msgstr "Offers are made in WETN. If you are short, the wallet wraps ETN for you first. The owner can accept any time before it expires."
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.offer.price"
+msgid "Offer in WETN"
+msgstr "Offer in WETN"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.offer.title"
+msgid "Make an offer"
+msgstr "Make an offer"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.offered"
+msgid "Offer made"
+msgstr "Offer made"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.offers"
+msgid "Offers"
+msgstr "Offers"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.owner"
+msgid "Owned by {a}"
+msgstr "Owned by {a}"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.price"
+msgid "Price in ETN"
+msgstr "Price in ETN"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.proceeds"
+msgid "You receive {a} ETN after the 3% marketplace fee{c}"
+msgstr "You receive {a} ETN after the 3% marketplace fee{c}"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.rank"
+msgid "Rank #{r}"
+msgstr "Rank #{r}"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.sent"
+msgid "Sent"
+msgstr "Sent"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.sold"
+msgid "Sold"
+msgstr "Sold"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.transfer"
+msgid "Send"
+msgstr "Send"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.transfer.body"
+msgid "The recipient goes through the same address checks as a send. A collectible cannot be recalled."
+msgstr "The recipient goes through the same address checks as a send. A collectible cannot be recalled."
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.transfer.title"
+msgid "Send this piece"
+msgstr "Send this piece"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.transfer.to"
+msgid "To"
+msgstr "To"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.web"
+msgid "On ElectroSwap"
+msgstr "On ElectroSwap"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.working"
+msgid "Working…"
+msgstr "Working…"
+
+#: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.yours"
+msgid "Yours"
+msgstr "Yours"
+
 #: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "pw.good"
 msgid "Good"
@@ -1327,6 +2537,76 @@ msgstr "Strong"
 msgctxt "quiz.wrong"
 msgid "Those words do not match your phrase. Check the numbers and try again."
 msgstr "Those words do not match your phrase. Check the numbers and try again."
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.all"
+msgid "All"
+msgstr "All"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.count"
+msgid "{n} piece{s}"
+msgstr "{n} piece{s}"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.empty"
+msgid "Nothing on the shelves yet. Explore collections on Electroneum — buying a piece lands it here."
+msgstr "Nothing on the shelves yet. Explore collections on Electroneum — buying a piece lands it here."
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.explore"
+msgid "Explore collectibles"
+msgstr "Explore collectibles"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.f.all"
+msgid "All"
+msgstr "All"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.f.listed"
+msgid "Listed"
+msgstr "Listed"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.f.unlisted"
+msgid "Unlisted"
+msgstr "Unlisted"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.floor"
+msgid "{v} ETN at floor"
+msgstr "{v} ETN at floor"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.inbox"
+msgid "Offers inbox"
+msgstr "Offers inbox"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.listed"
+msgid "{n} listed"
+msgstr "{n} listed"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.offer"
+msgid "Offer"
+msgstr "Offer"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.offers"
+msgid "{n} with offers →"
+msgstr "{n} with offers →"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.open"
+msgid "Open the Rack"
+msgstr "Open the Rack"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.title"
+msgid "Your collection"
+msgstr "Your collection"
 
 #: packages/wallet/src/screens/Receive.tsx
 msgctxt "receive.copy"
@@ -1615,8 +2895,18 @@ msgstr "Networks"
 
 #: packages/wallet/src/screens/shells.tsx
 msgctxt "settings.networks.rows"
-msgid "Chains, custom RPCs, tokens"
-msgstr "Chains, custom RPCs, tokens"
+msgid "Which chains show, custom RPCs, testnet"
+msgstr "Which chains show, custom RPCs, testnet"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.notifications"
+msgid "Notifications"
+msgstr "Notifications"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.notifications.rows"
+msgid "Watchlist alerts, campaigns going live, rewards and dividends"
+msgstr "Watchlist alerts, campaigns going live, rewards and dividends"
 
 #: packages/wallet/src/screens/shells.tsx
 msgctxt "settings.security"
@@ -1653,6 +2943,11 @@ msgctxt "show"
 msgid "Show"
 msgstr "Show"
 
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "sign.accept"
+msgid "Accept"
+msgstr "Accept"
+
 #: packages/wallet/src/screens/ConnectedSites.tsx
 msgctxt "sites.disconnect"
 msgid "Disconnect"
@@ -1677,6 +2972,56 @@ msgstr "Each site keeps its own chain. Changing the Home chain never changes a s
 msgctxt "sites.title"
 msgid "Connected sites"
 msgstr "Connected sites"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "sky.cancelled"
+msgid "Cancelled"
+msgstr "Cancelled"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "sky.days"
+msgid "{d}d {h}h"
+msgstr "{d}d {h}h"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "sky.empty"
+msgid "No campaigns right now. Star one from a share link to be told when it goes live."
+msgstr "No campaigns right now. Star one from a share link to be told when it goes live."
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "sky.failed"
+msgid "Did not reach its target"
+msgstr "Did not reach its target"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "sky.finalizing"
+msgid "Waiting for the team to finalize"
+msgstr "Waiting for the team to finalize"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "sky.hours"
+msgid "{h}h {m}m"
+msgstr "{h}h {m}m"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "sky.launched"
+msgid "Launched"
+msgstr "Launched"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "sky.live"
+msgid "Live · ends in {t}"
+msgstr "Live · ends in {t}"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "sky.raised"
+msgid "{r} / {t} ETN"
+msgstr "{r} / {t} ETN"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "sky.upcoming"
+msgid "Starts in {t}"
+msgstr "Starts in {t}"
 
 #: packages/wallet/src/screens/Spending.tsx
 msgctxt "spending.exact"
@@ -1997,4 +3342,19 @@ msgstr "That password does not open this vault."
 msgctxt "watch.label"
 msgid "Watch address"
 msgstr "Watch address"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "watch.only"
+msgid "Watch-only — import a key or pair a device."
+msgstr "Watch-only — import a key or pair a device."
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "watch.star"
+msgid "Star"
+msgstr "Star"
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "watch.starred"
+msgid "Starred"
+msgstr "Starred"
 

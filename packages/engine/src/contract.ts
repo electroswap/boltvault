@@ -50,7 +50,7 @@ import type {
   Positions,
   SyncStatus,
   VaultStatus,
-} from './schema'
+ BridgeQuote, BridgeRoute, BridgeStatus } from './schema'
 
 export type Unsubscribe = () => void
 
@@ -246,6 +246,15 @@ export interface LegendsNamespace {
   mint(input: { accountId: AccountId; chainId: number; count: number }): Promise<{ flowId: string; requestId: string | null }>
 }
 
+/** The Hyperlane bridge (§8.7): verified corridors, a quote with the interchain gas, the flow, and delivery status. */
+export interface BridgeNamespace {
+  routes(input: { fromChainId: number; token?: string }): Promise<BridgeRoute[]>
+  quote(input: { accountId: AccountId; fromChainId: number; toChainId: number; token: string; amount: string; recipient?: string }): Promise<BridgeQuote>
+  execute(input: { accountId: AccountId; fromChainId: number; toChainId: number; token: string; amount: string; recipient?: string }): Promise<{ flowId: string; requestId: string | null }>
+  list(input?: { accountId?: AccountId }): Promise<BridgeStatus[]>
+  status(input: { id: string }): Promise<BridgeStatus | null>
+}
+
 /** Yield farms (§8.8): positions from the chain; Deposit · Withdraw · Collect through the sheet. */
 export interface FarmNamespace {
   list(input: { chainId: number; accountId?: AccountId }): Promise<FarmView[]>
@@ -343,6 +352,7 @@ export interface WalletEngine {
   readonly launchpad: LaunchpadNamespace
   readonly watchlist: WatchlistNamespace
   readonly positions: PositionsNamespace
+  readonly bridge: BridgeNamespace
   readonly events: EngineEvents
 }
 

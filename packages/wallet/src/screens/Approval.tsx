@@ -51,7 +51,7 @@ function verbFor(payload: ApprovalPayload, origin: string): string {
   if (origin === 'internal:nft:list') return t({ id: 'piece.list', message: 'List' })
   if (origin === 'internal:nft:offer') return t({ id: 'piece.offer', message: 'Offer' })
   if (origin === 'internal:nft:buy') return t({ id: 'piece.buy', message: 'Buy' })
-  if (origin === 'internal:nft:accept') return t({ id: 'piece.accept', message: 'Accept' })
+  if (origin === 'internal:nft:accept') return t({ id: 'sign.accept', message: 'Accept' })
   if (origin === 'internal:nft:cancel') return t({ id: 'approval.cancel', message: 'Cancel' })
   if (origin === 'internal:nft:transfer') return t({ id: 'key.send', message: 'Send' })
   if (origin === 'internal:nft:mint') return t({ id: 'collection.mint.key', message: 'Mint' })

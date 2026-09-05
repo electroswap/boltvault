@@ -141,6 +141,9 @@ export interface BoltVaultSettings {
   exactApprovals: boolean
   /** Default swap slippage in bips (0.5 % = 50). */
   slippageBips: number
+  /** Chains shown besides Electroneum (§8.14 Networks). */
+  enabledChains: number[]
+  showTestnet: boolean
   /** Unknown-recipient extra confirm (default off; poison 4+4 is always on). */
   sendWhitelist: boolean
   autoLock: AutoLock
@@ -155,6 +158,8 @@ export const DEFAULT_SETTINGS: BoltVaultSettings = {
   ethSignEnabled: false,
   exactApprovals: true,
   slippageBips: 50,
+  enabledChains: [1, 56, 8453, 42161, 10, 137, 43114],
+  showTestnet: false,
   sendWhitelist: false,
   autoLock: '5min',
   displayCurrency: 'USD',

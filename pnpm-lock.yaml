@@ -8,6 +8,12 @@ importers:
 
   .:
     devDependencies:
+      '@boltvault/chains':
+        specifier: workspace:*
+        version: link:packages/chains
+      '@boltvault/electroswap':
+        specifier: workspace:*
+        version: link:packages/electroswap
       '@eslint/js':
         specifier: ^9.39.5
         version: 9.39.5
@@ -6923,9 +6929,7 @@ snapshots:
       metro-runtime: 0.84.6
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-color@2.1.0': {}
 

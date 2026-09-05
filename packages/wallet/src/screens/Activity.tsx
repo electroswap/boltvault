@@ -69,7 +69,15 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
     if (!active) return
     let alive = true
     setScanning(true)
-    engine.activityScan.scan({ accountId: active.id, chainId: 52014 }).catch(() => undefined).finally(() => alive && setScanning(false))
+    engine.settings
+      .get()
+      .then(async (s) => {
+        for (const chainId of [52014, ...s.enabledChains]) {
+          if (!alive) return
+          await engine.activityScan.scan({ accountId: active.id, chainId }).catch(() => undefined)
+        }
+      })
+      .finally(() => alive && setScanning(false))
     return () => {
       alive = false
     }

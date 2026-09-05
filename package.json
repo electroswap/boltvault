@@ -18,6 +18,8 @@
     "i18n:extract": "node tools/i18n-extract.mjs"
   },
   "devDependencies": {
+    "@boltvault/chains": "workspace:*",
+    "@boltvault/electroswap": "workspace:*",
     "@eslint/js": "^9.39.5",
     "@lingui/cli": "^5.9.5",
     "@types/pngjs": "^6.0.5",

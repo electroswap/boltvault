@@ -18,14 +18,14 @@ import { formatQuantity } from '../format'
 
 const ETN = 52014
 
-export function Send({ body, token: initialToken, to: initialTo, requestId: initialRequestId, reducedMotion = false }: { body: 'extension-popup' | 'extension-tab' | 'mobile'; token?: string; to?: string; requestId?: string; reducedMotion?: boolean }) {
+export function Send({ body, token: initialToken, to: initialTo, requestId: initialRequestId, reducedMotion = false, chainId: initialChainId }: { body: 'extension-popup' | 'extension-tab' | 'mobile'; token?: string; to?: string; requestId?: string; reducedMotion?: boolean; chainId?: number }) {
   const engine = useEngine()
   const router = useRouter()
   const { active } = useWalletState()
   const { width, height } = useWindowDimensions()
   const portfolio = usePortfolio(active?.id ?? null)
   const { entries } = useActivity(active?.id ?? null)
-  const [chainId] = useState(ETN)
+  const [chainId] = useState(initialChainId ?? ETN)
   const [tokens, setTokens] = useState<TokenView[]>([])
   const [token, setToken] = useState(initialToken ?? 'native')
   const [to, setTo] = useState(initialTo ?? '')

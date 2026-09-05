@@ -14,9 +14,10 @@ export interface PortfolioState {
  * mounted the heartbeat asks for a refresh on Electroneum's cadence (§2.8);
  * the engine debounces, so several surfaces share one read.
  */
-export function usePortfolio(accountId: string | null, intervalMs = 5_000): PortfolioState {
+export function usePortfolio(accountId: string | null, intervalMs = 5_000, chainIds?: readonly number[]): PortfolioState {
   const engine = useEngine()
   const [state, setState] = useState<PortfolioState>({ snapshot: null, unavailable: false, error: null })
+  const scope = chainIds ? chainIds.join(',') : ''
 
   useEffect(() => {
     if (!accountId) {
@@ -25,7 +26,7 @@ export function usePortfolio(accountId: string | null, intervalMs = 5_000): Port
     }
     let cancelled = false
     const ask = (): void => {
-      engine.portfolio.snapshot({ accountId }).then(
+      engine.portfolio.snapshot({ accountId, ...(scope ? { chainIds: scope.split(',').map(Number) } : {}) }).then(
         (snapshot) => {
           if (!cancelled) setState((prev) => (prev.snapshot && !snapshot.stale ? { snapshot, unavailable: false, error: null } : prev.snapshot && snapshot.stale ? prev : { snapshot, unavailable: false, error: null }))
         },
@@ -46,7 +47,7 @@ export function usePortfolio(accountId: string | null, intervalMs = 5_000): Port
       clearInterval(timer)
       off()
     }
-  }, [engine, accountId, intervalMs])
+  }, [engine, accountId, intervalMs, scope])
 
   return state
 }

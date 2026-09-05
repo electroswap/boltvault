@@ -29,6 +29,8 @@ import { Farm } from '../screens/Farm'
 import { Campaign } from '../screens/Campaign'
 import { Legends } from '../screens/Legends'
 import { Alerts } from '../screens/Alerts'
+import { Bridge } from '../screens/Bridge'
+import { Networks } from '../screens/Networks'
 import { Spending } from '../screens/Spending'
 import { Swap } from '../screens/Swap'
 import { Token } from '../screens/Token'
@@ -110,6 +112,14 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
     case 'legends':
       screen = <Legends body={body} reducedMotion={reducedMotionOverride} />
       break
+    case 'bridge': {
+      const p = current.params as { chainId?: number; token?: string } | undefined
+      screen = <Bridge body={body} reducedMotion={reducedMotionOverride} {...(p?.chainId ? { chainId: p.chainId } : {})} {...(p?.token ? { token: p.token } : {})} />
+      break
+    }
+    case 'networks':
+      screen = <Networks body={body} />
+      break
     case 'alerts':
       screen = <Alerts body={body} />
       break
@@ -155,13 +165,13 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
       break
     }
     case 'receive': {
-      const p = current.params as { token?: string } | undefined
-      screen = <Receive body={body} {...(p?.token ? { token: p.token } : {})} />
+      const p = current.params as { token?: string; chainId?: number } | undefined
+      screen = <Receive body={body} {...(p?.token ? { token: p.token } : {})} {...(p?.chainId ? { chainId: p.chainId } : {})} />
       break
     }
     case 'send': {
-      const p = current.params as { token?: string; to?: string; requestId?: string } | undefined
-      screen = <Send body={body} reducedMotion={reducedMotionOverride} {...(p?.token ? { token: p.token } : {})} {...(p?.to ? { to: p.to } : {})} {...(p?.requestId ? { requestId: p.requestId } : {})} />
+      const p = current.params as { token?: string; to?: string; requestId?: string; chainId?: number } | undefined
+      screen = <Send body={body} reducedMotion={reducedMotionOverride} {...(p?.token ? { token: p.token } : {})} {...(p?.to ? { to: p.to } : {})} {...(p?.requestId ? { requestId: p.requestId } : {})} {...(p?.chainId ? { chainId: p.chainId } : {})} />
       break
     }
     case 'token': {

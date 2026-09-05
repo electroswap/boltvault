@@ -87,7 +87,7 @@ export function Offers({ body, reducedMotion = false }: { body: BodyKind; reduce
                 {offer.endAt ? ` · ${t({ id: 'offers.expires', message: 'until {d}', values: { d: new Date(offer.endAt * 1000).toLocaleDateString('en-GB') } })}` : ''}
               </Body>
             </Column>
-            {offer.actionable && offer.orderHash && active ? <Key label={t({ id: 'piece.accept', message: 'Accept' })} disabled={busy} onPress={() => void run(() => engine.nft.accept({ accountId: active.id, chainId: 52014, address: asset.address, tokenId: asset.tokenId, orderHash: offer.orderHash ?? '' }))} testID={`offer-accept-${asset.tokenId}`} /> : null}
+            {offer.actionable && offer.orderHash && active ? <Key label={t({ id: 'offers.accept', message: 'Accept' })} disabled={busy} onPress={() => void run(() => engine.nft.accept({ accountId: active.id, chainId: 52014, address: asset.address, tokenId: asset.tokenId, orderHash: offer.orderHash ?? '' }))} testID={`offer-accept-${asset.tokenId}`} /> : null}
           </Row>
         </Plate>
       ))}

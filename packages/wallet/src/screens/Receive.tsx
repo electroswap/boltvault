@@ -16,13 +16,16 @@ import { useWalletState } from '../state/useWalletState'
 
 const ETN = 52014
 
-export function Receive({ body, token: initialToken }: { body: 'extension-popup' | 'extension-tab' | 'mobile'; token?: string }) {
+export function Receive({ body, token: initialToken, chainId: initialChainId }: { body: 'extension-popup' | 'extension-tab' | 'mobile'; token?: string; chainId?: number }) {
   const engine = useEngine()
   const host = useHost()
   const router = useRouter()
   const { active } = useWalletState()
   const [chain, setChain] = useState<ChainView | null>(null)
   const [tokens, setTokens] = useState<TokenView[]>([])
+  const [chainId, setChainId] = useState(initialChainId ?? ETN)
+  const [chains, setChains] = useState<ChainView[]>([])
+  const [enabled, setEnabled] = useState<number[]>([ETN])
   const [token, setToken] = useState(initialToken ?? 'native')
   const [amount, setAmount] = useState('')
   const [requesting, setRequesting] = useState(!!initialToken && initialToken !== 'native')
@@ -30,18 +33,22 @@ export function Receive({ body, token: initialToken }: { body: 'extension-popup'
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
 
   useEffect(() => {
-    engine.chains.list().then((list) => setChain(list.find((c) => c.chainId === ETN) ?? null), () => undefined)
-    engine.tokens.universe({ chainId: ETN }).then((u) => setTokens(u.filter((x) => !x.hidden)), () => undefined)
-  }, [engine])
+    engine.chains.list().then((list) => {
+      setChains(list)
+      setChain(list.find((c) => c.chainId === chainId) ?? null)
+    }, () => undefined)
+    engine.settings.get().then((s) => setEnabled([ETN, ...s.enabledChains]), () => undefined)
+    engine.tokens.universe({ chainId }).then((u) => setTokens(u.filter((x) => !x.hidden)), () => undefined)
+  }, [engine, chainId])
 
   if (!active) return null
   const address = active.address
   const selected = tokens.find((x) => x.address.toLowerCase() === token.toLowerCase())
-  let uri = `ethereum:${address}@${ETN}`
+  let uri = `ethereum:${address}@${chainId}`
   if (requesting && amount.trim()) {
     try {
-      if (token === 'native') uri = `ethereum:${address}@${ETN}?value=${parseUnits(amount, 18).toString()}`
-      else if (selected) uri = `ethereum:${selected.address}@${ETN}/transfer?address=${address}&uint256=${parseUnits(amount, selected.decimals).toString()}`
+      if (token === 'native') uri = `ethereum:${address}@${chainId}?value=${parseUnits(amount, 18).toString()}`
+      else if (selected) uri = `ethereum:${selected.address}@${chainId}/transfer?address=${address}&uint256=${parseUnits(amount, selected.decimals).toString()}`
     } catch {
       // keep the plain address until the amount parses
     }
@@ -68,6 +75,19 @@ export function Receive({ body, token: initialToken }: { body: 'extension-popup'
             {chain ? `${chain.name} · ${chain.chainId}` : `Electroneum · ${ETN}`}
           </Body>
         </Chip>
+        {enabled.length > 1 ? (
+          <Row gap="$1" flexWrap="wrap" justifyContent="center" testID="receive-chains">
+            {enabled
+              .filter((id) => id !== chainId)
+              .map((id) => (
+                <Chip key={id} onPress={() => (setChainId(id), setToken('native'))} cursor="pointer" minHeight={28} justifyContent="center" testID={`receive-chain-${id}`}>
+                  <Body tone="mute" size="caption">
+                    {chains.find((c) => c.chainId === id)?.name ?? `Chain ${id}`}
+                  </Body>
+                </Chip>
+              ))}
+          </Row>
+        ) : null}
         <Row gap="$2" alignItems="center">
           <Signature address={address} size={24} />
           <Body size="caption">{active.label}</Body>

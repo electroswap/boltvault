@@ -25,6 +25,8 @@ export interface ChainDef {
   }
   /** ~ms between blocks; used for heartbeat honesty, not for timing logic. */
   readonly blockTimeMs?: number
+  /** The wrapped native token (WETH-style), for display prices by address; absent on chains we do not price. */
+  readonly wrappedNative?: string
 }
 
 const ETN: ChainDef = {
@@ -55,6 +57,7 @@ const ETHEREUM: ChainDef = {
   rpcUrls: ['https://eth.drpc.org', 'https://ethereum-rpc.publicnode.com', 'https://cloudflare-eth.com'],
   explorer: { name: 'Etherscan', url: 'https://etherscan.io' },
   blockTimeMs: 12_000,
+  wrappedNative: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
 }
 
 const BSC: ChainDef = {
@@ -65,6 +68,7 @@ const BSC: ChainDef = {
   rpcUrls: ['https://bsc-dataseed.binance.org', 'https://bsc-rpc.publicnode.com'],
   explorer: { name: 'BscScan', url: 'https://bscscan.com' },
   blockTimeMs: 3_000,
+  wrappedNative: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c',
 }
 
 const OPTIMISM: ChainDef = {
@@ -75,6 +79,7 @@ const OPTIMISM: ChainDef = {
   rpcUrls: ['https://mainnet.optimism.io', 'https://optimism-rpc.publicnode.com'],
   explorer: { name: 'Optimism Explorer', url: 'https://optimism.io' },
   blockTimeMs: 2_000,
+  wrappedNative: '0x4200000000000000000000000000000000000006',
 }
 
 const POLYGON: ChainDef = {
@@ -85,6 +90,7 @@ const POLYGON: ChainDef = {
   rpcUrls: ['https://polygon.drpc.org', 'https://polygon-bor-rpc.publicnode.com'],
   explorer: { name: 'PolygonScan', url: 'https://polygonscan.com' },
   blockTimeMs: 2_000,
+  wrappedNative: '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270',
 }
 
 const AVALANCHE: ChainDef = {
@@ -98,6 +104,7 @@ const AVALANCHE: ChainDef = {
   ],
   explorer: { name: 'SnowTrace', url: 'https://snowtrace.io' },
   blockTimeMs: 2_000,
+  wrappedNative: '0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7',
 }
 
 const ARBITRUM: ChainDef = {
@@ -108,6 +115,7 @@ const ARBITRUM: ChainDef = {
   rpcUrls: ['https://arb1.arbitrum.io/rpc', 'https://arbitrum-one-rpc.publicnode.com'],
   explorer: { name: 'Arbiscan', url: 'https://arbiscan.io' },
   blockTimeMs: 250,
+  wrappedNative: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',
 }
 
 const BASE: ChainDef = {
@@ -118,6 +126,7 @@ const BASE: ChainDef = {
   rpcUrls: ['https://mainnet.base.org', 'https://base-rpc.publicnode.com'],
   explorer: { name: 'BaseScan', url: 'https://basescan.org' },
   blockTimeMs: 2_000,
+  wrappedNative: '0x4200000000000000000000000000000000000006',
 }
 
 const UNICHAIN: ChainDef = {
@@ -128,6 +137,7 @@ const UNICHAIN: ChainDef = {
   rpcUrls: ['https://mainnet.unichain.org', 'https://unichain-rpc.publicnode.com'],
   explorer: { name: 'Unichain Explorer', url: 'https://uniscan.xyz' },
   blockTimeMs: 1_000,
+  wrappedNative: '0x4200000000000000000000000000000000000006',
 }
 
 const LINEA: ChainDef = {
@@ -138,6 +148,7 @@ const LINEA: ChainDef = {
   rpcUrls: ['https://rpc.linea.build', 'https://linea.drpc.org'],
   explorer: { name: 'Lineascan', url: 'https://lineascan.build' },
   blockTimeMs: 1_000,
+  wrappedNative: '0xe5D7C2a44FfDDf6b295A15c148167daaAf5Cf34f',
 }
 
 export const ELECTRONEUM_MAINNET_CHAIN_ID = 52014

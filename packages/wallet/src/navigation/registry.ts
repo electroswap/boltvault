@@ -18,6 +18,8 @@ export interface ScreenParams {
   campaign: { chainId: number; pool: string }
   legends: undefined
   alerts: undefined
+  bridge: { chainId?: number; token?: string } | undefined
+  networks: undefined
   activity: undefined
   settings: undefined
   security: undefined
@@ -28,8 +30,8 @@ export interface ScreenParams {
   accounts: undefined
   backup: undefined
   unlock: undefined
-  receive: { token?: string } | undefined
-  send: { token?: string; to?: string; requestId?: string } | undefined
+  receive: { token?: string; chainId?: number } | undefined
+  send: { token?: string; to?: string; requestId?: string; chainId?: number } | undefined
   token: { chainId: number; address: string }
   sign: { requestId: string } | undefined
   onboarding: undefined
@@ -68,6 +70,8 @@ export const SCREENS: Record<ScreenId, ScreenMeta> = {
   campaign: { id: 'campaign', presentation: 'push', quiet: false, secrets: false },
   legends: { id: 'legends', presentation: 'push', quiet: false, secrets: false },
   alerts: { id: 'alerts', presentation: 'push', quiet: false, secrets: false },
+  bridge: { id: 'bridge', presentation: 'push', quiet: false, secrets: false },
+  networks: { id: 'networks', presentation: 'push', quiet: false, secrets: false },
   accounts: { id: 'accounts', presentation: 'sheet', quiet: false, secrets: true },
   backup: { id: 'backup', presentation: 'push', quiet: true, secrets: true },
   unlock: { id: 'unlock', presentation: 'window', quiet: true, secrets: false },

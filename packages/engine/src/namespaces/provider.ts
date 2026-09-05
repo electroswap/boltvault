@@ -302,7 +302,7 @@ export class ProviderService {
         const prepared = await this.prepare(intent.chainId, intent.tx)
         const request: SignRequest = { kind: 'transaction', tx: { from: prepared.tx.from as Hex, to: prepared.tx.to as Hex | null, value: BigInt(prepared.tx.value), data: prepared.tx.data as Hex, chainId: intent.chainId, gas: BigInt(prepared.tx.gas), ...(intent.tx.authorizationList ? { authorizationList: intent.tx.authorizationList } : {}) } }
         const simulation = await this.simulate(intent.chainId, prepared, request)
-        const assessment = await this.assessment(intent.origin, intent.chainId, intent.tx.from, request, simulation, intent.expectedFee ?? null)
+        const assessment = await this.assessment(intent.origin, intent.chainId, intent.tx.from, request, simulation, intent.expectedFee ?? null, intent.bridgeRecipient ?? null)
         const perGas = prepared.tx.type === 'eip1559' ? BigInt(prepared.tx.maxFeePerGas ?? '0x0') : BigInt(prepared.tx.gasPrice ?? '0x0')
         const symbol = getChain(intent.chainId)?.nativeCurrency.symbol ?? 'ETH'
         return { kind: 'send_transaction', tx: prepared.tx, fee: { gasLimit: BigInt(prepared.tx.gas).toString(), maxTotalWei: (perGas * BigInt(prepared.tx.gas)).toString(), symbol }, assessment: toView(assessment), clientRequestId: intent.clientRequestId }
@@ -312,7 +312,7 @@ export class ProviderService {
 
   // ---- firewall -------------------------------------------------------------------
 
-  private async assessment(origin: string, chainId: number, account: Hex, request: SignRequest, simulation: Simulation | null, expectedFee: { sink: Hex; bips: number } | null = null): Promise<Assessment> {
+  private async assessment(origin: string, chainId: number, account: Hex, request: SignRequest, simulation: Simulation | null, expectedFee: { sink: Hex; bips: number } | null = null, bridgeRecipient: { hasCodeOnOrigin: boolean; hasCodeOnDestination: boolean | null } | null = null): Promise<Assessment> {
     const d = this.deps
     const settings = await d.settings.get()
     const accounts = await d.vault.accounts()
@@ -352,6 +352,7 @@ export class ProviderService {
       now: d.platform.now(),
       // Our own swap must pay exactly what the schedule said (T10); anything else never sees the field.
       ...(origin === 'internal:swap' ? { expectedFee } : {}),
+      ...(origin === 'internal:bridge' ? { bridgeRecipient } : {}),
     })
     return assess({ origin, chainId, account, request, context, simulation })
   }
@@ -554,6 +555,7 @@ function categoryFor(assessment: AssessmentView, tx: PreparedTx, origin: string)
   const first = assessment.statements[0]?.text ?? ''
   if (origin === 'internal:limit' || origin === 'internal:limit:cancel') return 'LIMIT'
   if (origin === 'internal:swap') return 'SWAP'
+  if (origin === 'internal:bridge') return 'BRIDGE'
   if (origin === 'internal:farm:deposit') return 'FARM_DEPOSIT'
   if (origin === 'internal:farm:withdraw') return 'FARM_WITHDRAW'
   if (origin === 'internal:farm:collect') return 'FARM_COLLECT'

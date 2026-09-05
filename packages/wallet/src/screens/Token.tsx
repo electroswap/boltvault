@@ -25,12 +25,14 @@ export function Token({ chainId, address, body }: { chainId: number; address: st
   const [token, setToken] = useState<TokenView | null>(null)
   const [chain, setChain] = useState<ChainView | null>(null)
   const [allowances, setAllowances] = useState<AllowanceView[]>([])
+  const [bridgeable, setBridgeable] = useState(false)
   const [copied, setCopied] = useState(false)
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
 
   useEffect(() => {
     engine.tokens.get({ chainId, address }).then(setToken, () => setToken(null))
     engine.chains.list().then((list) => setChain(list.find((c) => c.chainId === chainId) ?? null), () => undefined)
+    engine.bridge.routes({ fromChainId: chainId, token: address }).then((rs) => setBridgeable(rs.length > 0), () => setBridgeable(false))
     if (active) engine.allowances.cached({ accountId: active.id, chainId }).then((c) => setAllowances(c.rows.filter((r) => r.token.toLowerCase() === address.toLowerCase())), () => undefined)
     return engine.events.subscribe((e) => {
       if (e.type === 'tokens.changed' && e.chainId === chainId) engine.tokens.get({ chainId, address }).then(setToken, () => undefined)
@@ -99,8 +101,9 @@ export function Token({ chainId, address, body }: { chainId: number; address: st
       </Plate>
 
       <Row gap="$3" justifyContent="space-between" testID="token-keys">
-        <Key label={t({ id: 'key.send', message: 'Send' })} kind="secondary" stacked onPress={() => router.navigate('send', { token: address })} icon={<Icon name="send" size={20} color={paint.ink} />} testID="token-send" />
-        <Key label={t({ id: 'key.receive', message: 'Receive' })} kind="secondary" stacked onPress={() => router.navigate('receive', { token: address })} icon={<Icon name="receive" size={20} color={paint.ink} />} testID="token-receive" />
+        <Key label={t({ id: 'key.send', message: 'Send' })} kind="secondary" stacked onPress={() => router.navigate('send', { token: address, chainId })} icon={<Icon name="send" size={20} color={paint.ink} />} testID="token-send" />
+        <Key label={t({ id: 'key.receive', message: 'Receive' })} kind="secondary" stacked onPress={() => router.navigate('receive', { token: address, chainId })} icon={<Icon name="receive" size={20} color={paint.ink} />} testID="token-receive" />
+        {bridgeable ? <Key label={t({ id: 'key.bridge', message: 'Bridge' })} kind="secondary" stacked onPress={() => router.navigate('bridge', { chainId, token: address })} icon={<Icon name="bridge" size={20} color={paint.ink} />} testID="token-bridge" /> : null}
         <Key label={t({ id: 'key.swap', message: 'Swap' })} kind="secondary" stacked onPress={() => router.setTab('swap')} icon={<Icon name="swap" size={20} color={paint.ink} />} testID="token-swap" />
       </Row>
 

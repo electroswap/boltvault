@@ -28,17 +28,23 @@ export function Allowances({ body }: { body: 'extension-popup' | 'extension-tab'
     if (!active) return
     setScanning(true)
     setError(null)
-    engine.allowances.scan({ accountId: active.id, chainId: ETN }).then(
-      (r) => {
-        setRows(r)
+    // Electroneum first, then every enabled chain (§8.13); rows carry their chain.
+    engine.settings
+      .get()
+      .then(async (s) => {
+        const all: AllowanceView[] = []
+        for (const chainId of [ETN, ...s.enabledChains]) {
+          const r = await engine.allowances.scan({ accountId: active.id, chainId }).catch(() => [] as AllowanceView[])
+          all.push(...r)
+        }
+        setRows(all)
         setAt(Date.now())
         setScanning(false)
-      },
-      (err: unknown) => {
+      })
+      .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : String(err))
         setScanning(false)
-      },
-    )
+      })
   }
 
   useEffect(() => {

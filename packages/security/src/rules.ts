@@ -189,6 +189,14 @@ export const feeSinkRules: Rule = ({ request, decoded, origin, context }) => {
   return null
 }
 
+/** A bridge recipient that is a contract here and empty there receives nothing (§3.4 RECIPIENT_NO_CODE_ON_DEST). */
+export const bridgeRecipientRule: Rule = ({ request, decoded, context }) => {
+  if (request.kind !== 'transaction' || !decoded || decoded.kind !== 'bridge') return null
+  const b = context.bridgeRecipient
+  if (!b || !b.hasCodeOnOrigin || b.hasCodeOnDestination !== false) return null
+  return { code: 'RECIPIENT_NO_CODE_ON_DEST', severity: 'block', title: 'The recipient does not exist on the destination', detail: 'That address is a contract on this chain but has no code on the destination chain. Tokens bridged there would be stuck.' }
+}
+
 export const dappTipsThirdParty: Rule = ({ request, decoded, origin, chainId, context }) => {
   if (request.kind !== 'transaction' || !decoded || decoded.kind !== 'universal_router' || isInternal(origin)) return null
   const portions = decoded.decoded.commands.filter((c) => c.type === 'PAY_PORTION')
@@ -290,6 +298,7 @@ export const ALL_RULES: readonly Rule[] = [
   chainMismatch,
   approveRules,
   feeSinkRules,
+  bridgeRecipientRule,
   dappTipsThirdParty,
   unknownFunction,
   newContract,
