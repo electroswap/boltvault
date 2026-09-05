@@ -5,7 +5,6 @@ import { decodeReceipt, KNOWN_SPENDERS } from './decode'
 import { riskChips } from './risk'
 
 describe('poisonCheck (4+4 rule)', () => {
-  const known = '0x1234abcd56789012345678901234567890123456' // first4=0x12 last4=3456... let's compute
   it('hits when recipient shares first4+last4 but differs in the middle', () => {
     const knownAddr = '0x1234aaaa56789012345678901234567890123456'
     // same first 4 hex ("1234") and last 4 hex ("3456"), different middle

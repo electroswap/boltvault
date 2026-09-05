@@ -9,7 +9,12 @@
     "test:ci": "pnpm -r --no-bail test",
     "build": "pnpm -r build",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
-    "verify": "pnpm -r --no-bail typecheck && pnpm -r --no-bail test && pnpm --filter @boltvault/extension build"
+    "lint": "eslint .",
+    "depcruise": "depcruise packages apps tools --config .dependency-cruiser.cjs",
+    "no-any": "node tools/no-any.mjs",
+    "registry:verify": "tsx tools/registry-verify.ts",
+    "abi:sync": "tsx tools/abi-sync.ts",
+    "ci": "pnpm typecheck && pnpm lint && pnpm no-any && pnpm depcruise && SKIP_LIVE=1 pnpm test:ci && pnpm --filter @boltvault/extension build"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

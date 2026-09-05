@@ -108,7 +108,7 @@ export class SiteRegistry {
     return Object.values(this.sites).filter((s) => s.connected)
   }
 
-  async persist(origin: string): Promise<void> {
+  async persist(_origin: string): Promise<void> {
     await this.store.save(this.sites)
   }
 }

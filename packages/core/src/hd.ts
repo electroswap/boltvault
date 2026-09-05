@@ -1,6 +1,5 @@
 import {
   entropyToMnemonic,
-  generateMnemonic,
   mnemonicToEntropy,
   mnemonicToSeedSync,
   validateMnemonic,

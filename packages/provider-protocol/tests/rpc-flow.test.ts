@@ -5,7 +5,6 @@ import {
   RpcError,
   RpcFlow,
   SiteRegistry,
-  SigningQueue,
   DEFAULT_HEX_CHAIN_ID,
   toDecChainId,
   hexChainId,
@@ -17,7 +16,7 @@ import type { ConnectedSite } from '../src'
 
 
 /** Await `promise` and assert it rejects with an RpcError carrying `code`. */
-async function rejectsWith(promise: Promise<unknown>, code: number): Promise<void> {
+async function _rejectsWith(promise: Promise<unknown>, code: number): Promise<void> {
   let caught: unknown
   try {
     await promise

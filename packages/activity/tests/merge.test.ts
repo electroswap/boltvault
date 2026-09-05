@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mergeActivity, decodeReceipt, txExplorerUrl, type EnrichedTx, type ActivityRow } from '../src'
+import { mergeActivity, decodeReceipt, txExplorerUrl, type EnrichedTx } from '../src'
 import type { HistoryEntry } from '@boltvault/core'
 
 const H1 = '0x' + '11'.repeat(32)

@@ -8,7 +8,6 @@ import {
   type Abi,
   type Hex,
   type PublicClient,
-  type TransactionRequest,
   type Log,
 } from 'viem'
 
@@ -35,19 +34,36 @@ export interface SimResult {
   readonly gas?: bigint
 }
 
+/** The subset of a transaction a simulation needs. `to` is null for a deploy. */
+export interface SimTx {
+  readonly from: Hex
+  readonly to: Hex | null
+  readonly data?: Hex
+  readonly value?: bigint
+  readonly gas?: bigint
+  readonly chainId: number
+}
+
 /** Run a transaction as eth_call (and optionally estimate gas). */
 export async function simulateCall(
   client: PublicClient,
-  tx: Omit<TransactionRequest, 'from'> & { from: Hex; chainId: number },
+  tx: SimTx,
   opts: { estimate?: boolean } = {},
 ): Promise<SimResult> {
   const block = await client.getBlockNumber()
   let returnValue: Hex = '0x'
   let ok = true
   let revertReason: string | undefined
+  const params = {
+    account: tx.from,
+    to: tx.to ?? undefined,
+    data: tx.data,
+    value: tx.value,
+    gas: tx.gas,
+  }
   try {
-    const res = await client.call({ ...tx, blockNumber: block } as any)
-    returnValue = ((res as { data?: Hex }).data ?? '0x') as Hex
+    const res = await client.call({ ...params, blockNumber: block })
+    returnValue = res.data ?? '0x'
   } catch (e) {
     ok = false
     revertReason = e instanceof Error ? e.message : String(e)
@@ -59,7 +75,7 @@ export async function simulateCall(
   }
   if (opts.estimate) {
     try {
-      return { ...out, gas: await client.estimateGas({ ...tx } as any) }
+      return { ...out, gas: await client.estimateGas(params) }
     } catch {
       return { ...out, gas: 21_000n }
     }
@@ -68,16 +84,8 @@ export async function simulateCall(
 }
 
 /** Decode an eth_call result as a function return of the given ABI. */
-export function decodeCall<TAbi extends Abi = Abi>(
-  abi: TAbi,
-  functionName: string,
-  data: Hex,
-): unknown {
-  return decodeFunctionResult({
-    abi,
-    functionName: functionName as any,
-    data,
-  } as any)
+export function decodeCall(abi: Abi, functionName: string, data: Hex): unknown {
+  return decodeFunctionResult({ abi, functionName, data })
 }
 
 const ERC20_ABI = parseAbi([

@@ -46,10 +46,11 @@ describe('simulate + decoders (T2.3)', () => {
 const SKIP = process.env.SKIP_LIVE === '1'
 describe.skipIf(SKIP)('live simulateCall (ETN mainnet)', () => {
   it('reads a real token balance via eth_call + decode', async () => {
-    const list = await (
+    const list = (await (
       await fetch('https://static.electroswap.io/tokens/tokenlist.json')
-    ).json()
-    const token = Object.values<any>(list.tokens).map((t) => t.address)[0] as Hex
+    ).json()) as { tokens: Array<{ address: Hex }> }
+    const token = list.tokens[0]?.address
+    if (!token) throw new Error('tokenlist has no tokens')
     const client = createPublicClient({
       transport: http('https://rpc.ankr.com/electroneum'),
     })

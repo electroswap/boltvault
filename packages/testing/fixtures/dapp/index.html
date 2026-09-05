@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BoltVault fixture dApp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; margin: 24px; max-width: 720px; }
+  h1 { font-size: 18px; }
+  button { margin: 4px 4px 4px 0; }
+  pre { background: #f4f4f4; padding: 8px; overflow: auto; }
+  .row { margin: 8px 0; }
+  code { background: #eee; padding: 0 3px; }
+</style>
+</head>
+<body>
+<h1>BoltVault fixture dApp</h1>
+<p>Exercises every way a real site finds and talks to a wallet: <code>window.ethereum</code> at parse time, EIP-6963 announcements, legacy <code>send</code>/<code>sendAsync</code>/<code>enable</code>, and EIP-1193 events. Playwright reads the data attributes and the log.</p>
+
+<div class="row">
+  <strong>Parse-time detection:</strong>
+  <span id="parse-time" data-testid="parse-time">pending</span>
+</div>
+<div class="row">
+  <strong>EIP-6963 providers:</strong>
+  <ul id="providers" data-testid="providers"></ul>
+</div>
+<div class="row">
+  <button data-testid="btn-request-accounts">eth_requestAccounts</button>
+  <button data-testid="btn-accounts">eth_accounts</button>
+  <button data-testid="btn-chain">eth_chainId</button>
+  <button data-testid="btn-block">eth_blockNumber</button>
+  <button data-testid="btn-personal-sign">personal_sign</button>
+  <button data-testid="btn-typed">eth_signTypedData_v4</button>
+  <button data-testid="btn-send">eth_sendTransaction</button>
+  <button data-testid="btn-switch">wallet_switchEthereumChain(0xcb2e)</button>
+  <button data-testid="btn-legacy-send">legacy send('eth_chainId')</button>
+  <button data-testid="btn-legacy-sendasync">legacy sendAsync</button>
+  <button data-testid="btn-enable">legacy enable()</button>
+  <button data-testid="btn-spoof">spoof postMessage</button>
+</div>
+<div class="row">
+  <strong>Last result:</strong>
+  <pre id="result" data-testid="result"></pre>
+  <strong>Events:</strong>
+  <pre id="events" data-testid="events"></pre>
+</div>
+<script src="./dapp.js"></script>
+</body>
+</html>

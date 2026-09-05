@@ -7,7 +7,7 @@
  * on-chain and API quotes exist and diverge >1%, **on-chain wins** (design
  * fallback table) — `resolveQuote` makes that decision pure.
  */
-import { encodeFunctionData, decodeFunctionResult, type Abi, type AbiFunction, type Hex } from 'viem'
+import { encodeFunctionData, decodeFunctionResult, type Abi, type Hex } from 'viem'
 import { ELECTRONEUM_ADDRESSES, isElectroneumChainId } from '@boltvault/chains'
 
 /** A raw eth_call transport: (to, data) → result hex. */
@@ -56,7 +56,7 @@ const MIXED_SINGLE_V2_ABI: Abi = [
   },
 ]
 
-const V2_GET_AMOUNTS_OUT_ABI: Abi = [
+export const V2_GET_AMOUNTS_OUT_ABI: Abi = [
   {
     type: 'function',
     name: 'getAmountsOut',

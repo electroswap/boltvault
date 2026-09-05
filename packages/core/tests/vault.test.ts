@@ -3,7 +3,6 @@ import {
   addAccountToPlaintext,
   addImportedKey,
   createVault,
-  emptyPlaintext,
   openVault,
   updateVault,
   VAULT_VERSION,
@@ -63,7 +62,7 @@ describe('VaultFileV1 (Argon2id → XChaCha20-Poly1305)', () => {
   }, 20_000)
 
   it('updateVault re-encrypts and preserves accounts across a password rotate', async () => {
-    let file = await createVault('old-pass', samplePlaintext(), { kdf: FAST })
+    const file = await createVault('old-pass', samplePlaintext(), { kdf: FAST })
     const importedKey = '11'.repeat(32)
     const { file: next } = await updateVault(file, 'old-pass', (pt) =>
       addImportedKey(

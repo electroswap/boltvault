@@ -74,6 +74,7 @@ export function createExtensionPlatform(api: ExtensionApi, opts: ExtensionPlatfo
   })
 
   const holds = new Set<string>()
+  let holdSeq = 0
   let keepAliveTimer: ReturnType<typeof setInterval> | null = null
   const syncKeepAlive = (): void => {
     if (holds.size > 0 && keepAliveTimer === null) {
@@ -121,7 +122,7 @@ export function createExtensionPlatform(api: ExtensionApi, opts: ExtensionPlatfo
     },
     keepAlive: {
       hold: (reason) => {
-        const token = `${reason}#${Math.random().toString(36).slice(2)}`
+        const token = `${reason}#${++holdSeq}`
         holds.add(token)
         syncKeepAlive()
         return () => {
