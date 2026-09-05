@@ -9,7 +9,10 @@
 import type { EngineNamespaces, NamespaceName, WalletEngine } from './contract'
 import type { EngineTransport } from './transport'
 
-const NAMESPACES: readonly NamespaceName[] = ['vault', 'accounts', 'sites', 'chains', 'approvals', 'settings', 'portfolio', 'activity', 'activityScan', 'tokens', 'names', 'allowances', 'contacts', 'send', 'sync', 'swap', 'holder', 'limit', 'hardware', 'explore', 'nft', 'legends', 'farm', 'launchpad', 'watchlist', 'positions', 'bridge', 'remote', 'dapps', 'connect', 'flags']
+// Exhaustive by construction: a namespace added to the contract but missing here is a compile error,
+// not a popup whose `engine.<ns>` is undefined.
+const NAMESPACE_TABLE: Record<NamespaceName, true> = { vault: true, accounts: true, sites: true, chains: true, approvals: true, settings: true, portfolio: true, activity: true, activityScan: true, tokens: true, names: true, allowances: true, contacts: true, send: true, sync: true, swap: true, holder: true, limit: true, hardware: true, explore: true, nft: true, legends: true, farm: true, launchpad: true, watchlist: true, positions: true, bridge: true, remote: true, dapps: true, connect: true, flags: true, about: true }
+const NAMESPACES = Object.keys(NAMESPACE_TABLE) as readonly NamespaceName[]
 
 type AnyMethod = (arg?: unknown) => Promise<unknown>
 

@@ -52,7 +52,7 @@ export default function App() {
     let alive = true
     Promise.all([createMobilePlatform(), createWalletKit().catch(() => null)])
       .then(([platform, walletKit]) => {
-        if (alive) setEngine(createEngine({ platform, ledger: bleLedgerProvider(), walletKit, body: 'mobile', clientVersion: `BoltVault/${process.env['EXPO_PUBLIC_APP_VERSION'] ?? '0.1.0'}` }))
+        if (alive) setEngine(createEngine({ platform, ledger: bleLedgerProvider(), walletKit, body: 'mobile', clientVersion: `BoltVault/${process.env['EXPO_PUBLIC_APP_VERSION'] ?? '0.1.0'}`, ...(process.env['EXPO_PUBLIC_BOLTVAULT_API'] ? { apiOrigin: process.env['EXPO_PUBLIC_BOLTVAULT_API'] } : {}), features: { limitOrders: process.env['EXPO_PUBLIC_BOLTVAULT_LIMIT_ORDERS'] === '1' } }))
       })
       .catch((err: unknown) => console.error('platform failed', err))
     return () => {

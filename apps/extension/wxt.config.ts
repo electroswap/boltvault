@@ -74,6 +74,9 @@ export default defineConfig({
       'process.env.NODE_ENV': JSON.stringify(process.env['NODE_ENV'] ?? 'production'),
       'process.env.TAMAGUI_TARGET': JSON.stringify('web'),
       __BUILD_HASH__: JSON.stringify(process.env['BUILD_HASH'] ?? ''),
+      // Development builds: point the API at a local services/api, turn optional surfaces on.
+      __API_ORIGIN__: JSON.stringify((process.env['WXT_BOLTVAULT_API'] ?? 'https://electroswap.io').replace(/\/+$/, '')),
+      __LIMIT_ORDERS__: JSON.stringify(process.env['WXT_BOLTVAULT_LIMIT_ORDERS'] === '1'),
     },
     optimizeDeps: {
       esbuildOptions: { loader: { '.js': 'jsx' }, resolveExtensions: ['.web.js', '.js', '.ts', '.tsx'] },

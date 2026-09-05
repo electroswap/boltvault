@@ -911,6 +911,16 @@ export const FlagsViewSchema = z.object({
 })
 export type FlagsView = z.infer<typeof FlagsViewSchema>
 
+/** What this build is pointed at and which optional surfaces it carries — read by About and by screens that hide a surface. */
+export const AboutViewSchema = z.object({
+  /** The ElectroSwap API origin every GraphQL/REST call goes to. */
+  apiOrigin: z.string(),
+  /** False when a development build points the API somewhere other than ElectroSwap's servers. */
+  apiIsDefault: z.boolean(),
+  features: z.object({ limitOrders: z.boolean() }),
+})
+export type AboutView = z.infer<typeof AboutViewSchema>
+
 export const EngineEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('swap.progress'), flow: SwapFlowSchema }),
   z.object({ type: z.literal('positions.changed'), positions: PositionsSchema }),

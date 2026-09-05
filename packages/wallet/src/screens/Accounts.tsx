@@ -303,6 +303,17 @@ function LedgerPicker({ onAdded }: { onAdded: () => void }) {
       </Column>
     )
   }
+  // WebHID's device chooser only opens from a full tab. A device paired there works from the popup afterwards.
+  if (status && status.devices.length === 0 && !host.requestHid && (host.body === 'extension-popup' || host.body === 'extension-sign') && host.openSecretScreen) {
+    return (
+      <Column gap="$2" testID="ledger-pair-in-tab">
+        <Body tone="mute" size="caption">
+          {t({ id: 'ledger.tabonly', message: 'Pairing a Ledger over USB happens in a full tab: the browser’s device chooser cannot open from this window. Once paired, it works from here too.' })}
+        </Body>
+        <Key label={t({ id: 'acct.openTab', message: 'Continue in a full tab' })} onPress={() => host.openSecretScreen?.('accounts')} testID="ledger-open-tab" />
+      </Column>
+    )
+  }
   return (
     <Column gap="$3" testID="ledger-picker">
       <Body tone="mute" size="caption">
@@ -318,7 +329,7 @@ function LedgerPicker({ onAdded }: { onAdded: () => void }) {
         </Body>
       ) : status ? (
         <Body tone="mute" size="caption">
-          {t({ id: 'ledger.none', message: 'No Ledger paired yet.' })}
+          {t({ id: 'ledger.none', message: 'No Ledger paired yet. Press Pair Ledger, then pick your Ledger in the browser’s device list.' })}
         </Body>
       ) : null}
       {status?.app && !status.app.blindSigning ? (

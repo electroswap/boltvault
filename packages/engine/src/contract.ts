@@ -12,6 +12,7 @@
  */
 import type { TokenDetailView } from '@boltvault/electroswap'
 import type {
+  AboutView,
   AccountId,
   AccountView,
   ActivityEntry,
@@ -323,6 +324,11 @@ export interface ConnectNamespace {
   disconnect(input: { topic: string }): Promise<void>
 }
 
+/** The build's endpoints and optional surfaces: a development build may point the API at a local services/api. */
+export interface AboutNamespace {
+  get(): Promise<AboutView>
+}
+
 /** Signed flags (§3.7): kill-switches, the minimum version, a notice; only ever disable. */
 export interface FlagsNamespace {
   get(): Promise<FlagsView>
@@ -392,6 +398,7 @@ export interface WalletEngine {
   readonly dapps: DappsNamespace
   readonly connect: ConnectNamespace
   readonly flags: FlagsNamespace
+  readonly about: AboutNamespace
   readonly events: EngineEvents
 }
 

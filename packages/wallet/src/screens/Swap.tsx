@@ -50,6 +50,11 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   const flow = anyFlow && (anyFlow.kind === 'swap' || anyFlow.kind === 'limit' || anyFlow.kind === 'limit_cancel') ? anyFlow : null
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const [mode, setMode] = useState<'swap' | 'limit'>('swap')
+  // Limit orders are a build feature (off by default); without it the screen is Swap only.
+  const [limitOn, setLimitOn] = useState(false)
+  useEffect(() => {
+    engine.about.get().then((a) => setLimitOn(a.features.limitOrders), () => undefined)
+  }, [engine])
   const [tokens, setTokens] = useState<TokenView[]>([])
   const [tokenIn, setTokenIn] = useState(initialIn ?? 'native')
   const [tokenOut, setTokenOut] = useState(initialOut ?? '')
@@ -254,15 +259,17 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="swap">
-      <Segmented
-        options={[
-          { id: 'swap', label: t({ id: 'swap.mode.swap', message: 'Swap' }) },
-          { id: 'limit', label: t({ id: 'swap.mode.limit', message: 'Limit' }) },
-        ]}
-        value={mode}
-        onChange={(id) => setMode(id as 'swap' | 'limit')}
-        testID="swap-mode"
-      />
+      {limitOn ? (
+        <Segmented
+          options={[
+            { id: 'swap', label: t({ id: 'swap.mode.swap', message: 'Swap' }) },
+            { id: 'limit', label: t({ id: 'swap.mode.limit', message: 'Limit' }) },
+          ]}
+          value={mode}
+          onChange={(id) => setMode(id as 'swap' | 'limit')}
+          testID="swap-mode"
+        />
+      ) : null}
 
       {/* You pay */}
       <Plate role="raised" gap="$2" testID="terminal-in">

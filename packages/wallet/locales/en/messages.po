@@ -24,6 +24,16 @@ msgid "Off by default. A crash sends the message and stack to ElectroSwap — ad
 msgstr "Off by default. A crash sends the message and stack to ElectroSwap — addresses, secrets and URLs scrubbed — nothing else, ever."
 
 #: packages/wallet/src/screens/About.tsx
+msgctxt "about.dev"
+msgid "Development build"
+msgstr "Development build"
+
+#: packages/wallet/src/screens/About.tsx
+msgctxt "about.dev.body"
+msgid "This build talks to {o} instead of ElectroSwap’s servers. Prices, activity, the marketplace and the launchpad come from there."
+msgstr "This build talks to {o} instead of ElectroSwap’s servers. Prices, activity, the marketplace and the launchpad come from there."
+
+#: packages/wallet/src/screens/About.tsx
 msgctxt "about.encryption"
 msgid "Encryption"
 msgstr "Encryption"
@@ -57,6 +67,16 @@ msgstr "No signed flags received yet — nothing is switched off, and the built-
 msgctxt "about.flags.ok"
 msgid "Kill-switches and the scam list are signed by ElectroSwap and checked every six hours ({n} scam origins)."
 msgstr "Kill-switches and the scam list are signed by ElectroSwap and checked every six hours ({n} scam origins)."
+
+#: packages/wallet/src/screens/About.tsx
+msgctxt "about.limit.off"
+msgid "Limit orders are off in this build."
+msgstr "Limit orders are off in this build."
+
+#: packages/wallet/src/screens/About.tsx
+msgctxt "about.limit.on"
+msgid "Limit orders are on in this build."
+msgstr "Limit orders are on in this build."
 
 #: packages/wallet/src/screens/About.tsx
 msgctxt "about.privacy"
@@ -2095,8 +2115,8 @@ msgstr "Ledger Live"
 
 #: packages/wallet/src/screens/Accounts.tsx
 msgctxt "ledger.none"
-msgid "No Ledger paired yet."
-msgstr "No Ledger paired yet."
+msgid "No Ledger paired yet. Press Pair Ledger, then pick your Ledger in the browser’s device list."
+msgstr "No Ledger paired yet. Press Pair Ledger, then pick your Ledger in the browser’s device list."
 
 #: packages/wallet/src/screens/Accounts.tsx
 msgctxt "ledger.nopick"
@@ -2122,6 +2142,11 @@ msgstr "{m} · Ethereum app {v}{b}"
 msgctxt "ledger.refresh"
 msgid "Refresh"
 msgstr "Refresh"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "ledger.tabonly"
+msgid "Pairing a Ledger over USB happens in a full tab: the browser’s device chooser cannot open from this window. Once paired, it works from here too."
+msgstr "Pairing a Ledger over USB happens in a full tab: the browser’s device chooser cannot open from this window. Once paired, it works from here too."
 
 #: packages/wallet/src/screens/Accounts.tsx
 msgctxt "ledger.unavailable"

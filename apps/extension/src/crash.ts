@@ -4,7 +4,7 @@
  * 0x address, hex secret and URL query scrubbed. No SDK; a message, a stack,
  * the version and the body. Never the user's address, never a balance.
  */
-export const CRASH_ENDPOINT = 'https://electroswap.io/api/wallet/crash'
+export const CRASH_ENDPOINT = `${__API_ORIGIN__}/api/wallet/crash`
 
 export interface CrashReport {
   readonly message: string

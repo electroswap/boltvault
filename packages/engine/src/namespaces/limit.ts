@@ -33,6 +33,8 @@ export interface LimitDeps {
   readonly provider: ProviderService
   readonly settings: SettingsStore
   readonly flows: FlowStore
+  /** Build feature flag: off by default (`features.limitOrders` in EngineDeps). */
+  readonly enabled: boolean
 }
 
 export interface LimitInput {
@@ -83,6 +85,7 @@ export class LimitService {
 
   async quote(input: LimitInput): Promise<LimitQuote> {
     const d = this.deps
+    if (!d.enabled) throw new EngineError('not_implemented', 'Limit orders are not enabled in this build.')
     const { chainId } = input
     const [inView, outView] = await Promise.all([d.tokens.get(chainId, input.tokenIn), d.tokens.get(chainId, input.tokenOut)])
     const manager = this.manager(chainId)
@@ -147,6 +150,7 @@ export class LimitService {
 
   async place(input: LimitInput): Promise<{ flowId: string; requestId: string | null }> {
     const d = this.deps
+    if (!d.enabled) throw new EngineError('not_implemented', 'Limit orders are not enabled in this build.')
     const { chainId } = input
     const manager = this.manager(chainId)
     if (!isEtn(chainId) || !manager) throw new EngineError('invalid_argument', 'Limit orders live on Electroneum mainnet.')
@@ -222,6 +226,7 @@ export class LimitService {
 
   async cancel(input: { accountId: string; chainId: number; orderId: string }): Promise<{ flowId: string; requestId: string | null }> {
     const d = this.deps
+    if (!d.enabled) throw new EngineError('not_implemented', 'Limit orders are not enabled in this build.')
     const manager = this.manager(input.chainId)
     if (!manager) throw new EngineError('invalid_argument', 'Limit orders live on Electroneum mainnet.')
     const account = (await d.vault.accounts()).find((a) => a.id === input.accountId)
@@ -239,6 +244,7 @@ export class LimitService {
 
   async list(input: { accountId: string; chainId: number }): Promise<LimitOrderView[]> {
     const d = this.deps
+    if (!d.enabled) return []
     const manager = this.manager(input.chainId)
     if (!manager) return []
     const account = (await d.vault.accounts()).find((a) => a.id === input.accountId)

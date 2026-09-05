@@ -5,7 +5,7 @@
  * where the audit, the SBOM and the security policy live.
  */
 import { Body, Column, Icon, Key, Plate, Row, ScrollView, Toggle, metrics, paint, shortAddress } from '@boltvault/ui'
-import type { FlagsView, Settings } from '@boltvault/engine'
+import type { AboutView, FlagsView, Settings } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
@@ -21,11 +21,13 @@ export function About({ body }: { body: 'extension-popup' | 'extension-tab' | 'm
   const router = useRouter()
   const [settings, setSettings] = useState<Settings | null>(null)
   const [flags, setFlags] = useState<FlagsView | null>(null)
+  const [about, setAbout] = useState<AboutView | null>(null)
   const [fee, setFee] = useState<{ sink: string | null; schedule: string | null } | null>(null)
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   useEffect(() => {
     engine.settings.get().then(setSettings, () => undefined)
     engine.flags.get().then(setFlags, () => undefined)
+    engine.about.get().then(setAbout, () => undefined)
     engine.holder.addresses({ chainId: ETN }).then(setFee, () => setFee({ sink: null, schedule: null }))
     return engine.events.subscribe((e) => {
       if (e.type === 'flags.changed') setFlags(e.flags)
@@ -47,6 +49,20 @@ export function About({ body }: { body: 'extension-popup' | 'extension-tab' | 'm
           {host.buildHash ? t({ id: 'about.build', message: 'Build {h} — reproducible; the hash is published with every release.', values: { h: host.buildHash.slice(0, 12) } }) : t({ id: 'about.build.dev', message: 'Development build.' })}
         </Body>
       </Plate>
+
+      {about && !about.apiIsDefault ? (
+        <Plate gap={4} borderColor={paint.ember} testID="about-dev-api">
+          <Body size="title">{t({ id: 'about.dev', message: 'Development build' })}</Body>
+          <Body tone="ember" size="caption">
+            {t({ id: 'about.dev.body', message: 'This build talks to {o} instead of ElectroSwap’s servers. Prices, activity, the marketplace and the launchpad come from there.', values: { o: about.apiOrigin } })}
+          </Body>
+        </Plate>
+      ) : null}
+      {about ? (
+        <Body tone="mute" size="caption" testID="about-features">
+          {about.features.limitOrders ? t({ id: 'about.limit.on', message: 'Limit orders are on in this build.' }) : t({ id: 'about.limit.off', message: 'Limit orders are off in this build.' })}
+        </Body>
+      ) : null}
 
       <Plate gap={4} testID="about-encryption">
         <Body size="title">{t({ id: 'about.encryption', message: 'Encryption' })}</Body>

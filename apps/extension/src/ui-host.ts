@@ -12,7 +12,7 @@ export function extensionUiHost(body: 'extension-popup' | 'extension-tab' | 'ext
     body,
     secretsAllowed: body === 'extension-tab',
     passkeys: createWebAuthnPasskeys(),
-    relayUrl: 'https://electroswap.io/api/wallet/sync',
+    relayUrl: `${__API_ORIGIN__}/api/wallet/sync`,
     version: browser.runtime.getManifest().version,
     buildHash: __BUILD_HASH__ || null,
     openSecretScreen: (screen: ScreenId) => {
@@ -47,7 +47,7 @@ export function extensionUiHost(body: 'extension-popup' | 'extension-tab' | 'ext
           },
           requestHid: async () => {
             const nav = navigator as unknown as { hid?: { requestDevice(o: { filters: Array<{ vendorId: number }> }): Promise<unknown[]> } }
-            if (!nav.hid) return false
+            if (!nav.hid) throw new Error('This browser has no WebHID. Pair the Ledger from Chrome, Edge or Brave on a computer.')
             const granted = await nav.hid.requestDevice({ filters: [{ vendorId: 0x2c97 }] })
             return granted.length > 0
           },

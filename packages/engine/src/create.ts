@@ -41,6 +41,7 @@ import { PositionsService, positionsNamespace } from './namespaces/positions'
 import { HolderService, holderNamespace } from './namespaces/holder'
 import { LimitService, limitNamespace } from './namespaces/limit'
 import { SwapService, swapNamespace } from './namespaces/swap'
+import { aboutNamespace } from './namespaces/about'
 import { SitesService, sitesNamespace } from './namespaces/sites'
 import { HttpRelay, MemoryRelay, SyncService, syncNamespace, type Relay } from './namespaces/sync'
 import { TokensService, tokensNamespace } from './namespaces/tokens'
@@ -49,8 +50,18 @@ import { AccountIdSchema, ApprovalDecisionSchema, SettingsSchema, type ApprovalD
 import { SettingsStore } from './settingsStore'
 import { createInProcessTransport } from './transport'
 
+/** ElectroSwap's API. A development build overrides it (extension `WXT_BOLTVAULT_API`, mobile `EXPO_PUBLIC_BOLTVAULT_API`). */
+export const DEFAULT_API_ORIGIN = 'https://electroswap.io'
+
 export interface EngineDeps {
   readonly platform: Platform
+  /**
+   * Origin of the ElectroSwap API (default `DEFAULT_API_ORIGIN`). GraphQL (`/graphql`) and REST derive from it;
+   * signed statics stay on static.electroswap.io. A dev build points this at a local services/api.
+   */
+  readonly apiOrigin?: string
+  /** Optional surfaces. Limit orders are off unless a build turns them on. */
+  readonly features?: { readonly limitOrders?: boolean }
   readonly heads?: HeadSource
   readonly os?: { reducedMotion: boolean }
   /** Test override for the vault KDF (production calibrates per device). */
@@ -171,7 +182,9 @@ export function createEngine(deps: EngineDeps): Engine {
     ...(deps.receiptPollMs !== undefined ? { receiptPollMs: deps.receiptPollMs } : {}),
   })
   const tokens = new TokensService(deps.platform, host.events, chains, fetchImpl)
-  const electroswap = deps.electroswapUrl === null ? null : new ElectroSwapClient({ ...(deps.electroswapUrl ? { url: deps.electroswapUrl } : {}), ...(deps.clientKey ? { apiKey: deps.clientKey } : {}), fetchImpl })
+  const apiOrigin = (deps.apiOrigin ?? DEFAULT_API_ORIGIN).replace(/\/+$/, '')
+  const features = { limitOrders: deps.features?.limitOrders ?? false }
+  const electroswap = deps.electroswapUrl === null ? null : new ElectroSwapClient({ url: deps.electroswapUrl ?? `${apiOrigin}/graphql`, ...(deps.clientKey ? { apiKey: deps.clientKey } : {}), fetchImpl })
   const prices = deps.pricesUrl === null ? null : new GeckoTerminalPrices(fetchImpl, () => deps.platform.now(), ...(deps.pricesUrl ? [deps.pricesUrl] : []))
   const portfolio = new PortfolioService({ platform: deps.platform, bus: host.events, chains, tokens, vault, electroswap, prices })
   const names = new NamesService(chains, () => deps.platform.now())
@@ -181,7 +194,7 @@ export function createEngine(deps: EngineDeps): Engine {
   const holder = new HolderService({ platform: deps.platform, chains, vault })
   const flows = new FlowStore({ platform: deps.platform, bus: host.events, activity })
   const swap = new SwapService({ statics,  platform: deps.platform, chains, tokens, vault, provider, settings, holder, flows })
-  const limit = new LimitService({ platform: deps.platform, bus: host.events, chains, tokens, vault, provider, settings, flows })
+  const limit = new LimitService({ platform: deps.platform, bus: host.events, chains, tokens, vault, provider, settings, flows, enabled: features.limitOrders })
   const watchlist = new WatchlistService({ platform: deps.platform, bus: host.events, vault })
   const explore = new ExploreService({ platform: deps.platform, electroswap, tokens, vault, watchlist })
   const legends = new LegendsService({ platform: deps.platform, chains, vault, provider, flows })
@@ -270,6 +283,7 @@ export function createEngine(deps: EngineDeps): Engine {
   host.register('dapps', dappsNamespace(dapps))
   host.register('connect', connectNamespace(connect))
   host.register('flags', flagsNamespace(statics))
+  host.register('about', aboutNamespace({ apiOrigin, apiIsDefault: apiOrigin === DEFAULT_API_ORIGIN, features }))
 
   const ready = Promise.all([approvals.hydrate(), sites.hydrate(), settings.get(), provider.init(), watchlist.hydrate(), statics.hydrate()]).then(() => {
     // Signed flags refresh in the background; nothing waits on the network (§3.7).

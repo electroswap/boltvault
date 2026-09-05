@@ -144,11 +144,10 @@ export class ElectroSwapClient {
 
   private headers(): Record<string, string> {
     const h: Record<string, string> = { 'Content-Type': 'application/json' }
-    // Mirror the fork: only send the interface Referer + key on the ES host.
-    if (this.url.includes('electroswap.io')) {
-      h['Referer'] = this.referer
-      if (this.apiKey) h['X-BoltVault-Key'] = this.apiKey
-    }
+    // The URL is a build constant (ElectroSwap's API, or a developer's own services/api), so the
+    // interface Referer and the client key always travel with the request.
+    h['Referer'] = this.referer
+    if (this.apiKey) h['X-BoltVault-Key'] = this.apiKey
     return h
   }
 
