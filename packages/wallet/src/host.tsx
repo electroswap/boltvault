@@ -36,6 +36,8 @@ export interface UiHost {
   closeWindow?(): void
   /** Fires on window focus/resize so the approval primary can go inert for 600 ms (§3.5). */
   onWindowFocus?(listener: () => void): () => void
+  /** Pair a Ledger over WebHID — needs a user gesture, so only a full page offers it (§2.7 S7). Resolves true when a device was granted. */
+  requestHid?(): Promise<boolean>
 }
 
 const unsupported: PasskeyProvider = {

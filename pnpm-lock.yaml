@@ -53,6 +53,9 @@ importers:
       '@boltvault/engine':
         specifier: workspace:*
         version: link:../../packages/engine
+      '@boltvault/hardware':
+        specifier: workspace:*
+        version: link:../../packages/hardware
       '@boltvault/platform':
         specifier: workspace:*
         version: link:../../packages/platform
@@ -368,6 +371,9 @@ importers:
         specifier: ^2.56.3
         version: 2.56.3(typescript@5.9.3)(zod@3.25.76)
     devDependencies:
+      '@boltvault/security':
+        specifier: workspace:*
+        version: link:../security
       '@types/node':
         specifier: ^22
         version: 22.20.1
@@ -389,6 +395,9 @@ importers:
       '@boltvault/electroswap':
         specifier: workspace:*
         version: link:../electroswap
+      '@boltvault/hardware':
+        specifier: workspace:*
+        version: link:../hardware
       '@boltvault/platform':
         specifier: workspace:*
         version: link:../platform
@@ -438,6 +447,25 @@ importers:
       '@boltvault/chains':
         specifier: workspace:*
         version: link:../chains
+      viem:
+        specifier: ^2.56.3
+        version: 2.56.3(typescript@5.9.3)(zod@3.25.76)
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
+
+  packages/hardware:
+    dependencies:
+      '@noble/curves':
+        specifier: ^1.9.1
+        version: 1.9.1
+      '@noble/hashes':
+        specifier: ^1.8.0
+        version: 1.8.0
       viem:
         specifier: ^2.56.3
         version: 2.56.3(typescript@5.9.3)(zod@3.25.76)

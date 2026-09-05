@@ -23,6 +23,16 @@ export function extensionUiHost(body: 'extension-popup' | 'extension-tab' | 'ext
       await browser.tabs.create({ url })
     },
     closeWindow: () => window.close(),
+    ...(body === 'extension-tab'
+      ? {
+          requestHid: async () => {
+            const nav = navigator as unknown as { hid?: { requestDevice(o: { filters: Array<{ vendorId: number }> }): Promise<unknown[]> } }
+            if (!nav.hid) return false
+            const granted = await nav.hid.requestDevice({ filters: [{ vendorId: 0x2c97 }] })
+            return granted.length > 0
+          },
+        }
+      : {}),
     onWindowFocus: (listener) => {
       window.addEventListener('focus', listener)
       window.addEventListener('resize', listener)

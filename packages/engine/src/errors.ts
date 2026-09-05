@@ -17,6 +17,7 @@ export type EngineErrorCode =
   | 'invalid_mnemonic'
   | 'expired'
   | 'already_decided'
+  | 'rejected'
   | 'disconnected'
   | 'timeout'
   | 'internal'

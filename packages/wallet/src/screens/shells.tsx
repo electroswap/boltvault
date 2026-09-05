@@ -1,83 +1,15 @@
 /**
  * Tab and push screens that M1 ships as designed shells: the structure, the
  * copy voice and the empty states are final; their data arrives with their
- * milestone (Swap M5, Explore/Activity M4–M6, Settings M4, Sign M3).
+ * milestone (Explore M6, Settings M4, Sign M3).
  */
-import { Body, Column, Icon, Key, Plate, Row, ScrollView, Segmented, metrics, paint } from '@boltvault/ui'
-import { useState } from 'react'
+import { Body, Column, Icon, Key, Plate, Row, ScrollView, metrics, paint } from '@boltvault/ui'
 import { useEngine } from '../engine/EngineProvider'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 
 type Body_ = 'extension-popup' | 'extension-tab' | 'mobile'
 const insetFor = (body: Body_): number => (body === 'extension-popup' ? metrics.inset : metrics.insetWide)
-
-export function SwapShell({ body }: { body: Body_ }) {
-  const [mode, setMode] = useState<'swap' | 'limit'>('swap')
-  return (
-    <ScrollView contentContainerStyle={{ padding: insetFor(body), gap: 16 }} testID="swap">
-      <Segmented
-        options={[
-          { id: 'swap', label: t({ id: 'swap.mode.swap', message: 'Swap' }) },
-          { id: 'limit', label: t({ id: 'swap.mode.limit', message: 'Limit' }) },
-        ]}
-        value={mode}
-        onChange={(id) => setMode(id as 'swap' | 'limit')}
-      />
-      <Plate role="raised" gap="$2" testID="terminal-in">
-        <Body tone="mute" size="caption">
-          {t({ id: 'swap.pay', message: 'You pay' })}
-        </Body>
-        <Row justifyContent="space-between">
-          <Body size="title">0</Body>
-          <Body size="title">ETN</Body>
-        </Row>
-      </Plate>
-      <Row justifyContent="center">
-        <Icon name="swap" color={paint.mute} />
-      </Row>
-      <Plate role="raised" gap="$2" testID="terminal-out">
-        <Body tone="mute" size="caption">
-          {t({ id: 'swap.receive', message: 'You receive' })}
-        </Body>
-        <Row justifyContent="space-between">
-          <Body size="title">—</Body>
-          <Body size="title">USDC</Body>
-        </Row>
-      </Plate>
-      <Column gap="$1">
-        <Row justifyContent="space-between">
-          <Body tone="mute" size="caption">
-            {t({ id: 'swap.impact', message: 'Price impact' })}
-          </Body>
-          <Body tone="mute" size="caption">
-            —
-          </Body>
-        </Row>
-        <Row justifyContent="space-between">
-          <Body tone="mute" size="caption">
-            {t({ id: 'swap.fee', message: 'Wallet fee' })}
-          </Body>
-          <Body tone="mute" size="caption">
-            {t({ id: 'swap.fee.value', message: '0.50% · hold BOLT for less' })}
-          </Body>
-        </Row>
-        <Row justifyContent="space-between">
-          <Body tone="mute" size="caption">
-            {t({ id: 'swap.min', message: 'Minimum received' })}
-          </Body>
-          <Body tone="mute" size="caption">
-            —
-          </Body>
-        </Row>
-      </Column>
-      <Key label={mode === 'swap' ? t({ id: 'swap.key', message: 'Swap' }) : t({ id: 'swap.limit.key', message: 'Place order' })} disabled testID="swap-key" />
-      <Body tone="mute" size="caption">
-        {t({ id: 'swap.soon', message: 'Swapping arrives with the M5 milestone. Quotes are on-chain; every in-wallet swap pays the wallet fee to the fee sink.' })}
-      </Body>
-    </ScrollView>
-  )
-}
 
 export function ExploreShell({ body }: { body: Body_ }) {
   return (
@@ -129,7 +61,7 @@ export function SettingsShell({ body }: { body: Body_ }) {
         <Key label={t({ id: 'settings.lock', message: 'Lock' })} kind="secondary" onPress={() => void engine.vault.lock()} icon={<Icon name="lock" size={18} color={paint.ink} />} testID="lock-key" />
       </Row>
       {groups.map((g) => {
-        const target = g.id === 'accounts' ? 'accounts' : g.id === 'security' ? 'security' : g.id === 'devices' ? 'devices' : g.id === 'sites' ? 'sites' : g.id === 'approvals' ? 'allowances' : null
+        const target = g.id === 'accounts' ? 'accounts' : g.id === 'security' ? 'security' : g.id === 'devices' ? 'devices' : g.id === 'sites' ? 'sites' : g.id === 'approvals' ? 'allowances' : g.id === 'spending' ? 'spending' : null
         return (
           <Plate key={g.id} gap="$1" testID={`settings-${g.id}`} onPress={target ? () => router.navigate(target) : undefined} cursor={target ? 'pointer' : undefined}>
             <Row justifyContent="space-between">

@@ -4,7 +4,7 @@
  */
 import { Body, Column, Icon, Input, Key, Plate, Row, ScrollView, Signature, Toggle, WordGrid, metrics, paint, shortAddress } from '@boltvault/ui'
 import type { AccountView, SeedView } from '@boltvault/engine'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
@@ -162,11 +162,7 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
             <Key label={t({ id: 'acct.add.watch.key', message: 'Watch address' })} disabled={busy || !/^0x[0-9a-fA-F]{40}$/.test(field.trim())} onPress={() => run(async () => { await engine.accounts.addWatch({ address: field.trim() }); setField(''); setAdding(null) })} />
           </Column>
         ) : null}
-        {adding === 'hardware' ? (
-          <Body tone="mute" size="caption">
-            {t({ id: 'acct.hardware.soon', message: 'Ledger over USB (extension) lands with M5; Ledger Bluetooth, Trezor and Keystone with M8. Until then you can watch the device address.' })}
-          </Body>
-        ) : null}
+        {adding === 'hardware' ? <LedgerPicker onAdded={() => setAdding(null)} /> : null}
         {error ? <Body tone="burn">{error}</Body> : null}
       </Plate>
 
@@ -196,5 +192,119 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
 
       <Toggle value={false} onChange={() => undefined} label={t({ id: 'acct.sync.hint', message: 'Sync accounts to paired devices' })} hint={t({ id: 'acct.sync.hint.body', message: 'Watch and hardware accounts sync; seeds and keys never do. Pair in Settings › Devices.' })} disabled />
     </ScrollView>
+  )
+}
+
+/** Pair a Ledger over USB and pick addresses from both derivation schemes (§8.1). */
+function LedgerPicker({ onAdded }: { onAdded: () => void }) {
+  const engine = useEngine()
+  const host = useHost()
+  const [status, setStatus] = useState<Awaited<ReturnType<typeof engine.hardware.ledgerStatus>> | null>(null)
+  const [rows, setRows] = useState<Array<{ scheme: 'bip44' | 'live'; path: string; address: string; index: number }>>([])
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [added, setAdded] = useState<string[]>([])
+
+  const refresh = async (): Promise<void> => {
+    setBusy(true)
+    setError(null)
+    try {
+      const st = await engine.hardware.ledgerStatus()
+      setStatus(st)
+      if (st.devices.length > 0 && st.app) {
+        const [a, b] = await Promise.all([engine.hardware.ledgerAddresses({ scheme: 'bip44', count: 5 }), engine.hardware.ledgerAddresses({ scheme: 'live', count: 5 })])
+        setRows([...a.map((x) => ({ ...x, scheme: 'bip44' as const })), ...b.map((x) => ({ ...x, scheme: 'live' as const }))])
+      } else {
+        setRows([])
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    void refresh()
+  }, [])
+
+  const pair = async (): Promise<void> => {
+    if (!host.requestHid) return
+    setError(null)
+    try {
+      const ok = await host.requestHid()
+      if (!ok) setError(t({ id: 'ledger.nopick', message: 'No device was chosen.' }))
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const add = async (row: { scheme: 'bip44' | 'live'; path: string; address: string; index: number }): Promise<void> => {
+    setBusy(true)
+    setError(null)
+    try {
+      await engine.accounts.addHardware({ kind: 'ledger', address: row.address, path: row.path, ...(status?.devices[0] ? { deviceId: status.devices[0].deviceId } : {}), label: `Ledger ${row.scheme === 'live' ? 'Live' : 'BIP-44'} #${row.index}` })
+      setAdded((xs) => [...xs, row.address.toLowerCase()])
+      onAdded()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (status && !status.available) {
+    return (
+      <Column gap="$2" testID="ledger-unavailable">
+        <Body tone="mute" size="caption">
+          {t({ id: 'ledger.unavailable', message: 'Ledger over USB works from the full tab in Chrome. Bluetooth (phone), Trezor and Keystone arrive with M8. You can watch the device address meanwhile.' })}
+        </Body>
+        {host.openSecretScreen && host.body !== 'extension-tab' ? <Key label={t({ id: 'acct.openTab', message: 'Continue in a full tab' })} onPress={() => host.openSecretScreen?.('accounts')} /> : null}
+      </Column>
+    )
+  }
+  return (
+    <Column gap="$3" testID="ledger-picker">
+      <Body tone="mute" size="caption">
+        {t({ id: 'ledger.body', message: 'Plug in your Ledger, unlock it and open the Ethereum app. Your keys never leave the device; BoltVault only shows you what it will sign.' })}
+      </Body>
+      <Row gap="$2" flexWrap="wrap">
+        {host.requestHid ? <Key label={t({ id: 'ledger.pair', message: 'Pair Ledger' })} kind="secondary" disabled={busy} onPress={() => void pair()} testID="ledger-pair" /> : null}
+        <Key label={t({ id: 'ledger.refresh', message: 'Refresh' })} kind="secondary" disabled={busy} onPress={() => void refresh()} testID="ledger-refresh" />
+      </Row>
+      {status?.devices[0] ? (
+        <Body size="caption" tone={status.app ? 'arc' : 'ember'} testID="ledger-status">
+          {status.app ? t({ id: 'ledger.ready', message: '{m} · Ethereum app {v}{b}', values: { m: status.devices[0].model, v: status.app.version, b: status.app.blindSigning ? '' : ' · blind signing off' } }) : (status.problem ?? t({ id: 'ledger.openapp', message: 'Open the Ethereum app on the device.' }))}
+        </Body>
+      ) : status ? (
+        <Body tone="mute" size="caption">
+          {t({ id: 'ledger.none', message: 'No Ledger paired yet.' })}
+        </Body>
+      ) : null}
+      {status?.app && !status.app.blindSigning ? (
+        <Body tone="ember" size="caption">
+          {t({ id: 'ledger.blind', message: 'Swaps and contract calls need blind signing: Ethereum app › Settings › Blind signing on the device. Plain sends work without it.' })}
+        </Body>
+      ) : null}
+      {(['bip44', 'live'] as const).map((scheme) => {
+        const list = rows.filter((r) => r.scheme === scheme)
+        if (list.length === 0) return null
+        return (
+          <Column key={scheme} gap="$1" testID={`ledger-${scheme}`}>
+            <Body size="caption">{scheme === 'bip44' ? t({ id: 'ledger.bip44', message: 'BIP-44 (MetaMask, most wallets)' }) : t({ id: 'ledger.live', message: 'Ledger Live' })}</Body>
+            {list.map((r) => (
+              <Row key={r.path} justifyContent="space-between" alignItems="center" minHeight={44}>
+                <Body tone="mute" size="caption" fontFamily="$mono">
+                  {shortAddress(r.address)} · {r.path}
+                </Body>
+                <Key label={added.includes(r.address.toLowerCase()) ? t({ id: 'ledger.added', message: 'Added' }) : t({ id: 'ledger.add', message: 'Add' })} kind="secondary" disabled={busy || added.includes(r.address.toLowerCase())} onPress={() => void add(r)} testID={`ledger-add-${scheme}-${r.index}`} />
+              </Row>
+            ))}
+          </Column>
+        )
+      })}
+      {error ? <Body tone="burn">{error}</Body> : null}
+    </Column>
   )
 }

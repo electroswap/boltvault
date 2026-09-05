@@ -16,6 +16,7 @@ export interface ScreenParams {
   devices: undefined
   sites: undefined
   allowances: undefined
+  spending: undefined
   accounts: undefined
   backup: undefined
   unlock: undefined
@@ -50,6 +51,7 @@ export const SCREENS: Record<ScreenId, ScreenMeta> = {
   devices: { id: 'devices', presentation: 'push', quiet: false, secrets: false },
   sites: { id: 'sites', presentation: 'push', quiet: false, secrets: false },
   allowances: { id: 'allowances', presentation: 'push', quiet: false, secrets: false },
+  spending: { id: 'spending', presentation: 'push', quiet: false, secrets: false },
   accounts: { id: 'accounts', presentation: 'sheet', quiet: false, secrets: true },
   backup: { id: 'backup', presentation: 'push', quiet: true, secrets: true },
   unlock: { id: 'unlock', presentation: 'window', quiet: true, secrets: false },

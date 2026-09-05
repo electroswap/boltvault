@@ -43,7 +43,7 @@ export type ApprovalIntent =
   | { readonly kind: 'sign_message'; readonly origin: string; readonly chainId: number; readonly accountId: string; readonly from: Hex; readonly message: Hex; readonly clientRequestId: string }
   | { readonly kind: 'eth_sign'; readonly origin: string; readonly chainId: number; readonly accountId: string; readonly from: Hex; readonly hash: Hex; readonly clientRequestId: string }
   | { readonly kind: 'sign_typed_data'; readonly origin: string; readonly chainId: number; readonly accountId: string; readonly from: Hex; readonly typedData: unknown; readonly version: 'v3' | 'v4'; readonly clientRequestId: string }
-  | { readonly kind: 'send_transaction'; readonly origin: string; readonly chainId: number; readonly accountId: string; readonly tx: TxParams; readonly clientRequestId: string }
+  | { readonly kind: 'send_transaction'; readonly origin: string; readonly chainId: number; readonly accountId: string; readonly tx: TxParams; readonly clientRequestId: string; /** internal:swap only — the fee the encoder wrote, checked by the firewall (T10). */ readonly expectedFee?: { readonly sink: Hex; readonly bips: number } | null }
   | { readonly kind: 'watch_asset'; readonly origin: string; readonly chainId: number; readonly type: string; readonly options: unknown; readonly clientRequestId: string }
 
 export interface ConnectResult {

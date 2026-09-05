@@ -53,6 +53,14 @@ export const MULTICALL3_ABI = parseAbi([
   'function aggregate((address target, bytes callData)[] calls) payable returns (uint256 blockNumber, bytes[] returnData)',
 ])
 
+/** EsLimitOrderManagerV1 (§8.6) — the calls the wallet itself makes. */
+export const LIMIT_ORDERS_ABI = parseAbi([
+  'function submitOrder(address tokenIn, address tokenOut, bool unwrapOutput, uint256 amountInExact, uint256 amountOutMin, address recipient, uint256 duration)',
+  'function submitOrderWithPermit(address tokenIn, address tokenOut, bool unwrapOutput, uint256 amountInExact, uint256 amountOutMin, address recipient, uint256 duration, ((address token, uint160 amount, uint48 expiration, uint48 nonce) details, address spender, uint256 sigDeadline) permitSingle, bytes permitSignature)',
+  'function closeOrder(uint256 orderId)',
+  'function closeOrders(uint256[] orderIds)',
+])
+
 /** Event topic0 hashes the simulator reads from traces. */
 export const TOPICS = {
   transfer: '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',

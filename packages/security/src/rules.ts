@@ -173,6 +173,22 @@ export const approveRules: Rule = ({ request, decoded, chainId, context }) => {
   return null
 }
 
+/** T10: our own swap must pay exactly the pinned sink at the schedule's bips — never less, never elsewhere. */
+export const feeSinkRules: Rule = ({ request, decoded, origin, context }) => {
+  if (origin !== 'internal:swap' || request.kind !== 'transaction' || !decoded || decoded.kind !== 'universal_router') return null
+  const expected = context.expectedFee
+  if (!expected) return { code: 'FEE_SINK_MISMATCH', severity: 'block', title: 'The wallet fee could not be verified', detail: 'The fee sink for this network is not configured. In-wallet swaps stay off until it is.' }
+  const portions = decoded.decoded.commands.filter((c) => c.type === 'PAY_PORTION')
+  if (expected.bips === 0) {
+    return portions.length === 0 ? null : { code: 'FEE_TIER_MISMATCH', severity: 'block', title: 'A fee was encoded for a zero-fee tier', detail: 'Your tier pays no wallet fee, but the transaction would pay one.' }
+  }
+  const p = portions[0]
+  if (!p || p.type !== 'PAY_PORTION' || portions.length !== 1) return { code: 'FEE_SINK_MISMATCH', severity: 'block', title: 'The wallet fee is missing', detail: 'This swap does not pay the wallet fee to the fee sink. BoltVault will not sign it.' }
+  if (p.recipient.toLowerCase() !== expected.sink.toLowerCase()) return { code: 'FEE_SINK_MISMATCH', severity: 'block', title: 'The fee would go to the wrong address', detail: `The fee recipient is not the pinned fee sink (${expected.sink.slice(0, 6)}…${expected.sink.slice(-4)}).` }
+  if (p.bips !== BigInt(expected.bips)) return { code: 'FEE_TIER_MISMATCH', severity: 'block', title: 'The fee does not match your tier', detail: `Encoded ${(Number(p.bips) / 100).toFixed(2)}%, schedule says ${(expected.bips / 100).toFixed(2)}%. Re-quote and try again.` }
+  return null
+}
+
 export const dappTipsThirdParty: Rule = ({ request, decoded, origin, chainId, context }) => {
   if (request.kind !== 'transaction' || !decoded || decoded.kind !== 'universal_router' || isInternal(origin)) return null
   const portions = decoded.decoded.commands.filter((c) => c.type === 'PAY_PORTION')
@@ -273,6 +289,7 @@ export const ALL_RULES: readonly Rule[] = [
   authorizationList,
   chainMismatch,
   approveRules,
+  feeSinkRules,
   dappTipsThirdParty,
   unknownFunction,
   newContract,

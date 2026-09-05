@@ -28,6 +28,12 @@ import type {
   SendQuote,
   Settings,
   SiteView,
+  SwapQuote,
+  SwapFlow,
+  HolderTier,
+  FeeScheduleView,
+  LimitQuote,
+  LimitOrderView,
   SyncStatus,
   VaultStatus,
 } from './schema'
@@ -165,6 +171,40 @@ export interface SendNamespace {
   submit(input: { accountId: AccountId; chainId: number; token: string; to: string; amount: string }): Promise<{ requestId: string; to: string }>
 }
 
+/** In-wallet swaps (§8.6): quote on chain, execute as a flow of sheets (approve → permit → swap). */
+export interface SwapNamespace {
+  quote(input: { accountId: AccountId; chainId: number; tokenIn: string; tokenOut: string; amountIn: string; slippageBips?: number }): Promise<SwapQuote>
+  /** Starts the flow; resolves once the first sheet exists. Progress arrives as `swap.progress` events. */
+  execute(input: { accountId: AccountId; chainId: number; tokenIn: string; tokenOut: string; amountIn: string; slippageBips?: number }): Promise<{ flowId: string; requestId: string | null }>
+  flow(input: { flowId: string }): Promise<SwapFlow | null>
+  flows(input?: { accountId?: AccountId }): Promise<SwapFlow[]>
+}
+
+/** The BOLT/DYNO holder program (§8.18): the account's fee tier and the whole schedule. */
+export interface HolderNamespace {
+  tier(input: { accountId: AccountId; chainId: number }): Promise<HolderTier>
+  schedule(input: { chainId: number }): Promise<FeeScheduleView>
+  addresses(input: { chainId: number }): Promise<{ sink: string | null; schedule: string | null }>
+  /** Dev/test only; refused for a chain whose sink is pinned in the build. */
+  configure(input: { chainId: number; sink: string | null; schedule: string | null }): Promise<{ sink: string | null; schedule: string | null }>
+}
+
+/** Limit orders on EsLimitOrderManagerV1 (§8.6). */
+export interface LimitNamespace {
+  quote(input: { accountId: AccountId; chainId: number; tokenIn: string; tokenOut: string; amountIn: string; minOut: string; durationSeconds: number }): Promise<LimitQuote>
+  place(input: { accountId: AccountId; chainId: number; tokenIn: string; tokenOut: string; amountIn: string; minOut: string; durationSeconds: number }): Promise<{ flowId: string; requestId: string | null }>
+  cancel(input: { accountId: AccountId; chainId: number; orderId: string }): Promise<{ flowId: string; requestId: string | null }>
+  list(input: { accountId: AccountId; chainId: number }): Promise<LimitOrderView[]>
+}
+
+/** Hardware devices (§2.7 S7): Ledger over HID from the worker in M5. */
+export interface HardwareNamespace {
+  ledgerStatus(): Promise<{ available: boolean; devices: Array<{ deviceId: string; model: string }>; app: { version: string; blindSigning: boolean } | null; problem: string | null }>
+  ledgerAddresses(input: { scheme: 'bip44' | 'live'; from?: number; count?: number; deviceId?: string }): Promise<Array<{ path: string; address: string; index: number }>>
+  ledgerVerify(input: { path: string; deviceId?: string }): Promise<{ address: string }>
+  verifyAccount(input: { accountId: AccountId }): Promise<{ address: string }>
+}
+
 /** The encrypted local activity log (§8.12). Locked vault = empty. */
 export interface ActivityNamespace {
   list(input?: { accountId?: AccountId; chainId?: number; limit?: number }): Promise<ActivityEntry[]>
@@ -206,6 +246,10 @@ export interface WalletEngine {
   readonly contacts: ContactsNamespace
   readonly send: SendNamespace
   readonly sync: SyncNamespace
+  readonly swap: SwapNamespace
+  readonly holder: HolderNamespace
+  readonly limit: LimitNamespace
+  readonly hardware: HardwareNamespace
   readonly events: EngineEvents
 }
 

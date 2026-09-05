@@ -73,6 +73,15 @@ export function explainCall(decoded: DecodedCall, ctx: AssessmentContext, chainI
       return [{ text: `Unwrap ${amount(ctx, decoded.token, decoded.amount, chainId)}`, tone: 'neutral' }]
     case 'multicall':
       return [{ text: `Run ${decoded.calls.length} calls through Multicall3`, tone: 'neutral' }]
+    case 'limit_order': {
+      if (decoded.action === 'close') return [{ text: decoded.orderIds.length === 1 ? `Cancel order #${decoded.orderIds[0]?.toString() ?? '?'} and take back what is left` : `Cancel ${decoded.orderIds.length} orders and take back what is left`, tone: 'in' }]
+      const days = Number(decoded.durationSeconds) / 86_400
+      const open = days >= 1 ? `${Math.round(days)} day${Math.round(days) === 1 ? '' : 's'}` : `${Math.max(1, Math.round(Number(decoded.durationSeconds) / 3600))} hours`
+      return [
+        { text: `Place an order: ${amount(ctx, decoded.tokenIn ?? 'native', decoded.amountIn, chainId)} for at least ${amount(ctx, decoded.tokenOut ?? 'native', decoded.minOut, chainId)}, open for ${open}`, tone: 'out' },
+        { text: 'Platform fee 0.1% on fill · no wallet fee', tone: 'neutral' },
+      ]
+    }
     case 'universal_router': {
       const out: Statement[] = []
       for (const c of decoded.decoded.commands) {

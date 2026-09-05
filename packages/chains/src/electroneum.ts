@@ -21,6 +21,12 @@ export interface ElectroSwapAddresses {
   seaportConduitKey: string
   yieldFarm: string
   dyno: string
+  /** BOLT — the boost/governance-style token (§8.18). */
+  bolt: string | null
+  /** Uniswap's FeeOnTransferDetector, as used by the interface (§8.6). */
+  feeOnTransferDetector: string | null
+  /** EsLimitOrderManagerV1 (§8.6). */
+  limitOrders: string | null
   /** Warp assets (Hyperlane). */
   usdc: string
   usdt: string
@@ -43,6 +49,9 @@ export const ELECTRONEUM_ADDRESSES: Record<52014 | 5201420, ElectroSwapAddresses
       '0xD6Cf49CbCF84B2cd2472a376B5f791689A0769d0000000000000000000000000',
     yieldFarm: '0xe653aC16B732876F58a1722d24801230fA96bc82',
     dyno: '0xEe432C220273e4F949007B4c1946562826Efa055',
+    bolt: '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1',
+    feeOnTransferDetector: '0x34dc8af1FFe9F71aB8B37F9Ea79c567ab64140b3',
+    limitOrders: '0x5911BE1AE831248883F84891fe798b52940a8721',
     usdc: '0x3187deAd7A2Bd6770F5Fe81495D1B715926AAe6e',
     usdt: '0x48E722f1458b253c2FB0E573F939318D7Dbd54e7',
   },
@@ -62,6 +71,9 @@ export const ELECTRONEUM_ADDRESSES: Record<52014 | 5201420, ElectroSwapAddresses
       '0x888031006C1b2D7A8F66b4E4Af52d8711C557B65000000000000000000000000',
     yieldFarm: '0x4025ed69ce7DCdc147418e0e730E7575F9b14b78',
     dyno: '0x162D5a58096b63D89D83e0C66b4731A6CC8b10aF',
+    bolt: null,
+    feeOnTransferDetector: null,
+    limitOrders: null,
     usdc: '0x9a110A3Ecc8704e93Bd4FA1bA44D5CF93327202B',
     usdt: '0x02FeC8c559fB598762df8D033bD7A3Df9b374771',
   },
@@ -74,8 +86,14 @@ export const ELECTRONEUM_ADDRESSES: Record<52014 | 5201420, ElectroSwapAddresses
  * sink at runtime must disable in-wallet swap ("do not swap"), per design.
  */
 export const BOLTVAULT_FEE_SINK: Record<52014 | 5201420, string | null> = {
-  52014: null, // mainnet sink pending PR-ES-5
-  5201420: null, // testnet sink pending PR-ES-5 (dev builds use 0x… pending)
+  52014: null, // mainnet sink: deployed at M10 (backend B10)
+  5201420: null, // testnet sink: contracts/ ready, deployment is an ops action (backend B5)
+}
+
+/** BoltVaultFeeSchedule (§8.18) per chain; null until deployed — the base fee applies. */
+export const BOLTVAULT_FEE_SCHEDULE: Record<52014 | 5201420, string | null> = {
+  52014: null,
+  5201420: null,
 }
 
 export const GRAPHQL_URL = 'https://electroswap.io/graphql'

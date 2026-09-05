@@ -79,11 +79,6 @@ msgid "Hardware"
 msgstr "Hardware"
 
 #: packages/wallet/src/screens/Accounts.tsx
-msgctxt "acct.hardware.soon"
-msgid "Ledger over USB (extension) lands with M5; Ledger Bluetooth, Trezor and Keystone with M8. Until then you can watch the device address."
-msgstr "Ledger over USB (extension) lands with M5; Ledger Bluetooth, Trezor and Keystone with M8. Until then you can watch the device address."
-
-#: packages/wallet/src/screens/Accounts.tsx
 msgctxt "acct.hidden"
 msgid "hidden"
 msgstr "hidden"
@@ -303,6 +298,11 @@ msgctxt "approval.blocked"
 msgid "BoltVault will not sign this. See why above."
 msgstr "BoltVault will not sign this. See why above."
 
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "approval.cancel"
+msgid "Cancel"
+msgstr "Cancel"
+
 #: packages/wallet/src/screens/Approval.tsx
 msgctxt "approval.connect"
 msgid "Connect"
@@ -317,6 +317,11 @@ msgstr "The site will see this address and can ask you to sign. It cannot move a
 msgctxt "approval.connectAs"
 msgid "Connect as"
 msgstr "Connect as"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.device"
+msgid "What your {d} shows"
+msgstr "What your {d} shows"
 
 #: packages/wallet/src/screens/Approval.tsx
 msgctxt "approval.fee"
@@ -438,7 +443,7 @@ msgctxt "cancel"
 msgid "Cancel"
 msgstr "Cancel"
 
-#: packages/wallet/src/screens/Approval.tsx
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
 msgctxt "close"
 msgid "Close"
 msgstr "Close"
@@ -457,6 +462,56 @@ msgstr "Copied"
 msgctxt "copy"
 msgid "Copy"
 msgstr "Copy"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "device.amount"
+msgid "Amount"
+msgstr "Amount"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "device.blind"
+msgid "The device shows the amount and the address; the data is a hash, so use the statements above as the truth. Blind signing must be on in the Ethereum app."
+msgstr "The device shows the amount and the address; the data is a hash, so use the statements above as the truth. Blind signing must be on in the Ethereum app."
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "device.chain"
+msgid "Chain"
+msgstr "Chain"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "device.deploy"
+msgid "new contract"
+msgstr "new contract"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "device.maxfee"
+msgid "Max fee"
+msgstr "Max fee"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "device.message"
+msgid "The device shows the message text."
+msgstr "The device shows the message text."
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "device.nonce"
+msgid "Nonce"
+msgstr "Nonce"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "device.plain"
+msgid "A plain send: the device shows exactly these fields."
+msgstr "A plain send: the device shows exactly these fields."
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "device.to"
+msgid "To"
+msgstr "To"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "device.typed"
+msgid "The device shows two hashes (domain and message) — the statements above are what they mean."
+msgstr "The device shows two hashes (domain and message) — the statements above are what they mean."
 
 #: packages/wallet/src/screens/Devices.tsx
 msgctxt "devices.answer.paste"
@@ -618,6 +673,146 @@ msgctxt "explore.tokens"
 msgid "Tokens"
 msgstr "Tokens"
 
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.getBolt"
+msgid "Get BOLT"
+msgstr "Get BOLT"
+
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.next"
+msgid "{n} more BOLT-eq for {p}"
+msgstr "{n} more BOLT-eq for {p}"
+
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.score"
+msgid "{s} BOLT-eq — {w} in your wallet, {f} deposited in farms, {d} from DYNO"
+msgstr "{s} BOLT-eq — {w} in your wallet, {f} deposited in farms, {d} from DYNO"
+
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.sheet.body"
+msgid "Every in-wallet swap pays a fee on what you receive. The more BOLT you hold — in your wallet or deposited as a farm boost — the less you pay. The schedule lives on chain; the wallet reads it live."
+msgstr "Every in-wallet swap pays a fee on what you receive. The more BOLT you hold — in your wallet or deposited as a farm boost — the less you pay. The schedule lives on chain; the wallet reads it live."
+
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.sheet.fallback"
+msgid "The schedule contract did not answer; these are the published defaults and you pay the base rate until it does."
+msgstr "The schedule contract did not answer; these are the published defaults and you pay the base rate until it does."
+
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.sheet.title"
+msgid "Wallet fee schedule"
+msgstr "Wallet fee schedule"
+
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.sink"
+msgid "Fees go to the fee sink {a}. What it does with them is published in About."
+msgstr "Fees go to the fee sink {a}. What it does with them is published in About."
+
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.sink.none"
+msgid "The fee sink for this network is not set yet; in-wallet swaps stay off until it is."
+msgstr "The fee sink for this network is not set yet; in-wallet swaps stay off until it is."
+
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.tier.base"
+msgid "Under {n} BOLT-eq"
+msgstr "Under {n} BOLT-eq"
+
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.tier.row"
+msgid "Tier {t} · {n}+ BOLT-eq"
+msgstr "Tier {t} · {n}+ BOLT-eq"
+
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.top"
+msgid "Top tier — the lowest fee there is."
+msgstr "Top tier — the lowest fee there is."
+
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.you"
+msgid "You: tier {t} · {p}"
+msgstr "You: tier {t} · {p}"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "flow.again"
+msgid "Back to Swap"
+msgstr "Back to Swap"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "flow.approve"
+msgid "Allow Permit2"
+msgstr "Allow Permit2"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "flow.cancel"
+msgid "Cancel order"
+msgstr "Cancel order"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "flow.confirmed"
+msgid "Done"
+msgstr "Done"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "flow.failed"
+msgid "Failed"
+msgstr "Failed"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "flow.failed.title"
+msgid "The network refused it"
+msgstr "The network refused it"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "flow.pending"
+msgid "Next"
+msgstr "Next"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "flow.permit"
+msgid "Permit this amount"
+msgstr "Permit this amount"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "flow.rejected"
+msgid "Rejected"
+msgstr "Rejected"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "flow.rejected.title"
+msgid "Nothing was signed"
+msgstr "Nothing was signed"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "flow.signing"
+msgid "Waiting for you"
+msgstr "Waiting for you"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "flow.submit"
+msgid "Place order"
+msgstr "Place order"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "flow.submitted"
+msgid "Confirming…"
+msgstr "Confirming…"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "flow.swap"
+msgid "Swap"
+msgstr "Swap"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "flow.tryAgain"
+msgid "Try again"
+msgstr "Try again"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "flow.wrap"
+msgid "Wrap ETN"
+msgstr "Wrap ETN"
+
 #: packages/wallet/src/screens/Receive.tsx
 msgctxt "hide"
 msgid "Hide"
@@ -777,6 +972,136 @@ msgstr "Send"
 msgctxt "key.swap"
 msgid "Swap"
 msgstr "Swap"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "ledger.add"
+msgid "Add"
+msgstr "Add"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "ledger.added"
+msgid "Added"
+msgstr "Added"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "ledger.bip44"
+msgid "BIP-44 (MetaMask, most wallets)"
+msgstr "BIP-44 (MetaMask, most wallets)"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "ledger.blind"
+msgid "Swaps and contract calls need blind signing: Ethereum app › Settings › Blind signing on the device. Plain sends work without it."
+msgstr "Swaps and contract calls need blind signing: Ethereum app › Settings › Blind signing on the device. Plain sends work without it."
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "ledger.body"
+msgid "Plug in your Ledger, unlock it and open the Ethereum app. Your keys never leave the device; BoltVault only shows you what it will sign."
+msgstr "Plug in your Ledger, unlock it and open the Ethereum app. Your keys never leave the device; BoltVault only shows you what it will sign."
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "ledger.live"
+msgid "Ledger Live"
+msgstr "Ledger Live"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "ledger.none"
+msgid "No Ledger paired yet."
+msgstr "No Ledger paired yet."
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "ledger.nopick"
+msgid "No device was chosen."
+msgstr "No device was chosen."
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "ledger.openapp"
+msgid "Open the Ethereum app on the device."
+msgstr "Open the Ethereum app on the device."
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "ledger.pair"
+msgid "Pair Ledger"
+msgstr "Pair Ledger"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "ledger.ready"
+msgid "{m} · Ethereum app {v}{b}"
+msgstr "{m} · Ethereum app {v}{b}"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "ledger.refresh"
+msgid "Refresh"
+msgstr "Refresh"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "ledger.unavailable"
+msgid "Ledger over USB works from the full tab in Chrome. Bluetooth (phone), Trezor and Keystone arrive with M8. You can watch the device address meanwhile."
+msgstr "Ledger over USB works from the full tab in Chrome. Bluetooth (phone), Trezor and Keystone arrive with M8. You can watch the device address meanwhile."
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "limit.above"
+msgid "{p}% above market — fills when the price gets there"
+msgstr "{p}% above market — fills when the price gets there"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "limit.below"
+msgid "{p}% below market — a swap would pay more right now"
+msgstr "{p}% below market — a swap would pay more right now"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "limit.cancelled"
+msgid "Order cancelled"
+msgstr "Order cancelled"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "limit.expires"
+msgid "Expires {d}"
+msgstr "Expires {d}"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "limit.fee"
+msgid "Platform fee 0.1% on fill · no wallet fee"
+msgstr "Platform fee 0.1% on fill · no wallet fee"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "limit.market"
+msgid "Market: {r}"
+msgstr "Market: {r}"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "limit.market.none"
+msgid "No market rate for this pair right now."
+msgstr "No market rate for this pair right now."
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "limit.none"
+msgid "No open orders. An order waits on chain until the price reaches your target or it expires."
+msgstr "No open orders. An order waits on chain until the price reaches your target or it expires."
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "limit.open"
+msgid "Open orders"
+msgstr "Open orders"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "limit.placed"
+msgid "Order placed"
+msgstr "Order placed"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "limit.receive"
+msgid "You receive at least"
+msgstr "You receive at least"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "limit.row"
+msgid "{a} {s} → at least {b} {u}"
+msgstr "{a} {s} → at least {b} {u}"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "limit.working"
+msgid "Placing your order…"
+msgstr "Placing your order…"
 
 #: packages/wallet/src/screens/Moments.tsx
 msgctxt "moments.discharge"
@@ -1163,7 +1488,7 @@ msgctxt "send.amount"
 msgid "Amount"
 msgstr "Amount"
 
-#: packages/wallet/src/screens/Send.tsx
+#: packages/wallet/src/screens/Swap.tsx
 msgctxt "send.balance"
 msgid "{q} {s} available"
 msgstr "{q} {s} available"
@@ -1178,7 +1503,7 @@ msgctxt "send.fee"
 msgid "Network fee about {fee} {s}"
 msgstr "Network fee about {fee} {s}"
 
-#: packages/wallet/src/screens/Send.tsx
+#: packages/wallet/src/screens/Swap.tsx
 msgctxt "send.max"
 msgid "Max"
 msgstr "Max"
@@ -1353,60 +1678,190 @@ msgctxt "sites.title"
 msgid "Connected sites"
 msgstr "Connected sites"
 
-#: packages/wallet/src/screens/shells.tsx
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.exact"
+msgid "Exact token approvals"
+msgstr "Exact token approvals"
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.exact.hint"
+msgid "Allow Permit2 only the amount of each swap. Safer; one more transaction per swap of that token."
+msgstr "Allow Permit2 only the amount of each swap. Safer; one more transaction per swap of that token."
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.fee"
+msgid "Wallet fee schedule"
+msgstr "Wallet fee schedule"
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.score"
+msgid "{s} BOLT-eq counted"
+msgstr "{s} BOLT-eq counted"
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.sink"
+msgid "Fee sink {a}"
+msgstr "Fee sink {a}"
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.sink.none"
+msgid "Fee sink not set on this network"
+msgstr "Fee sink not set on this network"
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.slippage"
+msgid "Swap slippage"
+msgstr "Swap slippage"
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.slippage.body"
+msgid "How far the price may move between your quote and the block that fills it before the swap gives up."
+msgstr "How far the price may move between your quote and the block that fills it before the swap gives up."
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.stepups"
+msgid "Step-ups"
+msgstr "Step-ups"
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.stepups.body"
+msgid "A first-time recipient pauses for a second look; a send above a tenth of a token balance asks you to unlock again. Both are always on."
+msgstr "A first-time recipient pauses for a second look; a send above a tenth of a token balance asks you to unlock again. Both are always on."
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.tier"
+msgid "Your tier: {t} · {p} on swaps"
+msgstr "Your tier: {t} · {p} on swaps"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.coach"
+msgid "Your first swap of a token takes up to three signatures: allow Permit2 once (the shared allowance contract ElectroSwap uses), permit this exact amount, then the swap itself. ETN in needs only the swap."
+msgstr "Your first swap of a token takes up to three signatures: allow Permit2 once (the shared allowance contract ElectroSwap uses), permit this exact amount, then the swap itself. ETN in needs only the swap."
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.coach.fee"
+msgid "The wallet fee comes out of what you receive; holding BOLT lowers it. Tap the fee line for the schedule."
+msgstr "The wallet fee comes out of what you receive; holding BOLT lowers it. Tap the fee line for the schedule."
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.coach.ok"
+msgid "Got it"
+msgstr "Got it"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.done"
+msgid "Swapped"
+msgstr "Swapped"
+
+#: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.fee"
 msgid "Wallet fee"
 msgstr "Wallet fee"
 
-#: packages/wallet/src/screens/shells.tsx
-msgctxt "swap.fee.value"
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.fee.idle"
 msgid "0.50% · hold BOLT for less"
 msgstr "0.50% · hold BOLT for less"
 
-#: packages/wallet/src/screens/shells.tsx
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.fee.line"
+msgid "{p} · BOLT tier {t} · {a} {s} to {sink}"
+msgstr "{p} · BOLT tier {t} · {a} {s} to {sink}"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.fee.next"
+msgid "hold {n} BOLT-eq for {p}"
+msgstr "hold {n} BOLT-eq for {p}"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.fee.zero"
+msgid "No wallet fee · BOLT tier {t}"
+msgstr "No wallet fee · BOLT tier {t}"
+
+#: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.impact"
 msgid "Price impact"
 msgstr "Price impact"
 
-#: packages/wallet/src/screens/shells.tsx
+#: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.key"
 msgid "Swap"
 msgstr "Swap"
 
-#: packages/wallet/src/screens/shells.tsx
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.key.anyway"
+msgid "Swap anyway"
+msgstr "Swap anyway"
+
+#: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.limit.key"
 msgid "Place order"
 msgstr "Place order"
 
-#: packages/wallet/src/screens/shells.tsx
+#: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.min"
 msgid "Minimum received"
 msgstr "Minimum received"
 
-#: packages/wallet/src/screens/shells.tsx
+#: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.mode.limit"
 msgid "Limit"
 msgstr "Limit"
 
-#: packages/wallet/src/screens/shells.tsx
+#: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.mode.swap"
 msgid "Swap"
 msgstr "Swap"
 
-#: packages/wallet/src/screens/shells.tsx
+#: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.pay"
 msgid "You pay"
 msgstr "You pay"
 
-#: packages/wallet/src/screens/shells.tsx
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.pick"
+msgid "Pick"
+msgstr "Pick"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.pick.in"
+msgid "You pay"
+msgstr "You pay"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.pick.out"
+msgid "You receive"
+msgstr "You receive"
+
+#: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.receive"
 msgid "You receive"
 msgstr "You receive"
 
-#: packages/wallet/src/screens/shells.tsx
-msgctxt "swap.soon"
-msgid "Swapping arrives with the M5 milestone. Quotes are on-chain; every in-wallet swap pays the wallet fee to the fee sink."
-msgstr "Swapping arrives with the M5 milestone. Quotes are on-chain; every in-wallet swap pays the wallet fee to the fee sink."
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.slippage"
+msgid "Slippage {p}"
+msgstr "Slippage {p}"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.stale"
+msgid "Re-quoting…"
+msgstr "Re-quoting…"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.summary"
+msgid "{a} {s} → at least {b} {u}"
+msgstr "{a} {s} → at least {b} {u}"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.tax"
+msgid "+{p} token tax"
+msgstr "+{p} token tax"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.working"
+msgid "Swapping…"
+msgstr "Swapping…"
 
 #: packages/wallet/src/screens/Token.tsx
 msgctxt "token.activity"

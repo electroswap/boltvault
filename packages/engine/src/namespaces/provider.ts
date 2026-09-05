@@ -18,7 +18,7 @@ import type { Platform } from '@boltvault/platform'
 import { RPC, RpcError, RpcFlow, hexChainId, isProviderPortMessage, type ApprovalIntent, type ProviderEvent, type RpcContext, type TxParams } from '@boltvault/protocol'
 import { assess, emptyContext, estimateSimulation, NO_SIMULATION, parseTypedData, decodeMessage, simulationFromTrace, type Assessment, type AssessmentContext, type SignRequest, type Simulation, type TraceFrame } from '@boltvault/security'
 import type { Hex } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
+import { privateKeyToAccount, type LocalAccount } from 'viem/accounts'
 import type { ActivityStore } from '../activityStore'
 import { ConnectDecisionDataSchema, type ApprovalPayload, type AssessmentView, type PreparedTx } from '../approvalPayloads'
 import type { ApprovalStore } from '../approvals'
@@ -28,6 +28,7 @@ import type { ActivityEntry, ApprovalRequest } from '../schema'
 import type { SettingsStore } from '../settingsStore'
 import type { MessageChannelLike } from '../transport'
 import type { ChainsService } from './chains'
+import type { HardwareService } from './hardware'
 import type { SitesService } from './sites'
 import type { VaultManager } from './vault'
 
@@ -47,6 +48,8 @@ export interface ProviderDeps {
   /** Put a new request in front of the user (the extension opens sign.html). Internal origins never call this. */
   readonly openApproval?: (request: ApprovalRequest) => void
   readonly clientVersion: string
+  /** Device signers (Ledger over HID from the worker); absent in bodies without one. */
+  readonly hardware?: HardwareService
   readonly fetch?: typeof fetch
   /** Receipt polling cadence; defaults to the chain's block time. */
   readonly receiptPollMs?: number
@@ -122,21 +125,30 @@ export class ProviderService {
    * its id at once; the sheet decides; execution runs here and lands in Activity.
    */
   async submitInternal(intent: Extract<ApprovalIntent, { kind: 'send_transaction' }>): Promise<{ requestId: string }> {
-    if (!intent.origin.startsWith('internal:')) throw new EngineError('invalid_argument', 'submitInternal is for internal origins')
+    const { requestId } = await this.runInternal(intent)
+    return { requestId }
+  }
+
+  /**
+   * The same for flows that need the outcome (Swap: the permit signature feeds
+   * the router call): `result` resolves with the hash or signature once the
+   * sheet approved and the step executed, and rejects on Reject or a block.
+   */
+  async runInternal(intent: Extract<ApprovalIntent, { kind: 'send_transaction' | 'sign_typed_data' }>): Promise<{ requestId: string; result: Promise<unknown> }> {
+    if (!intent.origin.startsWith('internal:')) throw new EngineError('invalid_argument', 'runInternal is for internal origins')
     const d = this.deps
     const payload = await this.payloadFor(intent)
-    const request = await d.approvals.create({ kind: 'send_transaction', origin: intent.origin, accountId: intent.accountId, chainId: intent.chainId, payload })
-    void (async () => {
-      try {
-        const outcome = await d.approvals.waitFor(request.id)
-        const view = payload as Extract<ApprovalPayload, { kind: 'send_transaction' }>
-        if (!outcome.approved || view.assessment.presentation.blocked) return
-        await this.execute(intent, request, outcome.data)
-      } catch {
-        // A broadcast failure is already recorded in Activity as failed.
-      }
+    const request = await d.approvals.create({ kind: intent.kind, origin: intent.origin, accountId: intent.accountId, chainId: intent.chainId, payload })
+    const result = (async () => {
+      const outcome = await d.approvals.waitFor(request.id)
+      const view = payload as { assessment: AssessmentView }
+      // Defence in depth: a blocked assessment is never signed, whatever a UI page says (§3.4).
+      if (!outcome.approved || view.assessment.presentation.blocked) throw new EngineError('rejected', 'User rejected the request.')
+      return this.execute(intent, request, outcome.data)
     })()
-    return { requestId: request.id }
+    // A broadcast failure is already recorded in Activity as failed; nobody has to await this.
+    result.catch(() => undefined)
+    return { requestId: request.id, result }
   }
 
   /** After unlock: keep watching transactions that were pending when the worker last stopped. */
@@ -290,7 +302,7 @@ export class ProviderService {
         const prepared = await this.prepare(intent.chainId, intent.tx)
         const request: SignRequest = { kind: 'transaction', tx: { from: prepared.tx.from as Hex, to: prepared.tx.to as Hex | null, value: BigInt(prepared.tx.value), data: prepared.tx.data as Hex, chainId: intent.chainId, gas: BigInt(prepared.tx.gas), ...(intent.tx.authorizationList ? { authorizationList: intent.tx.authorizationList } : {}) } }
         const simulation = await this.simulate(intent.chainId, prepared, request)
-        const assessment = await this.assessment(intent.origin, intent.chainId, intent.tx.from, request, simulation)
+        const assessment = await this.assessment(intent.origin, intent.chainId, intent.tx.from, request, simulation, intent.expectedFee ?? null)
         const perGas = prepared.tx.type === 'eip1559' ? BigInt(prepared.tx.maxFeePerGas ?? '0x0') : BigInt(prepared.tx.gasPrice ?? '0x0')
         const symbol = getChain(intent.chainId)?.nativeCurrency.symbol ?? 'ETH'
         return { kind: 'send_transaction', tx: prepared.tx, fee: { gasLimit: BigInt(prepared.tx.gas).toString(), maxTotalWei: (perGas * BigInt(prepared.tx.gas)).toString(), symbol }, assessment: toView(assessment), clientRequestId: intent.clientRequestId }
@@ -300,7 +312,7 @@ export class ProviderService {
 
   // ---- firewall -------------------------------------------------------------------
 
-  private async assessment(origin: string, chainId: number, account: Hex, request: SignRequest, simulation: Simulation | null): Promise<Assessment> {
+  private async assessment(origin: string, chainId: number, account: Hex, request: SignRequest, simulation: Simulation | null, expectedFee: { sink: Hex; bips: number } | null = null): Promise<Assessment> {
     const d = this.deps
     const settings = await d.settings.get()
     const accounts = await d.vault.accounts()
@@ -338,6 +350,8 @@ export class ProviderService {
       balances,
       ethSignEnabled: settings.ethSignEnabled,
       now: d.platform.now(),
+      // Our own swap must pay exactly what the schedule said (T10); anything else never sees the field.
+      ...(origin === 'internal:swap' ? { expectedFee } : {}),
     })
     return assess({ origin, chainId, account, request, context, simulation })
   }
@@ -422,6 +436,8 @@ export class ProviderService {
       }
       case 'eth_sign': {
         const account = await this.signer(intent.accountId)
+        // A device never signs a raw hash (§4.6: eth_sign is 4200 for hardware accounts).
+        if (!account.sign) throw new RpcError(RPC.UNSUPPORTED_METHOD, 'This account cannot sign a raw hash.')
         return account.sign({ hash: intent.hash })
       }
       case 'sign_typed_data': {
@@ -436,10 +452,20 @@ export class ProviderService {
     }
   }
 
-  private async signer(accountId: string) {
+  private async signer(accountId: string): Promise<LocalAccount> {
     const pk = await this.deps.vault.privateKeyFor(accountId)
-    if (!pk) throw new RpcError(RPC.UNAUTHORIZED, 'This account cannot sign here.')
-    return privateKeyToAccount(pk)
+    if (pk) return privateKeyToAccount(pk)
+    // Hardware accounts: the device signs; the engine only moves bytes (§3.3).
+    const account = (await this.deps.vault.accounts()).find((a) => a.id === accountId)
+    if (account && this.deps.hardware) {
+      try {
+        const device = await this.deps.hardware.signerFor(account)
+        if (device) return device
+      } catch (err) {
+        throw new RpcError(RPC.INTERNAL, err instanceof Error ? err.message : 'The device did not answer.')
+      }
+    }
+    throw new RpcError(RPC.UNAUTHORIZED, 'This account cannot sign here.')
   }
 
   private async broadcast(intent: Extract<ApprovalIntent, { kind: 'send_transaction' }>, request: ApprovalRequest, tx: PreparedTx, assessment: AssessmentView): Promise<Hex> {
@@ -447,16 +473,6 @@ export class ProviderService {
     // Already broadcast before a restart? The write-ahead entry carries the hash.
     const prior = (await d.activity.list({ chainId: intent.chainId }).catch(() => [] as ActivityEntry[])).find((e) => e.id === request.id)
     if (prior?.hash) return prior.hash as Hex
-    const account = await this.signer(intent.accountId)
-    const raw = await account.signTransaction({
-      chainId: intent.chainId,
-      to: (tx.to as Hex | null) ?? undefined,
-      value: BigInt(tx.value),
-      data: tx.data as Hex,
-      nonce: tx.nonce,
-      gas: BigInt(tx.gas),
-      ...(tx.type === 'eip1559' ? { type: 'eip1559' as const, maxFeePerGas: BigInt(tx.maxFeePerGas ?? '0x0'), maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas ?? '0x0') } : { type: 'legacy' as const, gasPrice: BigInt(tx.gasPrice ?? '0x0') }),
-    })
     const entry: ActivityEntry = {
       id: request.id,
       hash: null,
@@ -467,13 +483,31 @@ export class ProviderService {
       nonce: tx.nonce,
       submittedAt: d.platform.now(),
       origin: intent.origin,
-      category: categoryFor(assessment, tx),
+      category: categoryFor(assessment, tx, intent.origin),
       statements: assessment.statements.map((s) => s.text),
       riskCodes: assessment.rules.map((r) => r.code),
       status: 'pending',
       blockNumber: null,
     }
+    // Write-ahead (§3.4 step 7): the row exists before the signature, so a device refusal or a lost worker still leaves a trace.
     if (!prior) await d.activity.append(entry)
+    let raw: Hex
+    try {
+      const account = await this.signer(intent.accountId)
+      raw = await account.signTransaction({
+        chainId: intent.chainId,
+        to: (tx.to as Hex | null) ?? undefined,
+        value: BigInt(tx.value),
+        data: tx.data as Hex,
+        nonce: tx.nonce,
+        gas: BigInt(tx.gas),
+        ...(tx.type === 'eip1559' ? { type: 'eip1559' as const, maxFeePerGas: BigInt(tx.maxFeePerGas ?? '0x0'), maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas ?? '0x0') } : { type: 'legacy' as const, gasPrice: BigInt(tx.gasPrice ?? '0x0') }),
+      })
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'signing failed'
+      await d.activity.update(request.id, { status: 'failed', statements: [...entry.statements, reason] }).catch(() => undefined)
+      throw err instanceof RpcError ? err : new RpcError(RPC.INTERNAL, reason)
+    }
     try {
       const sent = (await d.chains.rpc(intent.chainId, 'eth_sendRawTransaction', [raw])) as string
       await d.activity.update(request.id, { hash: sent })
@@ -516,8 +550,10 @@ function toView(a: Assessment): AssessmentView {
   }
 }
 
-function categoryFor(assessment: AssessmentView, tx: PreparedTx): ActivityEntry['category'] {
+function categoryFor(assessment: AssessmentView, tx: PreparedTx, origin: string): ActivityEntry['category'] {
   const first = assessment.statements[0]?.text ?? ''
+  if (origin === 'internal:limit' || origin === 'internal:limit:cancel') return 'LIMIT'
+  if (origin === 'internal:swap') return 'SWAP'
   if (/^Allow /.test(first)) return 'APPROVE'
   if (/^Revoke /.test(first)) return 'REVOKE'
   if (/^Send /.test(first) || (tx.data === '0x' && tx.to)) return 'SEND'

@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@boltvault/engine": "workspace:*",
+    "@boltvault/hardware": "workspace:*",
     "@boltvault/platform": "workspace:*",
     "@boltvault/protocol": "workspace:*",
     "@boltvault/security": "workspace:*",

@@ -36,7 +36,7 @@ export const UR_ROUTER_SELF = '0x0000000000000000000000000000000000000002'
 export type UrCommand =
   | { readonly type: 'V3_SWAP_EXACT_IN' | 'V3_SWAP_EXACT_OUT'; readonly recipient: Hex; readonly amountIn: bigint; readonly amountOut: bigint; readonly path: Hex; readonly payerIsUser: boolean }
   | { readonly type: 'V2_SWAP_EXACT_IN' | 'V2_SWAP_EXACT_OUT'; readonly recipient: Hex; readonly amountIn: bigint; readonly amountOut: bigint; readonly path: readonly Hex[]; readonly payerIsUser: boolean }
-  | { readonly type: 'PERMIT2_PERMIT'; readonly token: Hex; readonly amount: bigint; readonly expiration: number; readonly spender: Hex; readonly sigDeadline: bigint }
+  | { readonly type: 'PERMIT2_PERMIT'; readonly token: Hex; readonly amount: bigint; readonly expiration: number; readonly nonce: number; readonly spender: Hex; readonly sigDeadline: bigint; readonly signature: Hex }
   | { readonly type: 'PERMIT2_PERMIT_BATCH'; readonly details: ReadonlyArray<{ token: Hex; amount: bigint; expiration: number }>; readonly spender: Hex }
   | { readonly type: 'PERMIT2_TRANSFER_FROM'; readonly token: Hex; readonly recipient: Hex; readonly amount: bigint }
   | { readonly type: 'PERMIT2_TRANSFER_FROM_BATCH'; readonly transfers: ReadonlyArray<{ from: Hex; to: Hex; amount: bigint; token: Hex }> }
@@ -78,8 +78,8 @@ export function decodeUrCommand(byte: number, input: Hex): UrCommand {
         return { type: type === UR_COMMAND.V2_SWAP_EXACT_IN ? 'V2_SWAP_EXACT_IN' : 'V2_SWAP_EXACT_OUT', recipient, amountIn, amountOut, path, payerIsUser }
       }
       case UR_COMMAND.PERMIT2_PERMIT: {
-        const [permit] = decodeAbiParameters(PERMIT_SINGLE, input)
-        return { type: 'PERMIT2_PERMIT', token: permit.details.token, amount: permit.details.amount, expiration: permit.details.expiration, spender: permit.spender, sigDeadline: permit.sigDeadline }
+        const [permit, signature] = decodeAbiParameters(PERMIT_SINGLE, input)
+        return { type: 'PERMIT2_PERMIT', token: permit.details.token, amount: permit.details.amount, expiration: permit.details.expiration, nonce: permit.details.nonce, spender: permit.spender, sigDeadline: permit.sigDeadline, signature }
       }
       case UR_COMMAND.PERMIT2_PERMIT_BATCH: {
         const [permit] = decodeAbiParameters(PERMIT_BATCH, input)

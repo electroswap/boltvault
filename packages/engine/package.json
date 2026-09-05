@@ -16,6 +16,7 @@
     "@boltvault/chains": "workspace:*",
     "@boltvault/core": "workspace:*",
     "@boltvault/electroswap": "workspace:*",
+    "@boltvault/hardware": "workspace:*",
     "@boltvault/platform": "workspace:*",
     "@boltvault/protocol": "workspace:*",
     "@boltvault/security": "workspace:*",

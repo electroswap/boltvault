@@ -4,7 +4,7 @@
  * `funded` scenario) a portfolio namespace answering from fixture rows. No
  * network, no service worker, byte-identical output run to run.
  */
-import { createEngine, type ActivityEntry, type AllowanceView, type Engine, type HeadSource, type PortfolioSnapshot, type TokenView } from '@boltvault/engine'
+import { createEngine, type ActivityEntry, type AllowanceView, type Engine, type FeeScheduleView, type HeadSource, type HolderTier, type PortfolioSnapshot, type SwapQuote, type TokenView } from '@boltvault/engine'
 import { createMemoryPlatform } from '@boltvault/platform/memory'
 import { z } from 'zod'
 
@@ -117,6 +117,73 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
           const row = snap.rows.find((r) => r.address.toLowerCase() === token.toLowerCase()) ?? snap.rows[0]
           const ok = /^0x[0-9a-fA-F]{40}$/.test(to) && Number(amount) > 0
           return { to: /^0x[0-9a-fA-F]{40}$/.test(to) ? to : null, name: null, token, symbol: row?.symbol ?? 'ETN', decimals: row?.decimals ?? 18, amountRaw: '0', balanceRaw: row?.raw ?? '0', maxRaw: row?.raw ?? '0', max: row?.quantity ?? '0', feeWei: '21000000000000', feeSymbol: 'ETN', ok, problems: ok ? [] : [Number(amount) > 0 ? 'Enter a full address or a name.' : 'Enter an amount above zero.'] }
+        },
+      },
+    })
+    // M5: a live-looking quote, the holder tier and an open limit order for the Swap screen.
+    const BOLT = '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1'
+    const USDC = '0x3187deAd7A2Bd6770F5Fe81495D1B715926AAe6e'
+    const SINK = '0x00000000000000000000000000000000000051ab'
+    const tierView: HolderTier = { chainId: 52014, bips: 30, tier: 2, score: '18400000000000000000000', nextTierAt: '50000000000000000000000', nextTierBips: 20, source: 'chain', sink: SINK, schedule: '0x00000000000000000000000000000000000005c4', breakdown: { wallet: '18400000000000000000000', farm: '0', dyno: '0' } }
+    const schedule: FeeScheduleView = { chainId: 52014, baseBips: 50, tiers: [{ minScore: '1000000000000000000000', bips: 40 }, { minScore: '10000000000000000000000', bips: 30 }, { minScore: '50000000000000000000000', bips: 20 }, { minScore: '100000000000000000000000', bips: 10 }], dynoWeight: '0', countFarmBolt: true, boltPayDiscountBips: 2500, source: 'chain', sink: SINK, address: '0x00000000000000000000000000000000000005c4' }
+    const swapQuote = (arg: { tokenIn: string; tokenOut: string; amountIn: string; slippageBips?: number }): SwapQuote => {
+      const inRow = snap.rows.find((r) => r.address.toLowerCase() === arg.tokenIn.toLowerCase()) ?? snap.rows[0]
+      const outRow = snap.rows.find((r) => r.address.toLowerCase() === arg.tokenOut.toLowerCase()) ?? snap.rows[2]
+      const decIn = inRow?.decimals ?? 18
+      const decOut = outRow?.decimals ?? 6
+      const amountIn = BigInt(Math.round(Number(arg.amountIn || '0') * 1e6)) * 10n ** BigInt(Math.max(0, decIn - 6))
+      // A fixed rate so the screenshot is stable: 1 in = 0.00296 out (ETN → USDC).
+      const amountOut = (amountIn * 296n * 10n ** BigInt(decOut)) / (100_000n * 10n ** BigInt(decIn))
+      const fee = (amountOut * 30n) / 10_000n
+      const receive = amountOut - fee
+      const slippage = BigInt(arg.slippageBips ?? 50)
+      const minOut = receive - (receive * slippage) / 10_000n
+      const ok = amountIn > 0n && amountIn <= BigInt(inRow?.raw ?? '0')
+      return {
+        chainId: 52014,
+        tokenIn: arg.tokenIn,
+        tokenOut: arg.tokenOut,
+        symbolIn: inRow?.symbol ?? 'ETN',
+        symbolOut: outRow?.symbol ?? 'USDC',
+        decimalsIn: decIn,
+        decimalsOut: decOut,
+        amountInRaw: amountIn.toString(),
+        balanceInRaw: inRow?.raw ?? '0',
+        amountOutRaw: amountOut.toString(),
+        receiveRaw: receive.toString(),
+        minimumOutRaw: minOut.toString(),
+        rate: 0.00296,
+        priceImpactPct: 0.12,
+        slippageBips: Number(slippage),
+        taxBips: 0,
+        fee: { bips: 30, tier: 2, amountRaw: fee.toString(), sink: SINK, source: 'chain', nextTierAt: '50000000000000000000000', nextTierBips: 20 },
+        route: { label: 'V3 0.3%', hops: [{ kind: 'v3', tokenIn: '0x138DAFbDA0CCB3d8E39C19edb0510Fc31b7C1c77', tokenOut: USDC, fee: 3000 }] },
+        gasEstimate: '210000',
+        steps: arg.tokenIn === 'native' ? ['swap'] : ['approve', 'permit', 'swap'],
+        quotedAt: FIXED_NOW,
+        ok,
+        problems: ok ? [] : [amountIn > 0n ? `Not enough ${inRow?.symbol ?? 'ETN'}.` : 'Enter an amount above zero.'],
+      }
+    }
+    engine.host.override('holder', {
+      tier: { input: AccountArg, handler: async () => tierView },
+      schedule: { input: z.object({}).passthrough(), handler: async () => schedule },
+      addresses: { input: z.object({}).passthrough(), handler: async () => ({ sink: SINK, schedule: schedule.address }) },
+    })
+    engine.host.override('swap', {
+      quote: { input: z.object({ tokenIn: z.string(), tokenOut: z.string(), amountIn: z.string(), slippageBips: z.number().optional() }).passthrough(), handler: async (arg) => swapQuote(arg as { tokenIn: string; tokenOut: string; amountIn: string; slippageBips?: number }) },
+      flows: { input: z.object({}).passthrough().optional(), handler: async () => [] },
+    })
+    engine.host.override('limit', {
+      list: { input: AccountArg, handler: async () => [{ chainId: 52014, orderId: '42', tokenIn: BOLT, tokenOut: USDC, symbolIn: 'BOLT', symbolOut: 'USDC', decimalsIn: 18, decimalsOut: 6, amountInExact: '5000000000000000000000', amountOutMin: '1100000000', amountInRemaining: '5000000000000000000000', amountOutFilled: '0', unwrapOutput: false, createdAt: Math.floor(FIXED_NOW / 1000) - 3_600, expiresAt: Math.floor(FIXED_NOW / 1000) + 6 * 86_400, status: 'open' as const }] },
+      quote: {
+        input: z.object({ tokenIn: z.string(), tokenOut: z.string(), amountIn: z.string(), minOut: z.string(), durationSeconds: z.number() }).passthrough(),
+        handler: async (arg) => {
+          const a = arg as { tokenIn: string; tokenOut: string; amountIn: string; minOut: string; durationSeconds: number }
+          const q = swapQuote({ tokenIn: a.tokenIn, tokenOut: a.tokenOut, amountIn: a.amountIn })
+          const minOut = BigInt(Math.round(Number(a.minOut || '0') * 10 ** q.decimalsOut))
+          const target = Number(a.amountIn) > 0 ? Number(a.minOut) / Number(a.amountIn) : null
+          return { chainId: 52014, tokenIn: a.tokenIn, tokenOut: a.tokenOut, symbolIn: q.symbolIn, symbolOut: q.symbolOut, decimalsIn: q.decimalsIn, decimalsOut: q.decimalsOut, amountInRaw: q.amountInRaw, balanceInRaw: q.balanceInRaw, minOutRaw: minOut.toString(), targetRate: target, marketRate: 0.00296, distancePct: target ? (target / 0.00296 - 1) * 100 : null, durationSeconds: a.durationSeconds, platformFeeBips: 10, steps: ['approve', 'permit', 'submit'], ok: q.ok && minOut > 0n, problems: q.ok && minOut > 0n ? [] : ['Enter the least you will accept.'] }
         },
       },
     })

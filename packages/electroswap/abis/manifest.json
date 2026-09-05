@@ -5,6 +5,18 @@
     "functions": 26,
     "events": 13
   },
+  "LimitOrders": {
+    "source": "apps/interface/src/abis/limit-orders.json",
+    "sha256": "ea43931a04064a2242ad199310bf8c3c4a44ce042a8735be46d9d768f4c64038",
+    "functions": 13,
+    "events": 3
+  },
+  "FeeOnTransferDetector": {
+    "source": "apps/interface/src/abis/fee-on-transfer-detector.json",
+    "sha256": "8bec942e10a1eac0833ab869daec155753e66c01d609667ca1b7334e3840fc23",
+    "functions": 3,
+    "events": 0
+  },
   "EsDividendDistributorV2": {
     "source": "apps/interface/src/abis/dividend-distributor.json",
     "sha256": "c2c13cb456c06430c544bac217d731430dd3d9bd9f1671e757dc46e3a07793e1",

@@ -19,10 +19,13 @@ import { Onboarding } from '../screens/Onboarding'
 import { Receive } from '../screens/Receive'
 import { Security } from '../screens/Security'
 import { Send } from '../screens/Send'
-import { ExploreShell, SettingsShell, SwapShell } from '../screens/shells'
+import { ExploreShell, SettingsShell } from '../screens/shells'
+import { Spending } from '../screens/Spending'
+import { Swap } from '../screens/Swap'
 import { Token } from '../screens/Token'
 import { Unlock } from '../screens/Unlock'
 import { useApprovals } from '../state/useApprovals'
+import { useFlowNavigation } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
 import { TABS, TAB_ORDER, type TabId } from './registry'
 import { useRouter } from './router'
@@ -37,6 +40,8 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   const { vault, loading } = useWalletState()
   const { pending } = useApprovals()
   const { current, state } = router
+  // A swap or limit-order flow opens its sheets from here, where nothing unmounts (§8.6).
+  useFlowNavigation()
   const items = TAB_ORDER.map((id) => ({ id, label: t({ id: TABS[id].labelId, message: TABS[id].labelMessage }), icon: TABS[id].icon }))
   const showTabs = state.stack.length === 0
 
@@ -57,9 +62,11 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
     case 'home':
       screen = <Home body={body} reducedMotionOverride={reducedMotionOverride} />
       break
-    case 'swap':
-      screen = <SwapShell body={body} />
+    case 'swap': {
+      const p = current.params as { tokenIn?: string; tokenOut?: string } | undefined
+      screen = <Swap body={body} reducedMotion={reducedMotionOverride} {...(p?.tokenIn ? { tokenIn: p.tokenIn } : {})} {...(p?.tokenOut ? { tokenOut: p.tokenOut } : {})} />
       break
+    }
     case 'explore':
       screen = <ExploreShell body={body} />
       break
@@ -80,6 +87,9 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
       break
     case 'allowances':
       screen = <Allowances body={body} />
+      break
+    case 'spending':
+      screen = <Spending body={body} />
       break
     case 'accounts':
       screen = <Accounts body={body} />

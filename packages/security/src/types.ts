@@ -117,6 +117,8 @@ export interface AssessmentContext {
   readonly labels: Readonly<Record<string, string>>
   readonly ethSignEnabled: boolean
   readonly now: number
+  /** For `internal:swap`: the fee the encoder must have written (T10). `bips: 0` means no PAY_PORTION at all. */
+  readonly expectedFee?: { readonly sink: Hex; readonly bips: number } | null
 }
 
 export interface AssetDelta {

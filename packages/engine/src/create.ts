@@ -4,6 +4,7 @@
  * tests). `ready` resolves once persisted state is hydrated.
  */
 import type { Argon2idParams } from '@boltvault/core'
+import type { HidProvider } from '@boltvault/hardware'
 import { ElectroSwapClient } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
@@ -21,6 +22,11 @@ import { NamesService, namesNamespace } from './namespaces/names'
 import { PortfolioService, portfolioNamespace } from './namespaces/portfolio'
 import { ProviderService } from './namespaces/provider'
 import { SendService, sendNamespace } from './namespaces/send'
+import { FlowStore } from './namespaces/flows'
+import { HardwareService, hardwareNamespace } from './namespaces/hardware'
+import { HolderService, holderNamespace } from './namespaces/holder'
+import { LimitService, limitNamespace } from './namespaces/limit'
+import { SwapService, swapNamespace } from './namespaces/swap'
 import { SitesService, sitesNamespace } from './namespaces/sites'
 import { HttpRelay, MemoryRelay, SyncService, syncNamespace, type Relay } from './namespaces/sync'
 import { TokensService, tokensNamespace } from './namespaces/tokens'
@@ -49,6 +55,8 @@ export interface EngineDeps {
   readonly fetch?: typeof fetch
   /** ElectroSwap GraphQL endpoint override (tests). `null` disables display prices. */
   readonly electroswapUrl?: string | null
+  /** WebHID (`navigator.hid`) in the extension worker; a BLE/USB shim on mobile; absent elsewhere (§2.7 S7). */
+  readonly hid?: HidProvider | null
 }
 
 export interface Engine {
@@ -69,6 +77,10 @@ export interface Engine {
   readonly allowances: AllowancesService
   readonly contacts: ContactsStore
   readonly send: SendService
+  readonly holder: HolderService
+  readonly swap: SwapService
+  readonly limit: LimitService
+  readonly hardware: HardwareService
   readonly ready: Promise<void>
   dispose(): void
 }
@@ -92,6 +104,7 @@ export function createEngine(deps: EngineDeps): Engine {
   const contacts = new ContactsStore(deps.platform, host.events, dek)
   const relayFor = deps.relayFor ?? ((url: string): Relay => (/^https?:\/\//.test(url) ? new HttpRelay(url, fetchImpl, deps.clientKey) : sharedMemoryRelay))
   const sync = new SyncService(deps.platform, host.events, { settings, sites, vault, relayFor })
+  const hardware = new HardwareService({ hid: deps.hid ?? null, vault })
   const provider = new ProviderService({
     platform: deps.platform,
     bus: host.events,
@@ -109,6 +122,7 @@ export function createEngine(deps: EngineDeps): Engine {
     },
     clientVersion: deps.clientVersion ?? 'BoltVault/0.1.0',
     fetch: fetchImpl,
+    hardware,
     ...(deps.openApproval ? { openApproval: deps.openApproval } : {}),
     ...(deps.receiptPollMs !== undefined ? { receiptPollMs: deps.receiptPollMs } : {}),
   })
@@ -119,6 +133,10 @@ export function createEngine(deps: EngineDeps): Engine {
   const allowances = new AllowancesService({ platform: deps.platform, bus: host.events, chains, tokens, vault, provider })
   const send = new SendService({ platform: deps.platform, chains, tokens, names, vault, provider })
   const scanner = new ActivityScanner({ platform: deps.platform, chains, activity, tokens, vault })
+  const holder = new HolderService({ platform: deps.platform, chains, vault })
+  const flows = new FlowStore({ platform: deps.platform, bus: host.events, activity })
+  const swap = new SwapService({ platform: deps.platform, chains, tokens, vault, provider, settings, holder, flows })
+  const limit = new LimitService({ platform: deps.platform, bus: host.events, chains, tokens, vault, provider, settings, flows })
 
   vault.init()
   host.events.subscribe((e) => {
@@ -170,6 +188,10 @@ export function createEngine(deps: EngineDeps): Engine {
   host.register('allowances', allowancesNamespace(allowances))
   host.register('contacts', contactsNamespace(contacts))
   host.register('send', sendNamespace(send))
+  host.register('swap', swapNamespace(swap))
+  host.register('holder', holderNamespace(holder))
+  host.register('limit', limitNamespace(limit))
+  host.register('hardware', hardwareNamespace(hardware, vault))
 
   const ready = Promise.all([approvals.hydrate(), sites.hydrate(), settings.get(), provider.init()]).then(() => undefined)
   const engine = createEngineClient(createInProcessTransport(host, 'internal'))
@@ -191,6 +213,10 @@ export function createEngine(deps: EngineDeps): Engine {
     allowances,
     contacts,
     send,
+    holder,
+    swap,
+    limit,
+    hardware,
     ready,
     dispose: () => {
       vault.dispose()

@@ -46,6 +46,8 @@ function verbFor(payload: ApprovalPayload, origin: string): string {
   if (origin === 'internal:send') return t({ id: 'key.send', message: 'Send' })
   if (origin === 'internal:approvals') return t({ id: 'allow.revoke', message: 'Revoke' })
   if (origin === 'internal:swap') return t({ id: 'swap.key', message: 'Swap' })
+  if (origin === 'internal:limit') return t({ id: 'swap.limit.key', message: 'Place order' })
+  if (origin === 'internal:limit:cancel') return t({ id: 'approval.cancel', message: 'Cancel' })
   switch (payload.kind) {
     case 'connect':
       return t({ id: 'approval.connect', message: 'Connect' })
@@ -287,6 +289,31 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
             <Body size="caption">{`${formatWei(payload.fee.maxTotalWei)} ${payload.fee.symbol}`}</Body>
           </Row>
         ) : null}
+        {signer && (signer.kind === 'ledger' || signer.kind === 'trezor' || signer.kind === 'keystone') && (payload.kind === 'send_transaction' || payload.kind === 'sign_typed_data' || payload.kind === 'sign_message') ? (
+          <Plate gap="$1" testID="approval-device">
+            <Body size="caption">{t({ id: 'approval.device', message: 'What your {d} shows', values: { d: signer.kind === 'ledger' ? 'Ledger' : signer.kind === 'trezor' ? 'Trezor' : 'Keystone' } })}</Body>
+            {payload.kind === 'send_transaction' ? (
+              <>
+                <DeviceRow label={t({ id: 'device.to', message: 'To' })} value={payload.tx.to ?? t({ id: 'device.deploy', message: 'new contract' })} />
+                <DeviceRow label={t({ id: 'device.amount', message: 'Amount' })} value={`${formatWei(BigInt(payload.tx.value).toString())} ${payload.fee.symbol}`} />
+                <DeviceRow label={t({ id: 'device.maxfee', message: 'Max fee' })} value={`${formatWei(payload.fee.maxTotalWei)} ${payload.fee.symbol}`} />
+                <DeviceRow label={t({ id: 'device.nonce', message: 'Nonce' })} value={String(payload.tx.nonce)} />
+                <DeviceRow label={t({ id: 'device.chain', message: 'Chain' })} value={String(request.chainId ?? '')} />
+                <Body tone="mute" size="caption">
+                  {payload.tx.data && payload.tx.data !== '0x' ? t({ id: 'device.blind', message: 'The device shows the amount and the address; the data is a hash, so use the statements above as the truth. Blind signing must be on in the Ethereum app.' }) : t({ id: 'device.plain', message: 'A plain send: the device shows exactly these fields.' })}
+                </Body>
+              </>
+            ) : payload.kind === 'sign_typed_data' ? (
+              <Body tone="mute" size="caption">
+                {t({ id: 'device.typed', message: 'The device shows two hashes (domain and message) — the statements above are what they mean.' })}
+              </Body>
+            ) : (
+              <Body tone="mute" size="caption">
+                {t({ id: 'device.message', message: 'The device shows the message text.' })}
+              </Body>
+            )}
+          </Plate>
+        ) : null}
         {payload.kind === 'send_transaction' && assessment?.simulationMode !== 'trace' ? (
           <Body tone="mute" size="caption">
             {t({ id: 'approval.nopreview', message: 'No balance preview on this network — only the revert check ran.' })}
@@ -324,4 +351,17 @@ function formatWei(wei: string): string {
   const whole = n / 10n ** 18n
   const frac = (n % 10n ** 18n).toString().padStart(18, '0').slice(0, 6).replace(/0+$/, '')
   return frac ? `${whole}.${frac}` : whole.toString()
+}
+
+function DeviceRow({ label, value }: { label: string; value: string }) {
+  return (
+    <Row justifyContent="space-between" gap="$3">
+      <Body tone="mute" size="caption">
+        {label}
+      </Body>
+      <Body size="caption" fontFamily="$mono" numberOfLines={1} flexShrink={1}>
+        {value}
+      </Body>
+    </Row>
+  )
 }

@@ -153,6 +153,8 @@ export const SettingsSchema = z.object({
   metaMaskCompat: z.boolean(),
   ethSignEnabled: z.boolean(),
   exactApprovals: z.boolean(),
+  /** Default swap slippage in bips (§8.14 Spending). */
+  slippageBips: z.number().int().min(1).max(5_000),
   sendWhitelist: z.boolean(),
   autoLock: AutoLockSchema,
   displayCurrency: z.enum(['USD', 'ETN']),
@@ -327,7 +329,151 @@ export const SendQuoteSchema = z.object({
 })
 export type SendQuote = z.infer<typeof SendQuoteSchema>
 
+// ---- M5: swap, holder tier, limit orders (§8.6, §8.18) ------------------------------
+
+/** One step of an in-wallet swap or limit-order flow; each is one sheet. */
+export const SwapStepSchema = z.enum(['wrap', 'approve', 'permit', 'swap', 'submit', 'cancel'])
+export type SwapStep = z.infer<typeof SwapStepSchema>
+
+/** The account's BOLT/DYNO tier as the fee schedule sees it (§8.18). Scores are BOLT-eq wei strings. */
+export const HolderTierSchema = z.object({
+  chainId: z.number().int().positive(),
+  bips: z.number().int().nonnegative(),
+  tier: z.number().int().nonnegative(),
+  score: z.string(),
+  nextTierAt: z.string().nullable(),
+  nextTierBips: z.number().int().nonnegative().nullable(),
+  /** 'chain' when the schedule contract answered; 'fallback' is the base fee, never lower. */
+  source: z.enum(['chain', 'fallback']),
+  sink: z.string().nullable(),
+  schedule: z.string().nullable(),
+  /** Where the score comes from, for the fee sheet. */
+  breakdown: z.object({ wallet: z.string(), farm: z.string(), dyno: z.string() }),
+})
+export type HolderTier = z.infer<typeof HolderTierSchema>
+
+export const FeeScheduleViewSchema = z.object({
+  chainId: z.number().int().positive(),
+  baseBips: z.number().int().nonnegative(),
+  tiers: z.array(z.object({ minScore: z.string(), bips: z.number().int().nonnegative() })),
+  dynoWeight: z.string(),
+  countFarmBolt: z.boolean(),
+  boltPayDiscountBips: z.number().int().nonnegative(),
+  source: z.enum(['chain', 'fallback']),
+  sink: z.string().nullable(),
+  address: z.string().nullable(),
+})
+export type FeeScheduleView = z.infer<typeof FeeScheduleViewSchema>
+
+export const SwapHopSchema = z.object({ kind: z.enum(['v2', 'v3']), tokenIn: z.string(), tokenOut: z.string(), fee: z.number().int().optional() })
+export type SwapHop = z.infer<typeof SwapHopSchema>
+
+/** What the Swap screen shows before the review (§8.6). Raw amounts are decimal strings. */
+export const SwapQuoteSchema = z.object({
+  chainId: z.number().int().positive(),
+  tokenIn: z.string(),
+  tokenOut: z.string(),
+  symbolIn: z.string(),
+  symbolOut: z.string(),
+  decimalsIn: z.number().int().nonnegative(),
+  decimalsOut: z.number().int().nonnegative(),
+  amountInRaw: z.string(),
+  balanceInRaw: z.string(),
+  /** The router's quoted output before the wallet fee. */
+  amountOutRaw: z.string(),
+  /** What the user should receive after the fee. */
+  receiveRaw: z.string(),
+  /** Guaranteed after fee and slippage; the transaction reverts below this. */
+  minimumOutRaw: z.string(),
+  /** Output units per input unit, display only. */
+  rate: z.number().nullable(),
+  priceImpactPct: z.number().nullable(),
+  slippageBips: z.number().int().nonnegative(),
+  /** Extra slippage folded in for fee-on-transfer tokens. */
+  taxBips: z.number().int().nonnegative(),
+  fee: z.object({
+    bips: z.number().int().nonnegative(),
+    tier: z.number().int().nonnegative(),
+    amountRaw: z.string(),
+    sink: z.string().nullable(),
+    source: z.enum(['chain', 'fallback']),
+    nextTierAt: z.string().nullable(),
+    nextTierBips: z.number().int().nonnegative().nullable(),
+  }),
+  route: z.object({ label: z.string(), hops: z.array(SwapHopSchema) }),
+  gasEstimate: z.string(),
+  steps: z.array(SwapStepSchema),
+  quotedAt: z.number().int().nonnegative(),
+  ok: z.boolean(),
+  problems: z.array(z.string()),
+})
+export type SwapQuote = z.infer<typeof SwapQuoteSchema>
+
+export const FlowStepStatusSchema = z.enum(['pending', 'signing', 'submitted', 'confirmed', 'rejected', 'failed'])
+export const SwapFlowSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['swap', 'limit', 'limit_cancel']),
+  accountId: AccountIdSchema,
+  chainId: z.number().int().positive(),
+  steps: z.array(z.object({ step: SwapStepSchema, requestId: z.string().nullable(), status: FlowStepStatusSchema, hash: z.string().nullable() })),
+  status: z.enum(['running', 'done', 'rejected', 'failed']),
+  error: z.string().nullable(),
+  /** The final transaction's hash once broadcast. */
+  hash: z.string().nullable(),
+  /** The quote the flow executes; re-quoted at sign time if the tier moved. */
+  quote: SwapQuoteSchema.nullable(),
+  startedAt: z.number().int().nonnegative(),
+})
+export type SwapFlow = z.infer<typeof SwapFlowSchema>
+
+export const LimitOrderViewSchema = z.object({
+  chainId: z.number().int().positive(),
+  orderId: z.string(),
+  tokenIn: z.string(),
+  tokenOut: z.string(),
+  symbolIn: z.string(),
+  symbolOut: z.string(),
+  decimalsIn: z.number().int().nonnegative(),
+  decimalsOut: z.number().int().nonnegative(),
+  amountInExact: z.string(),
+  amountOutMin: z.string(),
+  amountInRemaining: z.string(),
+  amountOutFilled: z.string(),
+  unwrapOutput: z.boolean(),
+  createdAt: z.number().int().nonnegative(),
+  expiresAt: z.number().int().nonnegative(),
+  status: z.enum(['open', 'filled', 'closed', 'expired', 'unknown']),
+})
+export type LimitOrderView = z.infer<typeof LimitOrderViewSchema>
+
+export const LimitQuoteSchema = z.object({
+  chainId: z.number().int().positive(),
+  tokenIn: z.string(),
+  tokenOut: z.string(),
+  symbolIn: z.string(),
+  symbolOut: z.string(),
+  decimalsIn: z.number().int().nonnegative(),
+  decimalsOut: z.number().int().nonnegative(),
+  amountInRaw: z.string(),
+  balanceInRaw: z.string(),
+  minOutRaw: z.string(),
+  /** Output per input the order asks for, and what the market pays right now. */
+  targetRate: z.number().nullable(),
+  marketRate: z.number().nullable(),
+  /** How far above (+) or below (−) market the target sits, in percent. */
+  distancePct: z.number().nullable(),
+  durationSeconds: z.number().int().positive(),
+  /** The contract's fee on fill, in bips — there is no wallet fee on limit orders (§8.6). */
+  platformFeeBips: z.number().int().nonnegative(),
+  steps: z.array(SwapStepSchema),
+  ok: z.boolean(),
+  problems: z.array(z.string()),
+})
+export type LimitQuote = z.infer<typeof LimitQuoteSchema>
+
 export const EngineEventSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('swap.progress'), flow: SwapFlowSchema }),
+  z.object({ type: z.literal('limit.changed'), accountId: AccountIdSchema, chainId: z.number().int().positive(), orders: z.array(LimitOrderViewSchema) }),
   z.object({ type: z.literal('tokens.changed'), chainId: z.number().int().positive() }),
   z.object({ type: z.literal('allowances.changed'), accountId: AccountIdSchema, chainId: z.number().int().positive(), rows: z.array(AllowanceViewSchema) }),
   z.object({ type: z.literal('contacts.changed'), contacts: z.array(ContactViewSchema) }),

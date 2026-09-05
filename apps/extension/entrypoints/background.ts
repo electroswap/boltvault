@@ -4,6 +4,7 @@
  * Approvals from dApps open sign.html; closing that window rejects.
  */
 import { createEngine, serveChannel, type ApprovalRequest } from '@boltvault/engine'
+import type { HidDeviceLike } from '@boltvault/hardware'
 import { PROVIDER_PORT_NAME } from '@boltvault/protocol'
 import { registrableOrigin } from '@boltvault/security'
 import { defineBackground } from '#imports'
@@ -44,7 +45,10 @@ export default defineBackground(() => {
     })()
   }
 
-  const engine = createEngine({ platform, openApproval, clientVersion: `BoltVault/${browser.runtime.getManifest().version}` })
+  // WebHID is available to extension workers since Chrome 117; pairing happens in tab.html (§2.7 S7).
+  const nav = globalThis.navigator as unknown as { hid?: { getDevices(): Promise<HidDeviceLike[]> } }
+  const hid = nav.hid ? { getDevices: () => nav.hid?.getDevices() ?? Promise.resolve([]) } : null
+  const engine = createEngine({ platform, openApproval, clientVersion: `BoltVault/${browser.runtime.getManifest().version}`, hid })
 
   browser.runtime.onInstalled.addListener((details) => {
     if (details.reason === 'install') void engine.ready

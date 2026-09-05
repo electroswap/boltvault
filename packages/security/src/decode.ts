@@ -5,7 +5,7 @@
  * "contract interaction".
  */
 import { decodeFunctionData, hexToString, isAddress, isHex, maxUint256, size, type Hex } from 'viem'
-import { ERC1155_ABI, ERC20_ABI, ERC721_ABI, MULTICALL3_ABI, PERMIT2_ABI, WETH_ABI } from './abis'
+import { ERC1155_ABI, ERC20_ABI, ERC721_ABI, LIMIT_ORDERS_ABI, MULTICALL3_ABI, PERMIT2_ABI, WETH_ABI } from './abis'
 import { knownContract } from './registry'
 import { decodeUniversalRouter, type DecodedUniversalRouter } from './ur'
 
@@ -31,6 +31,7 @@ export type DecodedCall =
   | { readonly kind: 'unwrap'; readonly token: Hex; readonly amount: bigint }
   | { readonly kind: 'universal_router'; readonly router: Hex; readonly decoded: DecodedUniversalRouter; readonly value: bigint }
   | { readonly kind: 'multicall'; readonly to: Hex; readonly calls: ReadonlyArray<{ target: Hex; data: Hex }> }
+  | { readonly kind: 'limit_order'; readonly manager: Hex; readonly action: 'submit' | 'close'; readonly tokenIn: Hex | null; readonly tokenOut: Hex | null; readonly amountIn: bigint; readonly minOut: bigint; readonly recipient: Hex | null; readonly durationSeconds: bigint; readonly orderIds: readonly bigint[]; readonly withPermit: boolean }
   | { readonly kind: 'contract_call'; readonly to: Hex; readonly selector: Hex; readonly functionName: string | null; readonly args: readonly unknown[] | null; readonly value: bigint }
 
 export interface DecodeCallInput {
@@ -40,7 +41,7 @@ export interface DecodeCallInput {
   readonly value: bigint
 }
 
-function tryDecode(abi: typeof ERC20_ABI | typeof ERC721_ABI | typeof ERC1155_ABI | typeof PERMIT2_ABI | typeof WETH_ABI | typeof MULTICALL3_ABI, data: Hex): { functionName: string; args: readonly unknown[] } | null {
+function tryDecode(abi: typeof ERC20_ABI | typeof ERC721_ABI | typeof ERC1155_ABI | typeof PERMIT2_ABI | typeof WETH_ABI | typeof MULTICALL3_ABI | typeof LIMIT_ORDERS_ABI, data: Hex): { functionName: string; args: readonly unknown[] } | null {
   try {
     const d = decodeFunctionData({ abi, data })
     return { functionName: d.functionName, args: (d.args ?? []) as readonly unknown[] }
@@ -76,6 +77,15 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
     const w = tryDecode(WETH_ABI, data)
     if (w?.functionName === 'deposit') return { kind: 'wrap', token: to, amount: value }
     if (w?.functionName === 'withdraw') return { kind: 'unwrap', token: to, amount: (w.args as [bigint])[0] }
+  }
+  if (known?.role === 'limit_orders') {
+    const l = tryDecode(LIMIT_ORDERS_ABI, data)
+    if (l?.functionName === 'submitOrder' || l?.functionName === 'submitOrderWithPermit') {
+      const [tokenIn, tokenOut, , amountInExact, amountOutMin, recipient, duration] = l.args as [Hex, Hex, boolean, bigint, bigint, Hex, bigint]
+      return { kind: 'limit_order', manager: to, action: 'submit', tokenIn, tokenOut, amountIn: amountInExact, minOut: amountOutMin, recipient, durationSeconds: duration, orderIds: [], withPermit: l.functionName === 'submitOrderWithPermit' }
+    }
+    if (l?.functionName === 'closeOrder') return { kind: 'limit_order', manager: to, action: 'close', tokenIn: null, tokenOut: null, amountIn: 0n, minOut: 0n, recipient: null, durationSeconds: 0n, orderIds: [(l.args as [bigint])[0]], withPermit: false }
+    if (l?.functionName === 'closeOrders') return { kind: 'limit_order', manager: to, action: 'close', tokenIn: null, tokenOut: null, amountIn: 0n, minOut: 0n, recipient: null, durationSeconds: 0n, orderIds: [...(l.args as [readonly bigint[]])[0]], withPermit: false }
   }
   if (known?.role === 'multicall') {
     const m = tryDecode(MULTICALL3_ABI, data)

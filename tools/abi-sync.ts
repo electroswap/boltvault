@@ -13,6 +13,8 @@ import { dirname, join, resolve } from 'node:path'
 
 const WANTED: Record<string, string> = {
   'yield-farm.json': 'YieldFarm',
+  'limit-orders.json': 'LimitOrders',
+  'fee-on-transfer-detector.json': 'FeeOnTransferDetector',
   'dividend-distributor.json': 'EsDividendDistributorV2',
   'electric-legends.json': 'ElectricLegends',
   'launchpadAffiliateRewards.json': 'LaunchpadAffiliateRewards',

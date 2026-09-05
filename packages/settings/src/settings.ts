@@ -56,6 +56,7 @@ export function normalizeSettings(
     metaMaskCompat: bool('metaMaskCompat', DEFAULT_SETTINGS.metaMaskCompat),
     ethSignEnabled: bool('ethSignEnabled', DEFAULT_SETTINGS.ethSignEnabled),
     exactApprovals: bool('exactApprovals', DEFAULT_SETTINGS.exactApprovals),
+    slippageBips: typeof obj.slippageBips === 'number' && Number.isInteger(obj.slippageBips) && obj.slippageBips >= 1 && obj.slippageBips <= 5_000 ? obj.slippageBips : DEFAULT_SETTINGS.slippageBips,
     sendWhitelist: bool('sendWhitelist', DEFAULT_SETTINGS.sendWhitelist),
     autoLock,
     displayCurrency,

@@ -165,3 +165,28 @@ describe('origins', () => {
     expect(codes(a)).toEqual(expect.arrayContaining(['ORIGIN_UNVERIFIED', 'ORIGIN_FIRST_TIME']))
   })
 })
+
+describe('our own swap fee (T10)', () => {
+  const SINK = '0x00000000000000000000000000000000000051ab' as Hex
+  const urData = (recipient: Hex, bips: bigint): Hex => {
+    const commands = `0x${UR_COMMAND.V3_SWAP_EXACT_IN.toString(16).padStart(2, '0')}${UR_COMMAND.PAY_PORTION.toString(16).padStart(2, '0')}` as Hex
+    const inputs = [
+      encodeAbiParameters(parseAbiParameters('address, uint256, uint256, bytes, bool'), ['0x0000000000000000000000000000000000000002', 1n, 1n, '0x', true]),
+      encodeAbiParameters(parseAbiParameters('address, address, uint256'), [TOKEN, recipient, bips]),
+    ]
+    return encodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commands, inputs, 1n] })
+  }
+  it('the pinned sink at the schedule bips is clean', () => {
+    const a = run(tx(A.universalRouter as Hex, urData(SINK, 30n)), { expectedFee: { sink: SINK, bips: 30 } }, 'internal:swap')
+    expect(codes(a)).not.toContain('FEE_SINK_MISMATCH')
+    expect(codes(a)).not.toContain('FEE_TIER_MISMATCH')
+  })
+  it('a different recipient or bips is blocked', () => {
+    expect(codes(run(tx(A.universalRouter as Hex, urData(UNKNOWN, 30n)), { expectedFee: { sink: SINK, bips: 30 } }, 'internal:swap'))).toContain('FEE_SINK_MISMATCH')
+    expect(codes(run(tx(A.universalRouter as Hex, urData(SINK, 10n)), { expectedFee: { sink: SINK, bips: 30 } }, 'internal:swap'))).toContain('FEE_TIER_MISMATCH')
+  })
+  it('no configured sink blocks; a zero tier must omit PAY_PORTION', () => {
+    expect(run(tx(A.universalRouter as Hex, urData(SINK, 30n)), {}, 'internal:swap').presentation.blocked).toBe(true)
+    expect(codes(run(tx(A.universalRouter as Hex, urData(SINK, 30n)), { expectedFee: { sink: SINK, bips: 0 } }, 'internal:swap'))).toContain('FEE_TIER_MISMATCH')
+  })
+})

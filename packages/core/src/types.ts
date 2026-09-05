@@ -139,6 +139,8 @@ export interface BoltVaultSettings {
   ethSignEnabled: boolean
   /** Approve exact amounts instead of max (default on). */
   exactApprovals: boolean
+  /** Default swap slippage in bips (0.5 % = 50). */
+  slippageBips: number
   /** Unknown-recipient extra confirm (default off; poison 4+4 is always on). */
   sendWhitelist: boolean
   autoLock: AutoLock
@@ -152,6 +154,7 @@ export const DEFAULT_SETTINGS: BoltVaultSettings = {
   metaMaskCompat: false,
   ethSignEnabled: false,
   exactApprovals: true,
+  slippageBips: 50,
   sendWhitelist: false,
   autoLock: '5min',
   displayCurrency: 'USD',
