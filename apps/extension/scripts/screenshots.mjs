@@ -85,19 +85,34 @@ async function serve(root) {
 }
 
 const SHOTS = [
-  ['01-home', 'home'],
-  ['02-swap', 'swap'],
-  ['03-send', 'send'],
-  ['04-receive', 'receive'],
-  ['05-bridge', 'bridge'],
-  ['06-token', 'token'],
-  ['07-farm', 'farm'],
-  ['08-launchpad', 'launchpad'],
-  ['09-nft', 'nft'],
-  ['10-activity', 'activity'],
-  ['11-approvals', 'approvals'],
-  ['12-settings', 'settings'],
+  // 5 dock tabs.
+  ['01-home', { tab: 'home' }],
+  ['02-swap', { tab: 'swap' }],
+  ['03-send', { tab: 'send' }],
+  ['04-activity', { tab: 'activity' }],
+  ['05-settings', { tab: 'settings' }],
+  // The 7 featured functions, opened from Home's bottom-⅔ grid.
+  ['06-receive', { feature: 'receive' }],
+  ['07-bridge', { feature: 'bridge' }],
+  ['08-token', { feature: 'token' }],
+  ['09-farm', { feature: 'farm' }],
+  ['10-launchpad', { feature: 'launchpad' }],
+  ['11-nft', { feature: 'nft' }],
+  ['12-approvals', { feature: 'approvals' }],
 ]
+
+// Navigate to a shot: either a dock tab, or a featured function (open from Home).
+async function gotoShot(page, spec) {
+  if (spec.tab) {
+    await page.click(`[data-testid="tab-${spec.tab}"]`)
+  } else if (spec.feature) {
+    // Reset to Home's split (dock Home clears any open feature), then open the tile.
+    await page.click('[data-testid="tab-home"]')
+    await page.waitForTimeout(120)
+    await page.click(`[data-testid="feature-${spec.feature}"]`)
+  }
+  await page.waitForTimeout(350) // let the view settle (fonts, no spinner)
+}
 
 async function launch() {
   try {
@@ -130,12 +145,11 @@ await page.waitForFunction(() => {
   return t && t.textContent && !t.textContent.trim().includes('—')
 }, { timeout: 10000 })
 
-for (const [file, tab] of SHOTS) {
-  await page.click(`[data-testid="tab-${tab}"]`)
-  await page.waitForTimeout(350) // let the view settle (fonts, no spinner)
+for (const [file, spec] of SHOTS) {
+  await gotoShot(page, spec)
   const out = path.join(OUT_DIR, `${file}.png`)
   await page.screenshot({ path: out, fullPage: false })
-  console.log(`  ✓ ${file}.png  (tab:${tab})`)
+  console.log(`  ✓ ${file}.png  (${spec.tab ? 'tab' : 'feature'}:${spec.tab ?? spec.feature})`)
 }
 
 await browser.close()
