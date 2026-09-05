@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "build": "wxt build",
     "dev": "wxt",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "dependencies": {
     "@boltvault/chains": "workspace:*",
@@ -30,6 +31,7 @@
     "@types/react": "^18.3.31",
     "@types/react-dom": "^19.2.7",
     "happy-dom": "^20.14.0",
+    "playwright": "^1.63.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "typescript": "^5.6.3",
