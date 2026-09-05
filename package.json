@@ -18,6 +18,8 @@
     "i18n:extract": "node tools/i18n-extract.mjs",
     "page-provider:build": "node tools/build-page-provider.mjs",
     "sbom": "node tools/sbom.mjs",
+    "zip:chrome": "node tools/zip-store.mjs chrome",
+    "zip:firefox": "node tools/zip-store.mjs firefox",
     "build:manifest": "node tools/build-manifest.mjs",
     "build:repro": "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) BUILD_HASH=$(git rev-parse HEAD) pnpm --filter @boltvault/extension build && SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) BUILD_HASH=$(git rev-parse HEAD) pnpm --filter @boltvault/extension build:firefox && node tools/build-manifest.mjs apps/extension/.output/chrome-mv3 && node tools/build-manifest.mjs apps/extension/.output/firefox-mv3"
   },
