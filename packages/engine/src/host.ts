@@ -63,6 +63,11 @@ export class EngineHost {
     this.namespaces.set(name, spec)
   }
 
+  /** Replace some methods of a namespace (fixtures, tests). Unlisted methods keep their handlers. */
+  override(name: string, spec: NamespaceSpec): void {
+    this.namespaces.set(name, { ...(this.namespaces.get(name) ?? {}), ...spec })
+  }
+
   has(ns: string, method: string): boolean {
     return this.namespaces.get(ns)?.[method] !== undefined
   }

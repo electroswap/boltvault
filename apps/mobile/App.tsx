@@ -3,7 +3,7 @@ import { createEngine, type Engine } from '@boltvault/engine'
 import { App as WalletApp, type UiHost } from '@boltvault/wallet'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useState } from 'react'
-import { SafeAreaView, StyleSheet, Text } from 'react-native'
+import { Linking, SafeAreaView, StyleSheet, Text } from 'react-native'
 import { createMobilePlatform } from './src/platform'
 
 const host: Partial<UiHost> = {
@@ -12,6 +12,13 @@ const host: Partial<UiHost> = {
   // Passkeys on mobile (platform authenticators via react-native-passkeys) and the
   // biometric device-wrap flow land with M9; until then the password unlocks.
   passkeys: null,
+  copy: async (text) => {
+    const { setStringAsync } = await import('expo-clipboard')
+    await setStringAsync(text)
+  },
+  openUrl: async (url) => {
+    await Linking.openURL(url)
+  },
 }
 
 export default function App() {

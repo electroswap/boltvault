@@ -115,6 +115,7 @@ export function SettingsShell({ body }: { body: Body_ }) {
     { id: 'accounts', title: t({ id: 'settings.accounts', message: 'Accounts' }), rows: [t({ id: 'settings.accounts.rows', message: 'Seeds, backups, identity' })] },
     { id: 'security', title: t({ id: 'settings.security', message: 'Security' }), rows: [t({ id: 'settings.security.rows', message: 'Password, auto-lock, passkeys, hardware' })] },
     { id: 'spending', title: t({ id: 'settings.spending', message: 'Spending' }), rows: [t({ id: 'settings.spending.rows', message: 'Slippage, approvals, step-ups, wallet fee schedule' })] },
+    { id: 'approvals', title: t({ id: 'settings.approvals', message: 'Approvals' }), rows: [t({ id: 'settings.approvals.rows', message: 'What contracts can move your tokens; revoke' })] },
     { id: 'sites', title: t({ id: 'settings.sites', message: 'Connected sites' }), rows: [t({ id: 'settings.sites.rows', message: 'Per-site chain and account' })] },
     { id: 'networks', title: t({ id: 'settings.networks', message: 'Networks' }), rows: [t({ id: 'settings.networks.rows', message: 'Chains, custom RPCs, tokens' })] },
     { id: 'devices', title: t({ id: 'settings.devices', message: 'Devices & sync' }), rows: [t({ id: 'settings.devices.rows', message: 'Pair a phone or browser; move your vault' })] },
@@ -128,7 +129,7 @@ export function SettingsShell({ body }: { body: Body_ }) {
         <Key label={t({ id: 'settings.lock', message: 'Lock' })} kind="secondary" onPress={() => void engine.vault.lock()} icon={<Icon name="lock" size={18} color={paint.ink} />} testID="lock-key" />
       </Row>
       {groups.map((g) => {
-        const target = g.id === 'accounts' ? 'accounts' : g.id === 'security' ? 'security' : g.id === 'devices' ? 'devices' : g.id === 'sites' ? 'sites' : null
+        const target = g.id === 'accounts' ? 'accounts' : g.id === 'security' ? 'security' : g.id === 'devices' ? 'devices' : g.id === 'sites' ? 'sites' : g.id === 'approvals' ? 'allowances' : null
         return (
           <Plate key={g.id} gap="$1" testID={`settings-${g.id}`} onPress={target ? () => router.navigate(target) : undefined} cursor={target ? 'pointer' : undefined}>
             <Row justifyContent="space-between">

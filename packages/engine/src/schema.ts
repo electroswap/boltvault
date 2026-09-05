@@ -236,6 +236,10 @@ export const ActivityEntrySchema = z.object({
   riskCodes: z.array(z.string()),
   status: z.enum(['pending', 'confirmed', 'failed', 'replaced']),
   blockNumber: z.number().int().nonnegative().nullable(),
+  /** Token contract for a token transfer ('native' or address); absent for other entries. */
+  token: z.string().nullable().optional(),
+  /** Counterparty for inbound entries. */
+  from: z.string().nullable().optional(),
 })
 export type ActivityEntry = z.infer<typeof ActivityEntrySchema>
 
@@ -256,7 +260,77 @@ export const SyncStatusSchema = z.object({
 })
 export type SyncStatus = z.infer<typeof SyncStatusSchema>
 
+/** One token of a chain's universe (master plan §10.2). `address` is 'native' or a checksummed contract. */
+export const TokenViewSchema = z.object({
+  chainId: z.number().int().positive(),
+  address: z.string(),
+  symbol: z.string(),
+  name: z.string(),
+  decimals: z.number().int().nonnegative(),
+  logoUri: z.string().nullable(),
+  source: z.enum(['native', 'list', 'user', 'dapp', 'lookup']),
+  pinned: z.boolean(),
+  hidden: z.boolean(),
+  tags: z.array(z.string()),
+})
+export type TokenView = z.infer<typeof TokenViewSchema>
+
+/** One allowance the account has granted (§8.13). Amounts are raw decimal strings, 'unlimited' or 'all'. */
+export const AllowanceViewSchema = z.object({
+  chainId: z.number().int().positive(),
+  token: z.string(),
+  tokenSymbol: z.string().nullable(),
+  spender: z.string(),
+  spenderName: z.string().nullable(),
+  known: z.boolean(),
+  standard: z.enum(['erc20', 'permit2', 'erc721']),
+  amount: z.string(),
+  /** Unix seconds for Permit2 allowances; null otherwise. */
+  expiration: z.number().int().nonnegative().nullable(),
+})
+export type AllowanceView = z.infer<typeof AllowanceViewSchema>
+
+export const ContactViewSchema = z.object({
+  id: z.string(),
+  address: z.string(),
+  label: z.string(),
+  chainId: z.number().int().positive().nullable(),
+  /** False for an entry synced from another device until confirmed here (§6). */
+  confirmed: z.boolean(),
+  createdAt: z.number().int().nonnegative(),
+})
+export type ContactView = z.infer<typeof ContactViewSchema>
+
+export const NameLookupSchema = z.object({
+  address: z.string(),
+  name: z.string().nullable(),
+  /** True when the reverse record was forward-verified on chain. */
+  verified: z.boolean(),
+})
+export type NameLookup = z.infer<typeof NameLookupSchema>
+
+/** What Send shows before the review (§8.4). Raw amounts are decimal strings. */
+export const SendQuoteSchema = z.object({
+  to: z.string().nullable(),
+  name: z.string().nullable(),
+  token: z.string(),
+  symbol: z.string(),
+  decimals: z.number().int().nonnegative(),
+  amountRaw: z.string(),
+  balanceRaw: z.string(),
+  maxRaw: z.string(),
+  max: z.string(),
+  feeWei: z.string(),
+  feeSymbol: z.string(),
+  ok: z.boolean(),
+  problems: z.array(z.string()),
+})
+export type SendQuote = z.infer<typeof SendQuoteSchema>
+
 export const EngineEventSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('tokens.changed'), chainId: z.number().int().positive() }),
+  z.object({ type: z.literal('allowances.changed'), accountId: AccountIdSchema, chainId: z.number().int().positive(), rows: z.array(AllowanceViewSchema) }),
+  z.object({ type: z.literal('contacts.changed'), contacts: z.array(ContactViewSchema) }),
   z.object({ type: z.literal('portfolio.snapshot'), snapshot: PortfolioSnapshotSchema }),
   z.object({ type: z.literal('activity.changed'), entries: z.array(ActivityEntrySchema) }),
   z.object({ type: z.literal('sync.changed'), status: SyncStatusSchema }),

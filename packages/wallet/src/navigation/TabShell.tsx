@@ -7,6 +7,8 @@
 import { Column, TabBar } from '@boltvault/ui'
 import { t } from '../i18n'
 import { Accounts } from '../screens/Accounts'
+import { Activity } from '../screens/Activity'
+import { Allowances } from '../screens/Allowances'
 import { Approval } from '../screens/Approval'
 import { Backup } from '../screens/Backup'
 import { ConnectedSites } from '../screens/ConnectedSites'
@@ -14,8 +16,11 @@ import { Devices } from '../screens/Devices'
 import { Home, type HomeProps } from '../screens/Home'
 import { Moments } from '../screens/Moments'
 import { Onboarding } from '../screens/Onboarding'
+import { Receive } from '../screens/Receive'
 import { Security } from '../screens/Security'
-import { ActivityShell, ExploreShell, PlaceholderScreen, SettingsShell, SwapShell } from '../screens/shells'
+import { Send } from '../screens/Send'
+import { ExploreShell, SettingsShell, SwapShell } from '../screens/shells'
+import { Token } from '../screens/Token'
 import { Unlock } from '../screens/Unlock'
 import { useApprovals } from '../state/useApprovals'
 import { useWalletState } from '../state/useWalletState'
@@ -41,8 +46,10 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   }
 
   // A dApp is waiting: the popup and the phone show the sheet over everything (§8.15).
-  if (pending.length > 0 && body !== 'extension-tab' && current.screen !== 'sign' && current.screen !== 'onboarding' && current.screen !== 'moments') {
-    return <Approval body={body} reducedMotion={reducedMotionOverride} />
+  // Our own flows (Send, Revoke) navigate to the sheet themselves.
+  const external = pending.filter((p) => !p.origin.startsWith('internal:'))
+  if (external.length > 0 && body !== 'extension-tab' && current.screen !== 'sign' && current.screen !== 'onboarding' && current.screen !== 'moments') {
+    return <Approval body={body} reducedMotion={reducedMotionOverride} requestId={external[0]?.id} />
   }
 
   let screen: React.ReactNode
@@ -57,7 +64,7 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
       screen = <ExploreShell body={body} />
       break
     case 'activity':
-      screen = <ActivityShell body={body} />
+      screen = <Activity body={body} />
       break
     case 'settings':
       screen = <SettingsShell body={body} />
@@ -70,6 +77,9 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
       break
     case 'sites':
       screen = <ConnectedSites body={body} />
+      break
+    case 'allowances':
+      screen = <Allowances body={body} />
       break
     case 'accounts':
       screen = <Accounts body={body} />
@@ -91,15 +101,21 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
       screen = <Approval body={body} reducedMotion={reducedMotionOverride} {...(requestId ? { requestId } : {})} />
       break
     }
-    case 'receive':
-      screen = <PlaceholderScreen body={body} title={t({ id: 'receive.title', message: 'Receive' })} note={t({ id: 'receive.soon', message: 'Receive lands with the M4 milestone.' })} />
+    case 'receive': {
+      const p = current.params as { token?: string } | undefined
+      screen = <Receive body={body} {...(p?.token ? { token: p.token } : {})} />
       break
-    case 'send':
-      screen = <PlaceholderScreen body={body} title={t({ id: 'send.title', message: 'Send' })} note={t({ id: 'send.soon', message: 'Send lands with the M4 milestone.' })} />
+    }
+    case 'send': {
+      const p = current.params as { token?: string; to?: string; requestId?: string } | undefined
+      screen = <Send body={body} reducedMotion={reducedMotionOverride} {...(p?.token ? { token: p.token } : {})} {...(p?.to ? { to: p.to } : {})} {...(p?.requestId ? { requestId: p.requestId } : {})} />
       break
-    case 'token':
-      screen = <PlaceholderScreen body={body} title={t({ id: 'token.title', message: 'Token' })} note={t({ id: 'token.soon', message: 'The token dossier lands with the M4 milestone.' })} />
+    }
+    case 'token': {
+      const p = current.params as { chainId: number; address: string } | undefined
+      screen = <Token body={body} chainId={p?.chainId ?? 52014} address={p?.address ?? 'native'} />
       break
+    }
   }
 
   return (

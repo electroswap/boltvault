@@ -4,7 +4,7 @@
  * `funded` scenario) a portfolio namespace answering from fixture rows. No
  * network, no service worker, byte-identical output run to run.
  */
-import { createEngine, type Engine, type HeadSource, type PortfolioSnapshot } from '@boltvault/engine'
+import { createEngine, type ActivityEntry, type AllowanceView, type Engine, type HeadSource, type PortfolioSnapshot, type TokenView } from '@boltvault/engine'
 import { createMemoryPlatform } from '@boltvault/platform/memory'
 import { z } from 'zod'
 
@@ -75,14 +75,49 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
     if (scenario === 'locked') await engine.engine.vault.lock()
   }
   if (scenario === 'funded') {
-    engine.host.register('portfolio', {
-      snapshot: {
-        input: z.object({ accountId: z.string(), chainIds: z.array(z.number()).optional() }),
-        handler: async (arg) => fixtureSnapshot((arg as { accountId: string }).accountId),
-      },
-      refresh: {
-        input: z.object({ accountId: z.string() }),
-        handler: async (arg) => fixtureSnapshot((arg as { accountId: string }).accountId),
+    const accountId = (await engine.engine.accounts.list())[0]?.id ?? 'fixture'
+    const address = (await engine.engine.accounts.list())[0]?.address ?? '0x0000000000000000000000000000000000000000'
+    const snap = fixtureSnapshot(accountId)
+    const tokens: TokenView[] = snap.rows.map((r) => ({ chainId: r.chainId, address: r.address, symbol: r.symbol, name: r.name, decimals: r.decimals, logoUri: r.logoUri, source: r.address === 'native' ? 'native' : 'list', pinned: r.pinned, hidden: false, tags: [] }))
+    const activity: ActivityEntry[] = [
+      { id: 'fx-1', hash: `0x${'a1'.repeat(32)}`, chainId: 52014, accountId, to: '0x2222222222222222222222222222222222222222', value: '1000000000000000000000', nonce: 3, submittedAt: FIXED_NOW - 3_600_000, origin: 'internal:send', category: 'SEND', statements: ['Send 1,000 ETN to 0x2222…2222'], riskCodes: ['RECIPIENT_FIRST_TIME'], status: 'confirmed', blockNumber: 15_212_100, token: 'native' },
+      { id: 'fx-2', hash: `0x${'b2'.repeat(32)}`, chainId: 52014, accountId, to: address, from: '0x3333333333333333333333333333333333333333', value: '250000000', nonce: null, submittedAt: FIXED_NOW - 7_200_000, origin: null, category: 'RECEIVE', statements: ['Received USDC from 0x3333…3333'], riskCodes: [], status: 'confirmed', blockNumber: 15_211_000, token: '0x3187deAd7A2Bd6770F5Fe81495D1B715926AAe6e' },
+      { id: 'fx-3', hash: `0x${'c3'.repeat(32)}`, chainId: 52014, accountId, to: '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1', value: '0', nonce: 4, submittedAt: FIXED_NOW - 600_000, origin: 'https://app.electroswap.io', category: 'APPROVE', statements: ['Allow Permit2 to move up to 5,000 BOLT'], riskCodes: [], status: 'pending', blockNumber: null, token: '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1' },
+    ]
+    const allowances: AllowanceView[] = [
+      { chainId: 52014, token: '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1', tokenSymbol: 'BOLT', spender: '0x012ff228Aa9Fec4dBEE6Cd704072749AF077b617', spenderName: 'Permit2', known: true, standard: 'erc20', amount: 'unlimited', expiration: null },
+      { chainId: 52014, token: '0x3187deAd7A2Bd6770F5Fe81495D1B715926AAe6e', tokenSymbol: 'USDC', spender: '0x2c12c8F15637b7A182DEc202816148A5E767DCEC', spenderName: 'ElectroSwap Universal Router', known: true, standard: 'permit2', amount: '1248000000', expiration: Math.floor(FIXED_NOW / 1000) + 1_800 },
+      { chainId: 52014, token: '0x3187deAd7A2Bd6770F5Fe81495D1B715926AAe6e', tokenSymbol: 'USDC', spender: '0x9999999999999999999999999999999999999999', spenderName: null, known: false, standard: 'erc20', amount: 'unlimited', expiration: null },
+    ]
+    const AccountArg = z.object({ accountId: z.string() }).passthrough()
+    engine.host.override('portfolio', {
+      snapshot: { input: AccountArg, handler: async () => snap },
+      refresh: { input: AccountArg, handler: async () => snap },
+      lastLook: { input: AccountArg, handler: async () => ({ previous: null, total: snap.total }) },
+    })
+    engine.host.override('tokens', {
+      universe: { input: z.object({}).passthrough(), handler: async () => tokens },
+      get: { input: z.object({ address: z.string() }).passthrough(), handler: async (arg) => tokens.find((t) => t.address.toLowerCase() === (arg as { address: string }).address.toLowerCase()) ?? null },
+      search: { input: z.object({ query: z.string() }).passthrough(), handler: async (arg) => tokens.filter((t) => t.symbol.toLowerCase().includes((arg as { query: string }).query.toLowerCase())) },
+    })
+    engine.host.override('activity', {
+      list: { input: z.object({}).passthrough().optional(), handler: async () => activity },
+    })
+    engine.host.override('activityScan', { scan: { input: AccountArg, handler: async () => ({ added: 0, fromBlock: 15_212_000, toBlock: 15_212_345 }) } })
+    engine.host.override('allowances', {
+      cached: { input: AccountArg, handler: async () => ({ rows: allowances, at: FIXED_NOW - 30_000 }) },
+      scan: { input: AccountArg, handler: async () => allowances },
+    })
+    engine.host.override('names', { lookup: { input: z.object({ addresses: z.array(z.string()) }).passthrough(), handler: async (arg) => (arg as { addresses: string[] }).addresses.map((a) => ({ address: a, name: null, verified: false })) } })
+    engine.host.override('send', {
+      quote: {
+        input: z.object({ to: z.string(), amount: z.string(), token: z.string() }).passthrough(),
+        handler: async (arg) => {
+          const { to, amount, token } = arg as { to: string; amount: string; token: string }
+          const row = snap.rows.find((r) => r.address.toLowerCase() === token.toLowerCase()) ?? snap.rows[0]
+          const ok = /^0x[0-9a-fA-F]{40}$/.test(to) && Number(amount) > 0
+          return { to: /^0x[0-9a-fA-F]{40}$/.test(to) ? to : null, name: null, token, symbol: row?.symbol ?? 'ETN', decimals: row?.decimals ?? 18, amountRaw: '0', balanceRaw: row?.raw ?? '0', maxRaw: row?.raw ?? '0', max: row?.quantity ?? '0', feeWei: '21000000000000', feeSymbol: 'ETN', ok, problems: ok ? [] : [Number(amount) > 0 ? 'Enter a full address or a name.' : 'Enter an amount above zero.'] }
+        },
       },
     })
   }

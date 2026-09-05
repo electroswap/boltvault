@@ -28,6 +28,10 @@ export interface UiHost {
   scanQr?(): Promise<string>
   /** The sync relay for this build (§9.5). */
   readonly relayUrl: string
+  /** Copy to the clipboard (addresses, hashes). */
+  copy?(text: string): Promise<void>
+  /** Open an external page (explorer links) in the body's browser. */
+  openUrl?(url: string): Promise<void>
   /** The approval window closes itself after a decision (§3.5). */
   closeWindow?(): void
   /** Fires on window focus/resize so the approval primary can go inert for 600 ms (§3.5). */

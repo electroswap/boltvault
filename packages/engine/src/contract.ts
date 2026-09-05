@@ -21,6 +21,11 @@ import type {
   ChainView,
   EngineEvent,
   PortfolioSnapshot,
+  TokenView,
+  NameLookup,
+  AllowanceView,
+  ContactView,
+  SendQuote,
   Settings,
   SiteView,
   SyncStatus,
@@ -111,8 +116,53 @@ export interface SettingsNamespace {
  * snapshot) lands in M4.
  */
 export interface PortfolioNamespace {
+  /** The last-good snapshot at once (stale), with a refresh started in the background. */
   snapshot(input: { accountId: AccountId; chainIds?: number[] }): Promise<PortfolioSnapshot>
-  refresh(input: { accountId: AccountId }): Promise<PortfolioSnapshot>
+  refresh(input: { accountId: AccountId; chainIds?: number[] }): Promise<PortfolioSnapshot>
+  /** "Since you last looked" (§7.13): the previous first-open total, and record this open. */
+  lastLook(input: { accountId: AccountId }): Promise<{ previous: { at: number; total: number | null } | null; total: number | null }>
+}
+
+export interface ActivityScanNamespace {
+  /** Bounded inbound transfer scan (§8.12); returns how many entries were added. */
+  scan(input: { accountId: AccountId; chainId: number }): Promise<{ added: number; fromBlock: number; toBlock: number }>
+}
+
+export interface TokensNamespace {
+  universe(input: { chainId?: number }): Promise<TokenView[]>
+  get(input: { chainId?: number; address: string }): Promise<TokenView | null>
+  search(input: { chainId?: number; query: string }): Promise<TokenView[]>
+  metadata(input: { chainId?: number; address: string }): Promise<{ address: string; name: string; symbol: string; decimals: number; hasCode: boolean }>
+  addCustom(input: { chainId?: number; address: string; source?: 'user' | 'dapp'; origin?: string }): Promise<TokenView>
+  removeCustom(input: { chainId?: number; address: string }): Promise<void>
+  setPrefs(input: { chainId?: number; address: string; pinned?: boolean; hidden?: boolean }): Promise<void>
+}
+
+export interface NamesNamespace {
+  /** Forward-verified reverse names for display; null where none. */
+  lookup(input: { chainId: number; addresses: string[] }): Promise<NameLookup[]>
+  /** Live forward resolution for a recipient field. */
+  resolve(input: { chainId: number; name: string }): Promise<{ address: string | null }>
+}
+
+export interface AllowancesNamespace {
+  cached(input: { accountId: AccountId; chainId: number }): Promise<{ rows: AllowanceView[]; at: number }>
+  scan(input: { accountId: AccountId; chainId: number; logs?: boolean }): Promise<AllowanceView[]>
+  /** Zero the allowance through the internal approval path; the sheet decides. */
+  revoke(input: { accountId: AccountId; chainId: number; token: string; spender: string; standard: 'erc20' | 'permit2' | 'erc721' }): Promise<{ requestId: string }>
+}
+
+export interface ContactsNamespace {
+  list(): Promise<ContactView[]>
+  add(input: { address: string; label: string; chainId?: number | null }): Promise<ContactView>
+  remove(input: { id: string }): Promise<void>
+  confirm(input: { id: string }): Promise<void>
+}
+
+export interface SendNamespace {
+  quote(input: { accountId: AccountId; chainId: number; token: string; to: string; amount: string }): Promise<SendQuote>
+  /** Creates the `internal:send` approval; Activity carries the result under `requestId`. */
+  submit(input: { accountId: AccountId; chainId: number; token: string; to: string; amount: string }): Promise<{ requestId: string; to: string }>
 }
 
 /** The encrypted local activity log (§8.12). Locked vault = empty. */
@@ -149,6 +199,12 @@ export interface WalletEngine {
   readonly settings: SettingsNamespace
   readonly portfolio: PortfolioNamespace
   readonly activity: ActivityNamespace
+  readonly activityScan: ActivityScanNamespace
+  readonly tokens: TokensNamespace
+  readonly names: NamesNamespace
+  readonly allowances: AllowancesNamespace
+  readonly contacts: ContactsNamespace
+  readonly send: SendNamespace
   readonly sync: SyncNamespace
   readonly events: EngineEvents
 }

@@ -31,11 +31,11 @@ export interface KnownContract {
 
 const key = (chainId: number, address: string): string => `${chainId}:${address.toLowerCase()}`
 
-const KNOWN = new Map<string, KnownContract>()
+const KNOWN = new Map<string, KnownContract & { readonly address: Hex }>()
 
 function add(chainId: number, address: string | null, name: string, role: ContractRole): void {
   if (!address) return
-  KNOWN.set(key(chainId, address), { name, role })
+  KNOWN.set(key(chainId, address), { name, role, address: address as Hex })
 }
 
 for (const chainId of [52014, 5201420] as const) {
@@ -81,14 +81,25 @@ export function isKnownSpender(chainId: number, address: string): boolean {
   return c.role === 'router' || c.role === 'permit2' || c.role === 'marketplace' || c.role === 'conduit' || c.role === 'farm' || c.role === 'locker' || c.role === 'launchpad' || c.role === 'limit_orders' || c.role === 'position_manager'
 }
 
+/** Known contracts on a chain by role (defaults to the spender roles). */
+export function knownSpenders(chainId: number, roles?: readonly ContractRole[]): Array<{ address: Hex; name: string; role: ContractRole }> {
+  const wanted = roles ?? (['router', 'permit2', 'marketplace', 'conduit', 'farm', 'locker', 'launchpad', 'limit_orders', 'position_manager'] as const)
+  const out: Array<{ address: Hex; name: string; role: ContractRole }> = []
+  for (const [k, v] of KNOWN) {
+    if (!k.startsWith(`${chainId}:`) || !wanted.includes(v.role)) continue
+    out.push({ address: v.address, name: v.name, role: v.role })
+  }
+  return out
+}
+
 export function permit2Address(chainId: number): Hex | null {
   for (const [k, v] of KNOWN) {
-    if (v.role === 'permit2' && k.startsWith(`${chainId}:`)) return k.slice(k.indexOf(':') + 1) as Hex
+    if (v.role === 'permit2' && k.startsWith(`${chainId}:`)) return v.address
   }
   return null
 }
 
 /** Register a contract at runtime (custom tokens, signed spender lists §9.4). */
 export function registerKnownContract(chainId: number, address: string, contract: KnownContract): void {
-  KNOWN.set(key(chainId, address), contract)
+  KNOWN.set(key(chainId, address), { ...contract, address: address as Hex })
 }

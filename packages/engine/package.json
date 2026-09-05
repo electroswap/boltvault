@@ -15,10 +15,12 @@
   "dependencies": {
     "@boltvault/chains": "workspace:*",
     "@boltvault/core": "workspace:*",
+    "@boltvault/electroswap": "workspace:*",
     "@boltvault/platform": "workspace:*",
     "@boltvault/protocol": "workspace:*",
     "@boltvault/security": "workspace:*",
     "@boltvault/settings": "workspace:*",
+    "@boltvault/token-catalog": "workspace:*",
     "@noble/ciphers": "^1.3.0",
     "@noble/hashes": "^1.8.0",
     "@scure/bip32": "^1.7.0",

@@ -41,7 +41,11 @@ function severityTone(severity: AssessmentView['severity']): BodyTone {
   return severity === 'block' || severity === 'danger' ? 'burn' : severity === 'warn' ? 'ember' : 'mute'
 }
 
-function verbFor(payload: ApprovalPayload): string {
+function verbFor(payload: ApprovalPayload, origin: string): string {
+  // Our own surfaces keep their verb through the flow (§7.10).
+  if (origin === 'internal:send') return t({ id: 'key.send', message: 'Send' })
+  if (origin === 'internal:approvals') return t({ id: 'allow.revoke', message: 'Revoke' })
+  if (origin === 'internal:swap') return t({ id: 'swap.key', message: 'Swap' })
   switch (payload.kind) {
     case 'connect':
       return t({ id: 'approval.connect', message: 'Connect' })
@@ -133,7 +137,7 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   const needsTyped = assessment?.presentation.typedConfirmation ?? null
   const typedOk = !needsTyped || typed.trim().toLowerCase() === needsTyped.toLowerCase()
   const armed = now >= enableAt && typedOk && !busy
-  const verb = verbFor(payload)
+  const verb = verbFor(payload, request.origin)
 
   const decide = async (approve: boolean): Promise<void> => {
     setBusy(true)

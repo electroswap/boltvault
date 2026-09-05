@@ -16,6 +16,12 @@ export function extensionUiHost(body: 'extension-popup' | 'extension-tab' | 'ext
       void browser.tabs.create({ url: browser.runtime.getURL(`/tab.html?screen=${screen}`) })
       if (body !== 'extension-tab') window.close()
     },
+    copy: async (text) => {
+      await navigator.clipboard.writeText(text)
+    },
+    openUrl: async (url) => {
+      await browser.tabs.create({ url })
+    },
     closeWindow: () => window.close(),
     onWindowFocus: (listener) => {
       window.addEventListener('focus', listener)

@@ -5,7 +5,7 @@ export { decodeUniversalRouter, decodeUrCommand, urCommandName, UR_COMMAND, UR_M
 export { explain, explainCall, explainTypedData, explainMessage, explainSimulation } from './explain'
 export { ALL_RULES, runRules, type Rule, type RuleInput } from './rules'
 export { deltasFromTrace, simulationFromTrace, mergeDeltas, estimateSimulation, NO_SIMULATION, type TraceFrame, type TraceLog } from './simulate'
-export { knownContract, isKnownSpender, permit2Address, registerKnownContract, type KnownContract, type ContractRole } from './registry'
+export { knownContract, isKnownSpender, knownSpenders, permit2Address, registerKnownContract, type KnownContract, type ContractRole } from './registry'
 export { registrableOrigin, hostOf, isScamOrigin, typosquat, levenshtein, normaliseHomoglyphs, PROTECTED_HOSTS, type TyposquatHit } from './origin'
 export { poisonCheck, sameAddress, inSet, type PoisonResult } from './poison'
 export { ERC20_ABI, ERC721_ABI, ERC1155_ABI, PERMIT2_ABI, WETH_ABI, UNIVERSAL_ROUTER_ABI, MULTICALL3_ABI, TOPICS } from './abis'

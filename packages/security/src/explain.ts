@@ -53,6 +53,7 @@ export function explainCall(decoded: DecodedCall, ctx: AssessmentContext, chainI
     case 'erc20_transfer':
       return [{ text: `Send ${amount(ctx, decoded.token, decoded.amount, chainId)} to ${who(ctx, chainId, decoded.to)}`, tone: 'out' }]
     case 'erc20_approve':
+      if (decoded.amount === 0n) return [{ text: `Revoke ${who(ctx, chainId, decoded.spender)}'s allowance for ${who(ctx, chainId, decoded.token)}`, tone: 'in' }]
       return [{ text: decoded.unlimited ? `Allow ${who(ctx, chainId, decoded.spender)} to move an unlimited amount of ${who(ctx, chainId, decoded.token)}` : `Allow ${who(ctx, chainId, decoded.spender)} to move up to ${amount(ctx, decoded.token, decoded.amount, chainId)}`, tone: decoded.unlimited ? 'warn' : 'neutral' }]
     case 'erc721_transfer':
       return [{ text: `Send ${who(ctx, chainId, decoded.token)} #${decoded.tokenId.toString()} to ${who(ctx, chainId, decoded.to)}`, tone: 'out' }]

@@ -138,15 +138,80 @@ msgctxt "acct.watch"
 msgid "Watching"
 msgstr "Watching"
 
+#: packages/wallet/src/screens/Activity.tsx
+msgctxt "activity.all"
+msgid "All"
+msgstr "All"
+
+#: packages/wallet/src/screens/Activity.tsx
+msgctxt "activity.approvals"
+msgid "Approvals"
+msgstr "Approvals"
+
+#: packages/wallet/src/screens/Activity.tsx
+msgctxt "activity.confirmed"
+msgid "Confirmed"
+msgstr "Confirmed"
+
 #: packages/wallet/src/screens/shells.tsx
 msgctxt "activity.empty"
 msgid "Nothing yet. Sends, swaps and everything the wallet signs will appear here, with what you were shown when you signed."
 msgstr "Nothing yet. Sends, swaps and everything the wallet signs will appear here, with what you were shown when you signed."
 
+#: packages/wallet/src/screens/Activity.tsx
+msgctxt "activity.explorer"
+msgid "Open in explorer"
+msgstr "Open in explorer"
+
+#: packages/wallet/src/screens/Activity.tsx
+msgctxt "activity.failed"
+msgid "Failed"
+msgstr "Failed"
+
+#: packages/wallet/src/screens/Activity.tsx
+msgctxt "activity.pending"
+msgid "Pending"
+msgstr "Pending"
+
+#: packages/wallet/src/screens/Activity.tsx
+msgctxt "activity.received"
+msgid "Received"
+msgstr "Received"
+
+#: packages/wallet/src/screens/Activity.tsx
+msgctxt "activity.replaced"
+msgid "Replaced"
+msgstr "Replaced"
+
+#: packages/wallet/src/screens/Activity.tsx
+msgctxt "activity.risks"
+msgid "What you were warned about"
+msgstr "What you were warned about"
+
+#: packages/wallet/src/screens/Activity.tsx
+msgctxt "activity.scanning"
+msgid "Checking for arrivals…"
+msgstr "Checking for arrivals…"
+
+#: packages/wallet/src/screens/Activity.tsx
+msgctxt "activity.sent"
+msgid "Sent"
+msgstr "Sent"
+
+#: packages/wallet/src/screens/Activity.tsx
+msgctxt "activity.status"
+msgid "Status"
+msgstr "Status"
+
 #: packages/wallet/src/screens/shells.tsx
 msgctxt "activity.title"
 msgid "Activity"
 msgstr "Activity"
+
+#: packages/wallet/src/screens/Activity.tsx
+msgctxt "activity.to"
+msgid "To"
+msgstr "To"
 
 #: packages/wallet/src/screens/Security.tsx
 msgctxt "al.never"
@@ -157,6 +222,76 @@ msgstr "Never"
 msgctxt "al.now"
 msgid "On close"
 msgstr "On close"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "allow.all"
+msgid "Every item"
+msgstr "Every item"
+
+#: packages/wallet/src/screens/Allowances.tsx
+msgctxt "allow.erc20"
+msgid "Token allowance"
+msgstr "Token allowance"
+
+#: packages/wallet/src/screens/Allowances.tsx
+msgctxt "allow.operator"
+msgid "Collection operator"
+msgstr "Collection operator"
+
+#: packages/wallet/src/screens/Allowances.tsx
+msgctxt "allow.rescan"
+msgid "Check again"
+msgstr "Check again"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "allow.revoke"
+msgid "Revoke"
+msgstr "Revoke"
+
+#: packages/wallet/src/screens/Allowances.tsx
+msgctxt "allow.scanning"
+msgid "Checking…"
+msgstr "Checking…"
+
+#: packages/wallet/src/screens/Allowances.tsx
+msgctxt "allow.summary.body"
+msgid "{n} contracts can move tokens from this account."
+msgstr "{n} contracts can move tokens from this account."
+
+#: packages/wallet/src/screens/Allowances.tsx
+msgctxt "allow.summary.empty"
+msgid "Nothing can move your tokens without a signature."
+msgstr "Nothing can move your tokens without a signature."
+
+#: packages/wallet/src/screens/Allowances.tsx
+msgctxt "allow.summary.none"
+msgid "No unlimited approvals"
+msgstr "No unlimited approvals"
+
+#: packages/wallet/src/screens/Allowances.tsx
+msgctxt "allow.summary.unlimited"
+msgid "{n} unlimited"
+msgstr "{n} unlimited"
+
+#: packages/wallet/src/screens/Allowances.tsx
+msgctxt "allow.title"
+msgid "Approvals"
+msgstr "Approvals"
+
+#: packages/wallet/src/screens/Allowances.tsx
+msgctxt "allow.unknown"
+msgid "Unknown"
+msgstr "Unknown"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "allow.unlimited"
+msgid "Unlimited"
+msgstr "Unlimited"
+
+#: packages/wallet/src/screens/Allowances.tsx
+msgctxt "allow.until"
+msgid "until {d}"
+msgstr "until {d}"
 
 #: packages/wallet/src/screens/Approval.tsx
 msgctxt "approval.accept"
@@ -278,7 +413,7 @@ msgctxt "backup.done"
 msgid "Backed up. Swapping and signing are unlocked."
 msgstr "Backed up. Swapping and signing are unlocked."
 
-#: packages/wallet/src/screens/Backup.tsx
+#: packages/wallet/src/screens/Send.tsx
 msgctxt "backup.home"
 msgid "Back to Home"
 msgstr "Back to Home"
@@ -312,6 +447,16 @@ msgstr "Close"
 msgctxt "continue"
 msgid "Continue"
 msgstr "Continue"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "copied"
+msgid "Copied"
+msgstr "Copied"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "copy"
+msgid "Copy"
+msgstr "Copy"
 
 #: packages/wallet/src/screens/Devices.tsx
 msgctxt "devices.answer.paste"
@@ -473,6 +618,21 @@ msgctxt "explore.tokens"
 msgid "Tokens"
 msgstr "Tokens"
 
+#: packages/wallet/src/screens/Receive.tsx
+msgctxt "hide"
+msgid "Hide"
+msgstr "Hide"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.acc.pending"
+msgid "{n} transaction pending"
+msgstr "{n} transaction pending"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.acc.unlimited"
+msgid "{n} unlimited approvals"
+msgstr "{n} unlimited approvals"
+
 #: packages/wallet/src/screens/Home.tsx
 msgctxt "home.backup.body"
 msgid "Swapping and signing stay locked until you confirm three words. Watching and receiving work now."
@@ -574,6 +734,21 @@ msgid "Tokens"
 msgstr "Tokens"
 
 #: packages/wallet/src/screens/Home.tsx
+msgctxt "home.since"
+msgid "Since {d}"
+msgstr "Since {d}"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.since.change"
+msgid "{from} → {to}"
+msgstr "{from} → {to}"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.since.none"
+msgid "No priced change to report."
+msgstr "No priced change to report."
+
+#: packages/wallet/src/screens/Token.tsx
 msgctxt "home.today"
 msgid "today"
 msgstr "today"
@@ -588,17 +763,17 @@ msgctxt "key.bridge"
 msgid "Bridge"
 msgstr "Bridge"
 
-#: packages/wallet/src/screens/Home.tsx
+#: packages/wallet/src/screens/Token.tsx
 msgctxt "key.receive"
 msgid "Receive"
 msgstr "Receive"
 
-#: packages/wallet/src/screens/Home.tsx
+#: packages/wallet/src/screens/Token.tsx
 msgctxt "key.send"
 msgid "Send"
 msgstr "Send"
 
-#: packages/wallet/src/screens/Home.tsx
+#: packages/wallet/src/screens/Token.tsx
 msgctxt "key.swap"
 msgid "Swap"
 msgstr "Swap"
@@ -828,15 +1003,30 @@ msgctxt "quiz.wrong"
 msgid "Those words do not match your phrase. Check the numbers and try again."
 msgstr "Those words do not match your phrase. Check the numbers and try again."
 
-#: packages/wallet/src/navigation/TabShell.tsx
-msgctxt "receive.soon"
-msgid "Receive lands with the M4 milestone."
-msgstr "Receive lands with the M4 milestone."
+#: packages/wallet/src/screens/Receive.tsx
+msgctxt "receive.copy"
+msgid "Copy address"
+msgstr "Copy address"
 
-#: packages/wallet/src/navigation/TabShell.tsx
+#: packages/wallet/src/screens/Receive.tsx
+msgctxt "receive.request"
+msgid "Request an amount"
+msgstr "Request an amount"
+
+#: packages/wallet/src/screens/Receive.tsx
+msgctxt "receive.request.hint"
+msgid "The code above updates with the amount."
+msgstr "The code above updates with the amount."
+
+#: packages/wallet/src/screens/Receive.tsx
 msgctxt "receive.title"
 msgid "Receive"
 msgstr "Receive"
+
+#: packages/wallet/src/screens/Receive.tsx
+msgctxt "receive.warning"
+msgid "This is Electroneum Smart Chain (52014). Send ETN here from an exchange that supports the smart chain. Do not send from the old Electroneum app."
+msgstr "This is Electroneum Smart Chain (52014). Send ETN here from an exchange that supports the smart chain. Do not send from the old Electroneum app."
 
 #: packages/wallet/src/screens/Security.tsx
 msgctxt "remove"
@@ -863,7 +1053,7 @@ msgctxt "reveal.title"
 msgid "Recovery phrase · {label}"
 msgstr "Recovery phrase · {label}"
 
-#: packages/wallet/src/screens/Devices.tsx
+#: packages/wallet/src/screens/Send.tsx
 msgctxt "save"
 msgid "Save"
 msgstr "Save"
@@ -968,15 +1158,75 @@ msgctxt "security.title"
 msgid "Security"
 msgstr "Security"
 
-#: packages/wallet/src/navigation/TabShell.tsx
-msgctxt "send.soon"
-msgid "Send lands with the M4 milestone."
-msgstr "Send lands with the M4 milestone."
+#: packages/wallet/src/screens/Send.tsx
+msgctxt "send.amount"
+msgid "Amount"
+msgstr "Amount"
 
-#: packages/wallet/src/navigation/TabShell.tsx
+#: packages/wallet/src/screens/Send.tsx
+msgctxt "send.balance"
+msgid "{q} {s} available"
+msgstr "{q} {s} available"
+
+#: packages/wallet/src/screens/Send.tsx
+msgctxt "send.failed"
+msgid "The network refused it"
+msgstr "The network refused it"
+
+#: packages/wallet/src/screens/Send.tsx
+msgctxt "send.fee"
+msgid "Network fee about {fee} {s}"
+msgstr "Network fee about {fee} {s}"
+
+#: packages/wallet/src/screens/Send.tsx
+msgctxt "send.max"
+msgid "Max"
+msgstr "Max"
+
+#: packages/wallet/src/screens/Send.tsx
+msgctxt "send.note"
+msgid "You will see exactly what moves before you sign. Sending to a contract or a new address asks for a second look."
+msgstr "You will see exactly what moves before you sign. Sending to a contract or a new address asks for a second look."
+
+#: packages/wallet/src/screens/Send.tsx
+msgctxt "send.review"
+msgid "Review"
+msgstr "Review"
+
+#: packages/wallet/src/screens/Send.tsx
+msgctxt "send.save"
+msgid "Save this address for next time"
+msgstr "Save this address for next time"
+
+#: packages/wallet/src/screens/Send.tsx
+msgctxt "send.save.ph"
+msgid "Name"
+msgstr "Name"
+
+#: packages/wallet/src/screens/Send.tsx
+msgctxt "send.sending"
+msgid "Sending…"
+msgstr "Sending…"
+
+#: packages/wallet/src/screens/Send.tsx
+msgctxt "send.sent"
+msgid "Sent"
+msgstr "Sent"
+
+#: packages/wallet/src/screens/Send.tsx
 msgctxt "send.title"
 msgid "Send"
 msgstr "Send"
+
+#: packages/wallet/src/screens/Send.tsx
+msgctxt "send.to"
+msgid "To"
+msgstr "To"
+
+#: packages/wallet/src/screens/Send.tsx
+msgctxt "send.to.ph"
+msgid "0x… or name.etn"
+msgstr "0x… or name.etn"
 
 #: packages/wallet/src/screens/shells.tsx
 msgctxt "settings.about"
@@ -997,6 +1247,16 @@ msgstr "Accounts"
 msgctxt "settings.accounts.rows"
 msgid "Seeds, backups, identity"
 msgstr "Seeds, backups, identity"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.approvals"
+msgid "Approvals"
+msgstr "Approvals"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.approvals.rows"
+msgid "What contracts can move your tokens; revoke"
+msgstr "What contracts can move your tokens; revoke"
 
 #: packages/wallet/src/screens/shells.tsx
 msgctxt "settings.devices"
@@ -1062,6 +1322,11 @@ msgstr "Spending"
 msgctxt "settings.spending.rows"
 msgid "Slippage, approvals, step-ups, wallet fee schedule"
 msgstr "Slippage, approvals, step-ups, wallet fee schedule"
+
+#: packages/wallet/src/screens/Receive.tsx
+msgctxt "show"
+msgid "Show"
+msgstr "Show"
 
 #: packages/wallet/src/screens/ConnectedSites.tsx
 msgctxt "sites.disconnect"
@@ -1143,15 +1408,100 @@ msgctxt "swap.soon"
 msgid "Swapping arrives with the M5 milestone. Quotes are on-chain; every in-wallet swap pays the wallet fee to the fee sink."
 msgstr "Swapping arrives with the M5 milestone. Quotes are on-chain; every in-wallet swap pays the wallet fee to the fee sink."
 
-#: packages/wallet/src/navigation/TabShell.tsx
-msgctxt "token.soon"
-msgid "The token dossier lands with the M4 milestone."
-msgstr "The token dossier lands with the M4 milestone."
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.activity"
+msgid "Your activity"
+msgstr "Your activity"
 
-#: packages/wallet/src/navigation/TabShell.tsx
-msgctxt "token.title"
-msgid "Token"
-msgstr "Token"
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.activity.none"
+msgid "Nothing yet with this token."
+msgstr "Nothing yet with this token."
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.allowances"
+msgid "Allowances"
+msgstr "Allowances"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.allowances.manage"
+msgid "Manage approvals"
+msgstr "Manage approvals"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.contract"
+msgid "Contract"
+msgstr "Contract"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.custom"
+msgid "Custom"
+msgstr "Custom"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.decimals"
+msgid "{n} decimals"
+msgstr "{n} decimals"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.explorer"
+msgid "Open in explorer"
+msgstr "Open in explorer"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.hide"
+msgid "Hide"
+msgstr "Hide"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.market"
+msgid "Market"
+msgstr "Market"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.market.none"
+msgid "Market data arrives from ElectroSwap once the wallet key is enabled on the API."
+msgstr "Market data arrives from ElectroSwap once the wallet key is enabled on the API."
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.market.other"
+msgid "No safety or market data for tokens outside Electroneum."
+msgstr "No safety or market data for tokens outside Electroneum."
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.pin"
+msgid "Pin to Home"
+msgstr "Pin to Home"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.price"
+msgid "Price"
+msgstr "Price"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.remove"
+msgid "Remove"
+msgstr "Remove"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.show"
+msgid "Show"
+msgstr "Show"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.unpin"
+msgid "Unpin"
+msgstr "Unpin"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.unpriced"
+msgid "No price available"
+msgstr "No price available"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.yours"
+msgid "Yours"
+msgstr "Yours"
 
 #: packages/wallet/src/screens/Unlock.tsx
 msgctxt "unlock.help"

@@ -1,0 +1,132 @@
+/**
+ * Approvals (master plan §8.13): every allowance the account has granted,
+ * grouped by token; unlimited ones are the fat fuse. Revoke runs through the
+ * same sheet as everything else (`internal:approvals`).
+ */
+import { Body, Chip, Column, Icon, Key, Plate, Row, ScrollView, metrics, paint, shortAddress } from '@boltvault/ui'
+import type { AllowanceView } from '@boltvault/engine'
+import { useEffect, useState } from 'react'
+import { useEngine } from '../engine/EngineProvider'
+import { t } from '../i18n'
+import { useRouter } from '../navigation/router'
+import { useWalletState } from '../state/useWalletState'
+import { formatQuantity } from '../format'
+
+const ETN = 52014
+
+export function Allowances({ body }: { body: 'extension-popup' | 'extension-tab' | 'mobile' }) {
+  const engine = useEngine()
+  const router = useRouter()
+  const { active } = useWalletState()
+  const [rows, setRows] = useState<AllowanceView[]>([])
+  const [at, setAt] = useState(0)
+  const [scanning, setScanning] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
+
+  const scan = (): void => {
+    if (!active) return
+    setScanning(true)
+    setError(null)
+    engine.allowances.scan({ accountId: active.id, chainId: ETN }).then(
+      (r) => {
+        setRows(r)
+        setAt(Date.now())
+        setScanning(false)
+      },
+      (err: unknown) => {
+        setError(err instanceof Error ? err.message : String(err))
+        setScanning(false)
+      },
+    )
+  }
+
+  useEffect(() => {
+    if (!active) return
+    let alive = true
+    engine.allowances.cached({ accountId: active.id, chainId: ETN }).then((c) => {
+      if (!alive) return
+      setRows(c.rows)
+      setAt(c.at)
+      if (Date.now() - c.at > 60_000) scan()
+    }, () => undefined)
+    const off = engine.events.subscribe((e) => {
+      if (e.type === 'allowances.changed' && e.accountId === active.id) {
+        setRows(e.rows)
+        setAt(Date.now())
+      }
+    })
+    return () => {
+      alive = false
+      off()
+    }
+  }, [engine, active?.id])
+
+  const unlimited = rows.filter((r) => r.amount === 'unlimited' || r.amount === 'all')
+  const byToken = new Map<string, AllowanceView[]>()
+  for (const r of rows) byToken.set(r.token.toLowerCase(), [...(byToken.get(r.token.toLowerCase()) ?? []), r])
+
+  const revoke = (r: AllowanceView): void => {
+    if (!active) return
+    engine.allowances.revoke({ accountId: active.id, chainId: r.chainId, token: r.token, spender: r.spender, standard: r.standard }).then((res) => router.navigate('sign', { requestId: res.requestId }), (err: unknown) => setError(err instanceof Error ? err.message : String(err)))
+  }
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: inset, gap: 12 }} testID="allowances">
+      <Row justifyContent="space-between">
+        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
+        <Body size="title">{t({ id: 'allow.title', message: 'Approvals' })}</Body>
+      </Row>
+      <Plate role="raised" gap="$1" testID="allow-summary">
+        <Body size="title" tone={unlimited.length ? 'burn' : 'ink'}>
+          {unlimited.length ? t({ id: 'allow.summary.unlimited', message: '{n} unlimited', values: { n: unlimited.length } }) : t({ id: 'allow.summary.none', message: 'No unlimited approvals' })}
+        </Body>
+        <Body tone="mute" size="caption">
+          {rows.length ? t({ id: 'allow.summary.body', message: '{n} contracts can move tokens from this account.', values: { n: rows.length } }) : t({ id: 'allow.summary.empty', message: 'Nothing can move your tokens without a signature.' })}
+        </Body>
+        <Row gap="$2" alignItems="center">
+          <Key label={scanning ? t({ id: 'allow.scanning', message: 'Checking…' }) : t({ id: 'allow.rescan', message: 'Check again' })} kind="secondary" disabled={scanning} onPress={scan} testID="allow-scan" />
+          {at ? (
+            <Body tone="mute" size="caption">
+              {new Date(at).toLocaleTimeString()}
+            </Body>
+          ) : null}
+        </Row>
+      </Plate>
+      {[...byToken.entries()].map(([token, list]) => (
+        <Plate key={token} gap="$2" testID={`allow-token-${token}`}>
+          <Body size="title">{list[0]?.tokenSymbol ?? shortAddress(token)}</Body>
+          {list.map((r) => (
+            <Column key={`${r.spender}:${r.standard}`} gap={4}>
+              <Row justifyContent="space-between" alignItems="center">
+                <Column flex={1}>
+                  <Row gap="$2" alignItems="center">
+                    <Body numberOfLines={1}>{r.spenderName ?? shortAddress(r.spender)}</Body>
+                    {!r.known ? (
+                      <Chip borderColor={paint.ember}>
+                        <Body tone="ember" size="caption">
+                          {t({ id: 'allow.unknown', message: 'Unknown' })}
+                        </Body>
+                      </Chip>
+                    ) : null}
+                  </Row>
+                  <Body tone="mute" size="caption">
+                    {r.standard === 'permit2' ? 'Permit2' : r.standard === 'erc721' ? t({ id: 'allow.operator', message: 'Collection operator' }) : t({ id: 'allow.erc20', message: 'Token allowance' })}
+                    {r.expiration ? ` · ${t({ id: 'allow.until', message: 'until {d}', values: { d: new Date(r.expiration * 1000).toLocaleDateString() } })}` : ''}
+                  </Body>
+                </Column>
+                <Body tone={r.amount === 'unlimited' || r.amount === 'all' ? 'burn' : 'ink'} size="caption" testID={`allow-amount-${r.spender}`}>
+                  {r.amount === 'unlimited' ? t({ id: 'allow.unlimited', message: 'Unlimited' }) : r.amount === 'all' ? t({ id: 'allow.all', message: 'Every item' }) : formatQuantity(r.amount)}
+                </Body>
+              </Row>
+              <Row>
+                <Key label={t({ id: 'allow.revoke', message: 'Revoke' })} kind="danger" onPress={() => revoke(r)} testID={`allow-revoke-${r.spender}`} />
+              </Row>
+            </Column>
+          ))}
+        </Plate>
+      ))}
+      {error ? <Body tone="burn">{error}</Body> : null}
+    </ScrollView>
+  )
+}

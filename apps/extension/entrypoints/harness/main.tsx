@@ -21,6 +21,8 @@ if (!root) throw new Error('harness: no #root')
 
 createFixtureEngine(scenario).then((engine) => {
   const initialTab = tabs.includes(screen as TabId) ? (screen as TabId) : 'home'
-  createRoot(root).render(<App engine={engine.engine} body={body} initialTab={initialTab} initialScreen={screen} reducedMotion={reducedMotion} />)
+  // Screens with required params get a representative fixture value.
+  const initialParams = screen === 'token' ? { chainId: 52014, address: '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1' } : undefined
+  createRoot(root).render(<App engine={engine.engine} body={body} initialTab={initialTab} initialScreen={screen} {...(initialParams ? { initialParams } : {})} reducedMotion={reducedMotion} />)
   document.documentElement.dataset['ready'] = '1'
 })

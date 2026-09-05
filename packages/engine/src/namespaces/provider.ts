@@ -40,6 +40,10 @@ export interface ProviderDeps {
   readonly approvals: ApprovalStore
   readonly settings: SettingsStore
   readonly activity: ActivityStore
+  /** Confirmed address-book entries join the lookalike reference set (§3.6). */
+  readonly addressBook?: () => Promise<string[]>
+  /** Token symbols/decimals for a chain, so statements read "2.5 FIX" not raw units. */
+  readonly tokenInfo?: (chainId: number) => Promise<Record<string, { symbol: string; decimals: number; name?: string }>>
   /** Put a new request in front of the user (the extension opens sign.html). Internal origins never call this. */
   readonly openApproval?: (request: ApprovalRequest) => void
   readonly clientVersion: string
@@ -111,6 +115,34 @@ export class ProviderService {
 
   isPending(origin: string): boolean {
     return this.flow.isPending(origin)
+  }
+
+  /**
+   * Our own surfaces (Send, Revoke, later Swap): create the approval and return
+   * its id at once; the sheet decides; execution runs here and lands in Activity.
+   */
+  async submitInternal(intent: Extract<ApprovalIntent, { kind: 'send_transaction' }>): Promise<{ requestId: string }> {
+    if (!intent.origin.startsWith('internal:')) throw new EngineError('invalid_argument', 'submitInternal is for internal origins')
+    const d = this.deps
+    const payload = await this.payloadFor(intent)
+    const request = await d.approvals.create({ kind: 'send_transaction', origin: intent.origin, accountId: intent.accountId, chainId: intent.chainId, payload })
+    void (async () => {
+      try {
+        const outcome = await d.approvals.waitFor(request.id)
+        const view = payload as Extract<ApprovalPayload, { kind: 'send_transaction' }>
+        if (!outcome.approved || view.assessment.presentation.blocked) return
+        await this.execute(intent, request, outcome.data)
+      } catch {
+        // A broadcast failure is already recorded in Activity as failed.
+      }
+    })()
+    return { requestId: request.id }
+  }
+
+  /** After unlock: keep watching transactions that were pending when the worker last stopped. */
+  async resumeWatchers(): Promise<void> {
+    const entries = await this.deps.activity.list({}).catch(() => [] as ActivityEntry[])
+    for (const e of entries) if (e.status === 'pending' && e.hash) this.watch(e.chainId, e.id, e.hash as Hex)
   }
 
   dispose(): void {
@@ -291,8 +323,15 @@ export class ProviderService {
       const bal = (await d.chains.rpc(chainId, 'eth_getBalance', [account, 'latest']).catch(() => null)) as string | null
       if (bal) balances['native'] = BigInt(bal)
     }
+    const addressBook = d.addressBook ? await d.addressBook().catch(() => [] as string[]) : []
+    const tokens = d.tokenInfo ? await d.tokenInfo(chainId).catch(() => ({}) as Record<string, { symbol: string; decimals: number; name?: string }>) : {}
+    const labels: Record<string, string> = {}
+    for (const [addr, info] of Object.entries(tokens)) labels[addr] = info.symbol
     const context: AssessmentContext = emptyContext({
       sentTo,
+      addressBook: addressBook as Hex[],
+      tokens,
+      labels,
       own: accounts.map((a) => a.address as Hex),
       firstTimeOrigin: d.sites.registry.isFirstTime(origin),
       contracts,

@@ -25,7 +25,9 @@ import {
   useWindowDimensions,
 } from '@boltvault/ui'
 // Column is also the Field's host; content sits above it via zIndex.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useEngine } from '../engine/EngineProvider'
+import { useActivity } from '../hooks/useActivity'
 import { useChainHead } from '../hooks/useChainHead'
 import { usePortfolio } from '../hooks/usePortfolio'
 import { t } from '../i18n'
@@ -49,7 +51,25 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   const { vault, active, loading } = useWalletState()
   const head = useChainHead(ETN)
   const portfolio = usePortfolio(active?.id ?? null)
+  const { entries } = useActivity(active?.id ?? null)
+  const engine = useEngine()
   const [segment, setSegment] = useState<'tokens' | 'collectibles' | 'positions'>('tokens')
+  const [sinceLook, setSinceLook] = useState<{ at: number; total: number | null } | null>(null)
+  const [unlimited, setUnlimited] = useState(0)
+  const pendingTx = entries.filter((e) => e.status === 'pending').length
+
+  // "Since you last looked" (§7.13) and the approvals fuse count, once per open.
+  useEffect(() => {
+    if (!active || !vault?.unlocked) return
+    let alive = true
+    engine.portfolio.lastLook({ accountId: active.id }).then((r) => {
+      if (alive && r.previous && Date.now() - r.previous.at > 60 * 60_000) setSinceLook(r.previous)
+    }, () => undefined)
+    engine.allowances.cached({ accountId: active.id, chainId: ETN }).then((c) => alive && setUnlimited(c.rows.filter((r) => r.amount === 'unlimited' || r.amount === 'all').length), () => undefined)
+    return () => {
+      alive = false
+    }
+  }, [engine, active, vault?.unlocked])
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const address = active?.address ?? NO_ACCOUNT_SEED
   const quiet = !vault?.unlocked
@@ -193,6 +213,36 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
                 )}
               </Column>
             </Ignition>
+
+            {sinceLook ? (
+              <Plate gap={2} testID="since-look">
+                <Body tone="mute" size="caption">
+                  {t({ id: 'home.since', message: 'Since {d}', values: { d: new Date(sinceLook.at).toLocaleDateString() } })}
+                </Body>
+                <Body size="caption">
+                  {sinceLook.total !== null && total !== null
+                    ? t({ id: 'home.since.change', message: '{from} → {to}', values: { from: formatFiat(sinceLook.total, portfolio.snapshot?.currency ?? 'USD'), to: totalText } })
+                    : t({ id: 'home.since.none', message: 'No priced change to report.' })}
+                </Body>
+              </Plate>
+            ) : null}
+
+            {/* One accessory (§8.2): pending tx > unlimited approvals. */}
+            {pendingTx > 0 ? (
+              <Plate gap={2} onPress={() => router.setTab('activity')} cursor="pointer" testID="accessory-pending">
+                <Row gap="$2" alignItems="center">
+                  <Icon name="clock" size={16} color={paint.arc} />
+                  <Body size="caption">{t({ id: 'home.acc.pending', message: '{n} transaction pending', values: { n: pendingTx } })}</Body>
+                </Row>
+              </Plate>
+            ) : unlimited > 0 ? (
+              <Plate gap={2} onPress={() => router.navigate('allowances')} cursor="pointer" testID="accessory-approvals">
+                <Row gap="$2" alignItems="center">
+                  <Icon name="approvals" size={16} color={paint.burn} />
+                  <Body size="caption">{t({ id: 'home.acc.unlimited', message: '{n} unlimited approvals', values: { n: unlimited } })}</Body>
+                </Row>
+              </Plate>
+            ) : null}
 
             <Row gap="$3" justifyContent="space-between" testID="keys">
               <ActionKey icon="send" label={t({ id: 'key.send', message: 'Send' })} onPress={() => router.navigate('send')} />

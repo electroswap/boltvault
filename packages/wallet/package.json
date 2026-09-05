@@ -18,6 +18,7 @@
     "@boltvault/ui": "workspace:*",
     "@lingui/core": "^5.9.5",
     "@lingui/react": "^5.9.5",
+    "viem": "^2.56.3",
     "zod": "^3.25.76"
   },
   "peerDependencies": {
