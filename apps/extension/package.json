@@ -20,6 +20,7 @@
     "@boltvault/swap": "workspace:*"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.3",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^19.2.7",
     "happy-dom": "^20.14.0",

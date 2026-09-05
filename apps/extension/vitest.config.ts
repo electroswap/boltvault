@@ -7,5 +7,8 @@ export default defineConfig({
     passWithNoTests: true,
     include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
     testTimeout: 30000,
+    // React must load its DEV build for @testing-library/react's `act`; a
+    // production build throws "act(...) is not supported in production builds".
+    env: { NODE_ENV: 'test' },
   },
 })
