@@ -18,16 +18,19 @@ export interface SheetProps {
   readonly children: ReactNode
   /** Quiet custody mode: no motion, dimmer scrim (§7.9). */
   readonly quiet?: boolean
+  /** Reduced motion (§7.6): the sheet simply appears. */
+  readonly reducedMotion?: boolean
   readonly testID?: string
 }
 
-export function Sheet({ open, onClose, title, children, quiet = false, testID }: SheetProps) {
+export function Sheet({ open, onClose, title, children, quiet = false, reducedMotion = false, testID }: SheetProps) {
   if (!open) return null
+  const still = quiet || reducedMotion
   return (
     <Animated.View
       style={[
         { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, justifyContent: 'flex-end', backgroundColor: quiet ? 'rgba(2,3,8,0.86)' : 'rgba(2,3,8,0.6)' },
-        quiet
+        still
           ? null
           : { animationName: { from: { opacity: 0 }, to: { opacity: 1 } }, animationDuration: `${motion.sheet}ms`, animationFillMode: 'forwards' },
       ]}
@@ -37,10 +40,11 @@ export function Sheet({ open, onClose, title, children, quiet = false, testID }:
       <Animated.View
         style={[
           { backgroundColor: paint.glassRaised, borderTopLeftRadius: radius.raised, borderTopRightRadius: radius.raised, borderTopWidth: 1, borderColor: 'rgba(95,216,255,0.12)', maxHeight: '88%' },
-          quiet
+          // The panel only slides: it is opaque at every frame, so a paused or skipped animation never shows the screen beneath.
+          still
             ? null
             : {
-                animationName: { from: { transform: [{ translateY: 24 }], opacity: 0.6 }, to: { transform: [{ translateY: 0 }], opacity: 1 } },
+                animationName: { from: { transform: [{ translateY: 24 }] }, to: { transform: [{ translateY: 0 }] } },
                 animationDuration: `${motion.sheet}ms`,
                 animationTimingFunction: 'ease-out',
                 animationFillMode: 'forwards',

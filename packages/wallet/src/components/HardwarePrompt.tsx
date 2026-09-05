@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useEngine, useEngineEvent } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
+import { useReducedMotion } from '../state/useReducedMotion'
 
 /** True once the scanned parts can complete a UR: a single-part code, or every index of `i-N` seen. */
 export function urPartsDone(parts: readonly string[]): boolean {
@@ -30,6 +31,7 @@ export function urPartsDone(parts: readonly string[]): boolean {
 export function HardwarePrompt({ body }: { body: 'extension-popup' | 'extension-tab' | 'mobile' }) {
   const engine = useEngine()
   const host = useHost()
+  const reducedMotion = useReducedMotion()
   const [pending, setPending] = useState<KeystonePending[]>([])
   const [outgoing, setOutgoing] = useState<RemoteRequest[]>([])
   const [pasted, setPasted] = useState('')
@@ -82,7 +84,7 @@ export function HardwarePrompt({ body }: { body: 'extension-popup' | 'extension-
   const kindLabel = (k: KeystonePending['kind']): string => (k === 'transaction' || k === 'typed_transaction' ? t({ id: 'keystone.kind.tx', message: 'a transaction' }) : k === 'personal_message' ? t({ id: 'keystone.kind.msg', message: 'a message' }) : t({ id: 'keystone.kind.typed', message: 'typed data' }))
 
   return (
-    <Sheet open onClose={() => (current ? void engine.hardware.keystoneCancel({ id: current.id }) : waiting ? void engine.remote.cancel({ id: waiting.id }) : undefined)} title={current ? t({ id: 'keystone.title', message: 'Sign on your Keystone' }) : t({ id: 'remote.title', message: 'Sign on another device' })} testID="hardware-prompt">
+    <Sheet open onClose={() => (current ? void engine.hardware.keystoneCancel({ id: current.id }) : waiting ? void engine.remote.cancel({ id: waiting.id }) : undefined)} title={current ? t({ id: 'keystone.title', message: 'Sign on your Keystone' }) : t({ id: 'remote.title', message: 'Sign on another device' })} reducedMotion={reducedMotion} testID="hardware-prompt">
       {current ? (
         <Column gap="$3" alignItems="stretch">
           <Body tone="mute" size="caption">
