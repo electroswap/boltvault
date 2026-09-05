@@ -1,3 +1,4 @@
+import { FlagsSchema } from '@boltvault/core'
 /**
  * DTOs that cross the UI↔engine boundary (master plan §2.4).
  *
@@ -164,6 +165,8 @@ export const SettingsSchema = z.object({
   sound: z.boolean(),
   /** Push registration opt-in (§9.3); the phone registers with the watcher only when on. */
   pushEnabled: z.boolean(),
+  /** Crash reports (§3.7): off by default; scrubbed; only to ElectroSwap. */
+  crashReports: z.boolean(),
   sendWhitelist: z.boolean(),
   autoLock: AutoLockSchema,
   displayCurrency: z.enum(['USD', 'ETN']),
@@ -895,6 +898,19 @@ export const WcSessionViewSchema = z.object({
 })
 export type WcSessionView = z.infer<typeof WcSessionViewSchema>
 
+// ---- M10: signed statics (§3.7) --------------------------------------------------------------
+
+export const FlagsViewSchema = z.object({
+  flags: FlagsSchema,
+  fetchedAt: z.number().nullable(),
+  /** This body is older than the signed minimum: the shell blocks with an update plate. */
+  updateRequired: z.boolean(),
+  minVersion: z.string().nullable(),
+  problem: z.string().nullable(),
+  scamOriginsCount: z.number().int().nonnegative(),
+})
+export type FlagsView = z.infer<typeof FlagsViewSchema>
+
 export const EngineEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('swap.progress'), flow: SwapFlowSchema }),
   z.object({ type: z.literal('positions.changed'), positions: PositionsSchema }),
@@ -902,6 +918,7 @@ export const EngineEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('hardware.keystone'), pending: z.array(KeystonePendingSchema) }),
   z.object({ type: z.literal('dapp.event'), sessionId: z.string(), origin: z.string(), event: z.string(), payload: z.unknown() }),
   z.object({ type: z.literal('connect.changed'), proposals: z.array(WcProposalViewSchema), sessions: z.array(WcSessionViewSchema) }),
+  z.object({ type: z.literal('flags.changed'), flags: FlagsViewSchema }),
   z.object({ type: z.literal('remote.changed'), outgoing: z.array(RemoteRequestSchema), incoming: z.array(RemoteRequestSchema) }),
   z.object({ type: z.literal('watchlist.changed'), items: z.array(WatchItemSchema) }),
   z.object({ type: z.literal('limit.changed'), accountId: AccountIdSchema, chainId: z.number().int().positive(), orders: z.array(LimitOrderViewSchema) }),

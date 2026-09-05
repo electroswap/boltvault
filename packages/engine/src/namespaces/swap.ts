@@ -51,6 +51,8 @@ export interface SwapDeps {
   readonly vault: VaultManager
   readonly provider: ProviderService
   readonly settings: SettingsStore
+  /** Signed flags (§3.7): the swap kill-switch. */
+  readonly statics?: { isDisabled(feature: 'swap' | 'limit'): boolean }
   readonly holder: HolderService
   readonly flows: FlowStore
 }
@@ -131,6 +133,8 @@ export class SwapService {
     const { chainId } = input
     const { inView, outView } = await this.pair(chainId, input.tokenIn, input.tokenOut)
     const problems: string[] = []
+    // The kill-switch (§3.7) comes before every other answer, even for a pair the wallet does not know.
+    if (this.deps.statics?.isDisabled('swap')) return this.skeleton(input, inView, outView, ['In-wallet swaps are switched off right now by a signed flag from ElectroSwap. Swap on app.electroswap.io meanwhile.'])
     if (!isEtn(chainId)) return this.skeleton(input, inView, outView, ['Swaps happen on Electroneum. Bridge first, then swap.'])
     if (!inView || !outView) return this.skeleton(input, inView, outView, ['Pick two tokens.'])
     const account = (await d.vault.accounts()).find((a) => a.id === input.accountId)
@@ -235,6 +239,7 @@ export class SwapService {
   /** Start the flow: approve → permit → swap, one sheet each. Resolves once the first sheet exists. */
   async execute(input: SwapInput): Promise<{ flowId: string; requestId: string | null }> {
     const d = this.deps
+    if (d.statics?.isDisabled('swap')) throw new EngineError('invalid_argument', 'In-wallet swaps are switched off right now.')
     const { chainId } = input
     if (!isEtn(chainId)) throw new EngineError('invalid_argument', 'Swaps happen on Electroneum.')
     const first = await this.quote(input)

@@ -33,6 +33,8 @@ import { Bridge } from '../screens/Bridge'
 import { Networks } from '../screens/Networks'
 import { Browser } from '../screens/Browser'
 import { Feel } from '../screens/Feel'
+import { About } from '../screens/About'
+import { UpdateRequired } from '../components/UpdateRequired'
 import { Spending } from '../screens/Spending'
 import { Swap } from '../screens/Swap'
 import { Token } from '../screens/Token'
@@ -135,6 +137,9 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
     case 'feel':
       screen = <Feel body={body} />
       break
+    case 'about':
+      screen = <About body={body} />
+      break
     case 'alerts':
       screen = <Alerts body={body} />
       break
@@ -202,6 +207,7 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
       {showTabs ? <TabBar items={items} activeId={state.tab} onSelect={(id) => router.setTab(id as TabId)} testID="tabs" /> : null}
       {/* Last child, so a device round trip sheet paints above the tab bar (§7.5). */}
       <HardwarePrompt body={body} reducedMotion={reducedMotionOverride} />
+      <UpdateRequired />
     </Column>
   )
 }

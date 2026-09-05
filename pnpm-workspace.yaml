@@ -3,3 +3,5 @@ packages:
   - 'apps/*'
 allowBuilds:
   esbuild: true
+# Supply chain (§3.7): a package version must be a week old before it can be resolved.
+minimumReleaseAge: 10080

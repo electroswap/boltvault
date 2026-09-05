@@ -22,6 +22,7 @@ export interface ScreenParams {
   networks: undefined
   browser: { url?: string } | undefined
   feel: undefined
+  about: undefined
   activity: undefined
   settings: undefined
   security: undefined
@@ -76,6 +77,7 @@ export const SCREENS: Record<ScreenId, ScreenMeta> = {
   networks: { id: 'networks', presentation: 'push', quiet: false, secrets: false },
   browser: { id: 'browser', presentation: 'push', quiet: false, secrets: false },
   feel: { id: 'feel', presentation: 'push', quiet: false, secrets: false },
+  about: { id: 'about', presentation: 'push', quiet: false, secrets: false },
   accounts: { id: 'accounts', presentation: 'sheet', quiet: false, secrets: true },
   backup: { id: 'backup', presentation: 'push', quiet: true, secrets: true },
   unlock: { id: 'unlock', presentation: 'window', quiet: true, secrets: false },

@@ -13,6 +13,8 @@ export function extensionUiHost(body: 'extension-popup' | 'extension-tab' | 'ext
     secretsAllowed: body === 'extension-tab',
     passkeys: createWebAuthnPasskeys(),
     relayUrl: 'https://electroswap.io/api/wallet/sync',
+    version: browser.runtime.getManifest().version,
+    buildHash: __BUILD_HASH__ || null,
     openSecretScreen: (screen: ScreenId) => {
       void browser.tabs.create({ url: browser.runtime.getURL(`/tab.html?screen=${screen}`) })
       if (body !== 'extension-tab') window.close()

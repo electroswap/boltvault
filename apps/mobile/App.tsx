@@ -42,6 +42,8 @@ const host: Partial<UiHost> = {
     disable: unregisterPush,
   },
   widget: { publish: publishWidgetSnapshot },
+  version: process.env['EXPO_PUBLIC_APP_VERSION'] ?? '0.1.0',
+  buildHash: process.env['EXPO_PUBLIC_BUILD_HASH'] ?? null,
 }
 
 export default function App() {
@@ -50,7 +52,7 @@ export default function App() {
     let alive = true
     Promise.all([createMobilePlatform(), createWalletKit().catch(() => null)])
       .then(([platform, walletKit]) => {
-        if (alive) setEngine(createEngine({ platform, ledger: bleLedgerProvider(), walletKit }))
+        if (alive) setEngine(createEngine({ platform, ledger: bleLedgerProvider(), walletKit, body: 'mobile', clientVersion: `BoltVault/${process.env['EXPO_PUBLIC_APP_VERSION'] ?? '0.1.0'}` }))
       })
       .catch((err: unknown) => console.error('platform failed', err))
     return () => {

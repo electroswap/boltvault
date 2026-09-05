@@ -1,0 +1,15 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":pinAllExceptPeerDependencies", "group:allNonMajor", "schedule:weekly"],
+  "minimumReleaseAge": "7 days",
+  "rangeStrategy": "pin",
+  "lockFileMaintenance": { "enabled": true, "schedule": ["before 6am on monday"] },
+  "packageRules": [
+    { "matchDepTypes": ["devDependencies"], "groupName": "dev tooling" },
+    { "matchPackagePatterns": ["^@ledgerhq/", "^@trezor/", "^@keystonehq/", "^@ngraveio/", "^@reown/", "^@walletconnect/"], "groupName": "hardware and connect SDKs", "minimumReleaseAge": "14 days" },
+    { "matchPackagePatterns": ["^react-native", "^expo", "^@expo/", "^@tamagui/", "^@shopify/react-native-skia"], "groupName": "react native stack" },
+    { "matchUpdateTypes": ["major"], "dependencyDashboardApproval": true }
+  ],
+  "vulnerabilityAlerts": { "enabled": true, "labels": ["security"] },
+  "osvVulnerabilityAlerts": true
+}

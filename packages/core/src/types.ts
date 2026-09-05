@@ -150,6 +150,8 @@ export interface BoltVaultSettings {
   sound: boolean
   /** Push registration opt-in (§9.3). */
   pushEnabled: boolean
+  /** Crash reports opt-in (§3.7). */
+  crashReports: boolean
   /** Unknown-recipient extra confirm (default off; poison 4+4 is always on). */
   sendWhitelist: boolean
   autoLock: AutoLock
@@ -170,6 +172,7 @@ export const DEFAULT_SETTINGS: BoltVaultSettings = {
   blockTick: false,
   sound: false,
   pushEnabled: false,
+  crashReports: false,
   sendWhitelist: false,
   autoLock: '5min',
   displayCurrency: 'USD',

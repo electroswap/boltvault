@@ -61,6 +61,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [chains, setChains] = useState<ChainView[]>([])
   const [bridges, setBridges] = useState<BridgeStatus[]>([])
+  const [notice, setNotice] = useState<string | null>(null)
   const scopeIds = useMemo(() => (scope === 'all' ? [ETN, ...(settings?.enabledChains ?? [])] : [scope]), [scope, settings])
   const portfolio = usePortfolio(active?.id ?? null, 5_000, scopeIds)
   const { entries } = useActivity(active?.id ?? null)
@@ -83,6 +84,10 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   useEffect(() => {
     engine.settings.get().then(setSettings, () => undefined)
     engine.chains.list().then(setChains, () => undefined)
+    engine.flags.get().then((f) => setNotice(f.flags.notice), () => undefined)
+    return engine.events.subscribe((e) => {
+      if (e.type === 'flags.changed') setNotice(e.flags.flags.notice)
+    })
   }, [engine])
   useEffect(() => {
     if (!active || !vault?.unlocked) return
@@ -187,6 +192,16 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
                   <Key label={t({ id: 'home.backup.key', message: 'Back up' })} onPress={() => router.navigate('backup')} testID="backup-key" />
                 </Plate>
               </Ignition>
+            ) : null}
+            {notice ? (
+              <Plate gap={2} testID="home-notice">
+                <Row gap="$2" alignItems="center">
+                  <Icon name="warn" size={16} color={paint.ember} />
+                  <Body size="caption" flexShrink={1}>
+                    {notice}
+                  </Body>
+                </Row>
+              </Plate>
             ) : null}
             <Ignition reducedMotion={reducedMotion} order={2}>
               <Column gap="$2">

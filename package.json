@@ -2,7 +2,7 @@
   "name": "bolt-vault",
   "private": true,
   "version": "0.0.0",
-  "description": "BoltVault — Electroneum wallet & ElectroSwap uber-app (one brain, two bodies, one face)",
+  "description": "BoltVault \u2014 Electroneum wallet & ElectroSwap uber-app (one brain, two bodies, one face)",
   "scripts": {
     "typecheck": "pnpm -r --no-bail typecheck",
     "test": "vitest run --passWithNoTests",
@@ -16,7 +16,10 @@
     "abi:sync": "tsx tools/abi-sync.ts",
     "check": "pnpm typecheck && pnpm lint && pnpm no-any && pnpm depcruise && SKIP_LIVE=1 pnpm test:ci && pnpm --filter @boltvault/extension build",
     "i18n:extract": "node tools/i18n-extract.mjs",
-    "page-provider:build": "node tools/build-page-provider.mjs"
+    "page-provider:build": "node tools/build-page-provider.mjs",
+    "sbom": "node tools/sbom.mjs",
+    "build:manifest": "node tools/build-manifest.mjs",
+    "build:repro": "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) BUILD_HASH=$(git rev-parse HEAD) pnpm --filter @boltvault/extension build && SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) BUILD_HASH=$(git rev-parse HEAD) pnpm --filter @boltvault/extension build:firefox && node tools/build-manifest.mjs apps/extension/.output/chrome-mv3 && node tools/build-manifest.mjs apps/extension/.output/firefox-mv3"
   },
   "devDependencies": {
     "@boltvault/chains": "workspace:*",
@@ -39,5 +42,14 @@
   "packageManager": "pnpm@10.32.1",
   "engines": {
     "node": ">=20"
+  },
+  "pnpm": {
+    "overrides": {
+      "protobufjs": ">=7.6.1",
+      "shell-quote": ">=1.9.0",
+      "toml": ">=4.2.0",
+      "browserslist": ">=4.28.7",
+      "react-router": ">=7.18.2"
+    }
   }
 }

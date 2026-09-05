@@ -14,6 +14,7 @@ import { createServiceWorkerPlatform } from '../src/platform'
 import { portChannel } from '../src/port-channel'
 import { classifySender } from '../src/sender'
 import { createTrezorConnect } from '../src/trezor'
+import { installCrashReporter } from '../src/crash'
 
 const SIGN_WIDTH = 380
 const SIGN_HEIGHT = 640
@@ -50,7 +51,9 @@ export default defineBackground(() => {
   // WebHID is available to extension workers since Chrome 117; pairing happens in tab.html (§2.7 S7).
   const nav = globalThis.navigator as unknown as { hid?: { getDevices(): Promise<HidDeviceLike[]> } }
   const hid = nav.hid ? { getDevices: () => nav.hid?.getDevices() ?? Promise.resolve([]) } : null
-  const engine = createEngine({ platform, openApproval, clientVersion: `BoltVault/${browser.runtime.getManifest().version}`, hid, trezor: createTrezorConnect() })
+  const engine = createEngine({ platform, openApproval, clientVersion: `BoltVault/${browser.runtime.getManifest().version}`, hid, trezor: createTrezorConnect(), body: 'extension' })
+  // Crash reports are off until Settings › About says otherwise (§3.7); scrubbed either way.
+  installCrashReporter({ body: 'extension-worker', version: browser.runtime.getManifest().version, enabled: () => engine.engine.settings.get().then((s) => s.crashReports, () => false) })
 
   browser.runtime.onInstalled.addListener((details) => {
     if (details.reason === 'install') void engine.ready

@@ -51,6 +51,9 @@ export interface UiHost {
   share?(input: { title: string; text?: string; url?: string }): Promise<void>
   /** Push registration (§9.3). */
   readonly push?: { status(): Promise<'unavailable' | 'off' | 'granted' | 'denied'>; enable(): Promise<boolean>; disable(): Promise<void> }
+  /** The body's version and reproducible build hash (Settings › About). */
+  readonly version?: string
+  readonly buildHash?: string | null
   /** The home-screen widget's snapshot (§7.13): written where the widget extension reads it. */
   readonly widget?: { publish(snapshot: WidgetSnapshot): Promise<void> }
 }

@@ -65,6 +65,8 @@ const CASES: Array<{ screen: string; scenario: string; sizes: Array<keyof typeof
   // M9: the feel settings and the browser's web plate; Connected sites and Alerts carry the WalletConnect and push plates.
   { screen: 'feel', scenario: 'funded', sizes: ['popup'] },
   { screen: 'browser', scenario: 'funded', sizes: ['popup'] },
+  // M10: About (version, encryption, fee sink, signed flags, crash reports).
+  { screen: 'about', scenario: 'funded', sizes: ['popup'] },
 ]
 
 test('every screen renders in every size and matches its baseline', async () => {

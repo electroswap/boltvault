@@ -30,6 +30,7 @@ import { HardwareService, hardwareNamespace } from './namespaces/hardware'
 import { RemoteSignService, remoteNamespace } from './namespaces/remote'
 import { DappsService, dappsNamespace } from './namespaces/dapps'
 import { ConnectService, connectNamespace } from './namespaces/connect'
+import { StaticsService, flagsNamespace } from './namespaces/statics'
 import { ExploreService, exploreNamespace } from './namespaces/explore'
 import { NftService, nftNamespace } from './namespaces/nft'
 import { LegendsService, legendsNamespace } from './namespaces/legends'
@@ -78,6 +79,11 @@ export interface EngineDeps {
   readonly trezor?: TrezorConnectLike | null
   /** Reown WalletKit on the phone (§5.3); absent elsewhere. */
   readonly walletKit?: WalletKitLike | null
+  /** Which body this is, for the minimum-version flag. */
+  readonly body?: 'extension' | 'mobile'
+  /** Signed statics base URL override (tests); `null` never fetches. */
+  readonly staticsUrl?: string | null
+  readonly staticsPublicKey?: string
 }
 
 export interface Engine {
@@ -113,6 +119,7 @@ export interface Engine {
   readonly remote: RemoteSignService
   readonly dapps: DappsService
   readonly connect: ConnectService
+  readonly statics: StaticsService
   readonly ready: Promise<void>
   dispose(): void
 }
@@ -122,6 +129,7 @@ const sharedMemoryRelay = new MemoryRelay()
 export function createEngine(deps: EngineDeps): Engine {
   const host = new EngineHost()
   const fetchImpl = deps.fetch ?? fetch
+  let staticsRef: StaticsService | null = null
   const settings = new SettingsStore(deps.platform, host.events, deps.os)
   const vault = new VaultManager(deps.platform, host.events, settings, deps.kdf ? { kdf: deps.kdf } : {})
   const approvals = new ApprovalStore(deps.platform, host.events)
@@ -136,6 +144,8 @@ export function createEngine(deps: EngineDeps): Engine {
   const contacts = new ContactsStore(deps.platform, host.events, dek)
   const relayFor = deps.relayFor ?? ((url: string): Relay => (/^https?:\/\//.test(url) ? new HttpRelay(url, fetchImpl, deps.clientKey) : sharedMemoryRelay))
   const sync = new SyncService(deps.platform, host.events, { settings, sites, vault, relayFor })
+  staticsRef = new StaticsService({ platform: deps.platform, bus: host.events, fetch: fetchImpl, clientVersion: deps.clientVersion ?? 'BoltVault/0.1.0', body: deps.body ?? 'extension', ...(deps.staticsUrl ? { baseUrl: deps.staticsUrl } : {}), ...(deps.staticsPublicKey ? { publicKeyHex: deps.staticsPublicKey } : {}) })
+  const statics = staticsRef
   const hardware = new HardwareService({ hid: deps.hid ?? null, ledger: deps.ledger ?? null, trezor: deps.trezor ?? null, vault, bus: host.events, platform: deps.platform })
   const provider = new ProviderService({
     platform: deps.platform,
@@ -153,6 +163,7 @@ export function createEngine(deps: EngineDeps): Engine {
       return out
     },
     clientVersion: deps.clientVersion ?? 'BoltVault/0.1.0',
+    statics: { scamOrigins: () => staticsRef?.scamOrigins() ?? [] },
     fetch: fetchImpl,
     hardware,
     ...(deps.openApproval ? { openApproval: deps.openApproval } : {}),
@@ -168,7 +179,7 @@ export function createEngine(deps: EngineDeps): Engine {
   const scanner = new ActivityScanner({ platform: deps.platform, chains, activity, tokens, vault })
   const holder = new HolderService({ platform: deps.platform, chains, vault })
   const flows = new FlowStore({ platform: deps.platform, bus: host.events, activity })
-  const swap = new SwapService({ platform: deps.platform, chains, tokens, vault, provider, settings, holder, flows })
+  const swap = new SwapService({ statics,  platform: deps.platform, chains, tokens, vault, provider, settings, holder, flows })
   const limit = new LimitService({ platform: deps.platform, bus: host.events, chains, tokens, vault, provider, settings, flows })
   const watchlist = new WatchlistService({ platform: deps.platform, bus: host.events, vault })
   const explore = new ExploreService({ platform: deps.platform, electroswap, tokens, vault, watchlist })
@@ -183,7 +194,7 @@ export function createEngine(deps: EngineDeps): Engine {
   const dapps = new DappsService({ provider, bus: host.events, now: () => deps.platform.now(), random: (n) => deps.platform.random(n) })
   const connect = new ConnectService({ walletKit: deps.walletKit ?? null, dapps, chains, vault, sites, bus: host.events })
   connect.init()
-  const bridge = new BridgeService({ platform: deps.platform, bus: host.events, chains, vault, provider, flows, settings, ...(deps.receiptPollMs !== undefined ? { receiptPollMs: deps.receiptPollMs } : {}) })
+  const bridge = new BridgeService({ statics, platform: deps.platform, bus: host.events, chains, vault, provider, flows, settings, ...(deps.receiptPollMs !== undefined ? { receiptPollMs: deps.receiptPollMs } : {}) })
   watchlist.attach({
     tokens: (chainId) => explore.tokens(chainId),
     collections: (chainId) => explore.collections(chainId),
@@ -257,8 +268,12 @@ export function createEngine(deps: EngineDeps): Engine {
   host.register('remote', remoteNamespace(remote))
   host.register('dapps', dappsNamespace(dapps))
   host.register('connect', connectNamespace(connect))
+  host.register('flags', flagsNamespace(statics))
 
-  const ready = Promise.all([approvals.hydrate(), sites.hydrate(), settings.get(), provider.init(), watchlist.hydrate()]).then(() => undefined)
+  const ready = Promise.all([approvals.hydrate(), sites.hydrate(), settings.get(), provider.init(), watchlist.hydrate(), statics.hydrate()]).then(() => {
+    // Signed flags refresh in the background; nothing waits on the network (§3.7).
+    if (deps.staticsUrl !== null) void statics.refresh().catch(() => undefined)
+  })
   const engine = createEngineClient(createInProcessTransport(host, 'internal'))
 
   return {
@@ -293,6 +308,7 @@ export function createEngine(deps: EngineDeps): Engine {
     remote,
     dapps,
     connect,
+    statics,
     ready,
     dispose: () => {
       vault.dispose()

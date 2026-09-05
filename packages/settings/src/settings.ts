@@ -63,6 +63,7 @@ export function normalizeSettings(
     blockTick: bool('blockTick', DEFAULT_SETTINGS.blockTick),
     sound: bool('sound', DEFAULT_SETTINGS.sound),
     pushEnabled: bool('pushEnabled', DEFAULT_SETTINGS.pushEnabled),
+    crashReports: bool('crashReports', DEFAULT_SETTINGS.crashReports),
     sendWhitelist: bool('sendWhitelist', DEFAULT_SETTINGS.sendWhitelist),
     autoLock,
     displayCurrency,

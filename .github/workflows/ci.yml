@@ -30,6 +30,18 @@ jobs:
       # Live RPC/tokenlist/GraphQL tests are skipped on CI (SKIP_LIVE=1) so the
       # suite never depends on public endpoint availability.
       - run: SKIP_LIVE=1 pnpm test:ci
+      # Supply chain (§3.7): the SBOM ships as an artifact; the audit is reported on every run and reviewed
+      # in the dependency dashboard (Renovate + OSV) — the remaining advisories sit in prebuilt vendor
+      # bundles (Trezor Connect, Expo tooling) that pnpm overrides cannot reach. Critical findings block.
+      - run: pnpm audit --audit-level=critical --prod || (pnpm audit --json > audit.json; exit 1)
+      - run: pnpm audit --json > audit.json || true
+      - run: pnpm sbom
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom-and-audit
+          path: |
+            sbom.cdx.json
+            audit.json
 
   extension:
     name: extension build · Playwright smoke
@@ -45,7 +57,11 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @boltvault/extension build
+      # Reproducible build (§3.7): build twice, the manifests must match; Firefox MV3 builds too.
+      - run: pnpm build:repro
+      - run: cp apps/extension/.output/chrome-mv3.manifest.json /tmp/first.json
+      - run: pnpm build:repro
+      - run: cmp /tmp/first.json apps/extension/.output/chrome-mv3.manifest.json
       - run: pnpm --filter @boltvault/extension exec playwright install --with-deps chromium
       - run: pnpm --filter @boltvault/extension e2e
       - uses: actions/upload-artifact@v4
@@ -54,6 +70,8 @@ jobs:
           name: extension-build-and-screenshots
           path: |
             apps/extension/.output/chrome-mv3
+            apps/extension/.output/chrome-mv3.manifest.json
+            apps/extension/.output/firefox-mv3.manifest.json
             apps/extension/screenshots
           if-no-files-found: ignore
 

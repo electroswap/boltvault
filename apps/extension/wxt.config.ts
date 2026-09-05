@@ -42,7 +42,9 @@ const RNW_DIR = dirname(require.resolve('react-native-web/package.json'))
  */
 export default defineConfig({
   srcDir: '.',
-  manifest: {
+  // Firefox 128+ is MV3 too: an event page instead of a worker, the same CSP (§4.7).
+  manifestVersion: 3,
+  manifest: ({ browser }) => ({
     name: 'BoltVault',
     description: 'The Electroneum wallet and ElectroSwap uber-app.',
     version: '0.1.0',
@@ -54,7 +56,8 @@ export default defineConfig({
       extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
     },
     action: { default_title: 'BoltVault' },
-  },
+    ...(browser === 'firefox' ? { browser_specific_settings: { gecko: { id: 'boltvault@electroswap.io', strict_min_version: '128.0' } } } : {}),
+  }),
   vite: () => ({
     plugins: [react(), noFunctionGlobal()],
     resolve: {
@@ -70,6 +73,7 @@ export default defineConfig({
       __DEV__: JSON.stringify(process.env['NODE_ENV'] !== 'production'),
       'process.env.NODE_ENV': JSON.stringify(process.env['NODE_ENV'] ?? 'production'),
       'process.env.TAMAGUI_TARGET': JSON.stringify('web'),
+      __BUILD_HASH__: JSON.stringify(process.env['BUILD_HASH'] ?? ''),
     },
     optimizeDeps: {
       esbuildOptions: { loader: { '.js': 'jsx' }, resolveExtensions: ['.web.js', '.js', '.ts', '.tsx'] },

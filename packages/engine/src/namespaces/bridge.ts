@@ -33,6 +33,8 @@ export interface BridgeDeps {
   readonly flows: FlowStore
   readonly settings: SettingsStore
   readonly receiptPollMs?: number
+  /** Signed flags (§3.7): the bridge and per-corridor kill-switches. */
+  readonly statics?: { corridorDisabled(fromChainId: number, toChainId: number, symbol: string): boolean }
 }
 
 const DOC: DocSpec<{ items: BridgeStatus[] }> = { key: 'bridge.transfers', version: 1, schema: z.object({ items: z.array(BridgeStatusSchema) }), defaultValue: () => ({ items: [] }) }
@@ -92,7 +94,8 @@ export class BridgeService {
     for (const c of corridorsFrom(fromChainId, token)) {
       if (!settings.enabledChains.includes(c.destination.chainId) && c.destination.chainId !== 52014) continue
       const v = await this.verify(c)
-      out.push({ symbol: c.symbol, fromChainId: c.origin.chainId, toChainId: c.destination.chainId, token: c.origin.token, router: c.origin.router, standard: c.origin.standard, decimals: c.origin.decimals, verified: v.ok, reason: v.reason })
+      const off = this.deps.statics?.corridorDisabled(c.origin.chainId, c.destination.chainId, c.symbol) === true
+      out.push({ symbol: c.symbol, fromChainId: c.origin.chainId, toChainId: c.destination.chainId, token: c.origin.token, router: c.origin.router, standard: c.origin.standard, decimals: c.origin.decimals, verified: v.ok && !off, reason: off ? 'switched off by ElectroSwap (signed flag)' : v.reason })
     }
     return out
   }
@@ -108,6 +111,7 @@ export class BridgeService {
     if (!/^0x[0-9a-fA-F]{40}$/.test(recipient)) return { ...base, problems: ['Enter a full destination address.'] }
     const v = await this.verify(c)
     if (!v.ok) problems.push(`This corridor is switched off: ${v.reason ?? 'verification failed'}.`)
+    if (this.deps.statics?.corridorDisabled(c.origin.chainId, c.destination.chainId, c.symbol)) problems.push('This corridor is switched off right now by a signed flag from ElectroSwap.')
     if (account.kind === 'watch') problems.push('Watch-only — import a key or pair a device to bridge.')
     let amount = 0n
     try {

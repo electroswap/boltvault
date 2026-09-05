@@ -48,6 +48,8 @@ export interface ProviderDeps {
   /** Put a new request in front of the user (the extension opens sign.html). Internal origins never call this. */
   readonly openApproval?: (request: ApprovalRequest) => void
   readonly clientVersion: string
+  /** Signed statics: the scam-origin list for the firewall (§3.6). */
+  readonly statics?: { scamOrigins(): readonly string[] }
   /** Device signers (Ledger over HID from the worker); absent in bodies without one. */
   readonly hardware?: HardwareService
   readonly fetch?: typeof fetch
@@ -368,6 +370,7 @@ export class ProviderService {
       ...(origin === 'internal:swap' ? { expectedFee } : {}),
       ...(origin === 'internal:bridge' ? { bridgeRecipient } : {}),
       originVerified: !this.unverified.has(origin),
+      scamOrigins: d.statics?.scamOrigins() ?? [],
     })
     return assess({ origin, chainId, account, request, context, simulation })
   }

@@ -50,7 +50,7 @@ import type {
   Positions,
   SyncStatus,
   VaultStatus,
- BridgeQuote, BridgeRoute, BridgeStatus, KeystonePending, RemoteRequest, DappSession, WcProposalView, WcSessionView } from './schema'
+ BridgeQuote, BridgeRoute, BridgeStatus, KeystonePending, RemoteRequest, DappSession, WcProposalView, WcSessionView, FlagsView } from './schema'
 
 export type Unsubscribe = () => void
 
@@ -323,6 +323,12 @@ export interface ConnectNamespace {
   disconnect(input: { topic: string }): Promise<void>
 }
 
+/** Signed flags (§3.7): kill-switches, the minimum version, a notice; only ever disable. */
+export interface FlagsNamespace {
+  get(): Promise<FlagsView>
+  refresh(): Promise<{ flags: 'updated' | 'kept' | 'refused'; scam: 'updated' | 'kept' | 'refused' }>
+}
+
 /** Remote sign (§6, §8.16): what this device is waiting on, and what paired devices are asking it to sign. */
 export interface RemoteNamespace {
   list(): Promise<{ outgoing: RemoteRequest[]; incoming: RemoteRequest[] }>
@@ -385,6 +391,7 @@ export interface WalletEngine {
   readonly remote: RemoteNamespace
   readonly dapps: DappsNamespace
   readonly connect: ConnectNamespace
+  readonly flags: FlagsNamespace
   readonly events: EngineEvents
 }
 

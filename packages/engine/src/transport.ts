@@ -10,7 +10,7 @@
 import { EngineError } from './errors'
 import type { EngineHost, SenderClass } from './host'
 import type { EngineEvent } from './schema'
-import { parseEngineMessage, WIRE_VERSION, type EngineRequest, type EngineResponse } from './wire'
+import { hasRawBytes, parseEngineMessage, refusedRawBytes, WIRE_VERSION, type EngineRequest, type EngineResponse } from './wire'
 
 export interface EngineTransport {
   call(ns: string, method: string, arg: unknown): Promise<unknown>
@@ -113,13 +113,15 @@ export function serveChannel(host: EngineHost, channel: MessageChannelLike, send
     if (!msg || msg.kind !== 'request') return
     void host.dispatch(msg, sender).then((res: EngineResponse) => {
       try {
-        channel.post(res)
+        // Defence in depth (§12): nothing shaped like key material leaves the engine over the UI channel.
+        channel.post(hasRawBytes(res) ? refusedRawBytes(msg.id) : res)
       } catch {
         // channel went away mid-flight; nothing to do
       }
     })
   })
   const offEvents = host.events.subscribe((event) => {
+    if (hasRawBytes(event)) return
     try {
       channel.post({ v: WIRE_VERSION, kind: 'event', event })
     } catch {
