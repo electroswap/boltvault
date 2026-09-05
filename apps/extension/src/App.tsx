@@ -3,13 +3,21 @@ import { useEffect, useMemo, useState } from 'react'
 import { SwapView } from './SwapView'
 import { useBlockHeartbeat, usePortfolio, type SafeRow } from './data-layer'
 import {
+  type VaultAccount,
+  emptyIdentity,
+  currentAccount,
+  switchAccount,
+  type IdentityState,
+} from './identity'
+import { Onboarding } from './Onboarding'
+import { AccountSwitcher } from './AccountSwitcher'
+import {
   IconHome,
   IconSwap,
   IconActivity,
   IconSettings,
   IconFlask,
   IconScan,
-  IconBolt,
   type IconProps,
 } from '@boltvault/design'
 
@@ -130,31 +138,69 @@ export default function App() {
   const [tab, setTab] = useState<'home' | 'swap' | 'activity' | 'settings'>('home')
   const [selectedBar, setSelectedBar] = useState<string>('ETN')
   const [account, setAccount] = useState<string | null>(null)
+  const [vaultState, setVaultState] = useState<{ has: boolean; unlocked: boolean } | null>(null)
+  const [identity, setIdentity] = useState<IdentityState>(emptyIdentity)
+
+  // D: learn vault + account state from the SW on mount (and after onboarding).
+  useEffect(() => {
+    const b = (globalThis as any).browser
+    if (!b?.runtime?.sendMessage) return
+    void b.runtime.sendMessage({ type: 'bv:vault:state' }).then((r: any) => {
+      setVaultState({ has: !!r?.hasVault, unlocked: !!r?.unlocked })
+    }).catch(() => {})
+    void b.runtime.sendMessage({ type: 'bv:accounts' }).then((r: any) => {
+      const addrs: string[] = r?.accounts ?? []
+      if (addrs.length > 0) {
+        setIdentity((prev) => {
+          const accounts: VaultAccount[] = addrs.map((a, i) => ({ id: `acct-${i}`, label: i === 0 ? 'main' : `Account ${i + 1}`, address: a, kind: 'hd' }))
+          const current = prev.accounts[0] ?? null
+          return { accounts, currentAccountId: current?.id ?? 'acct-0' }
+        })
+        const firstAddr = addrs[0]
+        if (firstAddr) setAccount(firstAddr)
+      }
+    }).catch(() => {})
+  }, [])
 
   // E0b: the block heartbeat drives the filament + head; the portfolio hook
   // drives the total + bus bars with last-good + refresh (ETN 15s).
   const { state: hb } = useBlockHeartbeat(52014)
   const pf = usePortfolio(52014, account ?? '', { client: undefined })
 
-  // Learn the current account from the SW once (first address after unlock).
-  useEffect(() => {
-    const b = (globalThis as any).browser
-    if (b?.runtime?.sendMessage) {
-      void b.runtime
-        .sendMessage({ type: 'bv:accounts' })
-        .then((r: any) => {
-          const first = r?.accounts?.[0]
-          if (typeof first === 'string' && first) setAccount(first)
-        })
-        .catch(() => {})
-    }
-  }, [])
-
   const total = pf.data?.pricedTotalUsd ?? null
   const bars: { symbol: string; share: number }[] = useMemo(() => {
     const rows: SafeRow[] = pf.data ? [...(pf.data.native ? [pf.data.native] : []), ...pf.data.rows] : []
     return rows.map((r) => ({ symbol: r.symbol, share: r.share }))
   }, [pf.data])
+
+  const onboarded = vaultState?.has ?? false
+  const onSwitch = (id: string) => {
+    setIdentity((s) => switchAccount(s, id))
+    const a = identity.accounts.find((x) => x.id === id)
+    if (a) setAccount(a.address)
+  }
+
+  // D: before onboarding, the whole chamber is the onboarding flow.
+  if (!onboarded) {
+    return (
+      <Onboarding
+        onDone={() => {
+          // After onboarding, re-read vault + accounts from the SW.
+          const b = (globalThis as any).browser
+          if (b?.runtime?.sendMessage) {
+            void b.runtime.sendMessage({ type: 'bv:vault:state' }).then((r: any) => {
+              setVaultState({ has: !!r?.hasVault, unlocked: !!r?.unlocked })
+            }).catch(() => {})
+            void b.runtime.sendMessage({ type: 'bv:accounts' }).then((r: any) => {
+              const addrs: string[] = r?.accounts ?? []
+              const firstAddr = addrs[0]
+              if (firstAddr) setAccount(firstAddr)
+            }).catch(() => {})
+          }
+        }}
+      />
+    )
+  }
 
   return (
     <div
@@ -175,10 +221,12 @@ export default function App() {
           padding: '12px var(--bv-inset)',
         }}
       >
-        <span data-testid="account" style={{ color: 'var(--bv-ink)', fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <IconBolt size={16} />
-          main ▾
-        </span>
+        <AccountSwitcher
+          accounts={identity.accounts}
+          currentId={identity.currentAccountId}
+          onSwitch={onSwitch}
+          testId="account"
+        />
         <span style={{ color: 'var(--bv-mute)', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
           <IconScan size={16} />
         </span>
