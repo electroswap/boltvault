@@ -107,16 +107,22 @@ export class ApprovalStore {
     return req
   }
 
-  /** Resolves when the request is decided or expires; false on reject/expiry. */
-  waitFor(id: string): Promise<boolean> {
+  /** Resolves when the request is decided or expires; `approved: false` on reject/expiry. */
+  async waitFor(id: string): Promise<{ approved: boolean; data?: unknown }> {
     const existing = this.get(id)
-    if (!existing) return Promise.reject(new EngineError('not_found', `no approval request ${id}`))
-    if (existing.status !== 'pending') return Promise.resolve(existing.status === 'approved')
-    return new Promise<boolean>((resolve) => {
+    if (!existing) throw new EngineError('not_found', `no approval request ${id}`)
+    if (existing.status !== 'pending') return { approved: existing.status === 'approved', data: existing.decisionData }
+    const approved = await new Promise<boolean>((resolve) => {
       const ws = this.waiters.get(id) ?? []
       ws.push(resolve)
       this.waiters.set(id, ws)
     })
+    return { approved, data: this.byId.get(id)?.decisionData }
+  }
+
+  /** A pending request matching a predicate (re-attach after a worker restart). */
+  findPending(predicate: (r: ApprovalRequest) => boolean): ApprovalRequest | undefined {
+    return this.list().find(predicate)
   }
 
   /** Record the one decision for a request. */
@@ -126,11 +132,16 @@ export class ApprovalStore {
     if (!req) throw new EngineError('not_found', `no approval request ${decision.id}`)
     if (req.status === 'expired') throw new EngineError('expired', 'this request has expired')
     if (req.status !== 'pending') throw new EngineError('already_decided', 'this request was already decided')
-    const decided: ApprovalRequest = { ...req, status: decision.approve ? 'approved' : 'rejected' }
+    const decided: ApprovalRequest = { ...req, status: decision.approve ? 'approved' : 'rejected', ...(decision.data !== undefined ? { decisionData: decision.data } : {}) }
     this.byId.set(req.id, decided)
     this.resolveWaiters(req.id, decision.approve)
     await this.persist()
     return decided
+  }
+
+  /** Reject every pending request for an origin (tab closed, site disconnected). */
+  async rejectAll(predicate: (r: ApprovalRequest) => boolean): Promise<void> {
+    for (const r of this.list().filter(predicate)) await this.decide({ id: r.id, approve: false })
   }
 
   /** Drop decided/expired requests older than the TTL (housekeeping). */

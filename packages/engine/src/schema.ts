@@ -76,6 +76,10 @@ export const SiteViewSchema = z.object({
   chainId: z.number().int().positive(),
   accountId: AccountIdSchema.nullable(),
   connected: z.boolean(),
+  connectedAt: z.number().int().nonnegative().nullable(),
+  lastUsed: z.number().int().nonnegative().nullable(),
+  title: z.string().nullable(),
+  icon: z.string().nullable(),
 })
 export type SiteView = z.infer<typeof SiteViewSchema>
 
@@ -132,12 +136,15 @@ export const ApprovalRequestSchema = z.object({
   createdAt: z.number().int().nonnegative(),
   expiresAt: z.number().int().nonnegative(),
   status: ApprovalStatusSchema,
+  /** What the deciding UI attached (e.g. the account chosen on a Connect sheet). */
+  decisionData: z.unknown().optional(),
 })
 export type ApprovalRequest = z.infer<typeof ApprovalRequestSchema>
 
 export const ApprovalDecisionSchema = z.object({
   id: z.string().regex(/^[0-9a-f]{32}$/),
   approve: z.boolean(),
+  data: z.unknown().optional(),
 })
 export type ApprovalDecision = z.infer<typeof ApprovalDecisionSchema>
 

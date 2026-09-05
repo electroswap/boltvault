@@ -10,12 +10,14 @@ import { ActivityStore } from './activityStore'
 import { ApprovalStore } from './approvals'
 import { createEngineClient } from './client'
 import type { WalletEngine } from './contract'
+import { EngineError } from './errors'
 import { EngineHost } from './host'
-import { chainsNamespace, ChainsService, rpcHeadSource, type HeadSource } from './namespaces/chains'
+import { chainsNamespace, ChainsService, type HeadSource } from './namespaces/chains'
+import { ProviderService } from './namespaces/provider'
 import { SitesService, sitesNamespace } from './namespaces/sites'
 import { HttpRelay, MemoryRelay, SyncService, syncNamespace, type Relay } from './namespaces/sync'
 import { accountsNamespace, VaultManager, vaultNamespace } from './namespaces/vault'
-import { AccountIdSchema, ApprovalDecisionSchema, SettingsSchema, type ApprovalDecision, type Settings } from './schema'
+import { AccountIdSchema, ApprovalDecisionSchema, SettingsSchema, type ApprovalDecision, type ApprovalRequest, type Settings } from './schema'
 import { SettingsStore } from './settingsStore'
 import { createInProcessTransport } from './transport'
 
@@ -29,6 +31,12 @@ export interface EngineDeps {
   readonly relayFor?: (relayUrl: string) => Relay
   /** Client identifier sent to the ElectroSwap relay (§9.1). */
   readonly clientKey?: string
+  /** Put a dApp approval in front of the user (the extension opens sign.html). */
+  readonly openApproval?: (request: ApprovalRequest) => void
+  /** Reported as web3_clientVersion. */
+  readonly clientVersion?: string
+  /** Receipt polling cadence override (tests). */
+  readonly receiptPollMs?: number
 }
 
 export interface Engine {
@@ -42,6 +50,7 @@ export interface Engine {
   readonly settings: SettingsStore
   readonly activity: ActivityStore
   readonly sync: SyncService
+  readonly provider: ProviderService
   readonly ready: Promise<void>
   dispose(): void
 }
@@ -54,14 +63,27 @@ export function createEngine(deps: EngineDeps): Engine {
   const vault = new VaultManager(deps.platform, host.events, settings, deps.kdf ? { kdf: deps.kdf } : {})
   const approvals = new ApprovalStore(deps.platform, host.events)
   const sites = new SitesService(deps.platform, host.events)
-  const chains = new ChainsService(deps.platform, host.events, deps.heads ?? rpcHeadSource)
+  const chains = new ChainsService(deps.platform, host.events, deps.heads)
   const activity = new ActivityStore(deps.platform, host.events, async () => {
     const hex = await deps.platform.storage.session.get('vault.dek')
-    if (hex === null) throw new (await import('./errors')).EngineError('locked', 'the vault is locked')
+    if (hex === null) throw new EngineError('locked', 'the vault is locked')
     return Uint8Array.from(hex.match(/.{2}/g)?.map((b) => parseInt(b, 16)) ?? [])
   })
   const relayFor = deps.relayFor ?? ((url: string): Relay => (/^https?:\/\//.test(url) ? new HttpRelay(url, fetch, deps.clientKey) : sharedMemoryRelay))
   const sync = new SyncService(deps.platform, host.events, { settings, sites, vault, relayFor })
+  const provider = new ProviderService({
+    platform: deps.platform,
+    bus: host.events,
+    vault,
+    sites,
+    chains,
+    approvals,
+    settings,
+    activity,
+    clientVersion: deps.clientVersion ?? 'BoltVault/0.1.0',
+    ...(deps.openApproval ? { openApproval: deps.openApproval } : {}),
+    ...(deps.receiptPollMs !== undefined ? { receiptPollMs: deps.receiptPollMs } : {}),
+  })
 
   vault.init()
   host.events.subscribe((e) => {
@@ -101,8 +123,24 @@ export function createEngine(deps: EngineDeps): Engine {
   })
   host.register('sync', syncNamespace(sync))
 
-  const ready = Promise.all([approvals.hydrate(), sites.hydrate(), settings.get()]).then(() => undefined)
+  const ready = Promise.all([approvals.hydrate(), sites.hydrate(), settings.get(), provider.init()]).then(() => undefined)
   const engine = createEngineClient(createInProcessTransport(host, 'internal'))
 
-  return { host, engine, vault, approvals, sites, chains, settings, activity, sync, ready, dispose: () => vault.dispose() }
+  return {
+    host,
+    engine,
+    vault,
+    approvals,
+    sites,
+    chains,
+    settings,
+    activity,
+    sync,
+    provider,
+    ready,
+    dispose: () => {
+      vault.dispose()
+      provider.dispose()
+    },
+  }
 }

@@ -8,11 +8,12 @@ import { createEngine, type Engine, type HeadSource, type PortfolioSnapshot } fr
 import { createMemoryPlatform } from '@boltvault/platform/memory'
 import { z } from 'zod'
 
-export type FixtureScenario = 'fresh' | 'locked' | 'unlocked' | 'funded'
+export type FixtureScenario = 'fresh' | 'locked' | 'unlocked' | 'funded' | 'connect' | 'sign'
 
 const FIXED_NOW = 1_757_000_000_000
 const PASSWORD = 'fixture password'
 const MNEMONIC = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
+const SITE = 'https://app.electroswap.io'
 
 const heads: HeadSource = { blockNumber: async (chainId) => BigInt(chainId === 52014 ? 15_212_345 : 21_000_000) }
 
@@ -31,12 +32,45 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
   const engine = createEngine({ platform, heads })
   await engine.ready
   if (scenario !== 'fresh') {
-    const { seedId } = await engine.engine.vault.import({ mnemonic: MNEMONIC, password: PASSWORD })
-    if (scenario === 'funded') {
+    const { seedId, accounts } = await engine.engine.vault.import({ mnemonic: MNEMONIC, password: PASSWORD })
+    const account = accounts[0]
+    if (scenario === 'funded' || scenario === 'connect' || scenario === 'sign') {
       // A mature account: the backup quiz has been passed, so no gate plate on Home.
       const words = MNEMONIC.split(' ')
       const quiz = await engine.engine.vault.backupQuiz({ seedId })
       await engine.engine.vault.confirmBackup({ seedId, answers: quiz.positions.map((position) => ({ position, word: words[position - 1] ?? '' })) })
+    }
+    if (scenario === 'funded' && account) {
+      await engine.sites.registry.connect(SITE, { accountId: account.id, chainId: 52014, accounts: [account.address], now: FIXED_NOW - 86_400_000 })
+      engine.sites.emit()
+    }
+    if (scenario === 'connect') {
+      await engine.approvals.create({ kind: 'connect', origin: SITE, accountId: null, chainId: 52014, payload: { kind: 'connect', requestedChainId: 52014, reconnect: false, firstTime: true, clientRequestId: 'fixture-connect' } })
+    }
+    if (scenario === 'sign' && account) {
+      await engine.approvals.create({
+        kind: 'send_transaction',
+        origin: SITE,
+        accountId: account.id,
+        chainId: 52014,
+        payload: {
+          kind: 'send_transaction',
+          tx: { from: account.address, to: '0x1111111111111111111111111111111111111111', value: '0x0', data: '0x095ea7b3', nonce: 4, gas: '0xea60', type: 'legacy', gasPrice: '0x3b9aca00' },
+          fee: { gasLimit: '60000', maxTotalWei: '60000000000000', symbol: 'ETN' },
+          assessment: {
+            severity: 'danger',
+            rules: [
+              { code: 'APPROVE_UNKNOWN_SPENDER', severity: 'danger', title: 'Allowance for an unknown contract', detail: 'This lets 0x2222…2222 spend an unlimited amount of 0x1111…1111. BoltVault does not recognise the spender.' },
+              { code: 'SIM_INCOMPLETE', severity: 'warn', title: 'Preview shows no balance changes', detail: 'This network cannot preview what moves. Only the revert check ran.' },
+            ],
+            statements: [{ text: 'Allow 0x2222…2222 to move an unlimited amount of 0x1111…1111', tone: 'warn' }],
+            changes: [],
+            presentation: { delayMs: 1500, typedConfirmation: 'app.electroswap.io', blocked: false },
+            simulationMode: 'estimate',
+          },
+          clientRequestId: 'fixture-sign',
+        },
+      })
     }
     if (scenario === 'locked') await engine.engine.vault.lock()
   }
@@ -55,4 +89,4 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
   return engine
 }
 
-export const FIXTURE_SCENARIOS: readonly FixtureScenario[] = ['fresh', 'locked', 'unlocked', 'funded']
+export const FIXTURE_SCENARIOS: readonly FixtureScenario[] = ['fresh', 'locked', 'unlocked', 'funded', 'connect', 'sign']

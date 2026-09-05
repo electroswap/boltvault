@@ -1,0 +1,94 @@
+/**
+ * Known contracts by (chainId, address) — never by address alone (§2.7 S6:
+ * the Avalanche collateral router shares an address with the ETN synthetic).
+ * Roles feed the spender rules ("known spender") and the statements
+ * ("ElectroSwap Universal Router" instead of 0x2c12…).
+ */
+import { ELECTRONEUM_ADDRESSES } from '@boltvault/chains'
+import type { Hex } from './types'
+
+export type ContractRole =
+  | 'router'
+  | 'permit2'
+  | 'marketplace'
+  | 'conduit'
+  | 'farm'
+  | 'locker'
+  | 'launchpad'
+  | 'limit_orders'
+  | 'position_manager'
+  | 'wrapped_native'
+  | 'warp_token'
+  | 'multicall'
+  | 'fee_sink'
+  | 'dividends'
+  | 'nft'
+
+export interface KnownContract {
+  readonly name: string
+  readonly role: ContractRole
+}
+
+const key = (chainId: number, address: string): string => `${chainId}:${address.toLowerCase()}`
+
+const KNOWN = new Map<string, KnownContract>()
+
+function add(chainId: number, address: string | null, name: string, role: ContractRole): void {
+  if (!address) return
+  KNOWN.set(key(chainId, address), { name, role })
+}
+
+for (const chainId of [52014, 5201420] as const) {
+  const a = ELECTRONEUM_ADDRESSES[chainId]
+  add(chainId, a.universalRouter, 'ElectroSwap Universal Router', 'router')
+  add(chainId, a.swapRouter02, 'ElectroSwap SwapRouter02', 'router')
+  add(chainId, a.v2Router02, 'ElectroSwap V2 Router', 'router')
+  add(chainId, a.permit2, 'Permit2', 'permit2')
+  add(chainId, a.seaport15, 'ElectroSwap NFT marketplace', 'marketplace')
+  add(chainId, a.yieldFarm, 'ElectroSwap yield farm', 'farm')
+  add(chainId, a.multicall3, 'Multicall3', 'multicall')
+  add(chainId, a.wetn, 'Wrapped ETN', 'wrapped_native')
+  add(chainId, a.usdc, 'Hyperlane USDC', 'warp_token')
+  add(chainId, a.usdt, 'Hyperlane USDT', 'warp_token')
+}
+// Mainnet-only addresses from the master plan §8.13 spender registry.
+add(52014, '0xcA11bde05977b3631167028862bE2a173976CA11', 'Multicall3', 'multicall')
+add(52014, '0x2941Cba4DD14B2C67b0802107f23144c70ED680F', 'ElectroSwap marketplace conduit', 'conduit')
+add(52014, '0x16ca736c8B181772009e598F37f137e9cD36AFAE', 'ElectroSwap V2 liquidity locker', 'locker')
+add(52014, '0xfdB0d62Fc929fD53D266B969Bfe4250b205D0899', 'ElectroSwap V3 liquidity locker', 'locker')
+add(52014, '0x08DbA509E323BCEf07752D1EccF880756e205669', 'ElectroSwap launchpad', 'launchpad')
+add(52014, '0xA29BAdAee7086e65277497AC6Af65579C7cf0101', 'ElectroSwap launchpad referrals', 'launchpad')
+add(52014, '0x5911BE1AE831248883F84891fe798b52940a8721', 'ElectroSwap limit orders', 'limit_orders')
+add(52014, '0x31cbb613D14cc85Cf3A8889007562E4B5cE9518b', 'Electric Legends', 'nft')
+add(52014, '0xc4065B310d64a02Ac4BF43CFd35C5Fe1A42811ea', 'Electric Legends dividends', 'dividends')
+add(5201420, '0xac3497017c8Af03005185Fc7760041A4bCFe19cd', 'Electric Legends', 'nft')
+add(5201420, '0x084BA4Db2EBbf3BB3b2b6D5C988eac8aB593a384', 'Electric Legends dividends', 'dividends')
+// Canonical Permit2 on the other chains.
+for (const chainId of [1, 56, 8453, 42161, 10, 137, 43114, 59144, 130]) {
+  add(chainId, '0x000000000022D473030F116dDEE9F6B43aC78BA3', 'Permit2', 'permit2')
+  add(chainId, '0xcA11bde05977b3631167028862bE2a173976CA11', 'Multicall3', 'multicall')
+}
+
+export function knownContract(chainId: number, address: string | null | undefined): KnownContract | null {
+  if (!address) return null
+  return KNOWN.get(key(chainId, address)) ?? null
+}
+
+/** A spender the wallet treats as trusted for approvals and permits. */
+export function isKnownSpender(chainId: number, address: string): boolean {
+  const c = knownContract(chainId, address)
+  if (!c) return false
+  return c.role === 'router' || c.role === 'permit2' || c.role === 'marketplace' || c.role === 'conduit' || c.role === 'farm' || c.role === 'locker' || c.role === 'launchpad' || c.role === 'limit_orders' || c.role === 'position_manager'
+}
+
+export function permit2Address(chainId: number): Hex | null {
+  for (const [k, v] of KNOWN) {
+    if (v.role === 'permit2' && k.startsWith(`${chainId}:`)) return k.slice(k.indexOf(':') + 1) as Hex
+  }
+  return null
+}
+
+/** Register a contract at runtime (custom tokens, signed spender lists §9.4). */
+export function registerKnownContract(chainId: number, address: string, contract: KnownContract): void {
+  KNOWN.set(key(chainId, address), contract)
+}

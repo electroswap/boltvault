@@ -39,6 +39,10 @@ const CASES: Array<{ screen: string; scenario: string; sizes: Array<keyof typeof
   { screen: 'backup', scenario: 'unlocked', sizes: ['tab', 'mobile'] },
   { screen: 'security', scenario: 'funded', sizes: ['popup', 'tab'] },
   { screen: 'devices', scenario: 'funded', sizes: ['popup', 'mobile'] },
+  // M3: the signing sheet (connect and a danger transaction) and connected sites.
+  { screen: 'sign', scenario: 'connect', sizes: ['popup', 'mobile'] },
+  { screen: 'sign', scenario: 'sign', sizes: ['popup', 'tab', 'mobile'] },
+  { screen: 'sites', scenario: 'funded', sizes: ['popup'] },
 ]
 
 test('every screen renders in every size and matches its baseline', async () => {

@@ -89,6 +89,10 @@ export interface SitesNamespace {
 export interface ChainsNamespace {
   list(): Promise<ChainView[]>
   head(input: { chainId: number }): Promise<ChainHead>
+  /** User RPC overrides by chain id (Settings › Networks). */
+  rpcs(): Promise<Record<string, { url: string; trace?: string }>>
+  /** Set (url) or clear (null) a chain's RPC; validated by eth_chainId. */
+  setRpc(input: { chainId: number; url: string | null; trace?: string | null }): Promise<void>
 }
 
 export interface ApprovalsNamespace {

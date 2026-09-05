@@ -56,6 +56,12 @@ importers:
       '@boltvault/platform':
         specifier: workspace:*
         version: link:../../packages/platform
+      '@boltvault/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@boltvault/security':
+        specifier: workspace:*
+        version: link:../../packages/security
       '@boltvault/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -84,6 +90,9 @@ importers:
         specifier: ^7.13.2
         version: 7.13.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
     devDependencies:
+      '@boltvault/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
       '@playwright/test':
         specifier: ^1.63.0
         version: 1.63.0
@@ -108,6 +117,9 @@ importers:
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
+      viem:
+        specifier: ^2.56.3
+        version: 2.56.3(typescript@5.9.3)(zod@3.25.76)
       vite:
         specifier: ^7.1.0
         version: 7.3.6(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.23.13)(yaml@2.9.0)
@@ -377,9 +389,12 @@ importers:
       '@boltvault/platform':
         specifier: workspace:*
         version: link:../platform
-      '@boltvault/provider-protocol':
+      '@boltvault/protocol':
         specifier: workspace:*
-        version: link:../provider-protocol
+        version: link:../protocol
+      '@boltvault/security':
+        specifier: workspace:*
+        version: link:../security
       '@boltvault/settings':
         specifier: workspace:*
         version: link:../settings
@@ -399,6 +414,9 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
+      '@boltvault/testing':
+        specifier: workspace:*
+        version: link:../testing
       '@types/node':
         specifier: ^22.20.1
         version: 22.20.1
@@ -536,7 +554,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
-  packages/provider-protocol:
+  packages/protocol:
     dependencies:
       '@boltvault/chains':
         specifier: workspace:*
@@ -557,6 +575,9 @@ importers:
       '@boltvault/chains':
         specifier: workspace:*
         version: link:../chains
+      viem:
+        specifier: ^2.56.3
+        version: 2.56.3(typescript@5.9.3)(zod@3.25.76)
     devDependencies:
       typescript:
         specifier: ^5.6.3
@@ -6862,9 +6883,7 @@ snapshots:
       metro-runtime: 0.84.6
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-color@2.1.0': {}
 

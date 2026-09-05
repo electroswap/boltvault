@@ -19,7 +19,7 @@ export interface PasskeyProvider {
 }
 
 export interface UiHost {
-  readonly body: 'extension-popup' | 'extension-tab' | 'mobile' | 'harness'
+  readonly body: 'extension-popup' | 'extension-tab' | 'extension-sign' | 'mobile' | 'harness'
   /** True when secrets (seed words, exports) may render in this surface. */
   readonly secretsAllowed: boolean
   /** Open a screen in a surface where secrets are allowed (the extension tab). */
@@ -28,6 +28,10 @@ export interface UiHost {
   scanQr?(): Promise<string>
   /** The sync relay for this build (§9.5). */
   readonly relayUrl: string
+  /** The approval window closes itself after a decision (§3.5). */
+  closeWindow?(): void
+  /** Fires on window focus/resize so the approval primary can go inert for 600 ms (§3.5). */
+  onWindowFocus?(listener: () => void): () => void
 }
 
 const unsupported: PasskeyProvider = {

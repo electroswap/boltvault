@@ -1,0 +1,527 @@
+/**
+ * ProviderService — dApp traffic (master plan §4.6, §3.3, §3.4).
+ *
+ * A content-script Port (or, later, a WebView / WalletConnect transport) is
+ * served here: every request runs through `RpcFlow` with an `RpcContext`
+ * backed by the engine. Anything that needs a human becomes an
+ * `ApprovalRequest` whose payload carries the firewall's assessment; the
+ * decision arrives from whichever surface rendered it (sign.html, the popup,
+ * the mobile sheet). Signing happens here, with the key read from the vault
+ * for the duration of one signature. Transactions are written to Activity
+ * before broadcast. A re-sent request (worker restart) re-attaches to its
+ * pending approval by `clientRequestId`, and a re-executed transaction is
+ * re-signed with the same prepared fields, so the raw bytes — and the hash —
+ * are identical.
+ */
+import { getChain } from '@boltvault/chains'
+import type { Platform } from '@boltvault/platform'
+import { RPC, RpcError, RpcFlow, hexChainId, isProviderPortMessage, type ApprovalIntent, type ProviderEvent, type RpcContext, type TxParams } from '@boltvault/protocol'
+import { assess, emptyContext, estimateSimulation, NO_SIMULATION, parseTypedData, decodeMessage, simulationFromTrace, type Assessment, type AssessmentContext, type SignRequest, type Simulation, type TraceFrame } from '@boltvault/security'
+import type { Hex } from 'viem'
+import { privateKeyToAccount } from 'viem/accounts'
+import type { ActivityStore } from '../activityStore'
+import { ConnectDecisionDataSchema, type ApprovalPayload, type AssessmentView, type PreparedTx } from '../approvalPayloads'
+import type { ApprovalStore } from '../approvals'
+import { EngineError } from '../errors'
+import type { EventBus } from '../host'
+import type { ActivityEntry, ApprovalRequest } from '../schema'
+import type { SettingsStore } from '../settingsStore'
+import type { MessageChannelLike } from '../transport'
+import type { ChainsService } from './chains'
+import type { SitesService } from './sites'
+import type { VaultManager } from './vault'
+
+export interface ProviderDeps {
+  readonly platform: Platform
+  readonly bus: EventBus
+  readonly vault: VaultManager
+  readonly sites: SitesService
+  readonly chains: ChainsService
+  readonly approvals: ApprovalStore
+  readonly settings: SettingsStore
+  readonly activity: ActivityStore
+  /** Put a new request in front of the user (the extension opens sign.html). Internal origins never call this. */
+  readonly openApproval?: (request: ApprovalRequest) => void
+  readonly clientVersion: string
+  readonly fetch?: typeof fetch
+  /** Receipt polling cadence; defaults to the chain's block time. */
+  readonly receiptPollMs?: number
+}
+
+export interface PortInfo {
+  readonly tabId?: number
+  readonly frameId?: number
+}
+
+const HEAD_POLL_MS = 5_000
+
+export class ProviderService {
+  private readonly flow: RpcFlow
+  private readonly ports = new Map<string, Set<(event: ProviderEvent) => void>>()
+  private readonly headPolls = new Map<number, { timer: ReturnType<typeof setInterval>; subs: Map<string, { origin: string; id: Hex }> }>()
+
+  constructor(private readonly deps: ProviderDeps) {
+    this.flow = new RpcFlow(this.context())
+    deps.sites.onChange((change) => {
+      if (change.kind === 'disconnected') {
+        void this.flow.disconnected(change.origin)
+        void deps.approvals.rejectAll((r) => r.origin === change.origin)
+      } else this.flow.chainChanged(change.origin, change.chainId)
+    })
+  }
+
+  /** Serve one dApp channel. The origin comes from the transport, never from a message. */
+  serve(channel: MessageChannelLike, origin: string, _info: PortInfo = {}): () => void {
+    const onEvent = (event: ProviderEvent): void => {
+      try {
+        channel.post({ kind: 'event', event: event.event, payload: event.payload })
+      } catch {
+        // gone
+      }
+    }
+    const set = this.ports.get(origin) ?? new Set()
+    set.add(onEvent)
+    this.ports.set(origin, set)
+    const offMessage = channel.onMessage((raw) => {
+      if (!isProviderPortMessage(raw) || raw.kind !== 'request') return
+      const clientRequestId = `${origin}#${raw.session ?? 'nosession'}#${raw.id}`
+      void this.flow
+        .request(origin, raw.method, raw.params, clientRequestId)
+        .then((result) => channel.post({ kind: 'response', id: raw.id, result: result ?? null }))
+        .catch((err: unknown) => {
+          const e = RpcError.from(err)
+          try {
+            channel.post({ kind: 'response', id: raw.id, error: e.toPayload() })
+          } catch {
+            // gone
+          }
+        })
+    })
+    const stop = (): void => {
+      offMessage()
+      set.delete(onEvent)
+      if (set.size === 0) this.ports.delete(origin)
+    }
+    const offDisconnect = channel.onDisconnect(stop)
+    return () => {
+      stop()
+      offDisconnect()
+    }
+  }
+
+  isPending(origin: string): boolean {
+    return this.flow.isPending(origin)
+  }
+
+  dispose(): void {
+    this.flow.dispose()
+    for (const p of this.headPolls.values()) clearInterval(p.timer)
+    this.headPolls.clear()
+  }
+
+  // ---- RpcContext -----------------------------------------------------------------
+
+  private context(): RpcContext {
+    const d = this.deps
+    return {
+      sites: d.sites.registry,
+      now: () => d.platform.now(),
+      clientVersion: d.clientVersion,
+      settings: {
+        get ethSignEnabled() {
+          return ethSignEnabledSync
+        },
+      },
+      knownChain: (chainId) => d.chains.known(chainId),
+      session: async (origin) => {
+        const row = d.sites.registry.get(origin)
+        if (!row?.connected) return null
+        const status = await d.vault.status()
+        if (!status.unlocked) return null
+        const account = (await d.vault.accounts()).find((a) => a.id === row.accountId)
+        if (!account) {
+          await d.sites.disconnect(origin)
+          return null
+        }
+        return { accountId: account.id, addresses: [account.address] }
+      },
+      executeSafe: (chainId, method, params) => d.chains.rpc(chainId, method, params),
+      approve: (intent) => this.approve(intent),
+      emit: (origin, event) => {
+        for (const l of this.ports.get(origin) ?? []) l(event)
+      },
+      subscribeHeads: (origin, chainId, id) => this.subscribeHeads(origin, chainId, id),
+    }
+  }
+
+  /** Settings are async; the flow reads a mirror kept current by the settings event. */
+  private ethSignMirror = false
+
+  async init(): Promise<void> {
+    const s = await this.deps.settings.get()
+    ethSignEnabledSync = s.ethSignEnabled
+    this.ethSignMirror = s.ethSignEnabled
+    this.deps.bus.subscribe((e) => {
+      if (e.type === 'settings.changed') {
+        ethSignEnabledSync = e.settings.ethSignEnabled
+        this.ethSignMirror = e.settings.ethSignEnabled
+      }
+    })
+  }
+
+  private subscribeHeads(origin: string, chainId: number, id: Hex): () => void {
+    let poll = this.headPolls.get(chainId)
+    if (!poll) {
+      const subs = new Map<string, { origin: string; id: Hex }>()
+      const timer = setInterval(() => {
+        void this.deps.chains.head(chainId).then((head) => {
+          for (const s of subs.values()) {
+            for (const l of this.ports.get(s.origin) ?? []) {
+              l({ event: 'message', payload: { type: 'eth_subscription', data: { subscription: s.id, result: { number: `0x${BigInt(head.blockNumber).toString(16)}` } } } })
+            }
+          }
+        }, () => undefined)
+      }, HEAD_POLL_MS)
+      poll = { timer, subs }
+      this.headPolls.set(chainId, poll)
+    }
+    const key = `${origin}:${id}`
+    poll.subs.set(key, { origin, id })
+    return () => {
+      const p = this.headPolls.get(chainId)
+      if (!p) return
+      p.subs.delete(key)
+      if (p.subs.size === 0) {
+        clearInterval(p.timer)
+        this.headPolls.delete(chainId)
+      }
+    }
+  }
+
+  // ---- approvals -------------------------------------------------------------------
+
+  private async approve(intent: ApprovalIntent): Promise<unknown> {
+    const d = this.deps
+    // Re-attach: a worker restart re-sends the request with the same client id.
+    const existing = d.approvals.findPending((r) => r.origin === intent.origin && (r.payload as { clientRequestId?: string } | null)?.clientRequestId === intent.clientRequestId)
+    let request = existing
+    if (!request) {
+      // An already-permitted site only needs the vault unlocked, not a new Connect.
+      if (intent.kind === 'connect') {
+        const row = d.sites.registry.get(intent.origin)
+        const status = await d.vault.status()
+        if (row?.connected && status.unlocked) {
+          const account = (await d.vault.accounts()).find((a) => a.id === row.accountId)
+          if (account) return { accountId: account.id, addresses: [account.address], chainId: row.chainId }
+        }
+      }
+      const payload = await this.payloadFor(intent)
+      request = await d.approvals.create({ kind: intent.kind === 'eth_sign' ? 'sign_message' : intent.kind, origin: intent.origin, accountId: 'accountId' in intent ? intent.accountId : null, chainId: intent.chainId, payload })
+      if (!intent.origin.startsWith('internal:')) d.openApproval?.(request)
+    }
+    const outcome = await d.approvals.waitFor(request.id)
+    const payload = request.payload as { assessment?: AssessmentView } | null
+    const blockedBy = payload?.assessment?.presentation.blocked ? payload.assessment.rules.filter((r) => r.severity === 'block').map((r) => r.code) : []
+    // Defence in depth: a blocked assessment is never signed, whatever a UI page says (§3.4).
+    if (!outcome.approved || blockedBy.length > 0) {
+      throw new RpcError(RPC.USER_REJECTED, 'User rejected the request.', blockedBy.length ? { rules: blockedBy } : undefined)
+    }
+    return this.execute(intent, request, outcome.data)
+  }
+
+  private async payloadFor(intent: ApprovalIntent): Promise<ApprovalPayload> {
+    const d = this.deps
+    switch (intent.kind) {
+      case 'connect':
+        return { kind: 'connect', requestedChainId: intent.chainId, reconnect: d.sites.registry.get(intent.origin)?.connected === true, firstTime: d.sites.registry.isFirstTime(intent.origin), clientRequestId: intent.clientRequestId }
+      case 'switch_chain':
+        return { kind: 'switch_chain', chainId: intent.chainId, clientRequestId: intent.clientRequestId }
+      case 'add_chain':
+        return { kind: 'add_chain', chainId: intent.chainId, clientRequestId: intent.clientRequestId }
+      case 'watch_asset':
+        return { kind: 'watch_asset', type: intent.type, options: intent.options, clientRequestId: intent.clientRequestId }
+      case 'sign_message': {
+        const assessment = await this.assessment(intent.origin, intent.chainId, intent.from, { kind: 'message', from: intent.from, message: intent.message }, null)
+        return { kind: 'sign_message', from: intent.from, message: intent.message, text: decodeMessage(intent.message).text, assessment: toView(assessment), clientRequestId: intent.clientRequestId }
+      }
+      case 'eth_sign': {
+        const assessment = await this.assessment(intent.origin, intent.chainId, intent.from, { kind: 'eth_sign', from: intent.from, hash: intent.hash }, null)
+        return { kind: 'eth_sign', from: intent.from, hash: intent.hash, assessment: toView(assessment), clientRequestId: intent.clientRequestId }
+      }
+      case 'sign_typed_data': {
+        const parsed = parseTypedData(intent.typedData)
+        const assessment = await this.assessment(intent.origin, intent.chainId, intent.from, { kind: 'typed_data', from: intent.from, typedData: intent.typedData }, null)
+        const typedJson = typeof intent.typedData === 'string' ? safeJson(intent.typedData) : intent.typedData
+        return { kind: 'sign_typed_data', from: intent.from, typedData: typedJson, version: intent.version, domainName: parsed?.domain.name ?? null, primaryType: parsed?.primaryType ?? 'unknown', assessment: toView(assessment), clientRequestId: intent.clientRequestId }
+      }
+      case 'send_transaction': {
+        const prepared = await this.prepare(intent.chainId, intent.tx)
+        const request: SignRequest = { kind: 'transaction', tx: { from: prepared.tx.from as Hex, to: prepared.tx.to as Hex | null, value: BigInt(prepared.tx.value), data: prepared.tx.data as Hex, chainId: intent.chainId, gas: BigInt(prepared.tx.gas), ...(intent.tx.authorizationList ? { authorizationList: intent.tx.authorizationList } : {}) } }
+        const simulation = await this.simulate(intent.chainId, prepared, request)
+        const assessment = await this.assessment(intent.origin, intent.chainId, intent.tx.from, request, simulation)
+        const perGas = prepared.tx.type === 'eip1559' ? BigInt(prepared.tx.maxFeePerGas ?? '0x0') : BigInt(prepared.tx.gasPrice ?? '0x0')
+        const symbol = getChain(intent.chainId)?.nativeCurrency.symbol ?? 'ETH'
+        return { kind: 'send_transaction', tx: prepared.tx, fee: { gasLimit: BigInt(prepared.tx.gas).toString(), maxTotalWei: (perGas * BigInt(prepared.tx.gas)).toString(), symbol }, assessment: toView(assessment), clientRequestId: intent.clientRequestId }
+      }
+    }
+  }
+
+  // ---- firewall -------------------------------------------------------------------
+
+  private async assessment(origin: string, chainId: number, account: Hex, request: SignRequest, simulation: Simulation | null): Promise<Assessment> {
+    const d = this.deps
+    const settings = await d.settings.get()
+    const accounts = await d.vault.accounts()
+    const activity = await d.activity.list({ chainId }).catch(() => [] as ActivityEntry[])
+    const sentTo = activity.filter((e) => e.category !== 'RECEIVE' && e.to).map((e) => e.to as Hex)
+    const contracts: Record<string, { hasCode: boolean }> = {}
+    const balances: Record<string, bigint> = {}
+    const probe: Hex[] = []
+    if (request.kind === 'transaction' && request.tx.to) probe.push(request.tx.to)
+    if (request.kind === 'typed_data') {
+      const parsed = parseTypedData(request.typedData)
+      const dec = parsed?.decoded
+      if (dec && 'spender' in dec) probe.push(dec.spender)
+    }
+    for (const address of probe) {
+      const code = (await d.chains.rpc(chainId, 'eth_getCode', [address, 'latest']).catch(() => '0x')) as string
+      contracts[address.toLowerCase()] = { hasCode: typeof code === 'string' && code.length > 2 }
+    }
+    if (request.kind === 'transaction' && request.tx.value > 0n) {
+      const bal = (await d.chains.rpc(chainId, 'eth_getBalance', [account, 'latest']).catch(() => null)) as string | null
+      if (bal) balances['native'] = BigInt(bal)
+    }
+    const context: AssessmentContext = emptyContext({
+      sentTo,
+      own: accounts.map((a) => a.address as Hex),
+      firstTimeOrigin: d.sites.registry.isFirstTime(origin),
+      contracts,
+      balances,
+      ethSignEnabled: settings.ethSignEnabled,
+      now: d.platform.now(),
+    })
+    return assess({ origin, chainId, account, request, context, simulation })
+  }
+
+  private async simulate(chainId: number, prepared: { tx: PreparedTx; estimateError: string | null }, request: SignRequest): Promise<Simulation> {
+    const d = this.deps
+    if (request.kind !== 'transaction') return NO_SIMULATION
+    const traceUrl = await d.chains.traceUrl(chainId)
+    if (traceUrl) {
+      const f = d.fetch ?? globalThis.fetch
+      try {
+        const res = await f(traceUrl, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'debug_traceCall', params: [{ from: prepared.tx.from, to: prepared.tx.to, value: prepared.tx.value, data: prepared.tx.data, gas: prepared.tx.gas }, 'latest', { tracer: 'callTracer', tracerConfig: { withLog: true } }] }),
+        })
+        const json = (await res.json()) as { result?: TraceFrame; error?: { message?: string } }
+        if (json.result) return simulationFromTrace(json.result, request.tx.from)
+      } catch {
+        // fall through to the estimate
+      }
+    }
+    return estimateSimulation(BigInt(prepared.tx.gas), prepared.estimateError)
+  }
+
+  // ---- transactions ---------------------------------------------------------------
+
+  private async prepare(chainId: number, tx: TxParams): Promise<{ tx: PreparedTx; estimateError: string | null }> {
+    const rpc = (method: string, params: readonly unknown[]): Promise<unknown> => this.deps.chains.rpc(chainId, method, params)
+    const value = tx.value ?? '0x0'
+    const data = tx.data ?? '0x'
+    const to = tx.to ?? null
+    const nonce = tx.nonce !== undefined ? parseInt(tx.nonce, 16) : parseInt(String(await rpc('eth_getTransactionCount', [tx.from, 'pending'])), 16)
+    let gas: bigint
+    let estimateError: string | null = null
+    if (tx.gas !== undefined) {
+      gas = BigInt(tx.gas)
+    } else {
+      try {
+        const est = BigInt(String(await rpc('eth_estimateGas', [{ from: tx.from, ...(to ? { to } : {}), value, data }])))
+        gas = (est * 12n) / 10n
+      } catch (err) {
+        estimateError = err instanceof Error ? err.message : String(err)
+        gas = data === '0x' && to ? 21_000n : 500_000n
+      }
+    }
+    const block = (await rpc('eth_getBlockByNumber', ['latest', false]).catch(() => null)) as { baseFeePerGas?: string } | null
+    const baseFee = block?.baseFeePerGas ? BigInt(block.baseFeePerGas) : 0n
+    let fees: Pick<PreparedTx, 'type' | 'maxFeePerGas' | 'maxPriorityFeePerGas' | 'gasPrice'>
+    if (tx.gasPrice !== undefined) {
+      fees = { type: 'legacy', gasPrice: tx.gasPrice }
+    } else if (baseFee > 0n || tx.maxFeePerGas !== undefined) {
+      const tip = tx.maxPriorityFeePerGas !== undefined ? BigInt(tx.maxPriorityFeePerGas) : BigInt(String(await rpc('eth_maxPriorityFeePerGas', []).catch(() => '0x3b9aca00')))
+      const max = tx.maxFeePerGas !== undefined ? BigInt(tx.maxFeePerGas) : baseFee * 2n + tip
+      fees = { type: 'eip1559', maxFeePerGas: `0x${max.toString(16)}`, maxPriorityFeePerGas: `0x${tip.toString(16)}` }
+    } else {
+      const gasPrice = BigInt(String(await rpc('eth_gasPrice', [])))
+      fees = { type: 'legacy', gasPrice: `0x${gasPrice.toString(16)}` }
+    }
+    return { tx: { from: tx.from, to, value, data, nonce, gas: `0x${gas.toString(16)}`, ...fees }, estimateError }
+  }
+
+  private async execute(intent: ApprovalIntent, request: ApprovalRequest, data: unknown): Promise<unknown> {
+    const d = this.deps
+    switch (intent.kind) {
+      case 'connect': {
+        const parsed = ConnectDecisionDataSchema.safeParse(data)
+        const accounts = await d.vault.accounts()
+        const account = parsed.success ? accounts.find((a) => a.id === parsed.data.accountId) : (await d.vault.active()) ?? accounts[0]
+        if (!account) throw new RpcError(RPC.UNAUTHORIZED, 'No account to connect.')
+        const chainId = parsed.success && d.chains.known(parsed.data.chainId) ? parsed.data.chainId : intent.chainId
+        return { accountId: account.id, addresses: [account.address], chainId }
+      }
+      case 'switch_chain':
+      case 'add_chain':
+        return null
+      case 'watch_asset':
+        return true
+      case 'sign_message': {
+        const account = await this.signer(intent.accountId)
+        return account.signMessage({ message: { raw: intent.message } })
+      }
+      case 'eth_sign': {
+        const account = await this.signer(intent.accountId)
+        return account.sign({ hash: intent.hash })
+      }
+      case 'sign_typed_data': {
+        const account = await this.signer(intent.accountId)
+        const typed = normaliseTypedData(typeof intent.typedData === 'string' ? safeJson(intent.typedData) : intent.typedData)
+        return account.signTypedData(typed as never)
+      }
+      case 'send_transaction': {
+        const payload = request.payload as Extract<ApprovalPayload, { kind: 'send_transaction' }>
+        return this.broadcast(intent, request, payload.tx, payload.assessment)
+      }
+    }
+  }
+
+  private async signer(accountId: string) {
+    const pk = await this.deps.vault.privateKeyFor(accountId)
+    if (!pk) throw new RpcError(RPC.UNAUTHORIZED, 'This account cannot sign here.')
+    return privateKeyToAccount(pk)
+  }
+
+  private async broadcast(intent: Extract<ApprovalIntent, { kind: 'send_transaction' }>, request: ApprovalRequest, tx: PreparedTx, assessment: AssessmentView): Promise<Hex> {
+    const d = this.deps
+    // Already broadcast before a restart? The write-ahead entry carries the hash.
+    const prior = (await d.activity.list({ chainId: intent.chainId }).catch(() => [] as ActivityEntry[])).find((e) => e.id === request.id)
+    if (prior?.hash) return prior.hash as Hex
+    const account = await this.signer(intent.accountId)
+    const raw = await account.signTransaction({
+      chainId: intent.chainId,
+      to: (tx.to as Hex | null) ?? undefined,
+      value: BigInt(tx.value),
+      data: tx.data as Hex,
+      nonce: tx.nonce,
+      gas: BigInt(tx.gas),
+      ...(tx.type === 'eip1559' ? { type: 'eip1559' as const, maxFeePerGas: BigInt(tx.maxFeePerGas ?? '0x0'), maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas ?? '0x0') } : { type: 'legacy' as const, gasPrice: BigInt(tx.gasPrice ?? '0x0') }),
+    })
+    const entry: ActivityEntry = {
+      id: request.id,
+      hash: null,
+      chainId: intent.chainId,
+      accountId: intent.accountId,
+      to: tx.to,
+      value: BigInt(tx.value).toString(),
+      nonce: tx.nonce,
+      submittedAt: d.platform.now(),
+      origin: intent.origin,
+      category: categoryFor(assessment, tx),
+      statements: assessment.statements.map((s) => s.text),
+      riskCodes: assessment.rules.map((r) => r.code),
+      status: 'pending',
+      blockNumber: null,
+    }
+    if (!prior) await d.activity.append(entry)
+    try {
+      const sent = (await d.chains.rpc(intent.chainId, 'eth_sendRawTransaction', [raw])) as string
+      await d.activity.update(request.id, { hash: sent })
+      this.watch(intent.chainId, request.id, sent as Hex)
+      return sent as Hex
+    } catch (err) {
+      await d.activity.update(request.id, { status: 'failed' }).catch(() => undefined)
+      throw new RpcError(RPC.INTERNAL, err instanceof Error ? err.message : 'broadcast failed')
+    }
+  }
+
+  /** Poll for the receipt at the chain's cadence; Activity moves pending → confirmed/failed. */
+  private watch(chainId: number, id: string, hash: Hex): void {
+    const d = this.deps
+    const every = d.receiptPollMs ?? getChain(chainId)?.blockTimeMs ?? 12_000
+    let attempts = 0
+    const tick = async (): Promise<void> => {
+      attempts += 1
+      const receipt = (await d.chains.rpc(chainId, 'eth_getTransactionReceipt', [hash]).catch(() => null)) as { status?: string; blockNumber?: string } | null
+      if (receipt?.blockNumber) {
+        await d.activity.update(id, { status: receipt.status === '0x1' ? 'confirmed' : 'failed', blockNumber: parseInt(receipt.blockNumber, 16) }).catch(() => undefined)
+        return
+      }
+      if (attempts < 120) setTimeout(() => void tick(), every)
+    }
+    setTimeout(() => void tick(), every)
+  }
+}
+
+let ethSignEnabledSync = false
+
+function toView(a: Assessment): AssessmentView {
+  return {
+    severity: a.severity,
+    rules: a.rules.map((r) => ({ code: r.code, severity: r.severity, title: r.title, detail: r.detail })),
+    statements: a.statements.map((s) => ({ text: s.text, tone: s.tone })),
+    changes: a.changes.map((s) => ({ text: s.text, tone: s.tone })),
+    presentation: a.presentation,
+    simulationMode: a.simulation?.mode ?? 'none',
+  }
+}
+
+function categoryFor(assessment: AssessmentView, tx: PreparedTx): ActivityEntry['category'] {
+  const first = assessment.statements[0]?.text ?? ''
+  if (/^Allow /.test(first)) return 'APPROVE'
+  if (/^Revoke /.test(first)) return 'REVOKE'
+  if (/^Send /.test(first) || (tx.data === '0x' && tx.to)) return 'SEND'
+  if (/^Swap /.test(first)) return 'SWAP'
+  return 'DAPP'
+}
+
+function safeJson(s: string): unknown {
+  try {
+    return JSON.parse(s)
+  } catch {
+    throw new EngineError('invalid_argument', 'typed data is not valid JSON')
+  }
+}
+
+/** dApps send uint values as decimal strings; viem's hashing wants bigints. Walks the declared types. */
+export function normaliseTypedData(input: unknown): unknown {
+  if (!input || typeof input !== 'object') throw new EngineError('invalid_argument', 'typed data must be an object')
+  const t = input as { types?: Record<string, Array<{ name: string; type: string }>>; primaryType?: string; domain?: Record<string, unknown>; message?: Record<string, unknown> }
+  if (!t.types || !t.primaryType || !t.message) throw new EngineError('invalid_argument', 'typed data needs types, primaryType and message')
+  const types = t.types
+  const convert = (typeName: string, value: unknown): unknown => {
+    const arrayMatch = /^(.*)\[(\d*)\]$/.exec(typeName)
+    if (arrayMatch && Array.isArray(value)) return value.map((v) => convert(arrayMatch[1] ?? '', v))
+    if (/^u?int\d*$/.test(typeName)) {
+      if (typeof value === 'string' && /^(0x[0-9a-fA-F]+|-?\d+)$/.test(value)) return BigInt(value)
+      if (typeof value === 'number') return BigInt(value)
+      return value
+    }
+    const fields = types[typeName]
+    if (fields && value && typeof value === 'object') {
+      const out: Record<string, unknown> = {}
+      for (const f of fields) out[f.name] = convert(f.type, (value as Record<string, unknown>)[f.name])
+      return out
+    }
+    return value
+  }
+  const domainFields = types['EIP712Domain']
+  const domain: Record<string, unknown> = { ...(t.domain ?? {}) }
+  if (domain['chainId'] !== undefined) domain['chainId'] = BigInt(String(domain['chainId']))
+  if (domainFields) for (const f of domainFields) if (/^u?int/.test(f.type) && domain[f.name] !== undefined) domain[f.name] = BigInt(String(domain[f.name]))
+  const { EIP712Domain: _omit, ...rest } = types
+  return { domain, types: rest, primaryType: t.primaryType, message: convert(t.primaryType, t.message) }
+}
+
+export { hexChainId }

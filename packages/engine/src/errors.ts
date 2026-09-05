@@ -3,7 +3,7 @@
  *
  * Codes are stable strings (not numbers) so a UI can branch on them without a
  * table, and `data` is always JSON-safe. Provider (EIP-1193) errors keep their
- * own numeric codes in @boltvault/provider-protocol; the engine wraps them when
+ * own numeric codes in @boltvault/protocol; the engine wraps them when
  * a dApp request surfaces through an ApprovalRequest.
  */
 export type EngineErrorCode =

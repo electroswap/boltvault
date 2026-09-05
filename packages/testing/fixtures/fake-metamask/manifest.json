@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Fixture MetaMask",
+  "version": "0.0.1",
+  "description": "A stand-in for MetaMask in coexistence tests: defines a non-configurable window.ethereum with isMetaMask and announces itself over EIP-6963.",
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["inpage.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ]
+}

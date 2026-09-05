@@ -27,13 +27,17 @@ export interface LoadedExtension {
   url(path: string): string
 }
 
-export async function launchWithExtension(): Promise<LoadedExtension> {
+/** A stand-in for MetaMask (packages/testing/fixtures/fake-metamask) for coexistence tests. */
+export const FAKE_METAMASK_DIR = fileURLToPath(new URL('../../../packages/testing/fixtures/fake-metamask/', import.meta.url))
+
+export async function launchWithExtension(opts: { extra?: readonly string[] } = {}): Promise<LoadedExtension> {
   if (!existsSync(join(EXTENSION_DIR, 'manifest.json'))) throw new Error(`extension not built at ${EXTENSION_DIR} — run pnpm build`)
   const userDataDir = await mkdtemp(join(tmpdir(), 'bv-e2e-'))
+  const dirs = [EXTENSION_DIR, ...(opts.extra ?? [])].join(',')
   const context = await chromium.launchPersistentContext(userDataDir, {
     channel: 'chromium',
     headless: true,
-    args: [`--disable-extensions-except=${EXTENSION_DIR}`, `--load-extension=${EXTENSION_DIR}`],
+    args: [`--disable-extensions-except=${dirs}`, `--load-extension=${dirs}`],
   })
   let [worker] = context.serviceWorkers()
   if (!worker) worker = await context.waitForEvent('serviceworker')

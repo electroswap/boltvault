@@ -282,7 +282,7 @@ describe('approvals', () => {
     expect((await again.engine.approvals.list()).map((r) => r.id)).toEqual([req.id])
     const waited = approvals.waitFor(req.id)
     await engine.approvals.decide({ id: req.id, approve: true })
-    expect(await waited).toBe(true)
+    expect((await waited).approved).toBe(true)
     await expectError(engine.approvals.decide({ id: req.id, approve: false }), 'already_decided')
     const r2 = await approvals.create({ kind: 'connect', origin: 'https://x.example', accountId: null, chainId: null, payload: null })
     await platform.clock.advance(5 * 60_000 + 1)
@@ -296,7 +296,7 @@ describe('sites', () => {
     const { engine, sites, ready } = boot()
     await ready
     await sites.registry.connect('https://app.electroswap.io', { accountId: 'acct-1', accounts: ['0x1'] })
-    expect(await engine.sites.list()).toEqual([{ origin: 'https://app.electroswap.io', chainId: 52014, accountId: 'acct-1', connected: true }])
+    expect(await engine.sites.list()).toMatchObject([{ origin: 'https://app.electroswap.io', chainId: 52014, accountId: 'acct-1', connected: true, title: null, icon: null }])
     const moved = await engine.sites.setChain({ origin: 'https://app.electroswap.io', chainId: 8453 })
     expect(moved.chainId).toBe(8453)
     await expectError(engine.sites.setChain({ origin: 'https://app.electroswap.io', chainId: 4242 }), 'invalid_argument')

@@ -1,5 +1,5 @@
 /** Layering rules from master plan §2.3. Run: pnpm depcruise */
-const PURE = '^packages/(core|chains|engine|electroswap|security|protocol|provider-protocol|tokens|token-catalog|market-data|portfolio|send|token-info|approvals|activity|settings|other-chain|swap|farm|launchpad|nft|adapters|hardware|ledger|trezor|passkey|connect|wc)/'
+const PURE = '^packages/(core|chains|engine|electroswap|security|protocol|tokens|token-catalog|market-data|portfolio|send|token-info|approvals|activity|settings|other-chain|swap|farm|launchpad|nft|adapters|hardware|ledger|trezor|passkey|connect|wc)/'
 
 module.exports = {
   forbidden: [

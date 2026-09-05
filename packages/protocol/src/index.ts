@@ -1,0 +1,7 @@
+export { RPC, RpcError, userRejected, type RpcErrorPayload } from './errors'
+export { SiteRegistry, type ConnectedSite, type SitesStore } from './sessions'
+export { classify, needsUserAttention, SAFE_METHODS, CONNECT_METHODS, APPROVAL_METHODS, CHAIN_METHODS, REJECTED_METHODS, MAX_LOG_RANGE, SAFE_RATE_PER_SECOND, type MethodClass } from './methods'
+export { RpcFlow, hexChainId, toDecChainId, type RpcContext, type ProviderEvent, type ApprovalIntent, type ConnectResult, type TxParams, type Hex } from './rpc-flow'
+export * from './wire'
+export { startBridge, mintNonce, type Bridge, type BridgeDeps, type BridgePort, type BridgeWindow } from './bridge'
+export { installProvider, windowTransport, BoltVaultProvider, ProviderRpcError, type ProviderConfig, type PageTransport, type WindowLike, type InstallResult, type Eip6963Info, type RequestArguments } from './page-provider'

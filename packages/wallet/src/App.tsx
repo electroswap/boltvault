@@ -5,9 +5,9 @@ import { useMemo } from 'react'
 import { EngineProvider } from './engine/EngineProvider'
 import { DEFAULT_RELAY, HostProvider, type UiHost } from './host'
 import { i18n, setupI18n } from './i18n'
-import { RouterProvider, RouterStore } from './navigation/router'
+import { RouterProvider, RouterStore, type Route } from './navigation/router'
 import { TabShell } from './navigation/TabShell'
-import type { ScreenId, TabId } from './navigation/registry'
+import type { ScreenId, ScreenParams, TabId } from './navigation/registry'
 import type { HomeProps } from './screens/Home'
 
 export interface AppProps {
@@ -16,6 +16,8 @@ export interface AppProps {
   /** Harness/deep-link: start on a tab or pushed screen. */
   readonly initialTab?: TabId
   readonly initialScreen?: ScreenId
+  /** Params for `initialScreen` (the sign window passes its request id). */
+  readonly initialParams?: ScreenParams[ScreenId]
   /** Harness override; production reads the OS setting from the engine. */
   readonly reducedMotion?: boolean
   /** Body capabilities; defaults to "secrets allowed, no passkeys" (the harness). */
@@ -25,13 +27,13 @@ export interface AppProps {
 const TAB_IDS: readonly string[] = ['home', 'swap', 'explore', 'activity']
 
 /** The shared root for every body. */
-export function App({ engine, body, initialTab, initialScreen, reducedMotion, host }: AppProps) {
+export function App({ engine, body, initialTab, initialScreen, initialParams, reducedMotion, host }: AppProps) {
   const router = useMemo(() => {
     setupI18n()
     const store = new RouterStore({ tab: initialTab ?? 'home' })
-    if (initialScreen && !TAB_IDS.includes(initialScreen)) store.navigate({ screen: initialScreen })
+    if (initialScreen && !TAB_IDS.includes(initialScreen)) store.navigate(initialParams === undefined ? { screen: initialScreen } : ({ screen: initialScreen, params: initialParams } as Route))
     return store
-  }, [initialTab, initialScreen])
+  }, [initialTab, initialScreen, initialParams])
   const uiHost = useMemo<UiHost>(
     () => ({ body: body === 'mobile' ? 'mobile' : body, secretsAllowed: body !== 'extension-popup', passkeys: null, relayUrl: DEFAULT_RELAY, ...host }),
     [body, host],
