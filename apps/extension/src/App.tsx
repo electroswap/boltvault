@@ -256,6 +256,12 @@ export default function App() {
   const openFeature = (id: FeatureId) => setFeature(id)
   const closeFeature = () => setFeature(null)
 
+  // G: open the full-tab theater (a second WXT entrypoint, "full sky + coil + shelf").
+  const openFullTab = () => {
+    const b = (globalThis as any).browser
+    b?.runtime?.sendMessage?.({ type: 'bv:full-tab:open' }).catch(() => {})
+  }
+
   const featureLabel = feature ? FEATURES.find((f) => f.id === feature)?.label ?? '' : ''
 
   // The non-dock surfaces, rendered when a feature is open.
@@ -503,8 +509,31 @@ export default function App() {
             testId="account"
           />
         )}
-        <span style={{ color: 'var(--bv-mute)', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-          <IconScan size={16} />
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <button
+            data-testid="full-tab-open"
+            onClick={openFullTab}
+            title="Full chamber"
+            aria-label="Full chamber"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              background: 'transparent',
+              border: '1px solid var(--bv-line)',
+              borderRadius: 'var(--bv-r-sm)',
+              padding: '6px 10px',
+              color: 'var(--bv-ink)',
+              cursor: 'pointer',
+              fontFamily: 'var(--bv-font-sora)',
+              fontSize: '12px',
+              fontWeight: 600,
+            }}
+          >
+            <IconLayers size={16} />
+          </button>
+          <span style={{ color: 'var(--bv-mute)', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+            <IconScan size={16} />
+          </span>
         </span>
       </header>
 

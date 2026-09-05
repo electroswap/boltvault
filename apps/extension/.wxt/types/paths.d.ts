@@ -13,6 +13,8 @@ declare module "wxt/browser" {
     | "/fonts/oxanium-600.woff2"
     | "/fonts/sora-400.woff2"
     | "/fonts/sora-600.woff2"
+    | "/full-tab.html"
+    | "/notification.html"
     | "/popup.html"
   type HtmlPublicPath = Extract<PublicPath, `${string}.html`>
   export interface WxtRuntime {

@@ -140,6 +140,29 @@ export default defineBackground(() => {
               return await dataEngine.portfolio(message.chainId, message.account)
             case 'bv:price':
               return await dataEngine.price(message.chainId, message.address)
+            // G: open the full-tab theater ("full sky + coil + shelf").
+            case 'bv:full-tab:open': {
+              const w = await browser.windows.create({
+                url: 'full-tab.html',
+                type: 'popup',
+                width: 1100,
+                height: 760,
+              })
+              return { ok: true, window: w?.id ?? null }
+            }
+            // G: open the signing notification window (the same breaker, quiet).
+            case 'bv:notify:open': {
+              const w = await browser.windows.create({
+                url: 'notification.html',
+                type: 'popup',
+                width: 412,
+                height: 520,
+              })
+              return { ok: true, window: w?.id ?? null }
+            }
+            case 'bv:notify:get':
+              // v1: no queued request yet (the popup drives it); return empty.
+              return { request: null }
             default:
               return { ok: false, error: 'unknown method' }
           }

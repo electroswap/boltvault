@@ -152,6 +152,59 @@ for (const [file, spec] of SHOTS) {
   console.log(`  ✓ ${file}.png  (${spec.tab ? 'tab' : 'feature'}:${spec.tab ?? spec.feature})`)
 }
 
+console.log(`\npopup done — ${SHOTS.length} screenshots in ${OUT_DIR}`)
+
+// ---- G: the two new entrypoints (full-tab theater + notification window) ---
+const NOTIFY_REQUEST = {
+  origin: 'app.electroswap.com',
+  method: 'eth_sendTransaction',
+  diffs: [
+    { label: 'Out', value: '182,440.55 ETN' },
+    { label: 'In', value: '≈ 12,478 USDC' },
+  ],
+  fee: 'Wallet fee 0.25% · 31.2 BOLT',
+  account: MAIN,
+}
+
+// Stub for the notification window: bv:notify:get returns a live request so the
+// breaker renders populated (origin largest, diffs, fee, Sign/Reject).
+async function installNotifyStub(page) {
+  await page.addInitScript(({ req, main }) => {
+    const handler = (msg) => {
+      const t = msg && msg.type
+      if (t === 'bv:notify:get') return { request: req }
+      if (t === 'bv:notify:done') return { ok: true }
+      if (t === 'bv:block:head') return { ok: true, block: 4213887, chainId: msg.chainId ?? 52014, at: Date.now() }
+      if (t === 'bv:portfolio') return { ...{ ok: true, chainId: 52014, account: main, native: null, rows: [], pricedTotalUsd: 12478, at: Date.now() } }
+      return {}
+    }
+    window.browser = { runtime: { sendMessage: (msg) => Promise.resolve(handler(msg)) } }
+  }, { req: NOTIFY_REQUEST, main: MAIN })
+}
+
+const fullTabPage = await browser.newPage({ viewport: { width: 1100, height: 760 }, deviceScaleFactor: 2 })
+await installStub(fullTabPage)
+await fullTabPage.goto(`http://127.0.0.1:${port}/full-tab.html`, { waitUntil: 'networkidle' })
+await fullTabPage.waitForFunction(() => {
+  const t = document.querySelector('[data-testid="ft-total"]')
+  return t && t.textContent && t.textContent.includes('$')
+}, { timeout: 10000 })
+await fullTabPage.screenshot({ path: path.join(OUT_DIR, '13-full-tab.png'), fullPage: false })
+console.log('  ✓ 13-full-tab.png  (full-tab theater)')
+
+const notifyPage = await browser.newPage({ viewport: { width: 412, height: 520 }, deviceScaleFactor: 2 })
+await installNotifyStub(notifyPage)
+await notifyPage.goto(`http://127.0.0.1:${port}/notification.html`, { waitUntil: 'networkidle' })
+await notifyPage.waitForFunction(() => {
+  const t = document.querySelector('[data-testid="notification-origin"]')
+  return t && t.textContent && t.textContent.length > 3
+}, { timeout: 10000 })
+await notifyPage.screenshot({ path: path.join(OUT_DIR, '14-notification.png'), fullPage: false })
+console.log('  ✓ 14-notification.png  (signing notification window)')
+
+await fullTabPage.close()
+await notifyPage.close()
+await page.close()
 await browser.close()
 server.close()
-console.log(`\ndone — ${SHOTS.length} screenshots in ${OUT_DIR}`)
+console.log(`\nall done — screenshots in ${OUT_DIR}`)
