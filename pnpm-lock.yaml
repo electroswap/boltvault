@@ -32,12 +32,24 @@ importers:
       '@boltvault/electroswap':
         specifier: workspace:*
         version: link:../../packages/electroswap
+      '@boltvault/farm':
+        specifier: workspace:*
+        version: link:../../packages/farm
+      '@boltvault/launchpad':
+        specifier: workspace:*
+        version: link:../../packages/launchpad
+      '@boltvault/nft':
+        specifier: workspace:*
+        version: link:../../packages/nft
       '@boltvault/portfolio':
         specifier: workspace:*
         version: link:../../packages/portfolio
       '@boltvault/provider-protocol':
         specifier: workspace:*
         version: link:../../packages/provider-protocol
+      '@boltvault/security':
+        specifier: workspace:*
+        version: link:../../packages/security
       '@boltvault/swap':
         specifier: workspace:*
         version: link:../../packages/swap
