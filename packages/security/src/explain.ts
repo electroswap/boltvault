@@ -23,8 +23,10 @@ function amount(ctx: AssessmentContext, token: 'native' | Hex, raw: bigint, chai
     return `${trim(formatUnits(abs, 18))} ${symbol}`
   }
   const t = ctx.tokens[token.toLowerCase()]
-  if (!t) return `${abs.toString()} of ${who(ctx, chainId, token)}`
-  return `${trim(formatUnits(abs, t.decimals))} ${t.symbol}`
+  if (t) return `${trim(formatUnits(abs, t.decimals))} ${t.symbol}`
+  // Wrapped ETN is known by role even when the universe has not loaded (offers are priced in it).
+  if (knownContract(chainId, token)?.role === 'wrapped_native') return `${trim(formatUnits(abs, 18))} WETN`
+  return `${abs.toString()} of ${who(ctx, chainId, token)}`
 }
 
 function trim(s: string): string {
@@ -73,6 +75,51 @@ export function explainCall(decoded: DecodedCall, ctx: AssessmentContext, chainI
       return [{ text: `Unwrap ${amount(ctx, decoded.token, decoded.amount, chainId)}`, tone: 'neutral' }]
     case 'multicall':
       return [{ text: `Run ${decoded.calls.length} calls through Multicall3`, tone: 'neutral' }]
+    case 'farm_deposit': {
+      const parts = [`Deposit into farm #${decoded.farmId.toString()}`]
+      if (decoded.value > 0n) parts.push(`with ${amount(ctx, 'native', decoded.value, chainId)}`)
+      if (decoded.amountBolt > 0n) parts.push(`and ${amount(ctx, ctx.boltToken ?? 'native', decoded.amountBolt, chainId)} as boost`)
+      return [{ text: parts.join(' '), tone: 'out' }, { text: 'Unused amounts come back; a second deposit re-weights your duration multiplier.', tone: 'neutral' }]
+    }
+    case 'farm_withdraw':
+      return decoded.liquidity === 0n
+        ? [{ text: `Collect rewards and fees from farm #${decoded.farmId.toString()}`, tone: 'in' }]
+        : [{ text: `Withdraw ${decoded.liquidity.toString()} liquidity units from farm #${decoded.farmId.toString()}${decoded.asNative ? ' as ETN' : ''}`, tone: 'in' }, { text: 'Rewards and fees are collected with it; withdrawing everything returns your BOLT boost.', tone: 'neutral' }]
+    case 'launchpad':
+      switch (decoded.action) {
+        case 'contribute':
+          return [{ text: `Contribute ${amount(ctx, 'native', decoded.value, chainId)} to the campaign at ${who(ctx, chainId, decoded.pool)}`, tone: 'out' }]
+        case 'claim_tokens':
+          return [{ text: `Claim your tokens from the campaign at ${who(ctx, chainId, decoded.pool)}`, tone: 'in' }]
+        case 'claim_refund':
+          return [{ text: `Claim your refund from the campaign at ${who(ctx, chainId, decoded.pool)}`, tone: 'in' }]
+        case 'claim_referral':
+          return [{ text: 'Claim your referral rewards', tone: 'in' }]
+      }
+      return []
+    case 'seaport_fulfill': {
+      const piece = decoded.offer.find((o) => o.itemType === 2 || o.itemType === 3) ?? decoded.consideration.find((c) => c.itemType === 2 || c.itemType === 3)
+      const label = piece ? `${who(ctx, chainId, piece.token)} #${piece.identifier.toString()}` : 'the item'
+      const buying = decoded.offer.some((o) => o.itemType === 2 || o.itemType === 3)
+      if (buying) {
+        const total = decoded.consideration.reduce((s, c) => s + c.amount, 0n)
+        const token = decoded.consideration[0]?.itemType === 0 ? 'native' : (decoded.consideration[0]?.token ?? 'native')
+        return [{ text: `Buy ${label} for ${amount(ctx, token, total, chainId)}`, tone: 'out' }, { text: 'Includes the 3% marketplace fee and any creator royalty in the price.', tone: 'neutral' }]
+      }
+      const paid = decoded.offer[0]
+      const yours = decoded.consideration.filter((c) => c.itemType !== 2 && c.itemType !== 3 && c.recipient.toLowerCase() !== decoded.offerer.toLowerCase())
+      const gross = paid ? paid.amount : 0n
+      const net = yours.length ? yours.reduce((s, c) => s + c.amount, 0n) - (decoded.consideration.filter((c) => c.itemType !== 2 && c.itemType !== 3).reduce((s, c) => s + c.amount, 0n) - (yours[0]?.amount ?? 0n)) : gross
+      return [{ text: `Sell ${label} for ${paid ? amount(ctx, paid.token, gross, chainId) : 'the offer'}`, tone: 'in' }, { text: `You receive ${paid ? amount(ctx, paid.token, yours[0]?.amount ?? net, chainId) : 'the amount'} after the 3% marketplace fee and any creator royalty.`, tone: 'neutral' }]
+    }
+    case 'seaport_cancel':
+      return [{ text: decoded.count === 1 ? 'Cancel your marketplace order' : `Cancel ${decoded.count} marketplace orders`, tone: 'in' }]
+    case 'dividends':
+      return decoded.action === 'register'
+        ? [{ text: `Activate dividends for ${decoded.tokenIds.length} Electric Legend${decoded.tokenIds.length === 1 ? '' : 's'}`, tone: 'neutral' }]
+        : [{ text: `Claim marketplace dividends for ${decoded.tokenIds.length} Electric Legend${decoded.tokenIds.length === 1 ? '' : 's'}`, tone: 'in' }]
+    case 'nft_mint':
+      return [{ text: `Mint ${decoded.count.toString()} from ${who(ctx, chainId, decoded.collection)} for ${amount(ctx, 'native', decoded.value, chainId)}`, tone: 'out' }]
     case 'limit_order': {
       if (decoded.action === 'close') return [{ text: decoded.orderIds.length === 1 ? `Cancel order #${decoded.orderIds[0]?.toString() ?? '?'} and take back what is left` : `Cancel ${decoded.orderIds.length} orders and take back what is left`, tone: 'in' }]
       const days = Number(decoded.durationSeconds) / 86_400

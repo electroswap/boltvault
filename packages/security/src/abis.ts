@@ -61,6 +61,27 @@ export const LIMIT_ORDERS_ABI = parseAbi([
   'function closeOrders(uint256[] orderIds)',
 ])
 
+/** ElectroSwap yield farm (§8.8). */
+export const FARM_ABI = parseAbi(['function deposit(uint256 _farmId, uint256 _amount0, uint256 _amount1, uint256 _amountBolt) payable', 'function withdraw(uint256 _farmId, uint256 _liquidityAmt, bool _asNative)'])
+
+/** Launchpad pools and referrals (§8.9). Pools are per campaign, so these are matched by selector on any address the wallet itself targets. */
+export const LAUNCHPAD_ABI = parseAbi(['function contribute(address referrer) payable', 'function claimTokens(address recipient)', 'function claimRefund(address recipient)', 'function claimReferralRewards()'])
+
+/** Seaport 1.5 fulfilment and cancellation (§8.10). */
+export const SEAPORT_ABI = parseAbi([
+  'struct OfferItem { uint8 itemType; address token; uint256 identifierOrCriteria; uint256 startAmount; uint256 endAmount; }',
+  'struct ConsiderationItem { uint8 itemType; address token; uint256 identifierOrCriteria; uint256 startAmount; uint256 endAmount; address recipient; }',
+  'struct OrderParameters { address offerer; address zone; OfferItem[] offer; ConsiderationItem[] consideration; uint8 orderType; uint256 startTime; uint256 endTime; bytes32 zoneHash; uint256 salt; bytes32 conduitKey; uint256 totalOriginalConsiderationItems; }',
+  'struct OrderComponents { address offerer; address zone; OfferItem[] offer; ConsiderationItem[] consideration; uint8 orderType; uint256 startTime; uint256 endTime; bytes32 zoneHash; uint256 salt; bytes32 conduitKey; uint256 counter; }',
+  'struct Order { OrderParameters parameters; bytes signature; }',
+  'function fulfillOrder(Order order, bytes32 fulfillerConduitKey) payable returns (bool fulfilled)',
+  'function cancel(OrderComponents[] orders) returns (bool cancelled)',
+])
+
+/** Electric Legends dividends and the marketplace minter (§8.10). */
+export const DIVIDENDS_ABI = parseAbi(['function register(uint256[] tokenIds)', 'function claimDividends(uint256[] tokenIds)'])
+export const MINTER_ABI = parseAbi(['function mint(address collection, uint256 mintCount) payable'])
+
 /** Event topic0 hashes the simulator reads from traces. */
 export const TOPICS = {
   transfer: '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',

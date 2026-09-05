@@ -24,6 +24,13 @@ import { ProviderService } from './namespaces/provider'
 import { SendService, sendNamespace } from './namespaces/send'
 import { FlowStore } from './namespaces/flows'
 import { HardwareService, hardwareNamespace } from './namespaces/hardware'
+import { ExploreService, exploreNamespace } from './namespaces/explore'
+import { NftService, nftNamespace } from './namespaces/nft'
+import { LegendsService, legendsNamespace } from './namespaces/legends'
+import { FarmService, farmNamespace } from './namespaces/farm'
+import { LaunchpadService, launchpadNamespace } from './namespaces/launchpad'
+import { WatchlistService, watchlistNamespace } from './namespaces/watchlist'
+import { PositionsService, positionsNamespace } from './namespaces/positions'
 import { HolderService, holderNamespace } from './namespaces/holder'
 import { LimitService, limitNamespace } from './namespaces/limit'
 import { SwapService, swapNamespace } from './namespaces/swap'
@@ -81,6 +88,13 @@ export interface Engine {
   readonly swap: SwapService
   readonly limit: LimitService
   readonly hardware: HardwareService
+  readonly explore: ExploreService
+  readonly nft: NftService
+  readonly legends: LegendsService
+  readonly farm: FarmService
+  readonly launchpad: LaunchpadService
+  readonly watchlist: WatchlistService
+  readonly positions: PositionsService
   readonly ready: Promise<void>
   dispose(): void
 }
@@ -137,6 +151,19 @@ export function createEngine(deps: EngineDeps): Engine {
   const flows = new FlowStore({ platform: deps.platform, bus: host.events, activity })
   const swap = new SwapService({ platform: deps.platform, chains, tokens, vault, provider, settings, holder, flows })
   const limit = new LimitService({ platform: deps.platform, bus: host.events, chains, tokens, vault, provider, settings, flows })
+  const watchlist = new WatchlistService({ platform: deps.platform, bus: host.events, vault })
+  const explore = new ExploreService({ platform: deps.platform, electroswap, tokens, vault, watchlist })
+  const legends = new LegendsService({ platform: deps.platform, chains, vault, provider, flows })
+  const nft = new NftService({ platform: deps.platform, chains, vault, provider, flows, electroswap, explore, legends })
+  const farm = new FarmService({ platform: deps.platform, chains, tokens, vault, provider, flows, settings, electroswap })
+  const launchpad = new LaunchpadService({ platform: deps.platform, chains, vault, provider, flows, electroswap, names, watchlist })
+  const positions = new PositionsService({ platform: deps.platform, bus: host.events, farm, legends, limit, launchpad, tokens })
+  watchlist.attach({
+    tokens: (chainId) => explore.tokens(chainId),
+    collections: (chainId) => explore.collections(chainId),
+    campaigns: (chainId) => launchpad.list(chainId, undefined, ['ACTIVE', 'PENDING']),
+    accessory: async (accountId, chainId) => (await positions.snapshot(accountId, chainId)).accessory,
+  })
 
   vault.init()
   host.events.subscribe((e) => {
@@ -192,8 +219,15 @@ export function createEngine(deps: EngineDeps): Engine {
   host.register('holder', holderNamespace(holder))
   host.register('limit', limitNamespace(limit))
   host.register('hardware', hardwareNamespace(hardware, vault))
+  host.register('explore', exploreNamespace(explore))
+  host.register('nft', nftNamespace(nft))
+  host.register('legends', legendsNamespace(legends))
+  host.register('farm', farmNamespace(farm))
+  host.register('launchpad', launchpadNamespace(launchpad))
+  host.register('watchlist', watchlistNamespace(watchlist))
+  host.register('positions', positionsNamespace(positions))
 
-  const ready = Promise.all([approvals.hydrate(), sites.hydrate(), settings.get(), provider.init()]).then(() => undefined)
+  const ready = Promise.all([approvals.hydrate(), sites.hydrate(), settings.get(), provider.init(), watchlist.hydrate()]).then(() => undefined)
   const engine = createEngineClient(createInProcessTransport(host, 'internal'))
 
   return {
@@ -217,6 +251,13 @@ export function createEngine(deps: EngineDeps): Engine {
     swap,
     limit,
     hardware,
+    explore,
+    nft,
+    legends,
+    farm,
+    launchpad,
+    watchlist,
+    positions,
     ready,
     dispose: () => {
       vault.dispose()

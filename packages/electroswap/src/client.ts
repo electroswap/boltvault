@@ -168,6 +168,24 @@ export class ElectroSwapClient {
     return body.data
   }
 
+  /** REST base next to the GraphQL endpoint (`https://electroswap.io/graphql` → `https://electroswap.io`). */
+  get restBase(): string {
+    return this.url.replace(/\/graphql\/?$/, '')
+  }
+
+  /** `POST /api/nfts/order` — the marketplace's Seaport order intake (§8.10). Answers `{ code: 200 }` on success. */
+  async postOrder(body: Record<string, unknown>): Promise<{ ok: boolean; status: number; message: string | null }> {
+    const res = await this.doFetch(`${this.restBase}/api/nfts/order`, { method: 'POST', headers: this.headers(), body: JSON.stringify(body) })
+    let message: string | null = null
+    try {
+      const j = (await res.json()) as { code?: number; message?: string }
+      message = typeof j.message === 'string' ? j.message : null
+      return { ok: res.ok && (j.code === undefined || j.code === 200), status: res.status, message }
+    } catch {
+      return { ok: res.ok, status: res.status, message }
+    }
+  }
+
   /**
    * Portfolio balances for a wallet on ETN. Design: prices + 24h come from
    * here (indexed); the wallet still pulls *quantity* from RPC so a stale

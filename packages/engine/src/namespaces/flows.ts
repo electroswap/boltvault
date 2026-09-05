@@ -12,8 +12,8 @@ import type { ActivityStore } from '../activityStore'
 
 export interface FlowStepRun {
   readonly step: SwapStep
-  /** Creates the approval; `result` settles when the sheet decided and the step executed (hash or signature). */
-  readonly run: (flowId: string) => Promise<{ requestId: string; result: Promise<unknown> }>
+  /** Creates the approval; `result` settles when the sheet decided and the step executed (hash or signature). A step with no sheet (an API call) returns `requestId: null`. */
+  readonly run: (flowId: string) => Promise<{ requestId: string | null; result: Promise<unknown> }>
   /** Wait for the receipt before the next step (an approve must land before the swap's estimate). */
   readonly waitReceipt?: boolean
 }
@@ -133,7 +133,7 @@ export class FlowStore {
         for (let i = 0; i < input.steps.length; i++) {
           const s = input.steps[i] as FlowStepRun
           const { requestId, result } = await s.run(id)
-          this.patchStep(id, i, { requestId, status: 'signing' })
+          this.patchStep(id, i, { requestId, status: requestId ? 'signing' : 'submitted' })
           if (i === 0) firstReady()
           let value: unknown
           try {
@@ -147,7 +147,7 @@ export class FlowStore {
           }
           const hash = typeof value === 'string' && value.startsWith('0x') && value.length === 66 ? value : null
           this.patchStep(id, i, { status: 'submitted', hash })
-          if (s.waitReceipt && hash) {
+          if (s.waitReceipt && hash && requestId) {
             try {
               await this.waitReceipt(requestId)
             } catch (err) {
@@ -160,7 +160,7 @@ export class FlowStore {
           const last = i === input.steps.length - 1
           const cur = this.flows.get(id)
           if (!cur) return
-          this.patch(id, { steps: cur.steps.map((st, j) => (j === i ? { ...st, status: 'confirmed' as const } : st)), ...(last ? { status: 'done' as const, hash } : {}) })
+          this.patch(id, { steps: cur.steps.map((st, j) => (j === i ? { ...st, status: 'confirmed' as const } : st)), ...(last ? { status: 'done' as const, hash: hash ?? (typeof value === 'string' ? value : null) } : {}) })
         }
       } catch (err) {
         this.patch(id, { status: 'failed', error: err instanceof Error ? err.message : String(err) })

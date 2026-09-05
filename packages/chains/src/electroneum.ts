@@ -30,6 +30,16 @@ export interface ElectroSwapAddresses {
   /** Warp assets (Hyperlane). */
   usdc: string
   usdt: string
+  /** Seaport 1.5 conduit for `seaportConduitKey` (§8.10). */
+  seaportConduit: string
+  /** Marketplace fee receiver — on mainnet the Electric Legends dividend distributor (§8.10). */
+  nftFeeReceiver: string
+  electricLegends: string
+  dividendDistributor: string
+  /** EsMinterV2 (§8.10 mint). */
+  nftMinter: string
+  launchpadManager: string
+  launchpadAffiliate: string
 }
 
 export const ELECTRONEUM_ADDRESSES: Record<52014 | 5201420, ElectroSwapAddresses> = {
@@ -54,6 +64,13 @@ export const ELECTRONEUM_ADDRESSES: Record<52014 | 5201420, ElectroSwapAddresses
     limitOrders: '0x5911BE1AE831248883F84891fe798b52940a8721',
     usdc: '0x3187deAd7A2Bd6770F5Fe81495D1B715926AAe6e',
     usdt: '0x48E722f1458b253c2FB0E573F939318D7Dbd54e7',
+    seaportConduit: '0x2941Cba4DD14B2C67b0802107f23144c70ED680F',
+    nftFeeReceiver: '0xc4065B310d64a02Ac4BF43CFd35C5Fe1A42811ea',
+    electricLegends: '0x31cbb613D14cc85Cf3A8889007562E4B5cE9518b',
+    dividendDistributor: '0xc4065B310d64a02Ac4BF43CFd35C5Fe1A42811ea',
+    nftMinter: '0x41B8c31e35317124a7a4895ea034538C213c060f',
+    launchpadManager: '0x08DbA509E323BCEf07752D1EccF880756e205669',
+    launchpadAffiliate: '0xA29BAdAee7086e65277497AC6Af65579C7cf0101',
   },
   5201420: {
     wetn: '0x154c9fD7F006b92b6afa746098d8081A831DC1FC',
@@ -73,9 +90,16 @@ export const ELECTRONEUM_ADDRESSES: Record<52014 | 5201420, ElectroSwapAddresses
     dyno: '0x162D5a58096b63D89D83e0C66b4731A6CC8b10aF',
     bolt: null,
     feeOnTransferDetector: null,
-    limitOrders: null,
+    limitOrders: '0x960d1cfD7582C2031939d228eBD61cF060cd21Dc',
     usdc: '0x9a110A3Ecc8704e93Bd4FA1bA44D5CF93327202B',
     usdt: '0x02FeC8c559fB598762df8D033bD7A3Df9b374771',
+    seaportConduit: '0xf14B3f11CEabC2A2FD0A7b06708549D10091d237',
+    nftFeeReceiver: '0x084BA4Db2EBbf3BB3b2b6D5C988eac8aB593a384',
+    electricLegends: '0xac3497017c8Af03005185Fc7760041A4bCFe19cd',
+    dividendDistributor: '0x084BA4Db2EBbf3BB3b2b6D5C988eac8aB593a384',
+    nftMinter: '0x23150bC4D7a6a4d83c952ef635D856d6FDe5a578',
+    launchpadManager: '0x55FFDd292F530a7211b0A55d492b3e429e78ED93',
+    launchpadAffiliate: '0xbabA97bddEB19C8021522451B50b2316b8762423',
   },
 }
 

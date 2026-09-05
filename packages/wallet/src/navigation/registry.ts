@@ -9,7 +9,15 @@ export type TabId = 'home' | 'swap' | 'explore' | 'activity'
 export interface ScreenParams {
   home: undefined
   swap: { tokenIn?: string; tokenOut?: string } | undefined
-  explore: undefined
+  explore: { segment?: 'tokens' | 'collectibles' | 'launch' | 'farms' } | undefined
+  collection: { chainId: number; address: string }
+  nft: { chainId: number; address: string; tokenId: string }
+  rack: undefined
+  offers: undefined
+  farm: { chainId: number; farmId: number }
+  campaign: { chainId: number; pool: string }
+  legends: undefined
+  alerts: undefined
   activity: undefined
   settings: undefined
   security: undefined
@@ -52,6 +60,14 @@ export const SCREENS: Record<ScreenId, ScreenMeta> = {
   sites: { id: 'sites', presentation: 'push', quiet: false, secrets: false },
   allowances: { id: 'allowances', presentation: 'push', quiet: false, secrets: false },
   spending: { id: 'spending', presentation: 'push', quiet: false, secrets: false },
+  collection: { id: 'collection', presentation: 'push', quiet: false, secrets: false },
+  nft: { id: 'nft', presentation: 'push', quiet: false, secrets: false },
+  rack: { id: 'rack', presentation: 'push', quiet: false, secrets: false },
+  offers: { id: 'offers', presentation: 'push', quiet: false, secrets: false },
+  farm: { id: 'farm', presentation: 'push', quiet: false, secrets: false },
+  campaign: { id: 'campaign', presentation: 'push', quiet: false, secrets: false },
+  legends: { id: 'legends', presentation: 'push', quiet: false, secrets: false },
+  alerts: { id: 'alerts', presentation: 'push', quiet: false, secrets: false },
   accounts: { id: 'accounts', presentation: 'sheet', quiet: false, secrets: true },
   backup: { id: 'backup', presentation: 'push', quiet: true, secrets: true },
   unlock: { id: 'unlock', presentation: 'window', quiet: true, secrets: false },

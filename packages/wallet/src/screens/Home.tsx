@@ -28,6 +28,11 @@ import {
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useActivity } from '../hooks/useActivity'
+import { usePositions } from '../hooks/usePositions'
+import { LegendsVault } from '../components/LegendsVault'
+import { Rack } from './Rack'
+import type { CampaignView, HolderTier } from '@boltvault/engine'
+import { formatRaw } from '../format'
 import { useChainHead } from '../hooks/useChainHead'
 import { usePortfolio } from '../hooks/usePortfolio'
 import { t } from '../i18n'
@@ -56,6 +61,9 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   const [segment, setSegment] = useState<'tokens' | 'collectibles' | 'positions'>('tokens')
   const [sinceLook, setSinceLook] = useState<{ at: number; total: number | null } | null>(null)
   const [unlimited, setUnlimited] = useState(0)
+  const [tier, setTier] = useState<HolderTier | null>(null)
+  const [live, setLive] = useState<CampaignView | null>(null)
+  const { positions } = usePositions(active?.id ?? null, !!vault?.unlocked)
   const pendingTx = entries.filter((e) => e.status === 'pending').length
 
   // "Since you last looked" (§7.13) and the approvals fuse count, once per open.
@@ -66,6 +74,9 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
       if (alive && r.previous && Date.now() - r.previous.at > 60 * 60_000) setSinceLook(r.previous)
     }, () => undefined)
     engine.allowances.cached({ accountId: active.id, chainId: ETN }).then((c) => alive && setUnlimited(c.rows.filter((r) => r.amount === 'unlimited' || r.amount === 'all').length), () => undefined)
+    // The holder tier warms the Field's spectrum and marks the seat (§8.18); a live campaign puts a Launch key on Home (§7.13).
+    engine.holder.tier({ accountId: active.id, chainId: ETN }).then((x) => alive && setTier(x), () => undefined)
+    engine.launchpad.list({ chainId: ETN, statuses: ['ACTIVE'] }).then((cs) => alive && setLive(cs.find((c) => c.phase === 'live') ?? null), () => undefined)
     return () => {
       alive = false
     }
@@ -80,12 +91,12 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
 
   return (
     <Column flex={1} backgroundColor="$void" testID="home">
-      <Field address={address} pulse={head?.live ? 1 : 0} intensity={body === 'extension-popup' ? 0.75 : 1} quiet={quiet} reducedMotion={reducedMotion} fps={body === 'extension-popup' ? 30 : 60} width={width} height={height} testID="field" />
+      <Field address={address} pulse={head?.live ? 1 : 0} warmth={tier ? Math.min(1, tier.tier / 4) : 0} intensity={body === 'extension-popup' ? 0.75 : 1} quiet={quiet} reducedMotion={reducedMotion} fps={body === 'extension-popup' ? 30 : 60} width={width} height={height} testID="field" />
       <ScrollView style={{ zIndex: 1 }} contentContainerStyle={{ padding: inset, gap: 20 }}>
         <Ignition reducedMotion={reducedMotion} order={0}>
           <Row justifyContent="space-between">
             {active ? (
-              <Seat address={active.address} label={active.label} onPress={() => router.navigate('accounts')} testID="seat" />
+              <Seat address={active.address} label={active.label} tierMark={tier && tier.tier > 0 ? t({ id: 'home.tier', message: 'Tier {t}', values: { t: tier.tier } }) : null} onPress={() => router.navigate('accounts')} testID="seat" />
             ) : (
               <Body size="title">BoltVault</Body>
             )}
@@ -203,9 +214,39 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
                     </Plate>
                   )
                 ) : segment === 'collectibles' ? (
-                  <Plate gap="$2">
-                    <Body tone="mute">{t({ id: 'home.collectibles.empty', message: 'No collectibles yet. Explore collections on Electroneum.' })}</Body>
-                  </Plate>
+                  <Rack body={body} embedded limit={6} />
+                ) : positions && (positions.farms.length > 0 || (positions.legends && positions.legends.ownedTokenIds.length > 0) || positions.orders.length > 0 || positions.campaigns.length > 0) ? (
+                  <Column gap="$2" testID="positions">
+                    {positions.legends && positions.legends.ownedTokenIds.length > 0 ? <LegendsVault status={positions.legends} compact reducedMotion={reducedMotion} onOpen={() => router.navigate('legends')} testID="home-legends" /> : null}
+                    {positions.farms.map((f) => (
+                      <Plate key={f.id} gap={2} onPress={() => router.navigate('farm', { chainId: ETN, farmId: f.id })} cursor="pointer" testID={`position-farm-${f.id}`}>
+                        <Row justifyContent="space-between" alignItems="center">
+                          <Row gap="$2" alignItems="center">
+                            <Icon name="farm" size={16} color={paint.arc} />
+                            <Body>{f.name || `${f.symbol0}/${f.symbol1}`}</Body>
+                          </Row>
+                          <Body tone="arc" size="caption">
+                            {f.position ? `${(f.position.durationMultiplier / 10_000).toFixed(2)}× · ${(f.position.boltMultiplier / 10_000).toFixed(2)}×` : ''}
+                          </Body>
+                        </Row>
+                        {f.position ? (
+                          <Body tone="mute" size="caption">
+                            {t({ id: 'home.pos.pending', message: '{d} DYNO to collect', values: { d: formatRaw(f.position.pendingRewards, 18) } })}
+                          </Body>
+                        ) : null}
+                      </Plate>
+                    ))}
+                    {positions.orders.map((o) => (
+                      <Plate key={o.orderId} gap={2} onPress={() => router.setTab('swap')} cursor="pointer" testID={`position-order-${o.orderId}`}>
+                        <Body size="caption">{t({ id: 'home.pos.order', message: 'Open order: {a} {s} → at least {b} {u}', values: { a: formatRaw(o.amountInExact, o.decimalsIn), s: o.symbolIn, b: formatRaw(o.amountOutMin, o.decimalsOut), u: o.symbolOut } })}</Body>
+                      </Plate>
+                    ))}
+                    {positions.campaigns.map((c) => (
+                      <Plate key={c.pool} gap={2} onPress={() => router.navigate('campaign', { chainId: ETN, pool: c.pool })} cursor="pointer" testID={`position-campaign-${c.pool}`}>
+                        <Body size="caption">{t({ id: 'home.pos.campaign', message: '{s}: {a} ETN contributed{k}', values: { s: c.token.symbol, a: formatRaw(c.contributedWei, 18), k: c.keys.includes('claim_tokens') ? ' · tokens ready' : c.keys.includes('claim_refund') ? ' · refund waiting' : '' } })}</Body>
+                      </Plate>
+                    ))}
+                  </Column>
                 ) : (
                   <Plate gap="$2">
                     <Body tone="mute">{t({ id: 'home.positions.empty', message: 'No farm positions, open orders or bridges in flight.' })}</Body>
@@ -227,12 +268,29 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
               </Plate>
             ) : null}
 
-            {/* One accessory (§8.2): pending tx > unlimited approvals. */}
+            {/* A persistent Launch key while a campaign is live (§7.13). */}
+            {live ? (
+              <Plate role="raised" gap={2} onPress={() => router.navigate('campaign', { chainId: ETN, pool: live.pool })} cursor="pointer" testID="launch-key">
+                <Row gap="$2" alignItems="center">
+                  <Icon name="bolt" size={16} color={paint.arc} />
+                  <Body size="caption">{t({ id: 'home.launch', message: '{s} is live on the launchpad', values: { s: live.token.symbol } })}</Body>
+                </Row>
+              </Plate>
+            ) : null}
+
+            {/* One accessory (§8.2): pending tx > rewards/dividends to collect > unlimited approvals. */}
             {pendingTx > 0 ? (
               <Plate gap={2} onPress={() => router.setTab('activity')} cursor="pointer" testID="accessory-pending">
                 <Row gap="$2" alignItems="center">
                   <Icon name="clock" size={16} color={paint.arc} />
                   <Body size="caption">{t({ id: 'home.acc.pending', message: '{n} transaction pending', values: { n: pendingTx } })}</Body>
+                </Row>
+              </Plate>
+            ) : positions?.accessory ? (
+              <Plate gap={2} onPress={() => (positions.accessory?.target === 'legends' ? router.navigate('legends') : positions.accessory?.target.startsWith('farm:') ? router.navigate('farm', { chainId: ETN, farmId: Number(positions.accessory.target.slice(5)) }) : router.navigate('campaign', { chainId: ETN, pool: positions.accessory?.target.slice(9) ?? '' }))} cursor="pointer" testID="accessory-positions">
+                <Row gap="$2" alignItems="center">
+                  <Icon name={positions.accessory.kind === 'dividends' ? 'star' : positions.accessory.kind === 'collect' ? 'farm' : 'bolt'} size={16} color={paint.ember} />
+                  <Body size="caption">{positions.accessory.text}</Body>
                 </Row>
               </Plate>
             ) : unlimited > 0 ? (

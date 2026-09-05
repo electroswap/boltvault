@@ -23,6 +23,7 @@ export type ContractRole =
   | 'fee_sink'
   | 'dividends'
   | 'nft'
+  | 'minter'
 
 export interface KnownContract {
   readonly name: string
@@ -50,19 +51,18 @@ for (const chainId of [52014, 5201420] as const) {
   add(chainId, a.wetn, 'Wrapped ETN', 'wrapped_native')
   add(chainId, a.usdc, 'Hyperlane USDC', 'warp_token')
   add(chainId, a.usdt, 'Hyperlane USDT', 'warp_token')
+  add(chainId, a.seaportConduit, 'ElectroSwap marketplace conduit', 'conduit')
+  add(chainId, a.launchpadManager, 'ElectroSwap launchpad', 'launchpad')
+  add(chainId, a.launchpadAffiliate, 'ElectroSwap launchpad referrals', 'launchpad')
+  add(chainId, a.limitOrders, 'ElectroSwap limit orders', 'limit_orders')
+  add(chainId, a.electricLegends, 'Electric Legends', 'nft')
+  add(chainId, a.dividendDistributor, 'Electric Legends dividends', 'dividends')
+  add(chainId, a.nftMinter, 'ElectroSwap NFT minter', 'minter')
 }
 // Mainnet-only addresses from the master plan §8.13 spender registry.
 add(52014, '0xcA11bde05977b3631167028862bE2a173976CA11', 'Multicall3', 'multicall')
-add(52014, '0x2941Cba4DD14B2C67b0802107f23144c70ED680F', 'ElectroSwap marketplace conduit', 'conduit')
 add(52014, '0x16ca736c8B181772009e598F37f137e9cD36AFAE', 'ElectroSwap V2 liquidity locker', 'locker')
 add(52014, '0xfdB0d62Fc929fD53D266B969Bfe4250b205D0899', 'ElectroSwap V3 liquidity locker', 'locker')
-add(52014, '0x08DbA509E323BCEf07752D1EccF880756e205669', 'ElectroSwap launchpad', 'launchpad')
-add(52014, '0xA29BAdAee7086e65277497AC6Af65579C7cf0101', 'ElectroSwap launchpad referrals', 'launchpad')
-add(52014, '0x5911BE1AE831248883F84891fe798b52940a8721', 'ElectroSwap limit orders', 'limit_orders')
-add(52014, '0x31cbb613D14cc85Cf3A8889007562E4B5cE9518b', 'Electric Legends', 'nft')
-add(52014, '0xc4065B310d64a02Ac4BF43CFd35C5Fe1A42811ea', 'Electric Legends dividends', 'dividends')
-add(5201420, '0xac3497017c8Af03005185Fc7760041A4bCFe19cd', 'Electric Legends', 'nft')
-add(5201420, '0x084BA4Db2EBbf3BB3b2b6D5C988eac8aB593a384', 'Electric Legends dividends', 'dividends')
 // Canonical Permit2 on the other chains.
 for (const chainId of [1, 56, 8453, 42161, 10, 137, 43114, 59144, 130]) {
   add(chainId, '0x000000000022D473030F116dDEE9F6B43aC78BA3', 'Permit2', 'permit2')

@@ -17,15 +17,26 @@ type Filter = 'all' | 'sent' | 'received' | 'approvals'
 
 function matches(e: ActivityEntry, f: Filter): boolean {
   if (f === 'all') return true
-  if (f === 'sent') return e.category === 'SEND' || e.category === 'SWAP' || e.category === 'DAPP'
-  if (f === 'received') return e.category === 'RECEIVE'
+  if (f === 'sent') return e.category === 'SEND' || e.category === 'SWAP' || e.category === 'DAPP' || e.category === 'LIMIT' || e.category === 'FARM_DEPOSIT' || e.category === 'FARM_WITHDRAW' || e.category === 'LAUNCHPAD' || e.category === 'NFT'
+  if (f === 'received') return e.category === 'RECEIVE' || e.category === 'FARM_COLLECT' || e.category === 'DIVIDEND_CLAIM'
   return e.category === 'APPROVE' || e.category === 'REVOKE'
 }
 
-function iconFor(e: ActivityEntry): 'arrowUpRight' | 'arrowDownLeft' | 'approvals' | 'swap' | 'external' {
+function iconFor(e: ActivityEntry): 'arrowUpRight' | 'arrowDownLeft' | 'approvals' | 'swap' | 'external' | 'farm' | 'star' | 'bolt' {
   switch (e.category) {
     case 'RECEIVE':
+    case 'FARM_COLLECT':
+    case 'DIVIDEND_CLAIM':
       return 'arrowDownLeft'
+    case 'FARM_DEPOSIT':
+    case 'FARM_WITHDRAW':
+      return 'farm'
+    case 'NFT':
+      return 'star'
+    case 'LAUNCHPAD':
+      return 'bolt'
+    case 'LIMIT':
+      return 'swap'
     case 'APPROVE':
     case 'REVOKE':
       return 'approvals'

@@ -1,7 +1,7 @@
 /**
  * Tab and push screens that M1 ships as designed shells: the structure, the
  * copy voice and the empty states are final; their data arrives with their
- * milestone (Explore M6, Settings M4, Sign M3).
+ * milestone (Settings M4, Sign M3).
  */
 import { Body, Column, Icon, Key, Plate, Row, ScrollView, metrics, paint } from '@boltvault/ui'
 import { useEngine } from '../engine/EngineProvider'
@@ -10,24 +10,6 @@ import { useRouter } from '../navigation/router'
 
 type Body_ = 'extension-popup' | 'extension-tab' | 'mobile'
 const insetFor = (body: Body_): number => (body === 'extension-popup' ? metrics.inset : metrics.insetWide)
-
-export function ExploreShell({ body }: { body: Body_ }) {
-  return (
-    <ScrollView contentContainerStyle={{ padding: insetFor(body), gap: 16 }} testID="explore">
-      <Body size="title">{t({ id: 'explore.title', message: 'Explore Electroneum' })}</Body>
-      {(['tokens', 'collectibles', 'launch', 'farms'] as const).map((k) => (
-        <Plate key={k} gap="$1">
-          <Body size="title">
-            {k === 'tokens' ? t({ id: 'explore.tokens', message: 'Tokens' }) : k === 'collectibles' ? t({ id: 'explore.collectibles', message: 'Collectibles' }) : k === 'launch' ? t({ id: 'explore.launch', message: 'Launch' }) : t({ id: 'explore.farms', message: 'Farms' })}
-          </Body>
-          <Body tone="mute" size="caption">
-            {t({ id: 'explore.soon', message: 'Markets are on Electroneum. This list fills in with the M6 milestone.' })}
-          </Body>
-        </Plate>
-      ))}
-    </ScrollView>
-  )
-}
 
 export function ActivityShell({ body }: { body: Body_ }) {
   return (
@@ -51,6 +33,7 @@ export function SettingsShell({ body }: { body: Body_ }) {
     { id: 'sites', title: t({ id: 'settings.sites', message: 'Connected sites' }), rows: [t({ id: 'settings.sites.rows', message: 'Per-site chain and account' })] },
     { id: 'networks', title: t({ id: 'settings.networks', message: 'Networks' }), rows: [t({ id: 'settings.networks.rows', message: 'Chains, custom RPCs, tokens' })] },
     { id: 'devices', title: t({ id: 'settings.devices', message: 'Devices & sync' }), rows: [t({ id: 'settings.devices.rows', message: 'Pair a phone or browser; move your vault' })] },
+    { id: 'notifications', title: t({ id: 'settings.notifications', message: 'Notifications' }), rows: [t({ id: 'settings.notifications.rows', message: 'Watchlist alerts, campaigns going live, rewards and dividends' })] },
     { id: 'feel', title: t({ id: 'settings.feel', message: 'Appearance & feel' }), rows: [t({ id: 'settings.feel.rows', message: 'Motion, haptics, sound, currency' })] },
     { id: 'about', title: t({ id: 'settings.about', message: 'About' }), rows: [t({ id: 'settings.about.rows', message: 'Version, encryption, fee sink' })] },
   ]
@@ -61,7 +44,7 @@ export function SettingsShell({ body }: { body: Body_ }) {
         <Key label={t({ id: 'settings.lock', message: 'Lock' })} kind="secondary" onPress={() => void engine.vault.lock()} icon={<Icon name="lock" size={18} color={paint.ink} />} testID="lock-key" />
       </Row>
       {groups.map((g) => {
-        const target = g.id === 'accounts' ? 'accounts' : g.id === 'security' ? 'security' : g.id === 'devices' ? 'devices' : g.id === 'sites' ? 'sites' : g.id === 'approvals' ? 'allowances' : g.id === 'spending' ? 'spending' : null
+        const target = g.id === 'accounts' ? 'accounts' : g.id === 'security' ? 'security' : g.id === 'devices' ? 'devices' : g.id === 'sites' ? 'sites' : g.id === 'approvals' ? 'allowances' : g.id === 'spending' ? 'spending' : g.id === 'notifications' ? 'alerts' : null
         return (
           <Plate key={g.id} gap="$1" testID={`settings-${g.id}`} onPress={target ? () => router.navigate(target) : undefined} cursor={target ? 'pointer' : undefined}>
             <Row justifyContent="space-between">

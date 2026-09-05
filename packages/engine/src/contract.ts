@@ -10,6 +10,7 @@
  * Namespaces land with their milestone; a host without one answers
  * `not_implemented`, which the UI renders as an honest empty state.
  */
+import type { TokenDetailView } from '@boltvault/electroswap'
 import type {
   AccountId,
   AccountView,
@@ -34,6 +35,19 @@ import type {
   FeeScheduleView,
   LimitQuote,
   LimitOrderView,
+  ExploreToken,
+  CollectionView,
+  AssetView,
+  Inventory,
+  OffersInbox,
+  NftActivityView,
+  LegendsStatus,
+  FarmView,
+  FarmDepositQuote,
+  FarmWithdrawQuote,
+  CampaignView,
+  WatchItem,
+  Positions,
   SyncStatus,
   VaultStatus,
 } from './schema'
@@ -197,6 +211,78 @@ export interface LimitNamespace {
   list(input: { accountId: AccountId; chainId: number }): Promise<LimitOrderView[]>
 }
 
+/** Explore (§8.11): the ElectroSwap market inside the wallet. Display data; empty when the API is unreachable. */
+export interface ExploreNamespace {
+  available(): Promise<boolean>
+  tokens(input: { chainId: number }): Promise<ExploreToken[]>
+  tokenDetail(input: { chainId: number; address: string }): Promise<TokenDetailView | null>
+  collections(input: { chainId: number; accountId?: AccountId }): Promise<CollectionView[]>
+  collection(input: { chainId: number; address: string; accountId?: AccountId }): Promise<CollectionView | null>
+  search(input: { chainId: number; query: string }): Promise<{ tokens: ExploreToken[]; collections: CollectionView[] }>
+}
+
+/** The NFT marketplace (§8.10) on Seaport 1.5. Flows resolve once the first sheet exists; progress arrives as `swap.progress`. */
+export interface NftNamespace {
+  inventory(input: { accountId: AccountId; chainId: number }): Promise<Inventory>
+  assets(input: { chainId: number; address: string; orderBy?: 'PRICE' | 'RARITY'; asc?: boolean; listed?: boolean; traits?: Array<{ name: string; values: string[] }>; query?: string; after?: string; accountId?: AccountId }): Promise<{ assets: AssetView[]; total: number | null; next: string | null }>
+  asset(input: { chainId: number; address: string; tokenId: string; accountId?: AccountId }): Promise<AssetView | null>
+  activity(input: { chainId: number; address: string; tokenId?: string }): Promise<NftActivityView[]>
+  offers(input: { accountId: AccountId; chainId: number }): Promise<OffersInbox>
+  list(input: { accountId: AccountId; chainId: number; address: string; tokenId: string; priceEtn: string; days: number }): Promise<{ flowId: string; requestId: string | null }>
+  offer(input: { accountId: AccountId; chainId: number; address: string; tokenId: string; priceEtn: string; days: number }): Promise<{ flowId: string; requestId: string | null }>
+  buy(input: { accountId: AccountId; chainId: number; address: string; tokenId: string }): Promise<{ flowId: string; requestId: string | null }>
+  accept(input: { accountId: AccountId; chainId: number; address: string; tokenId: string; orderHash: string }): Promise<{ flowId: string; requestId: string | null }>
+  cancel(input: { accountId: AccountId; chainId: number; address: string; tokenId: string; orderHash: string }): Promise<{ flowId: string; requestId: string | null }>
+  transfer(input: { accountId: AccountId; chainId: number; address: string; tokenId: string; to: string }): Promise<{ flowId: string; requestId: string | null }>
+  mint(input: { accountId: AccountId; chainId: number; count: number }): Promise<{ flowId: string; requestId: string | null }>
+  collectionApproved(input: { accountId: AccountId; chainId: number; address: string }): Promise<boolean>
+}
+
+/** Electric Legends dividends (§8.10). */
+export interface LegendsNamespace {
+  status(input: { accountId: AccountId; chainId: number }): Promise<LegendsStatus | null>
+  activate(input: { accountId: AccountId; chainId: number }): Promise<{ flowId: string; requestId: string | null }>
+  claim(input: { accountId: AccountId; chainId: number }): Promise<{ flowId: string; requestId: string | null }>
+  mint(input: { accountId: AccountId; chainId: number; count: number }): Promise<{ flowId: string; requestId: string | null }>
+}
+
+/** Yield farms (§8.8): positions from the chain; Deposit · Withdraw · Collect through the sheet. */
+export interface FarmNamespace {
+  list(input: { chainId: number; accountId?: AccountId }): Promise<FarmView[]>
+  farm(input: { chainId: number; farmId: number; accountId?: AccountId }): Promise<FarmView | null>
+  quoteDeposit(input: { accountId: AccountId; chainId: number; farmId: number; amount0?: string; amount1?: string; bolt?: string }): Promise<FarmDepositQuote>
+  deposit(input: { accountId: AccountId; chainId: number; farmId: number; amount0?: string; amount1?: string; bolt?: string }): Promise<{ flowId: string; requestId: string | null }>
+  quoteWithdraw(input: { accountId: AccountId; chainId: number; farmId: number; percent: number; asNative: boolean }): Promise<FarmWithdrawQuote>
+  withdraw(input: { accountId: AccountId; chainId: number; farmId: number; percent: number; asNative: boolean }): Promise<{ flowId: string; requestId: string | null }>
+  collect(input: { accountId: AccountId; chainId: number; farmId: number; asNative: boolean }): Promise<{ flowId: string; requestId: string | null }>
+}
+
+/** Launchpad (§8.9). */
+export interface LaunchpadNamespace {
+  list(input: { chainId: number; accountId?: AccountId; statuses?: Array<'ACTIVE' | 'LAUNCHED' | 'FAILED' | 'CANCELLED' | 'PENDING'> }): Promise<CampaignView[]>
+  detail(input: { chainId: number; pool: string; accountId?: AccountId }): Promise<CampaignView | null>
+  contribute(input: { accountId: AccountId; chainId: number; pool: string; amountEtn: string }): Promise<{ flowId: string; requestId: string | null }>
+  claim(input: { accountId: AccountId; chainId: number; pool: string; kind: 'tokens' | 'refund' | 'referral' }): Promise<{ flowId: string; requestId: string | null }>
+  rememberReferral(input: { chainId: number; pool: string; referrer: string }): Promise<void>
+  rememberFromLink(input: { url: string }): Promise<{ pool: string; referrer: string | null } | null>
+}
+
+/** Watchlist and alerts (§7.13). */
+export interface WatchlistNamespace {
+  list(): Promise<WatchItem[]>
+  star(input: { kind: 'token' | 'collection' | 'campaign'; chainId: number; address: string; label: string }): Promise<WatchItem[]>
+  unstar(input: { kind: 'token' | 'collection' | 'campaign'; chainId: number; address: string }): Promise<WatchItem[]>
+  setAlert(input: { kind: 'token' | 'collection' | 'campaign'; chainId: number; address: string; above: number | null; below: number | null; onLive: boolean }): Promise<WatchItem[]>
+  /** One alert pass now (the alarm does this every five minutes). Returns the tags sent. */
+  check(): Promise<string[]>
+}
+
+/** Home › Positions (§8.2). */
+export interface PositionsNamespace {
+  cached(input: { accountId: AccountId; chainId: number }): Promise<Positions | null>
+  snapshot(input: { accountId: AccountId; chainId: number }): Promise<Positions>
+}
+
 /** Hardware devices (§2.7 S7): Ledger over HID from the worker in M5. */
 export interface HardwareNamespace {
   ledgerStatus(): Promise<{ available: boolean; devices: Array<{ deviceId: string; model: string }>; app: { version: string; blindSigning: boolean } | null; problem: string | null }>
@@ -250,6 +336,13 @@ export interface WalletEngine {
   readonly holder: HolderNamespace
   readonly limit: LimitNamespace
   readonly hardware: HardwareNamespace
+  readonly explore: ExploreNamespace
+  readonly nft: NftNamespace
+  readonly legends: LegendsNamespace
+  readonly farm: FarmNamespace
+  readonly launchpad: LaunchpadNamespace
+  readonly watchlist: WatchlistNamespace
+  readonly positions: PositionsNamespace
   readonly events: EngineEvents
 }
 

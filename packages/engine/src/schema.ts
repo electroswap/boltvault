@@ -332,7 +332,7 @@ export type SendQuote = z.infer<typeof SendQuoteSchema>
 // ---- M5: swap, holder tier, limit orders (§8.6, §8.18) ------------------------------
 
 /** One step of an in-wallet swap or limit-order flow; each is one sheet. */
-export const SwapStepSchema = z.enum(['wrap', 'approve', 'permit', 'swap', 'submit', 'cancel'])
+export const SwapStepSchema = z.enum(['wrap', 'approve', 'permit', 'swap', 'submit', 'cancel', 'approve_collection', 'sign_order', 'post_order', 'buy', 'accept', 'cancel_order', 'transfer', 'mint', 'deposit', 'withdraw', 'collect', 'contribute', 'claim', 'register'])
 export type SwapStep = z.infer<typeof SwapStepSchema>
 
 /** The account's BOLT/DYNO tier as the fee schedule sees it (§8.18). Scores are BOLT-eq wei strings. */
@@ -412,7 +412,7 @@ export type SwapQuote = z.infer<typeof SwapQuoteSchema>
 export const FlowStepStatusSchema = z.enum(['pending', 'signing', 'submitted', 'confirmed', 'rejected', 'failed'])
 export const SwapFlowSchema = z.object({
   id: z.string(),
-  kind: z.enum(['swap', 'limit', 'limit_cancel']),
+  kind: z.enum(['swap', 'limit', 'limit_cancel', 'nft', 'farm', 'launchpad', 'legends']),
   accountId: AccountIdSchema,
   chainId: z.number().int().positive(),
   steps: z.array(z.object({ step: SwapStepSchema, requestId: z.string().nullable(), status: FlowStepStatusSchema, hash: z.string().nullable() })),
@@ -471,8 +471,306 @@ export const LimitQuoteSchema = z.object({
 })
 export type LimitQuote = z.infer<typeof LimitQuoteSchema>
 
+// ---- M6: Explore, NFTs, Legends, farms, launchpad, watchlist, positions (§8.8–8.11, §8.13) -----
+
+const Fiat = z.number().nullable()
+
+export const ExploreTokenSchema = z.object({
+  chainId: z.number().int().positive(),
+  address: z.string(),
+  symbol: z.string(),
+  name: z.string(),
+  decimals: z.number().int().nonnegative(),
+  logoUri: z.string().nullable(),
+  price: Fiat,
+  change24h: Fiat,
+  change7d: Fiat,
+  volume24h: Fiat,
+  tvl: Fiat,
+  marketCap: Fiat,
+  safety: z.enum(['VERIFIED', 'MEDIUM_WARNING', 'STRONG_WARNING', 'BLOCKED']).nullable(),
+  starred: z.boolean(),
+})
+export type ExploreToken = z.infer<typeof ExploreTokenSchema>
+
+export const CollectionViewSchema = z.object({
+  chainId: z.number().int().positive(),
+  address: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  verified: z.boolean(),
+  standard: z.enum(['ERC721', 'ERC1155', 'unknown']),
+  totalSupply: z.number().nullable(),
+  imageUrl: z.string().nullable(),
+  bannerUrl: z.string().nullable(),
+  creatorFee: z.object({ payoutAddress: z.string(), basisPoints: z.number().int() }).nullable(),
+  floorEtn: Fiat,
+  volume24hEtn: Fiat,
+  totalVolumeEtn: Fiat,
+  owners: z.number().nullable(),
+  listed: z.number().nullable(),
+  percentListed: Fiat,
+  traits: z.array(z.object({ name: z.string(), values: z.array(z.string()) })),
+  /** Electric Legends pay marketplace dividends (§8.10). */
+  paysDividends: z.boolean(),
+  starred: z.boolean(),
+  /** How many the active account owns (Explore shows "you own 3"). */
+  owned: z.number().int().nonnegative(),
+})
+export type CollectionView = z.infer<typeof CollectionViewSchema>
+
+export const OrderViewSchema = z.object({
+  type: z.enum(['LISTING', 'OFFER', 'BID']),
+  status: z.enum(['VALID', 'EXECUTED', 'CANCELLED', 'EXPIRED', 'INVALID']),
+  priceEtn: Fiat,
+  /** Raw wei of the price where the parameters carried it. */
+  priceRaw: z.string().nullable(),
+  orderHash: z.string().nullable(),
+  maker: z.string(),
+  createdAt: z.number().nullable(),
+  endAt: z.number().nullable(),
+  /** True when the order can be fulfilled/cancelled from here (parameters + signature present). */
+  actionable: z.boolean(),
+})
+export type OrderView = z.infer<typeof OrderViewSchema>
+
+export const AssetViewSchema = z.object({
+  chainId: z.number().int().positive(),
+  address: z.string(),
+  tokenId: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+  smallImageUrl: z.string().nullable(),
+  animationUrl: z.string().nullable(),
+  mediaType: z.enum(['IMAGE', 'VIDEO', 'AUDIO', 'RAW']).nullable(),
+  owner: z.string().nullable(),
+  /** The active account owns it (from the chain when the piece is opened). */
+  mine: z.boolean(),
+  standard: z.enum(['ERC721', 'ERC1155', 'unknown']),
+  collectionName: z.string(),
+  collectionVerified: z.boolean(),
+  collectionImageUrl: z.string().nullable(),
+  creatorFee: z.object({ payoutAddress: z.string(), basisPoints: z.number().int() }).nullable(),
+  suspicious: z.boolean(),
+  rarityRank: z.number().nullable(),
+  traits: z.array(z.object({ name: z.string(), value: z.string(), rarity: z.number().nullable() })),
+  lastPriceEtn: Fiat,
+  listing: OrderViewSchema.nullable(),
+  bestBid: OrderViewSchema.nullable(),
+  bids: z.array(OrderViewSchema),
+  /** Electric Legend: unclaimed dividends for this piece, wei string; null for other collections. */
+  dividendsWei: z.string().nullable(),
+  paysDividends: z.boolean(),
+})
+export type AssetView = z.infer<typeof AssetViewSchema>
+
+export const InventorySchema = z.object({
+  accountId: AccountIdSchema,
+  chainId: z.number().int().positive(),
+  assets: z.array(AssetViewSchema),
+  collections: z.array(z.object({ address: z.string(), name: z.string(), logoUrl: z.string().nullable(), balance: z.number().int(), floorEtn: Fiat })),
+  /** Sum of floors × counts, ETN, where floors exist. */
+  floorValueEtn: Fiat,
+  listedCount: z.number().int().nonnegative(),
+  withOffersCount: z.number().int().nonnegative(),
+  observedAt: z.number().int().nonnegative(),
+})
+export type Inventory = z.infer<typeof InventorySchema>
+
+export const OffersInboxSchema = z.object({
+  /** Offers on the account's pieces. */
+  received: z.array(z.object({ asset: AssetViewSchema, offer: OrderViewSchema })),
+  /** Offers the account made. */
+  made: z.array(z.object({ address: z.string(), tokenId: z.string(), name: z.string(), imageUrl: z.string().nullable(), collectionName: z.string(), offer: OrderViewSchema, expiresAt: z.number() })),
+  /** Total WETN the account's open offers commit, wei string. */
+  obligationWei: z.string(),
+  wetnBalanceWei: z.string(),
+})
+export type OffersInbox = z.infer<typeof OffersInboxSchema>
+
+export const NftActivityViewSchema = z.object({
+  address: z.string(),
+  tokenId: z.string().nullable(),
+  name: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+  type: z.enum(['LISTING', 'SALE', 'CANCEL_LISTING', 'TRANSFER', 'BID', 'CANCEL_BID']),
+  from: z.string(),
+  to: z.string().nullable(),
+  hash: z.string().nullable(),
+  priceEtn: Fiat,
+  timestamp: z.number(),
+})
+export type NftActivityView = z.infer<typeof NftActivityViewSchema>
+
+export const LegendsStatusSchema = z.object({
+  accountId: AccountIdSchema,
+  chainId: z.number().int().positive(),
+  collection: z.string(),
+  distributor: z.string(),
+  ownedTokenIds: z.array(z.string()),
+  registeredTokenIds: z.array(z.string()),
+  unregisteredTokenIds: z.array(z.string()),
+  claimableWei: z.string(),
+  /** The best single claim so far, for the vessel's level (§8.10). */
+  bestClaimWei: z.string(),
+  /** 0..1 */
+  vesselLevel: z.number(),
+  lifetimePaidWei: z.string(),
+  activeTokenCount: z.number().int().nonnegative(),
+  /** The account's share of the holders' third of the next fee, 0..1. */
+  shareOfNextFee: z.number(),
+  dividendsEnabled: z.boolean(),
+  mint: z.object({ mintable: z.boolean(), priceWei: z.string(), mintableCount: z.number().int().nonnegative(), totalSupply: z.number().int().nonnegative() }).nullable(),
+  observedAt: z.number().int().nonnegative(),
+})
+export type LegendsStatus = z.infer<typeof LegendsStatusSchema>
+
+export const FarmViewSchema = z.object({
+  chainId: z.number().int().positive(),
+  id: z.number().int().nonnegative(),
+  version: z.union([z.literal(2), z.literal(3)]),
+  name: z.string(),
+  poolAddr: z.string(),
+  token0: z.string(),
+  token1: z.string(),
+  symbol0: z.string(),
+  symbol1: z.string(),
+  decimals0: z.number().int().nonnegative(),
+  decimals1: z.number().int().nonnegative(),
+  active: z.boolean(),
+  tvlUsd: Fiat,
+  baseApy: Fiat,
+  thirdPartyApy: Fiat,
+  thirdParty: z.object({ token: z.string(), symbol: z.string() }).nullable(),
+  farmerCount: z.number().int().nonnegative(),
+  /** The active account's position (chain read), or null. */
+  position: z
+    .object({
+      liquidity: z.string(),
+      shareOfFarm: z.number(),
+      durationMultiplier: z.number().int(),
+      boltMultiplier: z.number().int(),
+      boltDeposited: z.string(),
+      startingBlock: z.number().int().nonnegative(),
+      blocksServed: z.number().int().nonnegative(),
+      pendingRewards: z.string(),
+      pendingThirdParty: z.string(),
+      fees0: z.string(),
+      fees1: z.string(),
+      /** Estimated wall-clock dates (5 s blocks) at which the ring reaches 2.0× and 2.5×; null when reached. */
+      at2x: z.number().nullable(),
+      at25x: z.number().nullable(),
+      nextStair: z.object({ bolt: z.string(), multiplier: z.number().int(), more: z.string() }).nullable(),
+      /** Token amounts the position holds right now (for the withdraw preview). */
+      amount0: z.string(),
+      amount1: z.string(),
+    })
+    .nullable(),
+})
+export type FarmView = z.infer<typeof FarmViewSchema>
+
+export const FarmDepositQuoteSchema = z.object({
+  farmId: z.number().int().nonnegative(),
+  amount0Raw: z.string(),
+  amount1Raw: z.string(),
+  boltRaw: z.string(),
+  /** Which side is native ETN (goes in `value`), if any. */
+  nativeSide: z.union([z.literal(0), z.literal(1)]).nullable(),
+  liquidityAdded: z.string(),
+  /** Duration multiplier before and after this deposit (the dilution plate). */
+  multiplierBefore: z.number().int(),
+  multiplierAfter: z.number().int(),
+  boltStair: z.object({ total: z.string(), multiplier: z.number().int() }).nullable(),
+  steps: z.array(SwapStepSchema),
+  ok: z.boolean(),
+  problems: z.array(z.string()),
+})
+export type FarmDepositQuote = z.infer<typeof FarmDepositQuoteSchema>
+
+export const FarmWithdrawQuoteSchema = z.object({
+  farmId: z.number().int().nonnegative(),
+  liquidityRaw: z.string(),
+  percent: z.number(),
+  amount0Raw: z.string(),
+  amount1Raw: z.string(),
+  rewardsRaw: z.string(),
+  thirdPartyRaw: z.string(),
+  fees0Raw: z.string(),
+  fees1Raw: z.string(),
+  /** BOLT returned — only when everything is withdrawn. */
+  boltReturnedRaw: z.string(),
+  keepsMultiplier: z.boolean(),
+  ok: z.boolean(),
+  problems: z.array(z.string()),
+})
+export type FarmWithdrawQuote = z.infer<typeof FarmWithdrawQuoteSchema>
+
+export const CampaignViewSchema = z.object({
+  chainId: z.number().int().positive(),
+  pool: z.string(),
+  status: z.enum(['ACTIVE', 'LAUNCHED', 'FAILED', 'CANCELLED', 'PENDING']),
+  phase: z.enum(['upcoming', 'live', 'awaiting_finalize', 'launched', 'failed', 'cancelled']),
+  token: z.object({ name: z.string(), symbol: z.string(), decimals: z.number().int(), address: z.string().nullable() }),
+  creator: z.string(),
+  creatorName: z.string().nullable(),
+  logoUrl: z.string().nullable(),
+  bannerUrl: z.string().nullable(),
+  description: z.string(),
+  links: z.object({ website: z.string().nullable(), twitter: z.string().nullable(), discord: z.string().nullable(), telegram: z.string().nullable() }),
+  starts: z.number(),
+  ends: z.number(),
+  raisedWei: z.string(),
+  minEtnToLaunchWei: z.string(),
+  maxContributionWei: z.string().nullable(),
+  minContributionWei: z.string().nullable(),
+  /** 0..1 of the launch target. */
+  fill: z.number(),
+  contributorCount: z.number().int().nonnegative(),
+  affiliatePercent: z.number(),
+  shareLink: z.string().nullable(),
+  /** The account's side. */
+  contributedWei: z.string(),
+  claimed: z.boolean(),
+  claimableTokensRaw: z.string(),
+  referralClaimableWei: z.string(),
+  keys: z.array(z.enum(['contribute', 'claim_tokens', 'claim_refund', 'claim_referral'])),
+  starred: z.boolean(),
+})
+export type CampaignView = z.infer<typeof CampaignViewSchema>
+
+export const WatchItemSchema = z.object({
+  kind: z.enum(['token', 'collection', 'campaign']),
+  chainId: z.number().int().positive(),
+  address: z.string(),
+  label: z.string(),
+  /** Alert when the price/floor crosses this (USD for tokens, ETN for floors); null = no alert. */
+  above: z.number().nullable(),
+  below: z.number().nullable(),
+  /** Campaigns: tell me when it goes live. */
+  onLive: z.boolean(),
+  addedAt: z.number().int().nonnegative(),
+  lastValue: z.number().nullable(),
+})
+export type WatchItem = z.infer<typeof WatchItemSchema>
+
+export const PositionsSchema = z.object({
+  accountId: AccountIdSchema,
+  chainId: z.number().int().positive(),
+  farms: z.array(FarmViewSchema),
+  legends: LegendsStatusSchema.nullable(),
+  orders: z.array(LimitOrderViewSchema),
+  campaigns: z.array(CampaignViewSchema),
+  /** The one accessory Home shows for positions, if any: rewards to collect or dividends to claim. */
+  accessory: z.object({ kind: z.enum(['collect', 'dividends', 'claim_tokens', 'claim_refund']), text: z.string(), target: z.string() }).nullable(),
+  observedAt: z.number().int().nonnegative(),
+})
+export type Positions = z.infer<typeof PositionsSchema>
+
 export const EngineEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('swap.progress'), flow: SwapFlowSchema }),
+  z.object({ type: z.literal('positions.changed'), positions: PositionsSchema }),
+  z.object({ type: z.literal('watchlist.changed'), items: z.array(WatchItemSchema) }),
   z.object({ type: z.literal('limit.changed'), accountId: AccountIdSchema, chainId: z.number().int().positive(), orders: z.array(LimitOrderViewSchema) }),
   z.object({ type: z.literal('tokens.changed'), chainId: z.number().int().positive() }),
   z.object({ type: z.literal('allowances.changed'), accountId: AccountIdSchema, chainId: z.number().int().positive(), rows: z.array(AllowanceViewSchema) }),

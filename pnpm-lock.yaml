@@ -370,6 +370,9 @@ importers:
       viem:
         specifier: ^2.56.3
         version: 2.56.3(typescript@5.9.3)(zod@3.25.76)
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@boltvault/security':
         specifier: workspace:*
@@ -6920,7 +6923,9 @@ snapshots:
       metro-runtime: 0.84.6
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-color@2.1.0': {}
 

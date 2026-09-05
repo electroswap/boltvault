@@ -19,7 +19,16 @@ import { Onboarding } from '../screens/Onboarding'
 import { Receive } from '../screens/Receive'
 import { Security } from '../screens/Security'
 import { Send } from '../screens/Send'
-import { ExploreShell, SettingsShell } from '../screens/shells'
+import { SettingsShell } from '../screens/shells'
+import { Explore } from '../screens/Explore'
+import { Collection } from '../screens/Collection'
+import { Piece } from '../screens/Piece'
+import { Rack } from '../screens/Rack'
+import { Offers } from '../screens/Offers'
+import { Farm } from '../screens/Farm'
+import { Campaign } from '../screens/Campaign'
+import { Legends } from '../screens/Legends'
+import { Alerts } from '../screens/Alerts'
 import { Spending } from '../screens/Spending'
 import { Swap } from '../screens/Swap'
 import { Token } from '../screens/Token'
@@ -67,8 +76,42 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
       screen = <Swap body={body} reducedMotion={reducedMotionOverride} {...(p?.tokenIn ? { tokenIn: p.tokenIn } : {})} {...(p?.tokenOut ? { tokenOut: p.tokenOut } : {})} />
       break
     }
-    case 'explore':
-      screen = <ExploreShell body={body} />
+    case 'explore': {
+      const p = current.params as { segment?: 'tokens' | 'collectibles' | 'launch' | 'farms' } | undefined
+      screen = <Explore body={body} {...(p?.segment ? { segment: p.segment } : {})} />
+      break
+    }
+    case 'collection': {
+      const p = current.params as { chainId: number; address: string } | undefined
+      screen = <Collection body={body} reducedMotion={reducedMotionOverride} chainId={p?.chainId ?? 52014} address={p?.address ?? ''} />
+      break
+    }
+    case 'nft': {
+      const p = current.params as { chainId: number; address: string; tokenId: string } | undefined
+      screen = <Piece body={body} reducedMotion={reducedMotionOverride} chainId={p?.chainId ?? 52014} address={p?.address ?? ''} tokenId={p?.tokenId ?? '0'} />
+      break
+    }
+    case 'rack':
+      screen = <Rack body={body} />
+      break
+    case 'offers':
+      screen = <Offers body={body} reducedMotion={reducedMotionOverride} />
+      break
+    case 'farm': {
+      const p = current.params as { chainId: number; farmId: number } | undefined
+      screen = <Farm body={body} reducedMotion={reducedMotionOverride} chainId={p?.chainId ?? 52014} farmId={p?.farmId ?? 0} />
+      break
+    }
+    case 'campaign': {
+      const p = current.params as { chainId: number; pool: string } | undefined
+      screen = <Campaign body={body} reducedMotion={reducedMotionOverride} chainId={p?.chainId ?? 52014} pool={p?.pool ?? ''} />
+      break
+    }
+    case 'legends':
+      screen = <Legends body={body} reducedMotion={reducedMotionOverride} />
+      break
+    case 'alerts':
+      screen = <Alerts body={body} />
       break
     case 'activity':
       screen = <Activity body={body} />

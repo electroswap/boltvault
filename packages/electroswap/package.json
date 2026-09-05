@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@boltvault/chains": "workspace:*",
-    "viem": "^2.56.3"
+    "viem": "^2.56.3",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@boltvault/security": "workspace:*",

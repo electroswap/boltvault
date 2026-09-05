@@ -5,7 +5,7 @@
  * "contract interaction".
  */
 import { decodeFunctionData, hexToString, isAddress, isHex, maxUint256, size, type Hex } from 'viem'
-import { ERC1155_ABI, ERC20_ABI, ERC721_ABI, LIMIT_ORDERS_ABI, MULTICALL3_ABI, PERMIT2_ABI, WETH_ABI } from './abis'
+import { DIVIDENDS_ABI, ERC1155_ABI, ERC20_ABI, ERC721_ABI, FARM_ABI, LAUNCHPAD_ABI, LIMIT_ORDERS_ABI, MINTER_ABI, MULTICALL3_ABI, PERMIT2_ABI, SEAPORT_ABI, WETH_ABI } from './abis'
 import { knownContract } from './registry'
 import { decodeUniversalRouter, type DecodedUniversalRouter } from './ur'
 
@@ -32,6 +32,13 @@ export type DecodedCall =
   | { readonly kind: 'universal_router'; readonly router: Hex; readonly decoded: DecodedUniversalRouter; readonly value: bigint }
   | { readonly kind: 'multicall'; readonly to: Hex; readonly calls: ReadonlyArray<{ target: Hex; data: Hex }> }
   | { readonly kind: 'limit_order'; readonly manager: Hex; readonly action: 'submit' | 'close'; readonly tokenIn: Hex | null; readonly tokenOut: Hex | null; readonly amountIn: bigint; readonly minOut: bigint; readonly recipient: Hex | null; readonly durationSeconds: bigint; readonly orderIds: readonly bigint[]; readonly withPermit: boolean }
+  | { readonly kind: 'farm_deposit'; readonly farm: Hex; readonly farmId: bigint; readonly amount0: bigint; readonly amount1: bigint; readonly amountBolt: bigint; readonly value: bigint }
+  | { readonly kind: 'farm_withdraw'; readonly farm: Hex; readonly farmId: bigint; readonly liquidity: bigint; readonly asNative: boolean }
+  | { readonly kind: 'launchpad'; readonly pool: Hex; readonly action: 'contribute' | 'claim_tokens' | 'claim_refund' | 'claim_referral'; readonly value: bigint; readonly referrer: Hex | null; readonly recipient: Hex | null }
+  | { readonly kind: 'seaport_fulfill'; readonly marketplace: Hex; readonly offerer: Hex; readonly offer: ReadonlyArray<{ token: Hex; itemType: number; identifier: bigint; amount: bigint }>; readonly consideration: ReadonlyArray<{ token: Hex; itemType: number; identifier: bigint; amount: bigint; recipient: Hex }>; readonly value: bigint }
+  | { readonly kind: 'seaport_cancel'; readonly marketplace: Hex; readonly count: number }
+  | { readonly kind: 'dividends'; readonly distributor: Hex; readonly action: 'register' | 'claim'; readonly tokenIds: readonly bigint[] }
+  | { readonly kind: 'nft_mint'; readonly minter: Hex; readonly collection: Hex; readonly count: bigint; readonly value: bigint }
   | { readonly kind: 'contract_call'; readonly to: Hex; readonly selector: Hex; readonly functionName: string | null; readonly args: readonly unknown[] | null; readonly value: bigint }
 
 export interface DecodeCallInput {
@@ -41,7 +48,7 @@ export interface DecodeCallInput {
   readonly value: bigint
 }
 
-function tryDecode(abi: typeof ERC20_ABI | typeof ERC721_ABI | typeof ERC1155_ABI | typeof PERMIT2_ABI | typeof WETH_ABI | typeof MULTICALL3_ABI | typeof LIMIT_ORDERS_ABI, data: Hex): { functionName: string; args: readonly unknown[] } | null {
+function tryDecode(abi: typeof ERC20_ABI | typeof ERC721_ABI | typeof ERC1155_ABI | typeof PERMIT2_ABI | typeof WETH_ABI | typeof MULTICALL3_ABI | typeof LIMIT_ORDERS_ABI | typeof FARM_ABI | typeof LAUNCHPAD_ABI | typeof SEAPORT_ABI | typeof DIVIDENDS_ABI | typeof MINTER_ABI, data: Hex): { functionName: string; args: readonly unknown[] } | null {
   try {
     const d = decodeFunctionData({ abi, data })
     return { functionName: d.functionName, args: (d.args ?? []) as readonly unknown[] }
@@ -87,6 +94,49 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
     if (l?.functionName === 'closeOrder') return { kind: 'limit_order', manager: to, action: 'close', tokenIn: null, tokenOut: null, amountIn: 0n, minOut: 0n, recipient: null, durationSeconds: 0n, orderIds: [(l.args as [bigint])[0]], withPermit: false }
     if (l?.functionName === 'closeOrders') return { kind: 'limit_order', manager: to, action: 'close', tokenIn: null, tokenOut: null, amountIn: 0n, minOut: 0n, recipient: null, durationSeconds: 0n, orderIds: [...(l.args as [readonly bigint[]])[0]], withPermit: false }
   }
+  if (known?.role === 'farm') {
+    const f = tryDecode(FARM_ABI, data)
+    if (f?.functionName === 'deposit') {
+      const [farmId, amount0, amount1, amountBolt] = f.args as [bigint, bigint, bigint, bigint]
+      return { kind: 'farm_deposit', farm: to, farmId, amount0, amount1, amountBolt, value }
+    }
+    if (f?.functionName === 'withdraw') {
+      const [farmId, liquidity, asNative] = f.args as [bigint, bigint, boolean]
+      return { kind: 'farm_withdraw', farm: to, farmId, liquidity, asNative }
+    }
+  }
+  if (known?.role === 'marketplace') {
+    const s = tryDecode(SEAPORT_ABI, data)
+    if (s?.functionName === 'fulfillOrder') {
+      const [order] = s.args as [{ parameters: { offerer: Hex; offer: ReadonlyArray<{ itemType: number; token: Hex; identifierOrCriteria: bigint; startAmount: bigint }>; consideration: ReadonlyArray<{ itemType: number; token: Hex; identifierOrCriteria: bigint; startAmount: bigint; recipient: Hex }> } }]
+      const p = order.parameters
+      return { kind: 'seaport_fulfill', marketplace: to, offerer: p.offerer, offer: p.offer.map((o) => ({ token: o.token, itemType: Number(o.itemType), identifier: o.identifierOrCriteria, amount: o.startAmount })), consideration: p.consideration.map((c) => ({ token: c.token, itemType: Number(c.itemType), identifier: c.identifierOrCriteria, amount: c.startAmount, recipient: c.recipient })), value }
+    }
+    if (s?.functionName === 'cancel') {
+      const [orders] = s.args as [readonly unknown[]]
+      return { kind: 'seaport_cancel', marketplace: to, count: orders.length }
+    }
+  }
+  if (known?.role === 'dividends') {
+    const d = tryDecode(DIVIDENDS_ABI, data)
+    if (d?.functionName === 'register' || d?.functionName === 'claimDividends') {
+      const [ids] = d.args as [readonly bigint[]]
+      return { kind: 'dividends', distributor: to, action: d.functionName === 'register' ? 'register' : 'claim', tokenIds: [...ids] }
+    }
+  }
+  if (known?.role === 'minter') {
+    const m = tryDecode(MINTER_ABI, data)
+    if (m?.functionName === 'mint') {
+      const [collection, count] = m.args as [Hex, bigint]
+      return { kind: 'nft_mint', minter: to, collection, count, value }
+    }
+  }
+  // Launchpad pools are one contract per campaign: matched by selector, then by the manager the pool reports (engine side).
+  const lp = tryDecode(LAUNCHPAD_ABI, data)
+  if (lp?.functionName === 'contribute') return { kind: 'launchpad', pool: to, action: 'contribute', value, referrer: (lp.args as [Hex])[0], recipient: null }
+  if (lp?.functionName === 'claimTokens') return { kind: 'launchpad', pool: to, action: 'claim_tokens', value, referrer: null, recipient: (lp.args as [Hex])[0] }
+  if (lp?.functionName === 'claimRefund') return { kind: 'launchpad', pool: to, action: 'claim_refund', value, referrer: null, recipient: (lp.args as [Hex])[0] }
+  if (lp?.functionName === 'claimReferralRewards' && known?.role === 'launchpad') return { kind: 'launchpad', pool: to, action: 'claim_referral', value, referrer: null, recipient: null }
   if (known?.role === 'multicall') {
     const m = tryDecode(MULTICALL3_ABI, data)
     if (m) {

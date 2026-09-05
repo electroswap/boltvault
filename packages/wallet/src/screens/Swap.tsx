@@ -8,7 +8,7 @@
  * Discharge lands the result here.
  */
 import { Body, Chip, Column, Discharge, Icon, Input, Key, Plate, Row, ScrollView, Segmented, Sheet, TokenAvatar, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
-import type { LimitOrderView, LimitQuote, SwapFlow, SwapQuote, TokenView } from '@boltvault/engine'
+import type { LimitOrderView, LimitQuote, SwapQuote, TokenView } from '@boltvault/engine'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useActivity } from '../hooks/useActivity'
@@ -19,6 +19,7 @@ import { t } from '../i18n'
 import { swapFlowStore, useSwapFlow } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
 import { FeeScheduleSheet } from './FeeScheduleSheet'
+import { statusLabel, stepLabel } from '../components/FlowPlate'
 
 const ETN = 52014
 const QUOTE_STALE_MS = 8_000
@@ -38,40 +39,6 @@ export interface SwapProps {
   readonly reducedMotion?: boolean
 }
 
-function stepLabel(step: SwapFlow['steps'][number]['step']): string {
-  switch (step) {
-    case 'wrap':
-      return t({ id: 'flow.wrap', message: 'Wrap ETN' })
-    case 'approve':
-      return t({ id: 'flow.approve', message: 'Allow Permit2' })
-    case 'permit':
-      return t({ id: 'flow.permit', message: 'Permit this amount' })
-    case 'swap':
-      return t({ id: 'flow.swap', message: 'Swap' })
-    case 'submit':
-      return t({ id: 'flow.submit', message: 'Place order' })
-    case 'cancel':
-      return t({ id: 'flow.cancel', message: 'Cancel order' })
-  }
-}
-
-function statusLabel(status: SwapFlow['steps'][number]['status']): string {
-  switch (status) {
-    case 'pending':
-      return t({ id: 'flow.pending', message: 'Next' })
-    case 'signing':
-      return t({ id: 'flow.signing', message: 'Waiting for you' })
-    case 'submitted':
-      return t({ id: 'flow.submitted', message: 'Confirming…' })
-    case 'confirmed':
-      return t({ id: 'flow.confirmed', message: 'Done' })
-    case 'rejected':
-      return t({ id: 'flow.rejected', message: 'Rejected' })
-    case 'failed':
-      return t({ id: 'flow.failed', message: 'Failed' })
-  }
-}
-
 export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMotion = false }: SwapProps) {
   const engine = useEngine()
   const { active } = useWalletState()
@@ -79,7 +46,8 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   const portfolio = usePortfolio(active?.id ?? null)
   const { entries } = useActivity(active?.id ?? null)
   const head = useChainHead(ETN)
-  const { flow, setActive, dismiss } = useSwapFlow()
+  const { flow: anyFlow, setActive, dismiss } = useSwapFlow()
+  const flow = anyFlow && (anyFlow.kind === 'swap' || anyFlow.kind === 'limit' || anyFlow.kind === 'limit_cancel') ? anyFlow : null
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const [mode, setMode] = useState<'swap' | 'limit'>('swap')
   const [tokens, setTokens] = useState<TokenView[]>([])

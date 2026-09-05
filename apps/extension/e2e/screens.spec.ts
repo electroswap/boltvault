@@ -49,6 +49,14 @@ const CASES: Array<{ screen: string; scenario: string; sizes: Array<keyof typeof
   { screen: 'receive', scenario: 'funded', sizes: ['popup', 'mobile'] },
   { screen: 'allowances', scenario: 'funded', sizes: ['popup', 'tab'] },
   { screen: 'spending', scenario: 'funded', sizes: ['popup'] },
+  { screen: 'collection', scenario: 'funded', sizes: ['popup', 'tab'] },
+  { screen: 'nft', scenario: 'funded', sizes: ['popup', 'mobile'] },
+  { screen: 'rack', scenario: 'funded', sizes: ['popup', 'tab'] },
+  { screen: 'offers', scenario: 'funded', sizes: ['popup'] },
+  { screen: 'farm', scenario: 'funded', sizes: ['popup', 'mobile'] },
+  { screen: 'campaign', scenario: 'funded', sizes: ['popup', 'mobile'] },
+  { screen: 'legends', scenario: 'funded', sizes: ['popup', 'tab'] },
+  { screen: 'alerts', scenario: 'funded', sizes: ['popup'] },
 ]
 
 test('every screen renders in every size and matches its baseline', async () => {
