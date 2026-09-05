@@ -26,6 +26,9 @@ importers:
       '@boltvault/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@boltvault/design':
+        specifier: workspace:*
+        version: link:../../packages/design
       '@boltvault/electroswap':
         specifier: workspace:*
         version: link:../../packages/electroswap
@@ -173,13 +176,25 @@ importers:
 
   packages/design:
     dependencies:
+      '@boltvault/electroswap':
+        specifier: workspace:*
+        version: link:../electroswap
       react:
         specifier: ^18.3.1
         version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
     devDependencies:
       '@types/react':
         specifier: ^18.3.12
         version: 18.3.31
+      '@types/react-dom':
+        specifier: ^19.2.7
+        version: 19.2.7(@types/react@18.3.31)
+      happy-dom:
+        specifier: ^20.14.0
+        version: 20.14.0
       typescript:
         specifier: ^5.6.3
         version: 5.9.3

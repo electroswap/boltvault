@@ -1,6 +1,16 @@
 import { type CSSProperties } from 'react'
 import { useState } from 'react'
 import { SwapView } from './SwapView'
+import {
+  IconHome,
+  IconSwap,
+  IconActivity,
+  IconSettings,
+  IconFlask,
+  IconScan,
+  IconBolt,
+  type IconProps,
+} from '@boltvault/design'
 
 /**
  * The popup — the v1 product is the popup (design §Layout).
@@ -16,12 +26,12 @@ import { SwapView } from './SwapView'
  * them their own surfaces + empty states so the tabs are not Home clones).
  */
 
-const TABS = [
-  { id: 'home', label: 'Home' },
-  { id: 'swap', label: 'Swap' },
-  { id: 'activity', label: 'Act' },
-  { id: 'settings', label: 'Set' },
-] as const
+const TABS: { id: 'home' | 'swap' | 'activity' | 'settings'; label: string; icon: (p: IconProps) => any }[] = [
+  { id: 'home', label: 'Home', icon: IconHome },
+  { id: 'swap', label: 'Swap', icon: IconSwap },
+  { id: 'activity', label: 'Act', icon: IconActivity },
+  { id: 'settings', label: 'Set', icon: IconSettings },
+]
 
 /** Placeholder portfolio (ETN share of portfolio) — replaced by T4.2. */
 const PORTFOLIO = [
@@ -144,10 +154,13 @@ export default function App() {
           padding: '12px var(--bv-inset)',
         }}
       >
-        <span data-testid="account" style={{ color: 'var(--bv-ink)', fontSize: '14px' }}>
+        <span data-testid="account" style={{ color: 'var(--bv-ink)', fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <IconBolt size={16} />
           main ▾
         </span>
-        <span style={{ color: 'var(--bv-mute)', fontSize: '13px' }}>scan</span>
+        <span style={{ color: 'var(--bv-mute)', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+          <IconScan size={16} />
+        </span>
       </header>
 
       <main style={{ flex: 1, padding: '0 var(--bv-inset)', overflowY: 'auto' }}>
@@ -192,11 +205,15 @@ export default function App() {
                 padding: '10px 12px',
                 background: 'var(--bv-glass)',
                 borderRadius: '8px',
-                color: 'var(--bv-mute)',
+                color: 'var(--bv-ink)',
                 fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
               }}
             >
-              WETN/BOLT 1.41x · Collect 12 DYNO
+              <IconFlask size={18} />
+              <span>WETN/BOLT 1.41x · Collect 12 DYNO</span>
             </div>
           </>
         )}
@@ -318,11 +335,13 @@ export default function App() {
           background: 'var(--bv-void)',
         }}
       >
-        {TABS.map((t) => (
+        {TABS.map((t) => {
+          const TIcon = t.icon
+          return (
           <button
             key={t.id}
             data-testid={`tab-${t.id}`}
-            onClick={() => setTab(t.id as typeof tab)}
+            onClick={() => setTab(t.id)}
             style={{
               flex: 1,
               height: 'var(--bv-hit)',
@@ -330,13 +349,20 @@ export default function App() {
               border: 'none',
               color: tab === t.id ? 'var(--bv-arc)' : 'var(--bv-mute)',
               fontFamily: 'var(--bv-font-sora)',
-              fontSize: '12px',
+              fontSize: '11px',
               cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '2px',
             }}
           >
+            <TIcon size={20} />
             {t.label}
           </button>
-        ))}
+          )
+        })}
       </nav>
     </div>
   )

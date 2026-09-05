@@ -14,6 +14,7 @@
   "dependencies": {
     "@boltvault/chains": "workspace:*",
     "@boltvault/core": "workspace:*",
+    "@boltvault/design": "workspace:*",
     "@boltvault/electroswap": "workspace:*",
     "@boltvault/provider-protocol": "workspace:*",
     "@boltvault/swap": "workspace:*"

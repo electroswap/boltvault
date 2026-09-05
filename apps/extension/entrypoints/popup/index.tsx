@@ -1,6 +1,13 @@
 import { createRoot } from 'react-dom/client'
 import App from '../../src/App'
 import '../../src/tokens.css'
+import { cssVars } from '@boltvault/design'
+
+// The design tokens are the source of truth: inject the :root block once so the
+// popup and any full-tab share the same face contract (@boltvault/design).
+const bvStyle = document.createElement('style')
+bvStyle.textContent = cssVars()
+document.head.appendChild(bvStyle)
 
 // Popup entrypoint (entrypoints/popup/). WXT pairs index.html with this file
 // and emits popup.html (wired as the default action). An HTML page runs its

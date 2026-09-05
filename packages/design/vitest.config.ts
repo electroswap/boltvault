@@ -2,10 +2,11 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
-    environment: 'node',
+    environment: 'happy-dom',
     globals: true,
     passWithNoTests: true,
-    include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
+    include: ['tests/**/*.test.{ts,tsx}', 'src/**/*.test.{ts,tsx}'],
     testTimeout: 30000,
+    env: { NODE_ENV: 'test' },
   },
 })
