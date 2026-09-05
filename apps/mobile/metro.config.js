@@ -15,9 +15,14 @@ config.resolver.unstable_enablePackageExports = true
 // The pure packages use TypeScript's `./module.js` specifiers (which resolve
 // to `.ts` under Bundler resolution in Vite/tsc). Metro does not, so fall back
 // to the extensionless specifier when a `.js` import has no `.js` file.
+// Node built-ins that third-party code reaches for: `crypto` (the Keystone UR
+// registry's `hdkey`) is served by a small @noble-backed shim.
+const NODE_SHIMS = { crypto: path.resolve(projectRoot, 'src/node-crypto.ts'), 'create-hash': path.resolve(projectRoot, 'src/node-create-hash.ts') }
+
 const defaultResolve = config.resolver.resolveRequest
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   const resolve = defaultResolve ?? context.resolveRequest
+  if (NODE_SHIMS[moduleName]) return { type: 'sourceFile', filePath: NODE_SHIMS[moduleName] }
   try {
     return resolve(context, moduleName, platform)
   } catch (err) {
