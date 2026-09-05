@@ -1,5 +1,13 @@
 import react from '@vitejs/plugin-react'
+import { createRequire } from 'node:module'
+import { dirname } from 'node:path'
 import { defineConfig } from 'wxt'
+
+// Resolve react-native-web once, from this app, so workspace packages that
+// import `react-native` (packages/ui) get the web implementation regardless
+// of pnpm's per-package node_modules.
+const require = createRequire(import.meta.url)
+const RNW_DIR = dirname(require.resolve('react-native-web/package.json'))
 
 /**
  * WXT MV3 shell (master plan §2.1, §3.5).
@@ -31,10 +39,15 @@ export default defineConfig({
   vite: () => ({
     plugins: [react()],
     resolve: {
-      alias: { 'react-native': 'react-native-web' },
+      alias: [
+        { find: /^react-native$/, replacement: RNW_DIR },
+        { find: /^react-native\/(.*)$/, replacement: `${RNW_DIR}/$1` },
+      ],
       extensions: ['.web.tsx', '.web.ts', '.web.js', '.tsx', '.ts', '.jsx', '.js', '.mjs', '.json'],
+      mainFields: ['browser', 'module', 'main'],
     },
     define: {
+      global: 'globalThis',
       __DEV__: JSON.stringify(process.env['NODE_ENV'] !== 'production'),
       'process.env.NODE_ENV': JSON.stringify(process.env['NODE_ENV'] ?? 'production'),
       'process.env.TAMAGUI_TARGET': JSON.stringify('web'),

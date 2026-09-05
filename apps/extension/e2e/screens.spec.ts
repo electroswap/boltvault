@@ -1,0 +1,98 @@
+/**
+ * Screenshot harness (master plan §7.12 item 6): every registered screen ×
+ * body size × motion mode, rendered from fixture engine state, diffed
+ * against committed baselines with pixelmatch. `UPDATE_BASELINES=1` rewrites
+ * them. Hit-target measurement runs on the same pages.
+ */
+import { expect, test } from '@playwright/test'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+import { PNG } from 'pngjs'
+import pixelmatch from 'pixelmatch'
+import { collectErrors, launchWithExtension } from './extension'
+
+const BASELINES = join(process.cwd(), 'e2e', 'baselines')
+const OUT = join(process.cwd(), 'screenshots')
+const UPDATE = process.env['UPDATE_BASELINES'] === '1'
+
+const SIZES = {
+  popup: { body: 'extension-popup', width: 360, height: 600 },
+  tab: { body: 'extension-tab', width: 1100, height: 760 },
+  mobile: { body: 'mobile', width: 390, height: 844 },
+} as const
+
+const CASES: Array<{ screen: string; scenario: string; sizes: Array<keyof typeof SIZES> }> = [
+  { screen: 'home', scenario: 'fresh', sizes: ['popup', 'mobile'] },
+  { screen: 'home', scenario: 'locked', sizes: ['popup'] },
+  { screen: 'home', scenario: 'funded', sizes: ['popup', 'tab', 'mobile'] },
+  { screen: 'swap', scenario: 'funded', sizes: ['popup', 'mobile'] },
+  { screen: 'explore', scenario: 'funded', sizes: ['popup'] },
+  { screen: 'activity', scenario: 'funded', sizes: ['popup'] },
+  { screen: 'settings', scenario: 'funded', sizes: ['popup'] },
+  { screen: 'moments', scenario: 'funded', sizes: ['tab', 'mobile'] },
+]
+
+test('every screen renders in every size and matches its baseline', async () => {
+  test.setTimeout(240_000)
+  const ext = await launchWithExtension()
+  await mkdir(OUT, { recursive: true })
+  await mkdir(BASELINES, { recursive: true })
+  const failures: string[] = []
+  const tooSmall: string[] = []
+  try {
+    for (const c of CASES) {
+      for (const size of c.sizes) {
+        const s = SIZES[size]
+        const page = await ext.context.newPage()
+        const errors = collectErrors(page)
+        await page.setViewportSize({ width: s.width, height: s.height })
+        const url = ext.url(`harness.html?scenario=${c.scenario}&screen=${c.screen}&body=${s.body}&motion=reduced`)
+        await page.goto(url)
+        try {
+          await page.waitForFunction(() => document.documentElement.dataset['ready'] === '1', undefined, { timeout: 30_000 })
+        } catch (err) {
+          throw new Error(`${c.screen}/${c.scenario}/${size} never became ready. Page errors:\n${errors.join('\n')}\n${String(err)}`)
+        }
+        await page.waitForTimeout(600) // fonts + the still Field frame
+        // Hit-target law (§7.5): every pressable ≥ 44 px on its short side.
+        const small = await page.evaluate(() =>
+          Array.from(document.querySelectorAll('[role="button"],[role="tab"],button'))
+            .map((el) => {
+              const r = el.getBoundingClientRect()
+              return { id: el.getAttribute('data-testid') ?? el.getAttribute('aria-label') ?? el.tagName, w: r.width, h: r.height }
+            })
+            .filter((r) => r.w > 0 && r.h > 0 && (r.w < 44 || r.h < 44))
+            .map((r) => `${r.id} ${Math.round(r.w)}×${Math.round(r.h)}`),
+        )
+        for (const sm of small) tooSmall.push(`${c.screen}/${c.scenario}/${size}: ${sm}`)
+
+        const name = `${c.screen}--${c.scenario}--${size}.png`
+        const buf = await page.screenshot({ path: join(OUT, name), fullPage: false })
+        const baselinePath = join(BASELINES, name)
+        if (UPDATE || !existsSync(baselinePath)) {
+          await writeFile(baselinePath, buf)
+        } else {
+          const a = PNG.sync.read(await readFile(baselinePath))
+          const b = PNG.sync.read(buf)
+          if (a.width !== b.width || a.height !== b.height) {
+            failures.push(`${name}: size changed ${a.width}×${a.height} → ${b.width}×${b.height}`)
+          } else {
+            const diff = new PNG({ width: a.width, height: a.height })
+            const mismatched = pixelmatch(a.data, b.data, diff.data, a.width, a.height, { threshold: 0.12 })
+            const ratio = mismatched / (a.width * a.height)
+            if (ratio > 0.004) {
+              await writeFile(join(OUT, `diff--${name}`), PNG.sync.write(diff))
+              failures.push(`${name}: ${(ratio * 100).toFixed(2)}% pixels differ`)
+            }
+          }
+        }
+        await page.close()
+      }
+    }
+  } finally {
+    await ext.context.close()
+  }
+  expect(tooSmall, 'hit targets below 44 px').toEqual([])
+  expect(failures, 'screens that drifted from their baselines').toEqual([])
+})

@@ -1,27 +1,28 @@
 import { expect, test } from '@playwright/test'
 import { mkdir } from 'node:fs/promises'
-import { launchWithExtension } from './extension'
+import { collectErrors, launchWithExtension } from './extension'
 
-test('popup renders the shared Hello screen through the service-worker engine', async () => {
+test('popup renders the shared Home screen through the service-worker engine', async () => {
   const ext = await launchWithExtension()
   try {
     const page = await ext.context.newPage()
-    const cspViolations: string[] = []
-    page.on('console', (msg) => {
-      if (/Content Security Policy/i.test(msg.text())) cspViolations.push(msg.text())
-    })
+    const errors = collectErrors(page)
     await page.setViewportSize({ width: 360, height: 600 })
     await page.goto(ext.url('popup.html'))
 
-    await expect(page.getByTestId('hello')).toBeVisible()
-    await expect(page.getByTestId('vault-status')).toContainText('Not created yet', { timeout: 15_000 })
-    // The head readout may be a real block (network) or the em dash (offline) — both prove the path.
-    await expect(page.getByTestId('head-block')).toBeVisible()
-    await expect(page.getByText('Electroneum', { exact: true })).toBeVisible()
-    expect(cspViolations).toEqual([])
+    try {
+      await expect(page.getByTestId('home')).toBeVisible({ timeout: 15_000 })
+    } catch (err) {
+      throw new Error(`home did not render. Page errors:\n${errors.join('\n')}\n${String(err)}`)
+    }
+    // A fresh install: no vault yet → the creation plate, never a fake balance.
+    await expect(page.getByTestId('create-plate')).toContainText('Your vault is not created yet', { timeout: 15_000 })
+    await expect(page.getByTestId('tabs')).toBeVisible()
+    expect(errors.filter((e) => /Content Security Policy/i.test(e))).toEqual([])
+    expect(errors.filter((e) => e.startsWith('pageerror'))).toEqual([])
 
     await mkdir('screenshots', { recursive: true })
-    await page.screenshot({ path: 'screenshots/m0-popup.png' })
+    await page.screenshot({ path: 'screenshots/popup-fresh.png' })
   } finally {
     await ext.context.close()
   }

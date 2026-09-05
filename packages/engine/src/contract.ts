@@ -21,6 +21,7 @@ import type {
   ChainHead,
   ChainView,
   EngineEvent,
+  PortfolioSnapshot,
   Settings,
   SiteView,
   VaultStatus,
@@ -73,6 +74,17 @@ export interface SettingsNamespace {
   set(input: Partial<Settings>): Promise<Settings>
 }
 
+/**
+ * Portfolio (master plan §8.2). Declared here so screens are built against the
+ * contract from M1; the real service (multicall + GraphQL merge, last-good
+ * snapshot) lands in M4. A host without the namespace answers
+ * `not_implemented`, which the UI renders as the funding/empty state.
+ */
+export interface PortfolioNamespace {
+  snapshot(input: { accountId: AccountId; chainIds?: number[] }): Promise<PortfolioSnapshot>
+  refresh(input: { accountId: AccountId }): Promise<PortfolioSnapshot>
+}
+
 export interface WalletEngine {
   readonly vault: VaultNamespace
   readonly accounts: AccountsNamespace
@@ -80,6 +92,7 @@ export interface WalletEngine {
   readonly chains: ChainsNamespace
   readonly approvals: ApprovalsNamespace
   readonly settings: SettingsNamespace
+  readonly portfolio: PortfolioNamespace
   readonly events: EngineEvents
 }
 

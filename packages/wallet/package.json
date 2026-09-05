@@ -5,14 +5,20 @@
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@boltvault/engine": "workspace:*",
-    "@boltvault/ui": "workspace:*"
+    "@boltvault/platform": "workspace:*",
+    "@boltvault/ui": "workspace:*",
+    "@lingui/core": "^5.9.5",
+    "@lingui/react": "^5.9.5",
+    "zod": "^3.25.76"
   },
   "peerDependencies": {
     "react": "^19.2.0"

@@ -2,7 +2,17 @@
  * Playwright helpers: launch Chromium with the built extension loaded and find
  * its id from the service worker. Requires `pnpm build` first.
  */
-import { chromium, type BrowserContext } from '@playwright/test'
+import { chromium, type BrowserContext, type Page } from '@playwright/test'
+
+/** Collect page errors and console errors so a failed wait can explain itself. */
+export function collectErrors(page: Page): string[] {
+  const errors: string[] = []
+  page.on('pageerror', (err) => errors.push(`pageerror: ${err.message}`))
+  page.on('console', (msg) => {
+    if (msg.type() === 'error' || msg.type() === 'warning') errors.push(`${msg.type()}: ${msg.text()}`)
+  })
+  return errors
+}
 import { existsSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

@@ -11,6 +11,7 @@ declare module "wxt/browser" {
     | "/fonts/oxanium-600.woff2"
     | "/fonts/sora-400.woff2"
     | "/fonts/sora-600.woff2"
+    | "/harness.html"
     | "/icon/128.png"
     | "/icon/16.png"
     | "/icon/32.png"

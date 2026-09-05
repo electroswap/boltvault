@@ -2,9 +2,23 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "jsx": "react-jsx",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vitest/globals", "node"],
-    "paths": { "react-native": ["./node_modules/react-native-web"] }
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [
+      "vitest/globals",
+      "node"
+    ]
   },
-  "include": [".wxt/wxt.d.ts", "src", "entrypoints", "e2e", "tests", "wxt.config.ts", "playwright.config.ts"]
+  "include": [
+    ".wxt/wxt.d.ts",
+    "src",
+    "entrypoints",
+    "e2e",
+    "tests",
+    "wxt.config.ts",
+    "playwright.config.ts"
+  ]
 }

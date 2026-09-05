@@ -130,7 +130,49 @@ export const SettingsSchema = z.object({
 })
 export type Settings = z.infer<typeof SettingsSchema>
 
+/** One holding on one chain. Quantities are decimal strings; fiat is display-only. */
+export const PortfolioRowSchema = z.object({
+  chainId: z.number().int().positive(),
+  /** Token contract, or 'native'. */
+  address: z.string(),
+  symbol: z.string(),
+  name: z.string(),
+  decimals: z.number().int().nonnegative(),
+  logoUri: z.string().nullable(),
+  /** Raw balance in base units, decimal string. */
+  raw: z.string().regex(/^\d+$/),
+  /** Human quantity, decimal string. */
+  quantity: z.string(),
+  /** Fiat value in the display currency, or null when unpriced. */
+  fiat: z.number().nullable(),
+  /** 24 h change as a signed fraction (0.021 = +2.1 %), or null. */
+  change24h: z.number().nullable(),
+  /** Share of the scoped portfolio value, 0..1 (0 when unpriced). */
+  share: z.number().min(0).max(1),
+  pinned: z.boolean(),
+  custom: z.boolean(),
+  hidden: z.boolean(),
+})
+export type PortfolioRow = z.infer<typeof PortfolioRowSchema>
+
+export const PortfolioSnapshotSchema = z.object({
+  accountId: AccountIdSchema,
+  chainIds: z.array(z.number().int().positive()),
+  currency: z.enum(['USD', 'ETN']),
+  /** Total of priced rows; null when nothing is priced. */
+  total: z.number().nullable(),
+  /** Signed fraction, or null. Describes exactly `total`. */
+  change24h: z.number().nullable(),
+  unpricedCount: z.number().int().nonnegative(),
+  rows: z.array(PortfolioRowSchema),
+  observedAt: z.number().int().nonnegative(),
+  /** True when this came from the last-good snapshot rather than a fresh read. */
+  stale: z.boolean(),
+})
+export type PortfolioSnapshot = z.infer<typeof PortfolioSnapshotSchema>
+
 export const EngineEventSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('portfolio.snapshot'), snapshot: PortfolioSnapshotSchema }),
   z.object({ type: z.literal('vault.status'), status: VaultStatusSchema }),
   z.object({ type: z.literal('accounts.changed'), accounts: z.array(AccountViewSchema), activeId: AccountIdSchema.nullable() }),
   z.object({ type: z.literal('sites.changed'), sites: z.array(SiteViewSchema) }),

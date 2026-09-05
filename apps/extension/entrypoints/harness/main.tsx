@@ -1,0 +1,26 @@
+/**
+ * The screenshot/motion harness page. Renders any registered screen against a
+ * fixture engine (no service worker, no network) so screenshots are
+ * deterministic. Never linked from the product UI; the manifest does not
+ * expose it and it holds no secrets.
+ *
+ * harness.html?scenario=funded&screen=home&body=extension-popup&motion=reduced
+ */
+import { App, createFixtureEngine, type FixtureScenario, type ScreenId, type TabId } from '@boltvault/wallet'
+import { createRoot } from 'react-dom/client'
+
+const q = new URLSearchParams(location.search)
+const scenario = (q.get('scenario') ?? 'funded') as FixtureScenario
+const screen = (q.get('screen') ?? 'home') as ScreenId
+const body = (q.get('body') ?? 'extension-popup') as 'extension-popup' | 'extension-tab' | 'mobile'
+const reducedMotion = q.get('motion') === 'reduced'
+const tabs: readonly TabId[] = ['home', 'swap', 'explore', 'activity']
+
+const root = document.getElementById('root')
+if (!root) throw new Error('harness: no #root')
+
+createFixtureEngine(scenario).then((engine) => {
+  const initialTab = tabs.includes(screen as TabId) ? (screen as TabId) : 'home'
+  createRoot(root).render(<App engine={engine.engine} body={body} initialTab={initialTab} initialScreen={screen} reducedMotion={reducedMotion} />)
+  document.documentElement.dataset['ready'] = '1'
+})

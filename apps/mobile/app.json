@@ -1,25 +1,62 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
-    "version": "1.0.0",
+    "name": "BoltVault",
+    "slug": "boltvault",
+    "scheme": "boltvault",
+    "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#060913",
+    "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "io.electroswap.boltvault",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "io.electroswap.boltvault",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#060913",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
+      "allowBackup": false,
       "predictiveBackGestureEnabled": false
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    }
+    "plugins": [
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./node_modules/@expo-google-fonts/sora/400Regular/Sora_400Regular.ttf",
+            "./node_modules/@expo-google-fonts/sora/600SemiBold/Sora_600SemiBold.ttf",
+            "./node_modules/@expo-google-fonts/oxanium/400Regular/Oxanium_400Regular.ttf",
+            "./node_modules/@expo-google-fonts/oxanium/600SemiBold/Oxanium_600SemiBold.ttf"
+          ],
+          "android": {
+            "fonts": [
+              {
+                "fontFamily": "Sora",
+                "fontDefinitions": [
+                  { "path": "./node_modules/@expo-google-fonts/sora/400Regular/Sora_400Regular.ttf", "weight": 400 },
+                  { "path": "./node_modules/@expo-google-fonts/sora/600SemiBold/Sora_600SemiBold.ttf", "weight": 600 }
+                ]
+              },
+              {
+                "fontFamily": "Oxanium",
+                "fontDefinitions": [
+                  { "path": "./node_modules/@expo-google-fonts/oxanium/400Regular/Oxanium_400Regular.ttf", "weight": 400 },
+                  { "path": "./node_modules/@expo-google-fonts/oxanium/600SemiBold/Oxanium_600SemiBold.ttf", "weight": 600 }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    ]
   }
 }

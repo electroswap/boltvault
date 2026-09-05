@@ -18,7 +18,11 @@
     "@boltvault/wallet": "workspace:*",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "react-native-web": "^0.21.2"
+    "react-native-reanimated": "^4.5.1",
+    "react-native-svg": "15.15.4",
+    "react-native-web": "^0.21.2",
+    "react-native-worklets": "0.10.1",
+    "react-router": "^7.13.2"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
@@ -27,6 +31,7 @@
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^5.0.0",
     "happy-dom": "^20.14.0",
+    "react-native": "0.86.3",
     "typescript": "^5.6.3",
     "vite": "^7.1.0",
     "vitest": "^2.1.8",

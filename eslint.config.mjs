@@ -68,7 +68,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['**/tests/**', '**/*.test.ts', '**/*.test.tsx', 'tools/**', 'packages/testing/**'],
+    files: ['**/tests/**', '**/e2e/**', '**/*.test.ts', '**/*.test.tsx', 'tools/**', 'packages/testing/**'],
     rules: { 'no-console': 'off', 'no-restricted-syntax': 'off' },
   },
   {

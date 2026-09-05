@@ -15,16 +15,21 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@tamagui/core": "^2.7.7"
+    "@tamagui/core": "^2.7.7",
+    "qrcode": "^1.5.4",
+    "react-native-svg": "15.15.4"
   },
   "peerDependencies": {
     "react": "^19.2.0",
     "react-native": "*"
   },
   "devDependencies": {
+    "@shopify/react-native-skia": "2.6.2",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "~19.2.2",
     "react": "19.2.3",
     "react-native": "0.86.3",
+    "react-native-reanimated": "^4.5.1",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"
   }

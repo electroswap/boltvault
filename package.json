@@ -14,13 +14,18 @@
     "no-any": "node tools/no-any.mjs",
     "registry:verify": "tsx tools/registry-verify.ts",
     "abi:sync": "tsx tools/abi-sync.ts",
-    "check": "pnpm typecheck && pnpm lint && pnpm no-any && pnpm depcruise && SKIP_LIVE=1 pnpm test:ci && pnpm --filter @boltvault/extension build"
+    "check": "pnpm typecheck && pnpm lint && pnpm no-any && pnpm depcruise && SKIP_LIVE=1 pnpm test:ci && pnpm --filter @boltvault/extension build",
+    "i18n:extract": "node tools/i18n-extract.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
+    "@lingui/cli": "^5.9.5",
+    "@types/pngjs": "^6.0.5",
     "dependency-cruiser": "^17.4.3",
     "eslint": "^9.39.5",
     "globals": "^17.12.0",
+    "pixelmatch": "^7.2.0",
+    "pngjs": "^7.0.0",
     "prettier": "^3.3.3",
     "tsx": "^4.23.13",
     "typescript": "^5.6.3",

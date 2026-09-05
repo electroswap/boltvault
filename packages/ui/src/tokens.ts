@@ -10,10 +10,13 @@
 export const paint = {
   /** Base. Always under a Field frame; flat only in reduced-motion. */
   void: '#060913',
-  /** Recessed plate. */
-  glass: '#0E1628',
+  /** Recessed plate — smoked glass: the Field shows through it. */
+  glass: 'rgba(14, 22, 40, 0.78)',
   /** Raised plate / sheet. */
-  glassRaised: '#152238',
+  glassRaised: 'rgba(21, 34, 58, 0.88)',
+  /** Opaque plate colours for contexts that must not blend (menus, chips over images). */
+  glassSolid: '#0E1628',
+  glassRaisedSolid: '#152238',
   /** Body text. */
   ink: '#DCE5F5',
   /** Secondary text, unpriced rows. */

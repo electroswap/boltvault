@@ -1,0 +1,365 @@
+msgid ""
+msgstr ""
+"Language: en\n"
+"Content-Type: text/plain; charset=utf-8\n"
+
+#: packages/wallet/src/navigation/TabShell.tsx
+msgctxt "accounts.soon"
+msgid "The accounts sheet — every seed, key, device and watch address — lands with the M2 milestone."
+msgstr "The accounts sheet — every seed, key, device and watch address — lands with the M2 milestone."
+
+#: packages/wallet/src/navigation/TabShell.tsx
+msgctxt "accounts.title"
+msgid "Accounts"
+msgstr "Accounts"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "activity.empty"
+msgid "Nothing yet. Sends, swaps and everything the wallet signs will appear here, with what you were shown when you signed."
+msgstr "Nothing yet. Sends, swaps and everything the wallet signs will appear here, with what you were shown when you signed."
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "activity.title"
+msgid "Activity"
+msgstr "Activity"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "back"
+msgid "Back"
+msgstr "Back"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "explore.collectibles"
+msgid "Collectibles"
+msgstr "Collectibles"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "explore.farms"
+msgid "Farms"
+msgstr "Farms"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "explore.launch"
+msgid "Launch"
+msgstr "Launch"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "explore.soon"
+msgid "Markets are on Electroneum. This list fills in with the M6 milestone."
+msgstr "Markets are on Electroneum. This list fills in with the M6 milestone."
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "explore.title"
+msgid "Explore Electroneum"
+msgstr "Explore Electroneum"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "explore.tokens"
+msgid "Tokens"
+msgstr "Tokens"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.collectibles.empty"
+msgid "No collectibles yet. Explore collections on Electroneum."
+msgstr "No collectibles yet. Explore collections on Electroneum."
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.create.body"
+msgid "Create a new recovery phrase or import one you already have. Electroneum is your home chain."
+msgstr "Create a new recovery phrase or import one you already have. Electroneum is your home chain."
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.create.key"
+msgid "Create vault"
+msgstr "Create vault"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.create.title"
+msgid "Your vault is not created yet"
+msgstr "Your vault is not created yet"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.fund.body"
+msgid "This is Electroneum Smart Chain (52014). Send ETN here from an exchange that supports the smart chain, or bridge USDC from Ethereum — you will need a little ETN for fees."
+msgstr "This is Electroneum Smart Chain (52014). Send ETN here from an exchange that supports the smart chain, or bridge USDC from Ethereum — you will need a little ETN for fees."
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.fund.title"
+msgid "Receive ETN to get started"
+msgstr "Receive ETN to get started"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.locked.body"
+msgid "Unlock to see balances and sign."
+msgstr "Unlock to see balances and sign."
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.locked.key"
+msgid "Unlock"
+msgstr "Unlock"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.locked.title"
+msgid "Locked"
+msgstr "Locked"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.mark.custom"
+msgid "Custom"
+msgstr "Custom"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.positions.empty"
+msgid "No farm positions, open orders or bridges in flight."
+msgstr "No farm positions, open orders or bridges in flight."
+
+#: packages/wallet/src/i18n.ts
+msgctxt "home.receive"
+msgid "Receive"
+msgstr "Receive"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.scope.etn"
+msgid "Electroneum"
+msgstr "Electroneum"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.scope.none"
+msgid "No balances yet"
+msgstr "No balances yet"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.seg.collectibles"
+msgid "Collectibles"
+msgstr "Collectibles"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.seg.positions"
+msgid "Positions"
+msgstr "Positions"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.seg.tokens"
+msgid "Tokens"
+msgstr "Tokens"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.today"
+msgid "today"
+msgstr "today"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.unpriced"
+msgid "${portfolio.snapshot.unpricedCount} without price"
+msgstr "${portfolio.snapshot.unpricedCount} without price"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "key.bridge"
+msgid "Bridge"
+msgstr "Bridge"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "key.receive"
+msgid "Receive"
+msgstr "Receive"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "key.send"
+msgid "Send"
+msgstr "Send"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "key.swap"
+msgid "Swap"
+msgstr "Swap"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.discharge"
+msgid "Fire discharge"
+msgstr "Fire discharge"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.roll"
+msgid "Roll digits"
+msgstr "Roll digits"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.title"
+msgid "Signature moments"
+msgstr "Signature moments"
+
+#: packages/wallet/src/navigation/TabShell.tsx
+msgctxt "onboarding.soon"
+msgid "Onboarding, backup quiz and passkeys land with the M2 milestone."
+msgstr "Onboarding, backup quiz and passkeys land with the M2 milestone."
+
+#: packages/wallet/src/navigation/TabShell.tsx
+msgctxt "onboarding.title"
+msgid "Create your vault"
+msgstr "Create your vault"
+
+#: packages/wallet/src/navigation/TabShell.tsx
+msgctxt "receive.soon"
+msgid "Receive lands with the M4 milestone."
+msgstr "Receive lands with the M4 milestone."
+
+#: packages/wallet/src/navigation/TabShell.tsx
+msgctxt "receive.title"
+msgid "Receive"
+msgstr "Receive"
+
+#: packages/wallet/src/navigation/TabShell.tsx
+msgctxt "send.soon"
+msgid "Send lands with the M4 milestone."
+msgstr "Send lands with the M4 milestone."
+
+#: packages/wallet/src/navigation/TabShell.tsx
+msgctxt "send.title"
+msgid "Send"
+msgstr "Send"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.about"
+msgid "About"
+msgstr "About"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.about.rows"
+msgid "Version, encryption, fee sink"
+msgstr "Version, encryption, fee sink"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.accounts"
+msgid "Accounts"
+msgstr "Accounts"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.accounts.rows"
+msgid "Seeds, backups, identity"
+msgstr "Seeds, backups, identity"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.feel"
+msgid "Appearance & feel"
+msgstr "Appearance & feel"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.feel.rows"
+msgid "Motion, haptics, sound, currency"
+msgstr "Motion, haptics, sound, currency"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.networks"
+msgid "Networks"
+msgstr "Networks"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.networks.rows"
+msgid "Chains, custom RPCs, tokens"
+msgstr "Chains, custom RPCs, tokens"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.security"
+msgid "Security"
+msgstr "Security"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.security.rows"
+msgid "Password, auto-lock, passkeys, hardware"
+msgstr "Password, auto-lock, passkeys, hardware"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.sites"
+msgid "Connected sites"
+msgstr "Connected sites"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.sites.rows"
+msgid "Per-site chain and account"
+msgstr "Per-site chain and account"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.spending"
+msgid "Spending"
+msgstr "Spending"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.spending.rows"
+msgid "Slippage, approvals, step-ups, wallet fee schedule"
+msgstr "Slippage, approvals, step-ups, wallet fee schedule"
+
+#: packages/wallet/src/navigation/TabShell.tsx
+msgctxt "sign.soon"
+msgid "The signing sheet lands with the M3 milestone."
+msgstr "The signing sheet lands with the M3 milestone."
+
+#: packages/wallet/src/navigation/TabShell.tsx
+msgctxt "sign.title"
+msgid "Sign"
+msgstr "Sign"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "swap.fee"
+msgid "Wallet fee"
+msgstr "Wallet fee"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "swap.fee.value"
+msgid "0.50% · hold BOLT for less"
+msgstr "0.50% · hold BOLT for less"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "swap.impact"
+msgid "Price impact"
+msgstr "Price impact"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "swap.key"
+msgid "Swap"
+msgstr "Swap"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "swap.limit.key"
+msgid "Place order"
+msgstr "Place order"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "swap.min"
+msgid "Minimum received"
+msgstr "Minimum received"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "swap.mode.limit"
+msgid "Limit"
+msgstr "Limit"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "swap.mode.swap"
+msgid "Swap"
+msgstr "Swap"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "swap.pay"
+msgid "You pay"
+msgstr "You pay"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "swap.receive"
+msgid "You receive"
+msgstr "You receive"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "swap.soon"
+msgid "Swapping arrives with the M5 milestone. Quotes are on-chain; every in-wallet swap pays the wallet fee to the fee sink."
+msgstr "Swapping arrives with the M5 milestone. Quotes are on-chain; every in-wallet swap pays the wallet fee to the fee sink."
+
+#: packages/wallet/src/navigation/TabShell.tsx
+msgctxt "token.soon"
+msgid "The token dossier lands with the M4 milestone."
+msgstr "The token dossier lands with the M4 milestone."
+
+#: packages/wallet/src/navigation/TabShell.tsx
+msgctxt "token.title"
+msgid "Token"
+msgstr "Token"
+
