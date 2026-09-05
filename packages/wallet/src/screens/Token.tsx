@@ -93,7 +93,7 @@ export function Token({ chainId, address, body }: { chainId: number; address: st
             {row && row.fiat !== null ? formatFiat(row.fiat, portfolio.snapshot?.currency ?? 'USD') : t({ id: 'token.unpriced', message: 'No price available' })}
           </Body>
           {row && formatChange(row.change24h) ? (
-            <Body tone={(row.change24h ?? 0) >= 0 ? 'ember' : 'burn'} size="caption">
+            <Body tone={(row.change24h ?? 0) >= 0 ? 'surge' : 'burn'} size="caption">
               {formatChange(row.change24h)} {t({ id: 'home.today', message: 'today' })}
             </Body>
           ) : null}

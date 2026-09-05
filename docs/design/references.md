@@ -2,6 +2,8 @@
 
 Every mockup, primitive and motion in BoltVault is reviewed against this board (master plan §7.12). It exists so "jaw-dropping" is a comparison, not an adjective.
 
+> **2026-09-05:** the owner's concept renders (`/inspiration`) now set the visual direction — see `docs/design/style-bible.md`. Where this board and the bible disagree (violet is paint there, gains are mint, the Field is the Grid), the bible wins; the moments and the refusals below still stand.
+
 ## Subject
 
 Electroneum is electricity as money: a chain with a real 5-second pulse, a currency named after a unit of energy, a DEX whose mark is a bolt. BoltVault is an instrument you look *through* — smoked glass over a live electric field.

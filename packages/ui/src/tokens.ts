@@ -1,47 +1,72 @@
 /**
- * @boltvault/ui tokens — the design contract (master plan §7.3–§7.5).
+ * @boltvault/ui tokens — the design contract (docs/design/style-bible.md).
  *
  * Two palettes: PAINT (chrome, text, controls) and LIGHT (only ever rendered
- * by the scene and by gradients inside `ui/scene`). Light never becomes a flat
- * fill. This file is consumed by the Tamagui config, the scene renderer and
- * (if the face gate fails) the DOM fallback — it is the one source of truth.
+ * by the scene). One current — electric blue flowing into violet — is the
+ * brand: the primary key, the lit rims, the filament, the share bars. This
+ * file is consumed by the Tamagui config, the scene renderer and (if the
+ * face gate fails) the DOM fallback — it is the one source of truth.
  */
 
 export const paint = {
-  /** Base. Always under a Field frame; flat only in reduced-motion. */
-  void: '#060913',
-  /** Recessed plate — smoked glass: the Field shows through it. */
-  glass: 'rgba(14, 22, 40, 0.78)',
-  /** Raised plate / sheet. */
-  glassRaised: 'rgba(21, 34, 58, 0.88)',
+  /** Base: a deep navy night, never black. Always under the Grid. */
+  void: '#070A1F',
+  /** Sheet and menu base; the bottom of the page gradient. */
+  deep: '#0B1030',
+  /** Recessed plate — smoked navy glass: the Grid shows through it. */
+  glass: 'rgba(13, 18, 52, 0.66)',
+  /** Raised plate, console, sheet. */
+  glassRaised: 'rgba(22, 30, 78, 0.72)',
+  /** Inputs and the terminals inside a console: darker than their plate. */
+  well: 'rgba(6, 9, 30, 0.72)',
   /** Opaque plate colours for contexts that must not blend (menus, chips over images). */
-  glassSolid: '#0E1628',
-  glassRaisedSolid: '#152238',
-  /** Body text. */
-  ink: '#DCE5F5',
-  /** Secondary text, unpriced rows. */
-  mute: '#8593AD',
-  /** The one loud paint: primary action, selected, live marks. */
-  arc: '#5FD8FF',
-  /** Value, gains, gold of a charge held. */
-  ember: '#F0C56B',
-  /** Danger, revoke, blocked. Copper-hot. */
-  burn: '#FF6B4A',
+  glassSolid: '#0D1234',
+  glassRaisedSolid: '#161E4E',
+  /** The sheet panel is opaque at every frame (a paused slide never shows the screen beneath). */
+  sheet: '#10173F',
+  /** Body text and numerals. */
+  ink: '#F1F4FF',
+  /** Labels, captions, unpriced rows. */
+  mute: '#8F99C4',
+  /** The live mark: filament, selected, links, the active tab. */
+  arc: '#4FC3FF',
+  /** The far mark: rims fade into it. Never a flat fill on its own. */
+  plasma: '#8B5CF6',
+  /** Gains, confirmed, "to collect". */
+  surge: '#3EE6A5',
+  /** Tier marks, offers, warnings that are not danger. */
+  ember: '#F5C66B',
+  /** Losses, danger, revoke. */
+  burn: '#FF5C7A',
 } as const
 
 export const light = {
-  /** Arc core; hero numeral highlight inside the scene. */
-  core: '#EEF8FF',
-  arc: '#5FD8FF',
-  /** Violet fringe of the arc — never paint (§7.3). */
-  plasma: '#A78BFF',
-  /** Heat fringe; ties to ElectroSwap's warm brand without adopting its pink. */
+  /** Node cores and the hero numeral's glow. */
+  core: '#EAF6FF',
+  arc: '#4FC3FF',
+  plasma: '#8B5CF6',
+  auroraViolet: '#5B2BD9',
+  auroraBlue: '#1E4DFF',
+  /** Heat: the tier's warmth pulls the blue aurora toward it. */
   flare: '#FF8A5B',
 } as const
 
-/** Plate edges are `arc` at 12% alpha, never grey. */
-export const edge = 'rgba(95, 216, 255, 0.12)'
-export const edgeStrong = 'rgba(95, 216, 255, 0.28)'
+/** The current: electric blue into violet, left to right (top-left to bottom-right on rims). */
+export const current = { from: '#37A6FF', to: '#8A4DFF' } as const
+
+/** Recessed plate edges. */
+export const edge = 'rgba(122, 140, 255, 0.16)'
+/** Focus. */
+export const edgeStrong = 'rgba(140, 170, 255, 0.34)'
+/** The lit rim on raised plates, consoles, sheets, pills and secondary keys (an SVG gradient stroke). */
+export const rim = { from: 'rgba(79, 195, 255, 0.9)', to: 'rgba(139, 92, 246, 0.9)' } as const
+
+export const glow = {
+  plate: 'rgba(60, 100, 255, 0.22)',
+  key: 'rgba(70, 120, 255, 0.32)',
+  text: 'rgba(79, 195, 255, 0.35)',
+  tab: 'rgba(79, 195, 255, 0.6)',
+} as const
 
 export const metrics = {
   /** Popup inset; mobile/tab use insetWide. */
@@ -57,11 +82,13 @@ export const metrics = {
 
 /** Radii by plate role — one radius on everything is the template tell. */
 export const radius = {
-  recessed: 12,
+  recessed: 14,
   raised: 16,
-  key: 18,
+  console: 20,
+  key: 16,
   seat: 999,
-  chip: 8,
+  chip: 999,
+  well: 12,
   none: 0,
 } as const
 
@@ -88,7 +115,7 @@ export const fonts = {
 } as const
 
 export const type = {
-  readoutHero: { size: 34, weight: '600', tracking: -1.0 },
+  readoutHero: { size: 40, weight: '600', tracking: -1.3 },
   readout: { size: 24, weight: '600', tracking: -0.7 },
   title: { size: 17, weight: '600' },
   body: { size: 15, weight: '400' },

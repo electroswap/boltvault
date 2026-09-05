@@ -1,15 +1,16 @@
 /**
- * Interface-first primitives (master plan §2.6). `packages/wallet` composes
- * only these; it never imports react-native. Every primitive is a Tamagui
- * styled component today; the DOM fallback would implement the same props
- * with plain React, selected by the extension's Vite resolver.
- *
- * M0 ships the handful the Hello screen needs. M1 grows this into the ~30
- * primitives the surfaces use (bus bar, seat, plate roles, keys, sheets…).
+ * Interface-first primitives (master plan §2.6, docs/design/style-bible.md).
+ * `packages/wallet` composes only these; it never imports react-native.
+ * Every primitive is a Tamagui styled component today; the DOM fallback
+ * would implement the same props with plain React, selected by the
+ * extension's Vite resolver.
  */
 import { styled, Text as TText, View as TView } from '@tamagui/core'
+import type { ComponentProps, ReactNode } from 'react'
+import { Rim } from './Rim'
+import { glow, radius } from './tokens'
 
-/** Full-bleed screen background. The Field renders behind it (M1). */
+/** Full-bleed screen background. The Grid renders behind it. */
 export const Screen = styled(TView, {
   name: 'Screen',
   flex: 1,
@@ -20,6 +21,7 @@ export const Screen = styled(TView, {
 export const Column = styled(TView, {
   name: 'Column',
   flexDirection: 'column',
+  position: 'relative',
 })
 
 /** Horizontal stack. */
@@ -27,11 +29,18 @@ export const Row = styled(TView, {
   name: 'Row',
   flexDirection: 'row',
   alignItems: 'center',
+  position: 'relative',
 })
 
-/** A recessed or raised glass plate. Role decides radius and elevation. */
-export const Plate = styled(TView, {
+/**
+ * A glass plate. The role decides the material (style bible › materials):
+ * recessed (a quiet edge), raised (a lit rim and a soft glow), console (a
+ * screen's main panel: brighter rim, deeper glow), well (an input or a
+ * terminal inside a console: darker than its plate).
+ */
+const PlateFrame = styled(TView, {
   name: 'Plate',
+  position: 'relative',
   backgroundColor: '$glass',
   borderRadius: '$recessed',
   borderWidth: 1,
@@ -39,12 +48,30 @@ export const Plate = styled(TView, {
   padding: '$4',
   variants: {
     role: {
-      recessed: { backgroundColor: '$glass', borderRadius: '$recessed' },
-      raised: { backgroundColor: '$glassRaised', borderRadius: '$raised' },
+      recessed: { backgroundColor: '$glass', borderRadius: '$recessed', borderWidth: 1, borderColor: '$edge' },
+      raised: { backgroundColor: '$glassRaised', borderRadius: '$raised', borderWidth: 0, shadowColor: glow.plate, shadowRadius: 24, shadowOpacity: 1, shadowOffset: { width: 0, height: 8 } },
+      console: { backgroundColor: '$glassRaised', borderRadius: '$console', borderWidth: 0, shadowColor: glow.plate, shadowRadius: 32, shadowOpacity: 1, shadowOffset: { width: 0, height: 10 } },
+      well: { backgroundColor: '$well', borderRadius: '$well', borderWidth: 1, borderColor: '$edge' },
     },
   } as const,
   defaultVariants: { role: 'recessed' },
 })
+
+export type PlateRole = 'recessed' | 'raised' | 'console' | 'well'
+export type PlateProps = Omit<ComponentProps<typeof PlateFrame>, 'role'> & { readonly role?: PlateRole; readonly children?: ReactNode }
+
+const RIM_BY_ROLE: Record<PlateRole, number> = { recessed: 0, raised: 0.45, console: 0.7, well: 0 }
+const RADIUS_BY_ROLE: Record<PlateRole, number> = { recessed: radius.recessed, raised: radius.raised, console: radius.console, well: radius.well }
+
+export function Plate({ role = 'recessed', children, ...rest }: PlateProps) {
+  const lit = RIM_BY_ROLE[role]
+  return (
+    <PlateFrame role={role} {...rest}>
+      {children}
+      {lit > 0 ? <Rim radius={RADIUS_BY_ROLE[role]} opacity={lit} /> : null}
+    </PlateFrame>
+  )
+}
 
 /** Body text — Sora, sentence case. */
 export const Body = styled(TText, {
@@ -58,6 +85,8 @@ export const Body = styled(TText, {
       ink: { color: '$ink' },
       mute: { color: '$mute' },
       arc: { color: '$arc' },
+      plasma: { color: '$plasma' },
+      surge: { color: '$surge' },
       ember: { color: '$ember' },
       burn: { color: '$burn' },
     },
@@ -70,7 +99,7 @@ export const Body = styled(TText, {
   defaultVariants: { tone: 'ink', size: 'body' },
 })
 
-/** A readout — Oxanium ≥ 24 px, tabular numerals. Digits roll only on change (M1). */
+/** A readout — Oxanium ≥ 24 px, tabular numerals. The hero carries a faint glow. */
 export const Readout = styled(TText, {
   name: 'Readout',
   fontFamily: '$readout',
@@ -81,7 +110,7 @@ export const Readout = styled(TText, {
   color: '$ink',
   variants: {
     hero: {
-      true: { fontSize: '$3', lineHeight: '$3', letterSpacing: -1.0 },
+      true: { fontSize: '$4', lineHeight: '$4', letterSpacing: -1.3, textShadowColor: glow.text, textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
     },
   } as const,
 })
@@ -95,9 +124,14 @@ export const Address = styled(TText, {
   color: '$mute',
 })
 
-/** A key: the primary/secondary action control. 56 px tall, 44 px minimum hit. */
+/**
+ * A key: the primary/secondary action control. 56 px tall, 44 px minimum
+ * hit. The primary is painted by `Key` with the current; the frame itself is
+ * transparent so the gradient shows through.
+ */
 export const KeyFrame = styled(TView, {
   name: 'Key',
+  position: 'relative',
   height: 56,
   minHeight: 44,
   paddingHorizontal: '$6',
@@ -105,10 +139,11 @@ export const KeyFrame = styled(TView, {
   alignItems: 'center',
   justifyContent: 'center',
   cursor: 'pointer',
+  overflow: 'hidden',
   variants: {
     kind: {
-      primary: { backgroundColor: '$arc' },
-      secondary: { backgroundColor: '$glassRaised', borderWidth: 1, borderColor: '$edge' },
+      primary: { backgroundColor: 'transparent', shadowColor: glow.key, shadowRadius: 14, shadowOpacity: 1, shadowOffset: { width: 0, height: 5 } },
+      secondary: { backgroundColor: '$glassRaised', borderWidth: 0 },
       danger: { backgroundColor: '$burn' },
     },
     disabled: {
@@ -124,16 +159,18 @@ export const KeyLabel = styled(TText, {
   fontFamily: '$body',
   fontSize: '$3',
   fontWeight: '600',
-  color: '$void',
+  color: '$ink',
   variants: {
     onDark: { true: { color: '$ink' } },
   } as const,
 })
 
-/** A small stamped mark (Custom, Verified, Hyperlane…). */
+/** A pill: a token, a duration, a scope, a small stamped mark (Custom, Verified, Hyperlane…). */
 export const Chip = styled(TView, {
   name: 'Chip',
-  paddingHorizontal: '$2',
+  position: 'relative',
+  overflow: 'hidden',
+  paddingHorizontal: '$3',
   paddingVertical: '$1',
   borderRadius: '$chip',
   backgroundColor: '$glassRaised',
@@ -141,7 +178,7 @@ export const Chip = styled(TView, {
   borderColor: '$edge',
 })
 
-/** The 2 px filament under the readout; motion arrives in M1. */
+/** The 2 px filament under the readout (static form; LiveFilament moves). */
 export const Filament = styled(TView, {
   name: 'Filament',
   height: 2,

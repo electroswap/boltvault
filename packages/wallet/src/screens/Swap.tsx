@@ -7,7 +7,7 @@
  * Confirming runs a flow of sheets (approve → permit → swap) and the
  * Discharge lands the result here.
  */
-import { Body, Chip, Column, Discharge, Icon, Input, Key, Plate, Row, ScrollView, Segmented, Sheet, TokenAvatar, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
+import { Body, Chip, Column, Discharge, Icon, Input, Key, Plate, Pressable, Readout, Rim, Row, ScrollView, Segmented, Sheet, TokenAvatar, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
 import type { LimitOrderView, LimitQuote, SwapQuote, TokenView } from '@boltvault/engine'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
@@ -143,6 +143,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   const inView = tokens.find((x) => x.address.toLowerCase() === tokenIn.toLowerCase()) ?? null
   const outView = tokens.find((x) => x.address.toLowerCase() === tokenOut.toLowerCase()) ?? null
   const rowIn = portfolio.snapshot?.rows.find((r) => r.address.toLowerCase() === tokenIn.toLowerCase())
+  const rowOut = portfolio.snapshot?.rows.find((r) => r.address.toLowerCase() === tokenOut.toLowerCase())
   const hasSwapped = useMemo(() => entries.some((e) => e.category === 'SWAP'), [entries])
   const fresh = quote ? now - quote.quotedAt <= QUOTE_STALE_MS : false
   const impactTone: 'mute' | 'ember' | 'burn' = quote?.priceImpactPct === null || quote?.priceImpactPct === undefined ? 'mute' : quote.priceImpactPct > 15 ? 'burn' : quote.priceImpactPct > 5 ? 'ember' : 'mute'
@@ -271,57 +272,68 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
         />
       ) : null}
 
-      {/* You pay */}
-      <Plate role="raised" gap="$2" testID="terminal-in">
-        <Row justifyContent="space-between">
+      {/* The console: two terminals in one panel, the flip control on their seam (style bible › layout). */}
+      <Plate role="console" gap="$2" padding="$3" testID="swap-console">
+        {/* You pay */}
+        <Plate role="well" gap="$1" padding="$3" testID="terminal-in">
           <Body tone="mute" size="caption">
             {t({ id: 'swap.pay', message: 'You pay' })}
           </Body>
-          <Body tone="mute" size="caption" testID="swap-balance-in">
-            {rowIn ? t({ id: 'send.balance', message: '{q} {s} available', values: { q: formatQuantity(rowIn.quantity), s: rowIn.symbol } }) : ''}
-          </Body>
-        </Row>
-        <Row gap="$2" alignItems="center">
-          <Column flex={1}>
-            <Input value={amount} onChange={setAmount} placeholder="0" testID="swap-amount-in" />
-          </Column>
-          <TokenChip chainId={ETN} token={inView} onPress={() => setPicker('in')} testID="swap-token-in" />
-        </Row>
-        {rowIn ? (
-          <Row justifyContent="flex-end">
-            <Key label={t({ id: 'send.max', message: 'Max' })} kind="secondary" onPress={() => setAmount(rowIn.quantity)} testID="swap-max" />
+          <Row gap="$2" alignItems="center">
+            <Column flex={1}>
+              <Input value={amount} onChange={setAmount} placeholder="0" bare big testID="swap-amount-in" />
+            </Column>
+            <TokenChip chainId={ETN} token={inView} onPress={() => setPicker('in')} testID="swap-token-in" />
           </Row>
-        ) : null}
-      </Plate>
+          <Row justifyContent="space-between" alignItems="center" minHeight={24}>
+            <Body tone="mute" size="caption" testID="swap-balance-in">
+              {rowIn ? t({ id: 'swap.balance', message: 'Balance: {q}', values: { q: formatQuantity(rowIn.quantity) } }) : ''}
+            </Body>
+            {rowIn ? (
+              <Pressable onPress={() => setAmount(rowIn.quantity)} accessibilityRole="button" accessibilityLabel={t({ id: 'send.max', message: 'Max' })} style={{ minHeight: 44, minWidth: 44, marginVertical: -10, justifyContent: 'center', alignItems: 'flex-end' }} testID="swap-max">
+                <Body tone="arc" size="caption" fontWeight="600">
+                  {t({ id: 'send.max', message: 'Max' })}
+                </Body>
+              </Pressable>
+            ) : null}
+          </Row>
+        </Plate>
 
-      <Row justifyContent="center">
-        <Chip onPress={flip} cursor="pointer" minHeight={44} minWidth={44} justifyContent="center" alignItems="center" testID="swap-flip">
-          <Icon name="swap" color={paint.arc} />
-        </Chip>
-      </Row>
-
-      {/* You receive */}
-      <Plate role="raised" gap="$2" testID="terminal-out">
-        <Body tone="mute" size="caption">
-          {mode === 'swap' ? t({ id: 'swap.receive', message: 'You receive' }) : t({ id: 'limit.receive', message: 'You receive at least' })}
-        </Body>
-        <Row gap="$2" alignItems="center">
-          <Column flex={1}>
-            {mode === 'swap' ? (
-              <Body size="title" testID="swap-amount-out">
-                {quote && quote.amountOutRaw !== '0' ? formatRaw(quote.receiveRaw, quote.decimalsOut) : '—'}
-              </Body>
-            ) : (
-              <Input value={minOut} onChange={setMinOut} placeholder="0" testID="limit-min-out" />
-            )}
-          </Column>
-          <TokenChip chainId={ETN} token={outView} onPress={() => setPicker('out')} testID="swap-token-out" />
+        <Row justifyContent="center" marginVertical={-18} zIndex={2}>
+          <Chip onPress={flip} cursor="pointer" width={40} height={40} borderRadius={20} padding={0} justifyContent="center" alignItems="center" backgroundColor="$glassRaisedSolid" borderWidth={0} overflow="hidden" testID="swap-flip">
+            <Icon name="swap" color={paint.arc} size={18} />
+            <Rim radius={20} opacity={0.85} />
+          </Chip>
         </Row>
+
+        {/* You receive */}
+        <Plate role="well" gap="$1" padding="$3" testID="terminal-out">
+          <Body tone="mute" size="caption">
+            {mode === 'swap' ? t({ id: 'swap.receive', message: 'You receive' }) : t({ id: 'limit.receive', message: 'You receive at least' })}
+          </Body>
+          <Row gap="$2" alignItems="center">
+            <Column flex={1}>
+              {mode === 'swap' ? (
+                <Readout numberOfLines={1} testID="swap-amount-out">
+                  {quote && quote.amountOutRaw !== '0' ? formatRaw(quote.receiveRaw, quote.decimalsOut) : '—'}
+                </Readout>
+              ) : (
+                <Input value={minOut} onChange={setMinOut} placeholder="0" bare big testID="limit-min-out" />
+              )}
+            </Column>
+            <TokenChip chainId={ETN} token={outView} onPress={() => setPicker('out')} testID="swap-token-out" />
+          </Row>
+          <Row minHeight={24} alignItems="center">
+            <Body tone="mute" size="caption" testID="swap-balance-out">
+              {rowOut ? t({ id: 'swap.balance', message: 'Balance: {q}', values: { q: formatQuantity(rowOut.quantity) } }) : ''}
+            </Body>
+          </Row>
+        </Plate>
       </Plate>
 
       {/* Rate and route */}
       {mode === 'swap' && quote && quote.amountOutRaw !== '0' ? (
-        <Row justifyContent="space-between" alignItems="center" flexWrap="wrap" gap="$2">
+        <Plate role="recessed" paddingVertical="$2" paddingHorizontal="$3" flexDirection="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap="$2">
           <Body tone={fresh ? 'ink' : 'mute'} size="caption" testID="swap-rate">
             {formatRate(quote.rate, quote.symbolIn, quote.symbolOut) ?? ''}
           </Body>
@@ -337,7 +349,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
               </Row>
             ))}
           </Row>
-        </Row>
+        </Plate>
       ) : null}
       {mode === 'limit' && limitQuote ? (
         <Plate gap="$1" testID="limit-distance">

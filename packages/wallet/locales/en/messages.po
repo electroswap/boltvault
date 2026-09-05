@@ -2905,8 +2905,8 @@ msgstr "Offer"
 
 #: packages/wallet/src/screens/Rack.tsx
 msgctxt "rack.offers"
-msgid "{n} with offers →"
-msgstr "{n} with offers →"
+msgid "{n} with offers"
+msgstr "{n} with offers"
 
 #: packages/wallet/src/screens/Rack.tsx
 msgctxt "rack.open"
@@ -3108,7 +3108,7 @@ msgctxt "send.amount"
 msgid "Amount"
 msgstr "Amount"
 
-#: packages/wallet/src/screens/Swap.tsx
+#: packages/wallet/src/screens/Send.tsx
 msgctxt "send.balance"
 msgid "{q} {s} available"
 msgstr "{q} {s} available"
@@ -3447,6 +3447,11 @@ msgstr "A first-time recipient pauses for a second look; a send above a tenth of
 msgctxt "spending.tier"
 msgid "Your tier: {t} · {p} on swaps"
 msgstr "Your tier: {t} · {p} on swaps"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.balance"
+msgid "Balance: {q}"
+msgstr "Balance: {q}"
 
 #: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.coach"

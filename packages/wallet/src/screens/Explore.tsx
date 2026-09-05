@@ -201,7 +201,7 @@ export function TokenRow({ token, onPress, onStar }: { token: ExploreToken; onPr
         <Column alignItems="flex-end">
           <Body>{token.price !== null ? formatFiat(token.price, 'USD') : '—'}</Body>
           {change ? (
-            <Body tone={change.startsWith('+') ? 'ember' : change.startsWith('−') ? 'burn' : 'mute'} size="caption">
+            <Body tone={change.startsWith('+') ? 'surge' : change.startsWith('−') ? 'burn' : 'mute'} size="caption">
               {change}
             </Body>
           ) : null}

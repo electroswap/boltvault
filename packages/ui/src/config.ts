@@ -29,6 +29,8 @@ export const tokens = createTokens({
     lightArc: light.arc,
     lightPlasma: light.plasma,
     lightFlare: light.flare,
+    lightAuroraViolet: light.auroraViolet,
+    lightAuroraBlue: light.auroraBlue,
     edge,
     edgeStrong,
   },
@@ -48,10 +50,10 @@ const sora = createFont({
 
 const oxanium = createFont({
   family: fontFamilies.readout,
-  size: { 1: 24, 2: 28, 3: 34, 4: 44, true: 28 },
-  lineHeight: { 1: 28, 2: 32, 3: 38, 4: 48, true: 32 },
+  size: { 1: 24, 2: 28, 3: 34, 4: 40, 5: 48, true: 28 },
+  lineHeight: { 1: 28, 2: 32, 3: 38, 4: 46, 5: 54, true: 32 },
   weight: { 1: '600', true: '600' },
-  letterSpacing: { 1: -0.7, 2: -0.85, 3: -1.0, 4: -1.3, true: -0.85 },
+  letterSpacing: { 1: -0.7, 2: -0.85, 3: -1.0, 4: -1.3, 5: -1.5, true: -0.85 },
 })
 
 const mono = createFont({

@@ -71,7 +71,7 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
           {inventory.withOffersCount ? (
             <Chip onPress={() => router.navigate('offers')} cursor="pointer" minHeight={44} justifyContent="center" testID="rack-offers">
               <Body tone="ember" size="caption">
-                {t({ id: 'rack.offers', message: '{n} with offers →', values: { n: inventory.withOffersCount } })}
+                {t({ id: 'rack.offers', message: '{n} with offers', values: { n: inventory.withOffersCount } })}
               </Body>
             </Chip>
           ) : !embedded ? (

@@ -1,12 +1,13 @@
 /**
  * BusBar — one holding (master plan §7.5): logo, symbol, amount, value, 24 h
- * change, and a fill equal to its share of the scoped portfolio. 52 px tall,
- * tap selects; never drag.
+ * change, and a fill equal to its share of the scoped portfolio, painted with
+ * the current. 52 px tall, tap selects; never drag.
  */
-import { Pressable } from 'react-native'
+import { Pressable, View } from 'react-native'
 import { Body, Column, Row } from './primitives'
+import { CurrentFill } from './Rim'
 import { TokenAvatar } from './TokenAvatar'
-import { edge, metrics, paint } from './tokens'
+import { edge, metrics } from './tokens'
 
 export interface BusBarProps {
   readonly chainId: number
@@ -28,6 +29,7 @@ export interface BusBarProps {
 export function BusBar({ chainId, address, symbol, amount, value, change, share, logoUri, selected, mark, onPress, testID }: BusBarProps) {
   const up = change?.startsWith('+')
   const down = change?.startsWith('-') || change?.startsWith('−')
+  const width = `${Math.max(0, Math.min(1, share)) * 100}%` as const
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${amount} ${symbol}${value ? `, ${value}` : ''}`} testID={testID}>
       <Column
@@ -53,7 +55,9 @@ export function BusBar({ chainId, address, symbol, amount, value, change, share,
                   </Body>
                 ) : null}
               </Row>
-              <Body size="body">{amount}</Body>
+              <Body size="body" fontWeight="600">
+                {amount}
+              </Body>
             </Row>
             <Row justifyContent="space-between">
               <Row gap="$2">
@@ -61,7 +65,7 @@ export function BusBar({ chainId, address, symbol, amount, value, change, share,
                   {value ?? 'no price'}
                 </Body>
                 {change ? (
-                  <Body tone={up ? 'ember' : down ? 'burn' : 'mute'} size="caption">
+                  <Body tone={up ? 'surge' : down ? 'burn' : 'mute'} size="caption">
                     {change}
                   </Body>
                 ) : null}
@@ -69,9 +73,11 @@ export function BusBar({ chainId, address, symbol, amount, value, change, share,
             </Row>
           </Column>
         </Row>
-        <Row position="absolute" left={56} right={12} bottom={4} height={2} borderRadius={1} backgroundColor={edge}>
-          <Row width={`${Math.max(0, Math.min(1, share)) * 100}%`} height={2} borderRadius={1} backgroundColor={selected ? paint.arc : paint.mute} />
-        </Row>
+        <View style={{ position: 'absolute', left: 56, right: 12, bottom: 4, height: 2, borderRadius: 1, backgroundColor: edge }} pointerEvents="none">
+          <View style={{ width, height: 2, borderRadius: 1, overflow: 'hidden', opacity: selected ? 1 : 0.75 }}>
+            <CurrentFill radius={1} />
+          </View>
+        </View>
       </Column>
     </Pressable>
   )

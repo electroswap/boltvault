@@ -4,9 +4,9 @@
  * the SVG stand-in for the 40 px crop of the live Field (§7.6); the Field
  * component replaces it where the scene is running.
  */
-import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg'
+import Svg, { Circle, Defs, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg'
 import { fieldSeed } from './hash'
-import { light, paint } from './tokens'
+import { light, paint, rim } from './tokens'
 
 export interface SignatureProps {
   readonly address: string
@@ -40,12 +40,16 @@ export function Signature({ address, size = 40, ring = true, testID }: Signature
           <Stop offset="70%" stopColor={light.plasma} stopOpacity={0.12} />
           <Stop offset="100%" stopColor={paint.void} stopOpacity={1} />
         </RadialGradient>
+        <LinearGradient id={`${id}-ring`} x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor={rim.from} stopOpacity={0.9} />
+          <Stop offset="1" stopColor={rim.to} stopOpacity={0.9} />
+        </LinearGradient>
       </Defs>
       <Circle cx={c} cy={c} r={c} fill={`url(#${id})`} />
       {arcs.map((a, i) => (
         <Path key={i} d={arc(c, c, a.r, a.a0, a.a0 + a.span)} stroke={a.color} strokeWidth={a.w} strokeLinecap="round" fill="none" opacity={0.95} />
       ))}
-      {ring ? <Circle cx={c} cy={c} r={c - 0.75} stroke={light.arc} strokeOpacity={0.35} strokeWidth={1.5} fill="none" /> : null}
+      {ring ? <Circle cx={c} cy={c} r={c - 0.75} stroke={`url(#${id}-ring)`} strokeWidth={1.5} fill="none" /> : null}
     </Svg>
   )
 }

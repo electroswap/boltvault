@@ -2,14 +2,16 @@
  * Sheet — stacks from the bottom on every body (master plan §7.5). The
  * extension's sign.html mounts the same component full-window. Motion is a
  * Reanimated CSS animation so it is real CSS on web and a UI-thread animation
- * on native, with no worklet plugin dependency.
+ * on native, with no worklet plugin dependency. The panel is opaque navy
+ * glass with the current as a hairline on its top edge.
  */
 import type { ReactNode } from 'react'
-import { Pressable } from 'react-native'
+import { Pressable, View } from 'react-native'
 import Animated from 'react-native-reanimated'
 import { Icon } from './Icon'
 import { Body, Column, Row } from './primitives'
-import { motion, paint, radius } from './tokens'
+import { CurrentFill } from './Rim'
+import { glow, motion, paint, radius } from './tokens'
 
 export interface SheetProps {
   readonly open: boolean
@@ -29,7 +31,7 @@ export function Sheet({ open, onClose, title, children, quiet = false, reducedMo
   return (
     <Animated.View
       style={[
-        { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 10, justifyContent: 'flex-end', backgroundColor: quiet ? 'rgba(2,3,8,0.86)' : 'rgba(2,3,8,0.6)' },
+        { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 10, justifyContent: 'flex-end', backgroundColor: quiet ? 'rgba(3, 4, 14, 0.88)' : 'rgba(3, 4, 14, 0.62)' },
         still
           ? null
           : { animationName: { from: { opacity: 0 }, to: { opacity: 1 } }, animationDuration: `${motion.sheet}ms`, animationFillMode: 'forwards' },
@@ -39,7 +41,7 @@ export function Sheet({ open, onClose, title, children, quiet = false, reducedMo
       <Pressable onPress={onClose} accessibilityLabel="Close" style={{ flex: 1 }} />
       <Animated.View
         style={[
-          { backgroundColor: paint.glassRaised, borderTopLeftRadius: radius.raised, borderTopRightRadius: radius.raised, borderTopWidth: 1, borderColor: 'rgba(95,216,255,0.12)', maxHeight: '88%' },
+          { backgroundColor: paint.sheet, borderTopLeftRadius: radius.console, borderTopRightRadius: radius.console, maxHeight: '88%', overflow: 'hidden', shadowColor: glow.plate, shadowRadius: 32, shadowOpacity: 1, shadowOffset: { width: 0, height: -8 } },
           // The panel only slides: it is opaque at every frame, so a paused or skipped animation never shows the screen beneath.
           still
             ? null
@@ -51,6 +53,9 @@ export function Sheet({ open, onClose, title, children, quiet = false, reducedMo
               },
         ]}
       >
+        <View style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 1, opacity: 0.8 }} pointerEvents="none">
+          <CurrentFill />
+        </View>
         <Column padding="$5" gap="$4">
           {title ? (
             <Row justifyContent="space-between">

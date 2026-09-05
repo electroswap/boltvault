@@ -219,7 +219,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
                     </Body>
                   )}
                   {change ? (
-                    <Body tone={change.startsWith('+') ? 'ember' : change.startsWith('−') ? 'burn' : 'mute'} size="caption">
+                    <Body tone={change.startsWith('+') ? 'surge' : change.startsWith('−') ? 'burn' : 'mute'} size="caption">
                       {change} {t({ id: 'home.today', message: 'today' })}
                     </Body>
                   ) : null}

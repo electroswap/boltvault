@@ -342,7 +342,7 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
             <Plate key={x.id} gap={2} testID={`bridge-transfer-${x.id}`}>
               <Row justifyContent="space-between" alignItems="center">
                 <Body>{t({ id: 'bridge.transfer', message: '{a} {s} · {from} → {to}', values: { a: formatRaw(x.amountRaw, x.decimals), s: x.symbol, from: chainName(x.fromChainId), to: chainName(x.toChainId) } })}</Body>
-                <Body tone={x.state === 'delivered' ? 'ember' : 'burn'} size="caption">
+                <Body tone={x.state === 'delivered' ? 'surge' : 'burn'} size="caption">
                   {x.state === 'delivered' ? t({ id: 'bridge.state.delivered', message: 'Delivered' }) : x.state === 'failed' ? t({ id: 'bridge.state.failed', message: 'Failed' }) : t({ id: 'bridge.state.timeout', message: 'Taking longer than 30 minutes' })}
                 </Body>
               </Row>
