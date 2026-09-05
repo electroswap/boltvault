@@ -28,6 +28,7 @@ import {
 // Column is also the Field's host; content sits above it via zIndex.
 import { useEffect, useState, useMemo } from 'react'
 import { useEngine } from '../engine/EngineProvider'
+import { useHost } from '../host'
 import { useActivity } from '../hooks/useActivity'
 import { usePositions } from '../hooks/usePositions'
 import { LegendsVault } from '../components/LegendsVault'
@@ -71,6 +72,12 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   const [live, setLive] = useState<CampaignView | null>(null)
   const { positions } = usePositions(active?.id ?? null, !!vault?.unlocked)
   const pendingTx = entries.filter((e) => e.status === 'pending').length
+  const host = useHost()
+  // The home-screen widget reads what Home shows (§7.13); never more.
+  useEffect(() => {
+    if (!host.widget || !active || !portfolio.snapshot) return
+    void host.widget.publish({ address: active.address, label: active.label, tier: tier?.tier ?? 0, total: portfolio.snapshot.total, change24h: portfolio.snapshot.change24h, currency: portfolio.snapshot.currency, at: Date.now() })
+  }, [host, active, portfolio.snapshot, tier])
 
   // Chain scope (§8.2): Electroneum by default; All chains or one enabled chain. Never a site's session.
   useEffect(() => {

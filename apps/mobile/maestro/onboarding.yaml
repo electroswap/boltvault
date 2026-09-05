@@ -1,0 +1,20 @@
+# Maestro (master plan §12): create a vault, back it up, land on Home. Runs on a device build.
+appId: io.electroswap.boltvault
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: "ob-create"
+- tapOn:
+    id: "ob-create"
+- assertVisible:
+    id: "ob-words"
+- tapOn:
+    id: "ob-words-next"
+- inputText: "correct horse battery staple 42"
+- tapOn:
+    id: "ob-password-next"
+- assertVisible:
+    id: "home"
+- assertVisible:
+    id: "total"

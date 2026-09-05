@@ -9,6 +9,7 @@ import { parseApprovalPayload, type AccountView, type ApprovalPayload, type Appr
 import { useEffect, useMemo, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
+import { useFeel } from '../feel'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { useApprovals } from '../state/useApprovals'
@@ -82,6 +83,7 @@ function assessmentOf(payload: ApprovalPayload): AssessmentView | null {
 export function Approval({ requestId, body, reducedMotion = false }: ApprovalProps) {
   const engine = useEngine()
   const host = useHost()
+  const feel = useFeel()
   const router = useRouter()
   const { pending, loaded } = useApprovals()
   const { accounts, active } = useWalletState()
@@ -161,6 +163,8 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
     try {
       const data = approve && payload.kind === 'connect' && signer ? { accountId: signer.id, chainId } : undefined
       await engine.approvals.decide({ id: request.id, approve, ...(data ? { data } : {}) })
+      if (approve) feel.confirm()
+      else feel.heavy()
       if (pending.length <= 1) finish()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))

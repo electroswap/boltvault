@@ -31,6 +31,8 @@ import { Legends } from '../screens/Legends'
 import { Alerts } from '../screens/Alerts'
 import { Bridge } from '../screens/Bridge'
 import { Networks } from '../screens/Networks'
+import { Browser } from '../screens/Browser'
+import { Feel } from '../screens/Feel'
 import { Spending } from '../screens/Spending'
 import { Swap } from '../screens/Swap'
 import { Token } from '../screens/Token'
@@ -38,6 +40,8 @@ import { Unlock } from '../screens/Unlock'
 import { useApprovals } from '../state/useApprovals'
 import { HardwarePrompt } from '../components/HardwarePrompt'
 import { useFlowNavigation } from '../state/useSwapFlow'
+import { useLinks } from '../state/useLinks'
+import { useFeelEvents } from '../feel'
 import { useWalletState } from '../state/useWalletState'
 import { TABS, TAB_ORDER, type TabId } from './registry'
 import { useRouter } from './router'
@@ -54,6 +58,8 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   const { current, state } = router
   // A swap or limit-order flow opens its sheets from here, where nothing unmounts (§8.6).
   useFlowNavigation()
+  useFeelEvents()
+  useLinks()
   const items = TAB_ORDER.map((id) => ({ id, label: t({ id: TABS[id].labelId, message: TABS[id].labelMessage }), icon: TABS[id].icon }))
   const showTabs = state.stack.length === 0
 
@@ -120,6 +126,14 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
     }
     case 'networks':
       screen = <Networks body={body} />
+      break
+    case 'browser': {
+      const p = current.params as { url?: string } | undefined
+      screen = <Browser body={body} {...(p?.url ? { url: p.url } : {})} />
+      break
+    }
+    case 'feel':
+      screen = <Feel body={body} />
       break
     case 'alerts':
       screen = <Alerts body={body} />

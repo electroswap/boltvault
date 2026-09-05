@@ -1,0 +1,20 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["REPLACE_TEAM_ID.io.electroswap.boltvault"],
+        "components": [
+          { "/": "/wc", "comment": "WalletConnect pairing" },
+          { "/": "/launchpad/*", "comment": "Campaign with referral" },
+          { "/": "/pay", "comment": "EIP-681 style payment request" },
+          { "/": "/swap" },
+          { "/": "/explore" },
+          { "/": "/bridge" },
+          { "/": "/receive" },
+          { "/": "/open", "comment": "In-app browser" }
+        ]
+      }
+    ]
+  },
+  "webcredentials": { "apps": ["REPLACE_TEAM_ID.io.electroswap.boltvault"] }
+}

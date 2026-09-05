@@ -13,7 +13,24 @@
       "supportsTablet": false,
       "bundleIdentifier": "io.electroswap.boltvault",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "BoltVault scans QR codes: a Keystone signer, a paired device, a WalletConnect link.",
+        "NSBluetoothAlwaysUsageDescription": "BoltVault talks to a Ledger over Bluetooth to sign with it.",
+        "NSFaceIDUsageDescription": "Unlock BoltVault with Face ID.",
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
+        "NSSupportsLiveActivities": true
+      },
+      "associatedDomains": [
+        "applinks:wallet.electroswap.io",
+        "webcredentials:wallet.electroswap.io"
+      ],
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.io.electroswap.boltvault"
+        ],
+        "aps-environment": "production"
       }
     },
     "android": {
@@ -25,7 +42,58 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "allowBackup": false,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.VIBRATE",
+        "android.permission.POST_NOTIFICATIONS"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "wallet.electroswap.io",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "wc"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "ethereum"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "plugins": [
       [
@@ -69,7 +137,47 @@
           }
         }
       ],
-      "react-native-libsodium"
-    ]
+      "react-native-libsodium",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "BoltVault scans QR codes: a Keystone signer, a paired device, a WalletConnect link."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#5FD8FF",
+          "defaultChannel": "boltvault"
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Unlock BoltVault with Face ID."
+        }
+      ],
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "modes": [
+            "central"
+          ],
+          "bluetoothAlwaysPermission": "BoltVault talks to a Ledger over Bluetooth to sign with it."
+        }
+      ],
+      "expo-audio",
+      "./plugins/withWidgets.js"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }

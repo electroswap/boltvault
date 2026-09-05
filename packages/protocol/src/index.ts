@@ -5,3 +5,5 @@ export { RpcFlow, hexChainId, toDecChainId, type RpcContext, type ProviderEvent,
 export * from './wire'
 export { startBridge, mintNonce, type Bridge, type BridgeDeps, type BridgePort, type BridgeWindow } from './bridge'
 export { installProvider, windowTransport, BoltVaultProvider, ProviderRpcError, type ProviderConfig, type PageTransport, type WindowLike, type InstallResult, type Eip6963Info, type RequestArguments } from './page-provider'
+export { BOLTVAULT_ICON, BOLTVAULT_NAME, BOLTVAULT_PROVIDER_UUID, BOLTVAULT_RDNS } from './identity'
+export { webviewTransport, webviewInpageMessage, parseWebviewRequest, WEBVIEW_CHANNEL_GLOBAL, type WebViewWindowLike } from './webview'

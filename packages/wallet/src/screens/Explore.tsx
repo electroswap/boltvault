@@ -8,6 +8,7 @@ import { Body, Chip, Column, Icon, Input, Plate, Pressable, Row, ScrollView, Seg
 import type { CampaignView, CollectionView, ExploreToken, FarmView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
+import { useHost } from '../host'
 import { formatChange, formatFiat, formatPct, formatRaw } from '../format'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
@@ -20,6 +21,7 @@ type BodyKind = 'extension-popup' | 'extension-tab' | 'mobile'
 export function Explore({ body, segment: initial = 'tokens' }: { body: BodyKind; segment?: Segment }) {
   const engine = useEngine()
   const router = useRouter()
+  const host = useHost()
   const { active } = useWalletState()
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const [segment, setSegment] = useState<Segment>(initial)
@@ -90,6 +92,11 @@ export function Explore({ body, segment: initial = 'tokens' }: { body: BodyKind;
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="explore">
       <Row justifyContent="space-between" alignItems="center">
         <Body size="title">{t({ id: 'explore.title', message: 'Explore Electroneum' })}</Body>
+        {host.browser ? (
+          <Pressable onPress={() => router.navigate('browser')} accessibilityRole="button" accessibilityLabel="Browser" testID="explore-browser" style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="external" color={paint.mute} />
+          </Pressable>
+        ) : null}
         <Pressable onPress={() => router.navigate('alerts')} accessibilityRole="button" accessibilityLabel="Alerts" testID="explore-alerts" style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="bell" color={paint.mute} />
         </Pressable>

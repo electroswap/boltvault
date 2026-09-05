@@ -5,6 +5,7 @@
  */
 import type { Argon2idParams } from '@boltvault/core'
 import type { HidProvider, LedgerTransportProvider, TrezorConnectLike } from '@boltvault/hardware'
+import type { WalletKitLike } from '@boltvault/connect'
 import { ElectroSwapClient } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
@@ -27,6 +28,8 @@ import { SendService, sendNamespace } from './namespaces/send'
 import { FlowStore } from './namespaces/flows'
 import { HardwareService, hardwareNamespace } from './namespaces/hardware'
 import { RemoteSignService, remoteNamespace } from './namespaces/remote'
+import { DappsService, dappsNamespace } from './namespaces/dapps'
+import { ConnectService, connectNamespace } from './namespaces/connect'
 import { ExploreService, exploreNamespace } from './namespaces/explore'
 import { NftService, nftNamespace } from './namespaces/nft'
 import { LegendsService, legendsNamespace } from './namespaces/legends'
@@ -73,6 +76,8 @@ export interface EngineDeps {
   readonly ledger?: LedgerTransportProvider | null
   /** Trezor Connect on the extension (the hosted popup); absent on the phone → watch-only + remote sign. */
   readonly trezor?: TrezorConnectLike | null
+  /** Reown WalletKit on the phone (§5.3); absent elsewhere. */
+  readonly walletKit?: WalletKitLike | null
 }
 
 export interface Engine {
@@ -106,6 +111,8 @@ export interface Engine {
   readonly positions: PositionsService
   readonly bridge: BridgeService
   readonly remote: RemoteSignService
+  readonly dapps: DappsService
+  readonly connect: ConnectService
   readonly ready: Promise<void>
   dispose(): void
 }
@@ -173,6 +180,9 @@ export function createEngine(deps: EngineDeps): Engine {
   const remote = new RemoteSignService({ platform: deps.platform, bus: host.events, sync, vault, provider, canSignHere: async (a) => (await vault.privateKeyFor(a.id).catch(() => null)) !== null || (a.kind !== 'hd' && a.kind !== 'imported' && hardware.canSign(a)), ...(deps.receiptPollMs !== undefined ? { pollMs: deps.receiptPollMs * 5 } : {}) })
   provider.setRemote(remote)
   sync.setRecordHook((rec, from) => remote.onRecord(rec, from))
+  const dapps = new DappsService({ provider, bus: host.events, now: () => deps.platform.now(), random: (n) => deps.platform.random(n) })
+  const connect = new ConnectService({ walletKit: deps.walletKit ?? null, dapps, chains, vault, sites, bus: host.events })
+  connect.init()
   const bridge = new BridgeService({ platform: deps.platform, bus: host.events, chains, vault, provider, flows, settings, ...(deps.receiptPollMs !== undefined ? { receiptPollMs: deps.receiptPollMs } : {}) })
   watchlist.attach({
     tokens: (chainId) => explore.tokens(chainId),
@@ -245,6 +255,8 @@ export function createEngine(deps: EngineDeps): Engine {
   host.register('positions', positionsNamespace(positions))
   host.register('bridge', bridgeNamespace(bridge))
   host.register('remote', remoteNamespace(remote))
+  host.register('dapps', dappsNamespace(dapps))
+  host.register('connect', connectNamespace(connect))
 
   const ready = Promise.all([approvals.hydrate(), sites.hydrate(), settings.get(), provider.init(), watchlist.hydrate()]).then(() => undefined)
   const engine = createEngineClient(createInProcessTransport(host, 'internal'))
@@ -279,6 +291,8 @@ export function createEngine(deps: EngineDeps): Engine {
     positions,
     bridge,
     remote,
+    dapps,
+    connect,
     ready,
     dispose: () => {
       vault.dispose()
@@ -286,6 +300,8 @@ export function createEngine(deps: EngineDeps): Engine {
       bridge.dispose()
       remote.dispose()
       hardware.dispose()
+      connect.dispose()
+      dapps.dispose()
     },
   }
 }

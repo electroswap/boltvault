@@ -137,8 +137,9 @@ export async function createMobilePlatform(): Promise<Platform> {
     openUrl: async (url) => {
       await Linking.openURL(url)
     },
-    notify: async () => {
-      // Local/push notifications land with M9 (expo-notifications).
+    notify: async (n) => {
+      const { notifyLocal } = await import('./push')
+      await notifyLocal({ title: n.title, body: n.body, ...(n.tag ? { data: { tag: n.tag } } : {}) })
     },
     hidePreview: async (hide) => {
       const ScreenCapture = await import('expo-screen-capture')

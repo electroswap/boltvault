@@ -274,6 +274,41 @@ msgid "Tell me when it goes live"
 msgstr "Tell me when it goes live"
 
 #: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.push"
+msgid "Push"
+msgstr "Push"
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.push.denied"
+msgid "Notifications are off for BoltVault in the system settings."
+msgstr "Notifications are off for BoltVault in the system settings."
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.push.granted"
+msgid "On. Incoming funds, sales and offers, campaigns going live, rewards and dividends arrive while the app is closed."
+msgstr "On. Incoming funds, sales and offers, campaigns going live, rewards and dividends arrive while the app is closed."
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.push.off"
+msgid "Turn off"
+msgstr "Turn off"
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.push.off.body"
+msgid "Off. Turn it on to hear about incoming funds, sales, campaigns and rewards while the app is closed. Only a type and an id ever travel; the app fetches the details."
+msgstr "Off. Turn it on to hear about incoming funds, sales, campaigns and rewards while the app is closed. Only a type and an id ever travel; the app fetches the details."
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.push.on"
+msgid "Turn on"
+msgstr "Turn on"
+
+#: packages/wallet/src/screens/Alerts.tsx
+msgctxt "alerts.push.web"
+msgid "The extension checks in the background on its own; push is for the phone."
+msgstr "The extension checks in the background on its own; push is for the phone."
+
+#: packages/wallet/src/screens/Alerts.tsx
 msgctxt "alerts.quiet"
 msgid "Nothing to tell you"
 msgstr "Nothing to tell you"
@@ -667,6 +702,31 @@ msgstr "To"
 msgctxt "bridge.transfer"
 msgid "{a} {s} · {from} → {to}"
 msgstr "{a} {s} · {from} → {to}"
+
+#: packages/wallet/src/screens/Browser.tsx
+msgctxt "browser.go"
+msgid "Go"
+msgstr "Go"
+
+#: packages/wallet/src/screens/Browser.tsx
+msgctxt "browser.loading"
+msgid "Loading…"
+msgstr "Loading…"
+
+#: packages/wallet/src/screens/Browser.tsx
+msgctxt "browser.open"
+msgid "Open app.electroswap.io"
+msgstr "Open app.electroswap.io"
+
+#: packages/wallet/src/screens/Browser.tsx
+msgctxt "browser.title"
+msgid "Browser"
+msgstr "Browser"
+
+#: packages/wallet/src/screens/Browser.tsx
+msgctxt "browser.web"
+msgid "The in-app browser is a phone feature. In the browser extension, BoltVault is already in every tab — open the site and connect from there."
+msgstr "The in-app browser is a phone feature. In the browser extension, BoltVault is already in every tab — open the site and connect from there."
 
 #: packages/wallet/src/screens/Campaign.tsx
 msgctxt "campaign.amount"
@@ -1457,6 +1517,61 @@ msgstr "Top tier — the lowest fee there is."
 msgctxt "fee.you"
 msgid "You: tier {t} · {p}"
 msgstr "You: tier {t} · {p}"
+
+#: packages/wallet/src/screens/Feel.tsx
+msgctxt "feel.currency"
+msgid "Display currency"
+msgstr "Display currency"
+
+#: packages/wallet/src/screens/Feel.tsx
+msgctxt "feel.haptics"
+msgid "Haptics"
+msgstr "Haptics"
+
+#: packages/wallet/src/screens/Feel.tsx
+msgctxt "feel.haptics.hint"
+msgid "A light tick on confirm and keys, medium on a receipt, heavy on danger."
+msgstr "A light tick on confirm and keys, medium on a receipt, heavy on danger."
+
+#: packages/wallet/src/screens/Feel.tsx
+msgctxt "feel.haptics.web"
+msgid "Felt on the phone."
+msgstr "Felt on the phone."
+
+#: packages/wallet/src/screens/Feel.tsx
+msgctxt "feel.motion"
+msgid "Reduce motion"
+msgstr "Reduce motion"
+
+#: packages/wallet/src/screens/Feel.tsx
+msgctxt "feel.motion.hint"
+msgid "The Field holds still, digits update without rolling, the discharge is a short fade. The app is complete without motion."
+msgstr "The Field holds still, digits update without rolling, the discharge is a short fade. The app is complete without motion."
+
+#: packages/wallet/src/screens/Feel.tsx
+msgctxt "feel.sound"
+msgid "Sound"
+msgstr "Sound"
+
+#: packages/wallet/src/screens/Feel.tsx
+msgctxt "feel.sound.hint"
+msgid "Three sounds: a confirm, a receive, an error. Nothing else."
+msgstr "Three sounds: a confirm, a receive, an error. Nothing else."
+
+#: packages/wallet/src/screens/Feel.tsx
+msgctxt "feel.sound.web"
+msgid "No sound in the extension."
+msgstr "No sound in the extension."
+
+#: packages/wallet/src/screens/Feel.tsx
+msgctxt "feel.tick"
+msgid "Tick every Electroneum block"
+msgstr "Tick every Electroneum block"
+
+#: packages/wallet/src/screens/Feel.tsx
+msgctxt "feel.tick.hint"
+msgid "One light tap every five seconds while Home is open. Off unless you like it."
+msgstr "One light tap every five seconds while Home is open. Off unless you like it."
 
 #: packages/wallet/src/components/FlowPlate.tsx
 msgctxt "flow.accept"
@@ -3053,6 +3168,36 @@ msgctxt "settings.spending.rows"
 msgid "Slippage, approvals, step-ups, wallet fee schedule"
 msgstr "Slippage, approvals, step-ups, wallet fee schedule"
 
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "share.body"
+msgid "Your signature, your name and your tier — never a balance."
+msgstr "Your signature, your name and your tier — never a balance."
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "share.copy"
+msgid "Copy link"
+msgstr "Copy link"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "share.hide"
+msgid "Hide"
+msgstr "Hide"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "share.key"
+msgid "Share"
+msgstr "Share"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "share.show"
+msgid "Show"
+msgstr "Show"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "share.title"
+msgid "Share card"
+msgstr "Share card"
+
 #: packages/wallet/src/screens/Receive.tsx
 msgctxt "show"
 msgid "Show"
@@ -3487,4 +3632,34 @@ msgstr "Star"
 msgctxt "watch.starred"
 msgid "Starred"
 msgstr "Starred"
+
+#: packages/wallet/src/screens/ConnectedSites.tsx
+msgctxt "wc.body"
+msgid "Paste or scan a wc: link from a site. The site then asks to connect like any other, and its signatures come through the same sheet."
+msgstr "Paste or scan a wc: link from a site. The site then asks to connect like any other, and its signatures come through the same sheet."
+
+#: packages/wallet/src/screens/ConnectedSites.tsx
+msgctxt "wc.chains"
+msgid "chains"
+msgstr "chains"
+
+#: packages/wallet/src/screens/ConnectedSites.tsx
+msgctxt "wc.pair"
+msgid "Pair"
+msgstr "Pair"
+
+#: packages/wallet/src/screens/ConnectedSites.tsx
+msgctxt "wc.scan"
+msgid "Scan"
+msgstr "Scan"
+
+#: packages/wallet/src/screens/ConnectedSites.tsx
+msgctxt "wc.title"
+msgid "WalletConnect"
+msgstr "WalletConnect"
+
+#: packages/wallet/src/screens/ConnectedSites.tsx
+msgctxt "wc.web"
+msgid "WalletConnect lives in the phone app. In the browser, BoltVault is already in every tab."
+msgstr "WalletConnect lives in the phone app. In the browser, BoltVault is already in every tab."
 

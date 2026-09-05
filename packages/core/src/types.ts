@@ -144,6 +144,12 @@ export interface BoltVaultSettings {
   /** Chains shown besides Electroneum (§8.14 Networks). */
   enabledChains: number[]
   showTestnet: boolean
+  /** Feel (§7.8). */
+  haptics: boolean
+  blockTick: boolean
+  sound: boolean
+  /** Push registration opt-in (§9.3). */
+  pushEnabled: boolean
   /** Unknown-recipient extra confirm (default off; poison 4+4 is always on). */
   sendWhitelist: boolean
   autoLock: AutoLock
@@ -160,6 +166,10 @@ export const DEFAULT_SETTINGS: BoltVaultSettings = {
   slippageBips: 50,
   enabledChains: [1, 56, 8453, 42161, 10, 137, 43114],
   showTestnet: false,
+  haptics: true,
+  blockTick: false,
+  sound: false,
+  pushEnabled: false,
   sendWhitelist: false,
   autoLock: '5min',
   displayCurrency: 'USD',

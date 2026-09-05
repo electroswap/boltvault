@@ -2,7 +2,7 @@
  * Accounts (master plan §8.1): the rail of seats grouped by origin, add,
  * rename, hide, reveal (quiet, password), backup state per seed.
  */
-import { Body, Column, Icon, Input, Key, Plate, Row, ScrollView, Signature, Toggle, WordGrid, metrics, paint, shortAddress, Chip } from '@boltvault/ui'
+import { Body, Column, Icon, Input, Key, Plate, Row, ScrollView, ShareCard, Signature, Toggle, WordGrid, metrics, paint, shortAddress, Chip } from '@boltvault/ui'
 import type { AccountView, SeedView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { KeystonePicker, TrezorPicker } from '../components/HardwarePickers'
@@ -20,6 +20,12 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
   const router = useRouter()
   const { vault, accounts, active, refresh } = useWalletState()
   const [adding, setAdding] = useState<Adding>(null)
+  const [showCard, setShowCard] = useState(false)
+  const [tier, setTier] = useState(0)
+  useEffect(() => {
+    if (!active) return
+    engine.holder.tier({ accountId: active.id, chainId: 52014 }).then((x) => setTier(x.tier), () => setTier(0))
+  }, [engine, active])
   const [hwKind, setHwKind] = useState<'ledger' | 'trezor' | 'keystone'>('ledger')
   const [editing, setEditing] = useState<string | null>(null)
   const [label, setLabel] = useState('')
@@ -180,6 +186,24 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
         ) : null}
         {error ? <Body tone="burn">{error}</Body> : null}
       </Plate>
+
+      {active ? (
+        <Plate gap="$3" testID="share">
+          <Row justifyContent="space-between" alignItems="center">
+            <Body size="title">{t({ id: 'share.title', message: 'Share card' })}</Body>
+            <Key label={showCard ? t({ id: 'share.hide', message: 'Hide' }) : t({ id: 'share.show', message: 'Show' })} kind="secondary" onPress={() => setShowCard((v) => !v)} testID="share-toggle" />
+          </Row>
+          {showCard ? (
+            <Column gap="$3" alignItems="center">
+              <ShareCard address={active.address} name={active.label} tier={tier} testID="share-card" />
+              <Body tone="mute" size="caption">
+                {t({ id: 'share.body', message: 'Your signature, your name and your tier — never a balance.' })}
+              </Body>
+              {host.share ? <Key label={t({ id: 'share.key', message: 'Share' })} onPress={() => void host.share?.({ title: 'BoltVault', text: `${active.label} on BoltVault${tier > 0 ? ` · Tier ${tier}` : ''}`, url: 'https://wallet.electroswap.io' })} testID="share-key" /> : <Key label={t({ id: 'share.copy', message: 'Copy link' })} kind="secondary" onPress={() => void host.copy?.('https://wallet.electroswap.io')} testID="share-copy" />}
+            </Column>
+          ) : null}
+        </Plate>
+      ) : null}
 
       {revealFor ? (
         <Plate role="raised" gap="$3" testID="reveal">

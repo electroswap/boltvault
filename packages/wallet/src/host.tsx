@@ -39,6 +39,31 @@ export interface UiHost {
   onWindowFocus?(listener: () => void): () => void
   /** Pair a Ledger over WebHID — needs a user gesture, so only a full page offers it (§2.7 S7). Resolves true when a device was granted. */
   requestHid?(): Promise<boolean>
+  /** The in-app browser (§5.3): the provider script injected before every page, and where the browser lives. */
+  readonly browser?: { readonly providerScript: string }
+  /** Deep and universal links (§5.3): the URL the app was opened with, and later ones. */
+  readonly links?: { initial(): Promise<string | null>; subscribe(listener: (url: string) => void): () => void }
+  /** Haptics (§7.8): light on confirm and keys, medium on a receipt, heavy on danger/reject. */
+  haptic?(kind: 'light' | 'medium' | 'heavy'): void
+  /** Three sounds (§7.8), off by default. */
+  sound?(kind: 'confirm' | 'receive' | 'error'): void
+  /** The native share sheet (the share card, §7.13). */
+  share?(input: { title: string; text?: string; url?: string }): Promise<void>
+  /** Push registration (§9.3). */
+  readonly push?: { status(): Promise<'unavailable' | 'off' | 'granted' | 'denied'>; enable(): Promise<boolean>; disable(): Promise<void> }
+  /** The home-screen widget's snapshot (§7.13): written where the widget extension reads it. */
+  readonly widget?: { publish(snapshot: WidgetSnapshot): Promise<void> }
+}
+
+/** What the home-screen widget shows (§7.13): the Field signature, the name, the tier — and the total the user opted into. */
+export interface WidgetSnapshot {
+  readonly address: string
+  readonly label: string
+  readonly tier: number
+  readonly total: number | null
+  readonly change24h: number | null
+  readonly currency: 'USD' | 'ETN'
+  readonly at: number
 }
 
 const unsupported: PasskeyProvider = {

@@ -9,7 +9,7 @@
 import type { EngineNamespaces, NamespaceName, WalletEngine } from './contract'
 import type { EngineTransport } from './transport'
 
-const NAMESPACES: readonly NamespaceName[] = ['vault', 'accounts', 'sites', 'chains', 'approvals', 'settings', 'portfolio', 'activity', 'activityScan', 'tokens', 'names', 'allowances', 'contacts', 'send', 'sync', 'swap', 'holder', 'limit', 'hardware', 'explore', 'nft', 'legends', 'farm', 'launchpad', 'watchlist', 'positions', 'bridge', 'remote']
+const NAMESPACES: readonly NamespaceName[] = ['vault', 'accounts', 'sites', 'chains', 'approvals', 'settings', 'portfolio', 'activity', 'activityScan', 'tokens', 'names', 'allowances', 'contacts', 'send', 'sync', 'swap', 'holder', 'limit', 'hardware', 'explore', 'nft', 'legends', 'farm', 'launchpad', 'watchlist', 'positions', 'bridge', 'remote', 'dapps', 'connect']
 
 type AnyMethod = (arg?: unknown) => Promise<unknown>
 

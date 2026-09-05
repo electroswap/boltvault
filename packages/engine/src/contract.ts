@@ -50,7 +50,7 @@ import type {
   Positions,
   SyncStatus,
   VaultStatus,
- BridgeQuote, BridgeRoute, BridgeStatus, KeystonePending, RemoteRequest } from './schema'
+ BridgeQuote, BridgeRoute, BridgeStatus, KeystonePending, RemoteRequest, DappSession, WcProposalView, WcSessionView } from './schema'
 
 export type Unsubscribe = () => void
 
@@ -308,6 +308,21 @@ export interface HardwareNamespace {
   keystoneCancel(input: { id: string }): Promise<{ ok: true }>
 }
 
+/** External dApp transports (§2.7 S9): the in-app browser opens a session per committed origin and relays EIP-1193 messages. */
+export interface DappsNamespace {
+  open(input: { url: string; kind: 'webview' | 'walletconnect'; verified?: boolean }): Promise<DappSession>
+  request(input: { sessionId: string; id: number; method: string; params?: unknown }): Promise<{ result?: unknown; error?: { code: number; message: string; data?: unknown } }>
+  close(input: { sessionId: string }): Promise<void>
+  list(): Promise<DappSession[]>
+}
+
+/** WalletConnect (§5.3): pair from a `wc:` link; proposals run the Connect sheet; sessions list under Connected sites. */
+export interface ConnectNamespace {
+  status(): Promise<{ available: boolean; proposals: WcProposalView[]; sessions: WcSessionView[] }>
+  pair(input: { uri: string }): Promise<void>
+  disconnect(input: { topic: string }): Promise<void>
+}
+
 /** Remote sign (§6, §8.16): what this device is waiting on, and what paired devices are asking it to sign. */
 export interface RemoteNamespace {
   list(): Promise<{ outgoing: RemoteRequest[]; incoming: RemoteRequest[] }>
@@ -368,6 +383,8 @@ export interface WalletEngine {
   readonly positions: PositionsNamespace
   readonly bridge: BridgeNamespace
   readonly remote: RemoteNamespace
+  readonly dapps: DappsNamespace
+  readonly connect: ConnectNamespace
   readonly events: EngineEvents
 }
 

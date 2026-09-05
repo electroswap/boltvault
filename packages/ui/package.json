@@ -17,7 +17,8 @@
   "dependencies": {
     "@tamagui/core": "^2.7.7",
     "qrcode": "^1.5.4",
-    "react-native-svg": "15.15.4"
+    "react-native-svg": "15.15.4",
+    "react-native-webview": "14.0.1"
   },
   "peerDependencies": {
     "react": "^19.2.0",

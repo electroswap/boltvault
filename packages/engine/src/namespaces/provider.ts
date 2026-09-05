@@ -58,12 +58,17 @@ export interface ProviderDeps {
 export interface PortInfo {
   readonly tabId?: number
   readonly frameId?: number
+  /** 'content' ports are verified by construction (the sender's URL); a WebView is the committed URL; WalletConnect only when Verify said VALID (§2.7 S9). */
+  readonly kind?: 'content' | 'webview' | 'walletconnect'
+  readonly verified?: boolean
 }
 
 const HEAD_POLL_MS = 5_000
 
 export class ProviderService {
   private remote: RemoteSigner | null = null
+  /** Origins whose transport could not vouch for them (WalletConnect without Verify). */
+  private unverified = new Set<string>()
 
   /** Remote sign is wired after construction: it needs the provider and the provider needs it. */
   setRemote(remote: RemoteSigner): void {
@@ -85,7 +90,9 @@ export class ProviderService {
   }
 
   /** Serve one dApp channel. The origin comes from the transport, never from a message. */
-  serve(channel: MessageChannelLike, origin: string, _info: PortInfo = {}): () => void {
+  serve(channel: MessageChannelLike, origin: string, info: PortInfo = {}): () => void {
+    if (info.verified === false) this.unverified.add(origin)
+    else this.unverified.delete(origin)
     const onEvent = (event: ProviderEvent): void => {
       try {
         channel.post({ kind: 'event', event: event.event, payload: event.payload })
@@ -360,6 +367,7 @@ export class ProviderService {
       // Our own swap must pay exactly what the schedule said (T10); anything else never sees the field.
       ...(origin === 'internal:swap' ? { expectedFee } : {}),
       ...(origin === 'internal:bridge' ? { bridgeRecipient } : {}),
+      originVerified: !this.unverified.has(origin),
     })
     return assess({ origin, chainId, account, request, context, simulation })
   }

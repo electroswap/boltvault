@@ -1,0 +1,36 @@
+# Maestro (master plan §12): a send to the sheet, the in-app browser connecting a dApp, a WalletConnect pairing from a link.
+appId: io.electroswap.boltvault
+---
+- launchApp
+- tapOn:
+    text: "Send"
+- tapOn:
+    id: "send-to-input"
+- inputText: "0x1111111111111111111111111111111111111111"
+- tapOn:
+    id: "send-amount-input"
+- inputText: "0.01"
+- tapOn:
+    id: "send-key"
+- assertVisible:
+    id: "approval-primary"
+- tapOn:
+    id: "approval-reject"
+# the browser
+- tapOn:
+    text: "Explore"
+- tapOn:
+    id: "explore-browser"
+- assertVisible:
+    id: "browser-page"
+- tapOn:
+    id: "browser-url"
+- inputText: "app.electroswap.io"
+- tapOn:
+    id: "browser-go"
+- assertVisible:
+    text: "app.electroswap.io"
+# WalletConnect from a link
+- openLink: "boltvault://wc?uri=wc%3Atest%402%3Frelay-protocol%3Dirn%26symKey%3D00"
+- assertVisible:
+    text: "Connect"

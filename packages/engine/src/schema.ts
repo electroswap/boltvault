@@ -158,6 +158,12 @@ export const SettingsSchema = z.object({
   /** Networks the wallet shows besides Electroneum (§8.14 Networks). */
   enabledChains: z.array(z.number().int().positive()),
   showTestnet: z.boolean(),
+  /** Feel (§7.8): haptics on confirm/keys/receipt/danger; the per-block tick and sound are off by default. */
+  haptics: z.boolean(),
+  blockTick: z.boolean(),
+  sound: z.boolean(),
+  /** Push registration opt-in (§9.3); the phone registers with the watcher only when on. */
+  pushEnabled: z.boolean(),
   sendWhitelist: z.boolean(),
   autoLock: AutoLockSchema,
   displayCurrency: z.enum(['USD', 'ETN']),
@@ -855,11 +861,47 @@ export const RemoteRequestSchema = z.object({
 })
 export type RemoteRequest = z.infer<typeof RemoteRequestSchema>
 
+// ---- M9: external dApp transports and WalletConnect (§5.3) ------------------------------------
+
+export const DappSessionSchema = z.object({
+  sessionId: z.string(),
+  origin: z.string(),
+  kind: z.enum(['webview', 'walletconnect']),
+  verified: z.boolean(),
+  openedAt: z.number(),
+})
+export type DappSession = z.infer<typeof DappSessionSchema>
+
+export const WcProposalViewSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  url: z.string(),
+  icon: z.string().nullable(),
+  origin: z.string(),
+  verified: z.boolean(),
+  requiredChains: z.array(z.string()),
+  optionalChains: z.array(z.string()),
+})
+export type WcProposalView = z.infer<typeof WcProposalViewSchema>
+
+export const WcSessionViewSchema = z.object({
+  topic: z.string(),
+  name: z.string(),
+  url: z.string(),
+  icon: z.string().nullable(),
+  origin: z.string(),
+  chains: z.array(z.number().int()),
+  expiry: z.number(),
+})
+export type WcSessionView = z.infer<typeof WcSessionViewSchema>
+
 export const EngineEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('swap.progress'), flow: SwapFlowSchema }),
   z.object({ type: z.literal('positions.changed'), positions: PositionsSchema }),
   z.object({ type: z.literal('bridge.changed'), transfers: z.array(BridgeStatusSchema) }),
   z.object({ type: z.literal('hardware.keystone'), pending: z.array(KeystonePendingSchema) }),
+  z.object({ type: z.literal('dapp.event'), sessionId: z.string(), origin: z.string(), event: z.string(), payload: z.unknown() }),
+  z.object({ type: z.literal('connect.changed'), proposals: z.array(WcProposalViewSchema), sessions: z.array(WcSessionViewSchema) }),
   z.object({ type: z.literal('remote.changed'), outgoing: z.array(RemoteRequestSchema), incoming: z.array(RemoteRequestSchema) }),
   z.object({ type: z.literal('watchlist.changed'), items: z.array(WatchItemSchema) }),
   z.object({ type: z.literal('limit.changed'), accountId: AccountIdSchema, chainId: z.number().int().positive(), orders: z.array(LimitOrderViewSchema) }),

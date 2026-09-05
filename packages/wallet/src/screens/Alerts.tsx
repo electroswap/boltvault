@@ -8,12 +8,19 @@ import { Body, Chip, Column, Icon, Input, Key, Plate, Row, ScrollView, Toggle, m
 import type { WatchItem } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
+import { useHost } from '../host'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 
 type BodyKind = 'extension-popup' | 'extension-tab' | 'mobile'
 
 export function Alerts({ body }: { body: BodyKind }) {
+  const host = useHost()
+  const [pushState, setPushState] = useState<'unavailable' | 'off' | 'granted' | 'denied'>('unavailable')
+  const refreshPush = (): void => {
+    if (host.push) host.push.status().then(setPushState, () => setPushState('unavailable'))
+  }
+  useEffect(refreshPush, [host])
   const engine = useEngine()
   const router = useRouter()
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
@@ -44,6 +51,15 @@ export function Alerts({ body }: { body: BodyKind }) {
       <Body tone="mute" size="caption">
         {t({ id: 'alerts.body', message: 'Star a token, collection or campaign from Explore, then set what to tell you about. Rewards to collect and dividends to claim are mentioned once a day on their own. Nothing here nags.' })}
       </Body>
+      <Plate gap="$2" testID="alerts-push">
+        <Row justifyContent="space-between" alignItems="center">
+          <Body size="title">{t({ id: 'alerts.push', message: 'Push' })}</Body>
+          {host.push ? <Key label={pushState === 'granted' ? t({ id: 'alerts.push.off', message: 'Turn off' }) : t({ id: 'alerts.push.on', message: 'Turn on' })} kind="secondary" disabled={pushState === 'denied' || pushState === 'unavailable'} onPress={() => void (pushState === 'granted' ? host.push?.disable().then(() => refreshPush()) : host.push?.enable().then(() => refreshPush()))} testID="alerts-push-toggle" /> : null}
+        </Row>
+        <Body tone="mute" size="caption">
+          {!host.push ? t({ id: 'alerts.push.web', message: 'The extension checks in the background on its own; push is for the phone.' }) : pushState === 'granted' ? t({ id: 'alerts.push.granted', message: 'On. Incoming funds, sales and offers, campaigns going live, rewards and dividends arrive while the app is closed.' }) : pushState === 'denied' ? t({ id: 'alerts.push.denied', message: 'Notifications are off for BoltVault in the system settings.' }) : t({ id: 'alerts.push.off.body', message: 'Off. Turn it on to hear about incoming funds, sales, campaigns and rewards while the app is closed. Only a type and an id ever travel; the app fetches the details.' })}
+        </Body>
+      </Plate>
       {items.length === 0 ? (
         <Plate gap="$2" testID="alerts-empty">
           <Body tone="mute" size="caption">
