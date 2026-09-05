@@ -86,10 +86,21 @@ contract FeeScheduleTest is Test {
         (, , uint256 score) = schedule.feeBipsFor(alice);
         assertEq(score, 0); // weight 0: DYNO does not count
         vm.prank(owner);
-        schedule.setDynoWeight(5); // 5 DYNO = 1 BOLT-eq
+        schedule.setDynoWeight(0.2e18); // 1 DYNO = 0.2 BOLT-eq (5 DYNO per BOLT)
         (uint16 bips, , uint256 weighted) = schedule.feeBipsFor(alice);
         assertEq(weighted, 10_000e18);
         assertEq(bips, 30);
+    }
+
+    function test_dynoWorthMoreThanOneBolt() public {
+        // The deployed weight: 1 DYNO = 875.68 BOLT-eq ($1.62 / $0.00185 on 2026-09-05).
+        dyno.mint(alice, 2e18);
+        vm.prank(owner);
+        schedule.setDynoWeight(875.68e18);
+        (uint16 bips, uint8 tier, uint256 score) = schedule.feeBipsFor(alice);
+        assertEq(score, 1_751.36e18);
+        assertEq(tier, 1);
+        assertEq(bips, 40);
     }
 
     function test_aMissingFarmNeverBlocksTheRead() public {

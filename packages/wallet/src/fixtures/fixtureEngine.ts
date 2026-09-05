@@ -124,8 +124,8 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
     const BOLT = '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1'
     const USDC = '0x3187deAd7A2Bd6770F5Fe81495D1B715926AAe6e'
     const SINK = '0x00000000000000000000000000000000000051ab'
-    const tierView: HolderTier = { chainId: 52014, bips: 30, tier: 2, score: '18400000000000000000000', nextTierAt: '50000000000000000000000', nextTierBips: 20, source: 'chain', sink: SINK, schedule: '0x00000000000000000000000000000000000005c4', breakdown: { wallet: '18400000000000000000000', farm: '0', dyno: '0' } }
-    const schedule: FeeScheduleView = { chainId: 52014, baseBips: 50, tiers: [{ minScore: '1000000000000000000000', bips: 40 }, { minScore: '10000000000000000000000', bips: 30 }, { minScore: '50000000000000000000000', bips: 20 }, { minScore: '100000000000000000000000', bips: 10 }], dynoWeight: '0', countFarmBolt: true, boltPayDiscountBips: 2500, source: 'chain', sink: SINK, address: '0x00000000000000000000000000000000000005c4' }
+    const tierView: HolderTier = { chainId: 52014, bips: 40, tier: 1, score: '18400000000000000000000', nextTierAt: '136000000000000000000000', nextTierBips: 30, source: 'chain', sink: SINK, schedule: '0x00000000000000000000000000000000000005c4', breakdown: { wallet: '18400000000000000000000', farm: '0', dyno: '0' } }
+    const schedule: FeeScheduleView = { chainId: 52014, baseBips: 50, tiers: [{ minScore: '13600000000000000000000', bips: 40 }, { minScore: '136000000000000000000000', bips: 30 }, { minScore: '680000000000000000000000', bips: 20 }, { minScore: '1360000000000000000000000', bips: 10 }], dynoWeight: '875680000000000000000', countFarmBolt: true, boltPayDiscountBips: 2500, source: 'chain', sink: SINK, address: '0x00000000000000000000000000000000000005c4' }
     const swapQuote = (arg: { tokenIn: string; tokenOut: string; amountIn: string; slippageBips?: number }): SwapQuote => {
       const inRow = snap.rows.find((r) => r.address.toLowerCase() === arg.tokenIn.toLowerCase()) ?? snap.rows[0]
       const outRow = snap.rows.find((r) => r.address.toLowerCase() === arg.tokenOut.toLowerCase()) ?? snap.rows[2]
@@ -134,7 +134,7 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
       const amountIn = BigInt(Math.round(Number(arg.amountIn || '0') * 1e6)) * 10n ** BigInt(Math.max(0, decIn - 6))
       // A fixed rate so the screenshot is stable: 1 in = 0.00296 out (ETN → USDC).
       const amountOut = (amountIn * 296n * 10n ** BigInt(decOut)) / (100_000n * 10n ** BigInt(decIn))
-      const fee = (amountOut * 30n) / 10_000n
+      const fee = (amountOut * 40n) / 10_000n
       const receive = amountOut - fee
       const slippage = BigInt(arg.slippageBips ?? 50)
       const minOut = receive - (receive * slippage) / 10_000n
@@ -156,7 +156,7 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
         priceImpactPct: 0.12,
         slippageBips: Number(slippage),
         taxBips: 0,
-        fee: { bips: 30, tier: 2, amountRaw: fee.toString(), sink: SINK, source: 'chain', nextTierAt: '50000000000000000000000', nextTierBips: 20 },
+        fee: { bips: 40, tier: 1, amountRaw: fee.toString(), sink: SINK, source: 'chain', nextTierAt: '136000000000000000000000', nextTierBips: 30 },
         route: { label: 'V3 0.3%', hops: [{ kind: 'v3', tokenIn: '0x138DAFbDA0CCB3d8E39C19edb0510Fc31b7C1c77', tokenOut: USDC, fee: 3000 }] },
         gasEstimate: '210000',
         steps: arg.tokenIn === 'native' ? ['swap'] : ['approve', 'permit', 'swap'],

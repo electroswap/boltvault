@@ -8,7 +8,7 @@
  * be read the fee falls back to the base bips, never lower.
  */
 import { BOLTVAULT_FEE_SCHEDULE, BOLTVAULT_FEE_SINK, ELECTRONEUM_ADDRESSES } from '@boltvault/chains'
-import { BASE_FEE_BIPS, ERC20_ABI, FALLBACK_SCHEDULE, FEE_SCHEDULE_ABI, nextTier, tierFor, type FeeSchedule } from '@boltvault/electroswap'
+import { BASE_FEE_BIPS, DYNO_WEIGHT_ONE, ERC20_ABI, FALLBACK_SCHEDULE, FEE_SCHEDULE_ABI, nextTier, tierFor, type FeeSchedule } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
 import { getAddress, isAddress, type Hex } from 'viem'
 import { z } from 'zod'
@@ -128,7 +128,7 @@ export class HolderService {
     if (fee?.ok && Array.isArray(fee.value)) {
       const [bips, tier, score] = fee.value as [number, number, bigint]
       const next = nextTier(schedule, Number(tier))
-      const dynoPart = schedule.dynoWeight > 0n ? dynoAmt / schedule.dynoWeight : 0n
+      const dynoPart = schedule.dynoWeight > 0n ? (dynoAmt * schedule.dynoWeight) / DYNO_WEIGHT_ONE : 0n
       const farm = score > wallet + dynoPart ? score - wallet - dynoPart : 0n
       return { ...base, bips: Number(bips), tier: Number(tier), score: score.toString(), nextTierAt: next ? next.minScore.toString() : null, nextTierBips: next ? next.bips : null, source: 'chain', breakdown: { wallet: wallet.toString(), farm: farm.toString(), dyno: dynoPart.toString() } }
     }

@@ -2,7 +2,7 @@ import { ELECTRONEUM_ADDRESSES } from '@boltvault/chains'
 import { decodeCalldata, decodeUniversalRouter } from '@boltvault/security'
 import type { Hex } from 'viem'
 import { describe, expect, it } from 'vitest'
-import { bestRoute, candidates, encodeSwap, feeAmount, minimumOut, permitCovers, permitSingleTypedData, tierFor, FALLBACK_SCHEDULE, MAX_CANDIDATES, taxSlippageBips, encodeSubmitOrder, encodeCloseOrder, COMMAND, ROUTER_AS_RECIPIENT, type QuoteAddresses, type ReadResult } from '../src/swap'
+import { bestRoute, candidates, encodeSwap, feeAmount, minimumOut, permitCovers, permitSingleTypedData, tierFor, DYNO_WEIGHT_ONE, FALLBACK_SCHEDULE, MAX_CANDIDATES, taxSlippageBips, encodeSubmitOrder, encodeCloseOrder, COMMAND, ROUTER_AS_RECIPIENT, type QuoteAddresses, type ReadResult } from '../src/swap'
 
 const A = ELECTRONEUM_ADDRESSES[52014]
 const UR = A.universalRouter as Hex
@@ -16,9 +16,13 @@ const addresses: QuoteAddresses = { quoterV2: A.quoterV2 as Hex, mixedRouteQuote
 describe('fee math (§8.6, §8.18)', () => {
   it('tiers from the schedule, base for tier 0', () => {
     expect(tierFor(FALLBACK_SCHEDULE, 0n)).toEqual({ bips: 50, tier: 0 })
-    expect(tierFor(FALLBACK_SCHEDULE, 1_000n * 10n ** 18n)).toEqual({ bips: 40, tier: 1 })
-    expect(tierFor(FALLBACK_SCHEDULE, 99_999n * 10n ** 18n)).toEqual({ bips: 20, tier: 3 })
-    expect(tierFor(FALLBACK_SCHEDULE, 100_000n * 10n ** 18n)).toEqual({ bips: 10, tier: 4 })
+    expect(tierFor(FALLBACK_SCHEDULE, 13_599n * 10n ** 18n)).toEqual({ bips: 50, tier: 0 })
+    expect(tierFor(FALLBACK_SCHEDULE, 13_600n * 10n ** 18n)).toEqual({ bips: 40, tier: 1 })
+    expect(tierFor(FALLBACK_SCHEDULE, 1_359_999n * 10n ** 18n)).toEqual({ bips: 20, tier: 3 })
+    expect(tierFor(FALLBACK_SCHEDULE, 1_360_000n * 10n ** 18n)).toEqual({ bips: 10, tier: 4 })
+    // 1 DYNO = 875.68 BOLT-eq: 1,554 DYNO clears the top tier on its own (1,553 does not).
+    expect((1_554n * 10n ** 18n * FALLBACK_SCHEDULE.dynoWeight) / DYNO_WEIGHT_ONE >= 1_360_000n * 10n ** 18n).toBe(true)
+    expect((1_553n * 10n ** 18n * FALLBACK_SCHEDULE.dynoWeight) / DYNO_WEIGHT_ONE < 1_360_000n * 10n ** 18n).toBe(true)
   })
   it('minOut = quoted × (1 − bips) × (1 − slippage)', () => {
     expect(feeAmount(10_000n, 50)).toBe(50n)

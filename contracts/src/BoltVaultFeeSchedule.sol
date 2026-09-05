@@ -32,7 +32,7 @@ interface IYieldFarm {
 ///         wallet reads `feeBipsFor(account)` at quote time and again at
 ///         sign time; changing the schedule is an owner transaction, not a
 ///         wallet release. Score = BOLT balance + BOLT deposited as farm boost
-///         (when counted) + DYNO balance / dynoWeight (when weighted).
+///         (when counted) + DYNO balance × dynoWeight / 1e18 (when weighted).
 contract BoltVaultFeeSchedule {
     struct Tier {
         uint256 minScore;
@@ -49,8 +49,10 @@ contract BoltVaultFeeSchedule {
     IYieldFarm public immutable farm;
 
     uint16 public baseBips = 50;
-    /// @notice How many DYNO count as one BOLT-equivalent; 0 means DYNO does not count.
+    /// @notice BOLT-equivalent per DYNO as an 18-decimal fixed point (`WEIGHT_ONE` = one BOLT per DYNO);
+    ///         0 means DYNO does not count. Ops sets it from the two prices (DYNO price / BOLT price).
     uint256 public dynoWeight;
+    uint256 public constant WEIGHT_ONE = 1e18;
     bool public countFarmBolt = true;
     uint256[] public farmIds;
     Tier[] private _tiers;
@@ -133,7 +135,7 @@ contract BoltVaultFeeSchedule {
             }
         }
         if (dynoWeight != 0 && address(dyno).code.length != 0) {
-            score += dyno.balanceOf(account) / dynoWeight;
+            score += (dyno.balanceOf(account) * dynoWeight) / WEIGHT_ONE;
         }
     }
 

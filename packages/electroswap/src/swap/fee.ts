@@ -20,7 +20,7 @@ export interface FeeTier {
 export interface FeeSchedule {
   readonly baseBips: number
   readonly tiers: readonly FeeTier[]
-  /** How many DYNO count as one BOLT-equivalent; 0 = DYNO does not count. */
+  /** BOLT-equivalent per DYNO, 18-decimal fixed point (`DYNO_WEIGHT_ONE` = one BOLT per DYNO); 0 = DYNO does not count. */
   readonly dynoWeight: bigint
   readonly countFarmBolt: boolean
   readonly boltPayDiscountBips: number
@@ -37,16 +37,24 @@ export interface HolderTier {
   readonly source: 'chain' | 'fallback'
 }
 
-/** Illustrative defaults (§8.18) until the schedule contract answers; ops sets the real numbers. */
+/** One BOLT per DYNO in the schedule's fixed-point weight. */
+export const DYNO_WEIGHT_ONE = 10n ** 18n
+
+/**
+ * The deployed defaults (§8.18, owner decision 2026-09-05 on USD prices: 1 BOLT = $0.00185, 1 DYNO = $1.62;
+ * $25 / $250 / $1,250 / $2,500 of BOLT + DYNO), used only when the schedule contract cannot answer — and
+ * then only for the next-tier hint, because the fee itself falls back to the base and never lower.
+ */
 export const FALLBACK_SCHEDULE: FeeSchedule = {
   baseBips: BASE_FEE_BIPS,
   tiers: [
-    { minScore: 1_000n * 10n ** 18n, bips: 40 },
-    { minScore: 10_000n * 10n ** 18n, bips: 30 },
-    { minScore: 50_000n * 10n ** 18n, bips: 20 },
-    { minScore: 100_000n * 10n ** 18n, bips: 10 },
+    { minScore: 13_600n * 10n ** 18n, bips: 40 },
+    { minScore: 136_000n * 10n ** 18n, bips: 30 },
+    { minScore: 680_000n * 10n ** 18n, bips: 20 },
+    { minScore: 1_360_000n * 10n ** 18n, bips: 10 },
   ],
-  dynoWeight: 0n,
+  /** 875.68 BOLT-eq per DYNO. */
+  dynoWeight: 875_680n * 10n ** 15n,
   countFarmBolt: true,
   boltPayDiscountBips: 2_500,
 }
