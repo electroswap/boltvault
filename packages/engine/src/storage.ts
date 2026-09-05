@@ -1,0 +1,71 @@
+/**
+ * Versioned JSON documents on top of a KeyValueStore.
+ *
+ * Every document is stored as `{ v, data }`. On read the envelope is parsed,
+ * migrated to the current version if older, and validated with zod. Anything
+ * unreadable is quarantined (copied under `<key>.quarantine.<ts>`) — never
+ * silently overwritten — and the default is returned (master plan §3.5).
+ */
+import type { KeyValueStore } from '@boltvault/platform'
+import type { ZodType } from 'zod'
+
+export interface DocSpec<T> {
+  readonly key: string
+  readonly version: number
+  readonly schema: ZodType<T>
+  /** Upgrade `data` written at `fromVersion` toward `version`; may return unknown. */
+  readonly migrate?: (data: unknown, fromVersion: number) => unknown
+  readonly defaultValue: () => T
+}
+
+interface Envelope {
+  v: number
+  data: unknown
+}
+
+function parseEnvelope(raw: string): Envelope | null {
+  try {
+    const obj: unknown = JSON.parse(raw)
+    if (typeof obj !== 'object' || obj === null) return null
+    const rec = obj as Record<string, unknown>
+    if (typeof rec['v'] !== 'number') return null
+    return { v: rec['v'], data: rec['data'] }
+  } catch {
+    return null
+  }
+}
+
+export interface ReadDocResult<T> {
+  readonly value: T
+  /** True when the stored document was unreadable and has been quarantined. */
+  readonly quarantined: boolean
+  /** True when a migration ran (the caller should write the doc back). */
+  readonly migrated: boolean
+}
+
+export async function readDoc<T>(store: KeyValueStore, spec: DocSpec<T>, now: () => number = Date.now): Promise<ReadDocResult<T>> {
+  const raw = await store.get(spec.key)
+  if (raw === null) return { value: spec.defaultValue(), quarantined: false, migrated: false }
+  const env = parseEnvelope(raw)
+  const quarantine = async (): Promise<ReadDocResult<T>> => {
+    await store.set(`${spec.key}.quarantine.${now()}`, raw)
+    await store.remove(spec.key)
+    return { value: spec.defaultValue(), quarantined: true, migrated: false }
+  }
+  if (!env || env.v > spec.version) return quarantine()
+  let data = env.data
+  let migrated = false
+  if (env.v < spec.version) {
+    if (!spec.migrate) return quarantine()
+    data = spec.migrate(data, env.v)
+    migrated = true
+  }
+  const parsed = spec.schema.safeParse(data)
+  if (!parsed.success) return quarantine()
+  return { value: parsed.data, quarantined: false, migrated }
+}
+
+export async function writeDoc<T>(store: KeyValueStore, spec: DocSpec<T>, value: T): Promise<void> {
+  const env: Envelope = { v: spec.version, data: value }
+  await store.set(spec.key, JSON.stringify(env))
+}
