@@ -31,6 +31,14 @@ const CASES: Array<{ screen: string; scenario: string; sizes: Array<keyof typeof
   { screen: 'activity', scenario: 'funded', sizes: ['popup'] },
   { screen: 'settings', scenario: 'funded', sizes: ['popup'] },
   { screen: 'moments', scenario: 'funded', sizes: ['tab', 'mobile'] },
+  // M2 custody surfaces. Secrets-bearing steps render only in tab/mobile (§3.2).
+  { screen: 'onboarding', scenario: 'fresh', sizes: ['popup', 'tab', 'mobile'] },
+  { screen: 'unlock', scenario: 'locked', sizes: ['popup', 'mobile'] },
+  { screen: 'home', scenario: 'unlocked', sizes: ['popup'] },
+  { screen: 'accounts', scenario: 'funded', sizes: ['popup', 'tab', 'mobile'] },
+  { screen: 'backup', scenario: 'unlocked', sizes: ['tab', 'mobile'] },
+  { screen: 'security', scenario: 'funded', sizes: ['popup', 'tab'] },
+  { screen: 'devices', scenario: 'funded', sizes: ['popup', 'mobile'] },
 ]
 
 test('every screen renders in every size and matches its baseline', async () => {

@@ -42,21 +42,34 @@
               {
                 "fontFamily": "Sora",
                 "fontDefinitions": [
-                  { "path": "./node_modules/@expo-google-fonts/sora/400Regular/Sora_400Regular.ttf", "weight": 400 },
-                  { "path": "./node_modules/@expo-google-fonts/sora/600SemiBold/Sora_600SemiBold.ttf", "weight": 600 }
+                  {
+                    "path": "./node_modules/@expo-google-fonts/sora/400Regular/Sora_400Regular.ttf",
+                    "weight": 400
+                  },
+                  {
+                    "path": "./node_modules/@expo-google-fonts/sora/600SemiBold/Sora_600SemiBold.ttf",
+                    "weight": 600
+                  }
                 ]
               },
               {
                 "fontFamily": "Oxanium",
                 "fontDefinitions": [
-                  { "path": "./node_modules/@expo-google-fonts/oxanium/400Regular/Oxanium_400Regular.ttf", "weight": 400 },
-                  { "path": "./node_modules/@expo-google-fonts/oxanium/600SemiBold/Oxanium_600SemiBold.ttf", "weight": 600 }
+                  {
+                    "path": "./node_modules/@expo-google-fonts/oxanium/400Regular/Oxanium_400Regular.ttf",
+                    "weight": 400
+                  },
+                  {
+                    "path": "./node_modules/@expo-google-fonts/oxanium/600SemiBold/Oxanium_600SemiBold.ttf",
+                    "weight": 600
+                  }
                 ]
               }
             ]
           }
         }
-      ]
+      ],
+      "react-native-libsodium"
     ]
   }
 }

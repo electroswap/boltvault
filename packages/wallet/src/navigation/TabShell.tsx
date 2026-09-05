@@ -1,13 +1,20 @@
 /**
- * TabShell — mounts the four tabs and the push stack for every body. The
- * popup is 360×600 with the tab bar pinned; the tab and mobile get the same
- * shell with room.
+ * TabShell — mounts the four tabs and the push stack for every body. While
+ * the vault exists but is locked, every surface except onboarding/harness
+ * screens is replaced by Unlock.
  */
 import { Column, TabBar } from '@boltvault/ui'
 import { t } from '../i18n'
+import { Accounts } from '../screens/Accounts'
+import { Backup } from '../screens/Backup'
+import { Devices } from '../screens/Devices'
 import { Home, type HomeProps } from '../screens/Home'
 import { Moments } from '../screens/Moments'
+import { Onboarding } from '../screens/Onboarding'
+import { Security } from '../screens/Security'
 import { ActivityShell, ExploreShell, PlaceholderScreen, SettingsShell, SwapShell } from '../screens/shells'
+import { Unlock } from '../screens/Unlock'
+import { useWalletState } from '../state/useWalletState'
 import { TABS, TAB_ORDER, type TabId } from './registry'
 import { useRouter } from './router'
 
@@ -18,9 +25,15 @@ export interface TabShellProps {
 
 export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   const router = useRouter()
+  const { vault, loading } = useWalletState()
   const { current, state } = router
   const items = TAB_ORDER.map((id) => ({ id, label: t({ id: TABS[id].labelId, message: TABS[id].labelMessage }), icon: TABS[id].icon }))
   const showTabs = state.stack.length === 0
+
+  const locked = !loading && !!vault?.exists && !vault.unlocked
+  if (locked && current.screen !== 'onboarding' && current.screen !== 'moments') {
+    return <Unlock body={body} reducedMotion={reducedMotionOverride} />
+  }
 
   let screen: React.ReactNode
   switch (current.screen) {
@@ -39,14 +52,26 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
     case 'settings':
       screen = <SettingsShell body={body} />
       break
-    case 'moments':
-      screen = <Moments reducedMotion={reducedMotionOverride} />
+    case 'security':
+      screen = <Security body={body} />
+      break
+    case 'devices':
+      screen = <Devices body={body} />
       break
     case 'accounts':
-      screen = <PlaceholderScreen body={body} title={t({ id: 'accounts.title', message: 'Accounts' })} note={t({ id: 'accounts.soon', message: 'The accounts sheet — every seed, key, device and watch address — lands with the M2 milestone.' })} />
+      screen = <Accounts body={body} />
+      break
+    case 'backup':
+      screen = <Backup reducedMotion={reducedMotionOverride} />
+      break
+    case 'unlock':
+      screen = <Unlock body={body} reducedMotion={reducedMotionOverride} />
       break
     case 'onboarding':
-      screen = <PlaceholderScreen body={body} title={t({ id: 'onboarding.title', message: 'Create your vault' })} note={t({ id: 'onboarding.soon', message: 'Onboarding, backup quiz and passkeys land with the M2 milestone.' })} />
+      screen = <Onboarding reducedMotion={reducedMotionOverride} />
+      break
+    case 'moments':
+      screen = <Moments reducedMotion={reducedMotionOverride} />
       break
     case 'receive':
       screen = <PlaceholderScreen body={body} title={t({ id: 'receive.title', message: 'Receive' })} note={t({ id: 'receive.soon', message: 'Receive lands with the M4 milestone.' })} />

@@ -31,7 +31,13 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
   const engine = createEngine({ platform, heads })
   await engine.ready
   if (scenario !== 'fresh') {
-    await engine.engine.vault.import({ mnemonic: MNEMONIC, password: PASSWORD })
+    const { seedId } = await engine.engine.vault.import({ mnemonic: MNEMONIC, password: PASSWORD })
+    if (scenario === 'funded') {
+      // A mature account: the backup quiz has been passed, so no gate plate on Home.
+      const words = MNEMONIC.split(' ')
+      const quiz = await engine.engine.vault.backupQuiz({ seedId })
+      await engine.engine.vault.confirmBackup({ seedId, answers: quiz.positions.map((position) => ({ position, word: words[position - 1] ?? '' })) })
+    }
     if (scenario === 'locked') await engine.engine.vault.lock()
   }
   if (scenario === 'funded') {

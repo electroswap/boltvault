@@ -14,6 +14,7 @@ import {
   Key,
   LiveFilament,
   Plate,
+  Pressable,
   Row,
   RollingReadout,
   Seat,
@@ -70,7 +71,9 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
             )}
             <Row gap="$4">
               <Icon name="scan" color={paint.mute} />
-              <Icon name="settings" color={paint.mute} testID="settings-key" />
+              <Pressable onPress={() => router.navigate('settings')} accessibilityRole="button" accessibilityLabel="Settings" testID="settings-key" hitSlop={12} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="settings" color={paint.mute} />
+              </Pressable>
             </Row>
           </Row>
         </Ignition>
@@ -95,13 +98,24 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
                 <Body size="title">{t({ id: 'home.locked.title', message: 'Locked' })}</Body>
               </Row>
               <Body tone="mute">{t({ id: 'home.locked.body', message: 'Unlock to see balances and sign.' })}</Body>
-              <Key label={t({ id: 'home.locked.key', message: 'Unlock' })} onPress={() => router.navigate('onboarding')} testID="unlock" />
+              <Key label={t({ id: 'home.locked.key', message: 'Unlock' })} onPress={() => router.navigate('unlock')} testID="unlock" />
             </Plate>
           </Ignition>
         ) : null}
 
         {vault?.unlocked ? (
           <>
+            {!vault.backupComplete && vault.seeds.length > 0 ? (
+              <Ignition reducedMotion={reducedMotion} order={1}>
+                <Plate role="raised" gap="$2" testID="backup-gate">
+                  <Body size="title">{t({ id: 'home.backup.title', message: 'Back up your recovery phrase' })}</Body>
+                  <Body tone="mute" size="caption">
+                    {t({ id: 'home.backup.body', message: 'Swapping and signing stay locked until you confirm three words. Watching and receiving work now.' })}
+                  </Body>
+                  <Key label={t({ id: 'home.backup.key', message: 'Back up' })} onPress={() => router.navigate('backup')} testID="backup-key" />
+                </Plate>
+              </Ignition>
+            ) : null}
             <Ignition reducedMotion={reducedMotion} order={2}>
               <Column gap="$2">
                 <RollingReadout value={totalText} hero reducedMotion={reducedMotion} testID="total" />
@@ -116,7 +130,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
                   ) : null}
                   {portfolio.snapshot && portfolio.snapshot.unpricedCount > 0 ? (
                     <Body tone="mute" size="caption">
-                      {t({ id: 'home.unpriced', message: `${portfolio.snapshot.unpricedCount} without price` })}
+                      {t({ id: 'home.unpriced', message: '{n} without price', values: { n: portfolio.snapshot.unpricedCount } })}
                     </Body>
                   ) : null}
                 </Row>

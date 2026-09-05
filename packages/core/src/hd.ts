@@ -44,8 +44,8 @@ export function mnemonicHex(phrase: string): string {
 }
 
 /** Seed (64-byte) from a mnemonic; `seedHex` is what we store in the vault. */
-export function seedHexFromMnemonic(phrase: string): string {
-  return `0x${toHex(mnemonicToSeedSync(phrase.trim()))}`
+export function seedHexFromMnemonic(phrase: string, passphrase?: string): string {
+  return `0x${toHex(mnemonicToSeedSync(phrase.trim(), passphrase))}`
 }
 
 export function mnemonicFromSeedHex(seedHex: string): { mnemonic: string; seedHex: string } {

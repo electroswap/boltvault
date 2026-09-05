@@ -10,7 +10,9 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@types/libsodium-wrappers-sumo": "^0.8.2",
     "@types/node": "^22.20.1",
+    "libsodium-wrappers-sumo": "^0.8.4",
     "typescript": "^5.6.3",
     "viem": "^2.56.3",
     "vitest": "^2.1.8"

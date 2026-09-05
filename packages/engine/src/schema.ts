@@ -27,15 +27,32 @@ export const AccountViewSchema = z.object({
   address: AddressSchema,
   /** BIP-44 index for HD accounts. */
   index: z.number().int().nonnegative().optional(),
+  /** Which seed an HD account belongs to. */
+  seedId: z.string().optional(),
+  /** Hardware accounts: derivation path and paired device. */
+  hardware: z.object({ path: z.string(), deviceId: z.string().optional() }).optional(),
   /** True when the engine can sign for this account without a device. */
   hasKey: z.boolean(),
   hidden: z.boolean(),
+  order: z.number().int().nonnegative(),
   createdAt: z.number().int().nonnegative(),
 })
 export type AccountView = z.infer<typeof AccountViewSchema>
 
 export const AutoLockSchema = z.enum(['immediately', '1min', '5min', '30min', 'never'])
 export type AutoLock = z.infer<typeof AutoLockSchema>
+
+export const WrapKindSchema = z.enum(['password', 'prf', 'device'])
+export type WrapKind = z.infer<typeof WrapKindSchema>
+
+export const SeedViewSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  backedUp: z.boolean(),
+  accountCount: z.number().int().nonnegative(),
+  hasPassphrase: z.boolean(),
+})
+export type SeedView = z.infer<typeof SeedViewSchema>
 
 export const VaultStatusSchema = z.object({
   /** A vault file exists (the user has onboarded). */
@@ -45,6 +62,12 @@ export const VaultStatusSchema = z.object({
   /** When the auto-lock alarm will fire, or null when never/locked. */
   lockAt: z.number().int().nullable(),
   autoLock: AutoLockSchema,
+  /** Enrolled unlock factors (from the file header; readable while locked). */
+  wraps: z.array(z.object({ by: WrapKindSchema, id: z.string() })),
+  /** Seeds and their backup state (only while unlocked; empty when locked). */
+  seeds: z.array(SeedViewSchema),
+  /** Every seed backed up, or no seed exists. Gates Swap/Sign (§8.1). */
+  backupComplete: z.boolean(),
 })
 export type VaultStatus = z.infer<typeof VaultStatusSchema>
 
@@ -171,8 +194,65 @@ export const PortfolioSnapshotSchema = z.object({
 })
 export type PortfolioSnapshot = z.infer<typeof PortfolioSnapshotSchema>
 
+export const ActivityCategorySchema = z.enum([
+  'SEND',
+  'RECEIVE',
+  'SWAP',
+  'LIMIT',
+  'BRIDGE',
+  'APPROVE',
+  'REVOKE',
+  'FARM_DEPOSIT',
+  'FARM_WITHDRAW',
+  'FARM_COLLECT',
+  'LAUNCHPAD',
+  'NFT',
+  'DIVIDEND_CLAIM',
+  'DAPP',
+])
+export type ActivityCategory = z.infer<typeof ActivityCategorySchema>
+
+/** One entry of the encrypted local log (master plan §8.12). Written before broadcast. */
+export const ActivityEntrySchema = z.object({
+  id: z.string(),
+  hash: z.string().nullable(),
+  chainId: z.number().int().positive(),
+  accountId: AccountIdSchema,
+  to: z.string().nullable(),
+  value: z.string(),
+  nonce: z.number().int().nonnegative().nullable(),
+  submittedAt: z.number().int().nonnegative(),
+  origin: z.string().nullable(),
+  category: ActivityCategorySchema,
+  /** The plain statements the user was shown at sign time (§3.4). */
+  statements: z.array(z.string()),
+  riskCodes: z.array(z.string()),
+  status: z.enum(['pending', 'confirmed', 'failed', 'replaced']),
+  blockNumber: z.number().int().nonnegative().nullable(),
+})
+export type ActivityEntry = z.infer<typeof ActivityEntrySchema>
+
+export const PairedDeviceSchema = z.object({
+  deviceId: z.string(),
+  label: z.string(),
+  pairedAt: z.number().int().nonnegative(),
+  lastSeenAt: z.number().int().nonnegative().nullable(),
+})
+export type PairedDevice = z.infer<typeof PairedDeviceSchema>
+
+export const SyncStatusSchema = z.object({
+  deviceId: z.string(),
+  deviceLabel: z.string(),
+  devices: z.array(PairedDeviceSchema),
+  /** A pairing in progress: show this SAS until confirmed on both sides. */
+  pending: z.object({ pairingId: z.string(), sas: z.string(), peerDeviceId: z.string(), role: z.enum(['offer', 'answer']) }).nullable(),
+})
+export type SyncStatus = z.infer<typeof SyncStatusSchema>
+
 export const EngineEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('portfolio.snapshot'), snapshot: PortfolioSnapshotSchema }),
+  z.object({ type: z.literal('activity.changed'), entries: z.array(ActivityEntrySchema) }),
+  z.object({ type: z.literal('sync.changed'), status: SyncStatusSchema }),
   z.object({ type: z.literal('vault.status'), status: VaultStatusSchema }),
   z.object({ type: z.literal('accounts.changed'), accounts: z.array(AccountViewSchema), activeId: AccountIdSchema.nullable() }),
   z.object({ type: z.literal('sites.changed'), sites: z.array(SiteViewSchema) }),

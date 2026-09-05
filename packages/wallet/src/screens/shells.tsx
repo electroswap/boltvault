@@ -5,6 +5,7 @@
  */
 import { Body, Column, Icon, Key, Plate, Row, ScrollView, Segmented, metrics, paint } from '@boltvault/ui'
 import { useState } from 'react'
+import { useEngine } from '../engine/EngineProvider'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 
@@ -109,30 +110,39 @@ export function ActivityShell({ body }: { body: Body_ }) {
 
 export function SettingsShell({ body }: { body: Body_ }) {
   const router = useRouter()
+  const engine = useEngine()
   const groups: Array<{ id: string; title: string; rows: string[] }> = [
     { id: 'accounts', title: t({ id: 'settings.accounts', message: 'Accounts' }), rows: [t({ id: 'settings.accounts.rows', message: 'Seeds, backups, identity' })] },
     { id: 'security', title: t({ id: 'settings.security', message: 'Security' }), rows: [t({ id: 'settings.security.rows', message: 'Password, auto-lock, passkeys, hardware' })] },
     { id: 'spending', title: t({ id: 'settings.spending', message: 'Spending' }), rows: [t({ id: 'settings.spending.rows', message: 'Slippage, approvals, step-ups, wallet fee schedule' })] },
     { id: 'sites', title: t({ id: 'settings.sites', message: 'Connected sites' }), rows: [t({ id: 'settings.sites.rows', message: 'Per-site chain and account' })] },
     { id: 'networks', title: t({ id: 'settings.networks', message: 'Networks' }), rows: [t({ id: 'settings.networks.rows', message: 'Chains, custom RPCs, tokens' })] },
+    { id: 'devices', title: t({ id: 'settings.devices', message: 'Devices & sync' }), rows: [t({ id: 'settings.devices.rows', message: 'Pair a phone or browser; move your vault' })] },
     { id: 'feel', title: t({ id: 'settings.feel', message: 'Appearance & feel' }), rows: [t({ id: 'settings.feel.rows', message: 'Motion, haptics, sound, currency' })] },
     { id: 'about', title: t({ id: 'settings.about', message: 'About' }), rows: [t({ id: 'settings.about.rows', message: 'Version, encryption, fee sink' })] },
   ]
   return (
     <ScrollView contentContainerStyle={{ padding: insetFor(body), gap: 12 }} testID="settings">
-      <Row gap="$3">
+      <Row gap="$3" justifyContent="space-between">
         <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
+        <Key label={t({ id: 'settings.lock', message: 'Lock' })} kind="secondary" onPress={() => void engine.vault.lock()} icon={<Icon name="lock" size={18} color={paint.ink} />} testID="lock-key" />
       </Row>
-      {groups.map((g) => (
-        <Plate key={g.id} gap="$1" testID={`settings-${g.id}`}>
-          <Body size="title">{g.title}</Body>
-          {g.rows.map((r) => (
-            <Body key={r} tone="mute" size="caption">
-              {r}
-            </Body>
-          ))}
-        </Plate>
-      ))}
+      {groups.map((g) => {
+        const target = g.id === 'accounts' ? 'accounts' : g.id === 'security' ? 'security' : g.id === 'devices' ? 'devices' : null
+        return (
+          <Plate key={g.id} gap="$1" testID={`settings-${g.id}`} onPress={target ? () => router.navigate(target) : undefined} cursor={target ? 'pointer' : undefined}>
+            <Row justifyContent="space-between">
+              <Body size="title">{g.title}</Body>
+              {target ? <Icon name="chevronRight" size={18} color={paint.mute} /> : null}
+            </Row>
+            {g.rows.map((r) => (
+              <Body key={r} tone="mute" size="caption">
+                {r}
+              </Body>
+            ))}
+          </Plate>
+        )
+      })}
     </ScrollView>
   )
 }

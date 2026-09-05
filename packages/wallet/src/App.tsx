@@ -3,6 +3,7 @@ import { TamaguiProvider, tamaguiConfig } from '@boltvault/ui'
 import { I18nProvider } from '@lingui/react'
 import { useMemo } from 'react'
 import { EngineProvider } from './engine/EngineProvider'
+import { DEFAULT_RELAY, HostProvider, type UiHost } from './host'
 import { i18n, setupI18n } from './i18n'
 import { RouterProvider, RouterStore } from './navigation/router'
 import { TabShell } from './navigation/TabShell'
@@ -17,23 +18,33 @@ export interface AppProps {
   readonly initialScreen?: ScreenId
   /** Harness override; production reads the OS setting from the engine. */
   readonly reducedMotion?: boolean
+  /** Body capabilities; defaults to "secrets allowed, no passkeys" (the harness). */
+  readonly host?: Partial<UiHost>
 }
 
+const TAB_IDS: readonly string[] = ['home', 'swap', 'explore', 'activity']
+
 /** The shared root for every body. */
-export function App({ engine, body, initialTab, initialScreen, reducedMotion }: AppProps) {
+export function App({ engine, body, initialTab, initialScreen, reducedMotion, host }: AppProps) {
   const router = useMemo(() => {
     setupI18n()
     const store = new RouterStore({ tab: initialTab ?? 'home' })
-    if (initialScreen && !['home', 'swap', 'explore', 'activity'].includes(initialScreen)) store.navigate({ screen: initialScreen })
+    if (initialScreen && !TAB_IDS.includes(initialScreen)) store.navigate({ screen: initialScreen })
     return store
   }, [initialTab, initialScreen])
+  const uiHost = useMemo<UiHost>(
+    () => ({ body: body === 'mobile' ? 'mobile' : body, secretsAllowed: body !== 'extension-popup', passkeys: null, relayUrl: DEFAULT_RELAY, ...host }),
+    [body, host],
+  )
   return (
     <TamaguiProvider config={tamaguiConfig} defaultTheme="dark">
       <I18nProvider i18n={i18n}>
         <EngineProvider engine={engine}>
-          <RouterProvider store={router}>
-            <TabShell body={body} reducedMotionOverride={reducedMotion} />
-          </RouterProvider>
+          <HostProvider host={uiHost}>
+            <RouterProvider store={router}>
+              <TabShell body={body} reducedMotionOverride={reducedMotion} />
+            </RouterProvider>
+          </HostProvider>
         </EngineProvider>
       </I18nProvider>
     </TamaguiProvider>
