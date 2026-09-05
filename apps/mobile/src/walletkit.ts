@@ -9,7 +9,8 @@ import '@walletconnect/react-native-compat'
 import { SessionProposalSchema, SessionRequestSchema, type ActiveSession, type JsonRpcResponse, type SessionProposal, type SessionRequest, type WalletKitLike } from '@boltvault/connect'
 import { z } from 'zod'
 
-export const WALLETCONNECT_PROJECT_ID = process.env['EXPO_PUBLIC_WALLETCONNECT_PROJECT_ID'] ?? ''
+/** The wallet's own Reown project (a public identifier); an env value overrides it. */
+export const WALLETCONNECT_PROJECT_ID = process.env['EXPO_PUBLIC_WALLETCONNECT_PROJECT_ID'] ?? 'f1eaee6b74bd39f43339dfff17927630'
 
 const METADATA = { name: 'BoltVault', description: 'The Electroneum wallet and ElectroSwap uber-app.', url: 'https://wallet.electroswap.io', icons: ['https://wallet.electroswap.io/icon.png'] }
 

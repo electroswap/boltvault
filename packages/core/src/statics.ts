@@ -11,9 +11,9 @@ import { z } from 'zod'
 /**
  * The statics signing key's public half (hex). The private half lives with
  * ops (an offline signer); rotating it is a wallet release. This value is a
- * placeholder pair generated for the build — replace before 1.0 (§11 M10).
+ * key ops generated on 2026-09-05; the private half lives in the ops secrets.
  */
-export const STATIC_SIGNING_PUBLIC_KEY = '7f3c9e1a4b6d8f0213a5c7e9b1d3f5a7c9e1b3d5f7a9c1e3b5d7f9a1c3e5b7d9'
+export const STATIC_SIGNING_PUBLIC_KEY = '98b03890bbc570eae1416856bc11e252b603104c040e7a9048e2d7ee088ce567'
 
 export const FlagsSchema = z.object({
   v: z.literal(1),
