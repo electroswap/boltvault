@@ -25,7 +25,8 @@ export interface UiHost {
   /** Open a screen in a surface where secrets are allowed (the extension tab). */
   openSecretScreen?(screen: ScreenId): void
   readonly passkeys: PasskeyProvider | null
-  scanQr?(): Promise<string>
+  /** Open the camera; with `onPart`, keep reading distinct codes until it returns true (multi-part URs). */
+  scanQr?(onPart?: (text: string) => boolean): Promise<string>
   /** The sync relay for this build (§9.5). */
   readonly relayUrl: string
   /** Copy to the clipboard (addresses, hashes). */

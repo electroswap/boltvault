@@ -23,7 +23,7 @@ export interface RuleInput {
 
 export type Rule = (input: RuleInput) => RiskRule | null
 
-const isInternal = (origin: string): boolean => origin.startsWith('internal:')
+const isInternal = (origin: string): boolean => origin.startsWith('internal:') || origin.startsWith('device:')
 
 function label(ctx: AssessmentContext, chainId: number, address: string): string {
   const l = ctx.labels[address.toLowerCase()]

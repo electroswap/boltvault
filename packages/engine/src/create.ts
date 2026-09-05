@@ -4,7 +4,7 @@
  * tests). `ready` resolves once persisted state is hydrated.
  */
 import type { Argon2idParams } from '@boltvault/core'
-import type { HidProvider } from '@boltvault/hardware'
+import type { HidProvider, LedgerTransportProvider, TrezorConnectLike } from '@boltvault/hardware'
 import { ElectroSwapClient } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
@@ -26,6 +26,7 @@ import { ProviderService } from './namespaces/provider'
 import { SendService, sendNamespace } from './namespaces/send'
 import { FlowStore } from './namespaces/flows'
 import { HardwareService, hardwareNamespace } from './namespaces/hardware'
+import { RemoteSignService, remoteNamespace } from './namespaces/remote'
 import { ExploreService, exploreNamespace } from './namespaces/explore'
 import { NftService, nftNamespace } from './namespaces/nft'
 import { LegendsService, legendsNamespace } from './namespaces/legends'
@@ -66,8 +67,12 @@ export interface EngineDeps {
   readonly electroswapUrl?: string | null
   /** GeckoTerminal base URL override (tests); `null` disables display prices off Electroneum (§10.4). */
   readonly pricesUrl?: string | null
-  /** WebHID (`navigator.hid`) in the extension worker; a BLE/USB shim on mobile; absent elsewhere (§2.7 S7). */
+  /** WebHID (`navigator.hid`) in the extension worker; absent elsewhere (§2.7 S7). */
   readonly hid?: HidProvider | null
+  /** A Ledger transport that is not WebHID (BLE on the phone). */
+  readonly ledger?: LedgerTransportProvider | null
+  /** Trezor Connect on the extension (the hosted popup); absent on the phone → watch-only + remote sign. */
+  readonly trezor?: TrezorConnectLike | null
 }
 
 export interface Engine {
@@ -100,6 +105,7 @@ export interface Engine {
   readonly watchlist: WatchlistService
   readonly positions: PositionsService
   readonly bridge: BridgeService
+  readonly remote: RemoteSignService
   readonly ready: Promise<void>
   dispose(): void
 }
@@ -123,7 +129,7 @@ export function createEngine(deps: EngineDeps): Engine {
   const contacts = new ContactsStore(deps.platform, host.events, dek)
   const relayFor = deps.relayFor ?? ((url: string): Relay => (/^https?:\/\//.test(url) ? new HttpRelay(url, fetchImpl, deps.clientKey) : sharedMemoryRelay))
   const sync = new SyncService(deps.platform, host.events, { settings, sites, vault, relayFor })
-  const hardware = new HardwareService({ hid: deps.hid ?? null, vault })
+  const hardware = new HardwareService({ hid: deps.hid ?? null, ledger: deps.ledger ?? null, trezor: deps.trezor ?? null, vault, bus: host.events, platform: deps.platform })
   const provider = new ProviderService({
     platform: deps.platform,
     bus: host.events,
@@ -164,6 +170,9 @@ export function createEngine(deps: EngineDeps): Engine {
   const farm = new FarmService({ platform: deps.platform, chains, tokens, vault, provider, flows, settings, electroswap })
   const launchpad = new LaunchpadService({ platform: deps.platform, chains, vault, provider, flows, electroswap, names, watchlist })
   const positions = new PositionsService({ platform: deps.platform, bus: host.events, farm, legends, limit, launchpad, tokens })
+  const remote = new RemoteSignService({ platform: deps.platform, bus: host.events, sync, vault, provider, canSignHere: async (a) => (await vault.privateKeyFor(a.id).catch(() => null)) !== null || (a.kind !== 'hd' && a.kind !== 'imported' && hardware.canSign(a)), ...(deps.receiptPollMs !== undefined ? { pollMs: deps.receiptPollMs * 5 } : {}) })
+  provider.setRemote(remote)
+  sync.setRecordHook((rec, from) => remote.onRecord(rec, from))
   const bridge = new BridgeService({ platform: deps.platform, bus: host.events, chains, vault, provider, flows, settings, ...(deps.receiptPollMs !== undefined ? { receiptPollMs: deps.receiptPollMs } : {}) })
   watchlist.attach({
     tokens: (chainId) => explore.tokens(chainId),
@@ -235,6 +244,7 @@ export function createEngine(deps: EngineDeps): Engine {
   host.register('watchlist', watchlistNamespace(watchlist))
   host.register('positions', positionsNamespace(positions))
   host.register('bridge', bridgeNamespace(bridge))
+  host.register('remote', remoteNamespace(remote))
 
   const ready = Promise.all([approvals.hydrate(), sites.hydrate(), settings.get(), provider.init(), watchlist.hydrate()]).then(() => undefined)
   const engine = createEngineClient(createInProcessTransport(host, 'internal'))
@@ -268,11 +278,14 @@ export function createEngine(deps: EngineDeps): Engine {
     watchlist,
     positions,
     bridge,
+    remote,
     ready,
     dispose: () => {
       vault.dispose()
       provider.dispose()
       bridge.dispose()
+      remote.dispose()
+      hardware.dispose()
     },
   }
 }

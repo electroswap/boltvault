@@ -60,6 +60,8 @@ const CASES: Array<{ screen: string; scenario: string; sizes: Array<keyof typeof
   // M7: other chains and the bridge.
   { screen: 'bridge', scenario: 'funded', sizes: ['popup', 'tab', 'mobile'] },
   { screen: 'networks', scenario: 'funded', sizes: ['popup'] },
+  // M8: the Keystone prompt over Home; Devices carries the signing-requests plate.
+  { screen: 'home', scenario: 'keystone', sizes: ['popup', 'mobile'] },
 ]
 
 test('every screen renders in every size and matches its baseline', async () => {

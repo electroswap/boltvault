@@ -36,6 +36,7 @@ import { Swap } from '../screens/Swap'
 import { Token } from '../screens/Token'
 import { Unlock } from '../screens/Unlock'
 import { useApprovals } from '../state/useApprovals'
+import { HardwarePrompt } from '../components/HardwarePrompt'
 import { useFlowNavigation } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
 import { TABS, TAB_ORDER, type TabId } from './registry'
@@ -184,6 +185,7 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   return (
     <Column flex={1} backgroundColor="$void">
       <Column flex={1}>{screen}</Column>
+      <HardwarePrompt body={body} />
       {showTabs ? <TabBar items={items} activeId={state.tab} onSelect={(id) => router.setTab(id as TabId)} testID="tabs" /> : null}
     </Column>
   )

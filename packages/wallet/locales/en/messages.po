@@ -1024,6 +1024,31 @@ msgid "Sent {n} records."
 msgstr "Sent {n} records."
 
 #: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.requests"
+msgid "Signing requests"
+msgstr "Signing requests"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.requests.body"
+msgid "An account whose key lives on another paired device signs there: the request opens as a signing sheet on that device, and the answer comes back here. Only you can approve it, and only after reading what it signs."
+msgstr "An account whose key lives on another paired device signs there: the request opens as a signing sheet on that device, and the answer comes back here. Only you can approve it, and only after reading what it signs."
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.requests.in"
+msgid "From {d} · {k} — open in the signing sheet"
+msgstr "From {d} · {k} — open in the signing sheet"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.requests.none"
+msgid "Nothing waiting."
+msgstr "Nothing waiting."
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.requests.out"
+msgid "Waiting for a paired device · {k}"
+msgstr "Waiting for a paired device · {k}"
+
+#: packages/wallet/src/screens/Devices.tsx
 msgctxt "devices.sas.body"
 msgid "Both devices show a six-digit code. Confirm only if they match exactly."
 msgstr "Both devices show a six-digit code. Confirm only if they match exactly."
@@ -1778,6 +1803,66 @@ msgctxt "key.swap"
 msgid "Swap"
 msgstr "Swap"
 
+#: packages/wallet/src/components/HardwarePrompt.tsx
+msgctxt "keystone.body"
+msgid "Scan this with the Keystone, check {what} on its screen, then scan its answer here."
+msgstr "Scan this with the Keystone, check {what} on its screen, then scan its answer here."
+
+#: packages/wallet/src/components/HardwarePickers.tsx
+msgctxt "keystone.import.body"
+msgid "On the Keystone choose Connect software wallet › BoltVault (or any EVM wallet) and scan the QR it shows. Signing later works the same way: a QR each way, nothing plugged in."
+msgstr "On the Keystone choose Connect software wallet › BoltVault (or any EVM wallet) and scan the QR it shows. Signing later works the same way: a QR each way, nothing plugged in."
+
+#: packages/wallet/src/components/HardwarePrompt.tsx
+msgctxt "keystone.kind.msg"
+msgid "a message"
+msgstr "a message"
+
+#: packages/wallet/src/components/HardwarePrompt.tsx
+msgctxt "keystone.kind.tx"
+msgid "a transaction"
+msgstr "a transaction"
+
+#: packages/wallet/src/components/HardwarePrompt.tsx
+msgctxt "keystone.kind.typed"
+msgid "typed data"
+msgstr "typed data"
+
+#: packages/wallet/src/components/HardwarePrompt.tsx
+msgctxt "keystone.paste"
+msgid "No camera here? Paste the UR text of the answer."
+msgstr "No camera here? Paste the UR text of the answer."
+
+#: packages/wallet/src/components/HardwarePickers.tsx
+msgctxt "keystone.rows"
+msgid "{n} · fingerprint {x}"
+msgstr "{n} · fingerprint {x}"
+
+#: packages/wallet/src/components/HardwarePrompt.tsx
+msgctxt "keystone.scan"
+msgid "Scan the answer"
+msgstr "Scan the answer"
+
+#: packages/wallet/src/components/HardwarePickers.tsx
+msgctxt "keystone.scan.account"
+msgid "Scan the Keystone"
+msgstr "Scan the Keystone"
+
+#: packages/wallet/src/components/HardwarePrompt.tsx
+msgctxt "keystone.title"
+msgid "Sign on your Keystone"
+msgstr "Sign on your Keystone"
+
+#: packages/wallet/src/components/HardwarePrompt.tsx
+msgctxt "keystone.use"
+msgid "Use answer"
+msgstr "Use answer"
+
+#: packages/wallet/src/components/HardwarePickers.tsx
+msgctxt "keystone.use.account"
+msgid "Use this account QR"
+msgstr "Use this account QR"
+
 #: packages/wallet/src/screens/Accounts.tsx
 msgctxt "ledger.add"
 msgid "Add"
@@ -1840,8 +1925,8 @@ msgstr "Refresh"
 
 #: packages/wallet/src/screens/Accounts.tsx
 msgctxt "ledger.unavailable"
-msgid "Ledger over USB works from the full tab in Chrome. Bluetooth (phone), Trezor and Keystone arrive with M8. You can watch the device address meanwhile."
-msgstr "Ledger over USB works from the full tab in Chrome. Bluetooth (phone), Trezor and Keystone arrive with M8. You can watch the device address meanwhile."
+msgid "Ledger over USB works from the full tab in Chrome, and over Bluetooth on the phone. In this window you can watch its address, or sign on a paired device."
+msgstr "Ledger over USB works from the full tab in Chrome, and over Bluetooth on the phone. In this window you can watch its address, or sign on a paired device."
 
 #: packages/wallet/src/components/LegendsVault.tsx
 msgctxt "legends.activate"
@@ -2633,6 +2718,36 @@ msgctxt "receive.warning"
 msgid "This is Electroneum Smart Chain (52014). Send ETN here from an exchange that supports the smart chain. Do not send from the old Electroneum app."
 msgstr "This is Electroneum Smart Chain (52014). Send ETN here from an exchange that supports the smart chain. Do not send from the old Electroneum app."
 
+#: packages/wallet/src/components/HardwarePrompt.tsx
+msgctxt "remote.body"
+msgid "This account signs on a paired device. Open BoltVault there — the request appears as a signing sheet with everything it is about to sign."
+msgstr "This account signs on a paired device. Open BoltVault there — the request appears as a signing sheet with everything it is about to sign."
+
+#: packages/wallet/src/components/HardwarePrompt.tsx
+msgctxt "remote.kind.msg"
+msgid "Waiting for the message to be signed"
+msgstr "Waiting for the message to be signed"
+
+#: packages/wallet/src/components/HardwarePrompt.tsx
+msgctxt "remote.kind.tx"
+msgid "Waiting for the transaction to be signed"
+msgstr "Waiting for the transaction to be signed"
+
+#: packages/wallet/src/components/HardwarePrompt.tsx
+msgctxt "remote.kind.typed"
+msgid "Waiting for the typed data to be signed"
+msgstr "Waiting for the typed data to be signed"
+
+#: packages/wallet/src/components/HardwarePrompt.tsx
+msgctxt "remote.timeout"
+msgid "Gives up after ten minutes."
+msgstr "Gives up after ten minutes."
+
+#: packages/wallet/src/components/HardwarePrompt.tsx
+msgctxt "remote.title"
+msgid "Sign on another device"
+msgstr "Sign on another device"
+
 #: packages/wallet/src/screens/Security.tsx
 msgctxt "remove"
 msgid "Remove"
@@ -3302,6 +3417,21 @@ msgstr "No price available"
 msgctxt "token.yours"
 msgid "Yours"
 msgstr "Yours"
+
+#: packages/wallet/src/components/HardwarePickers.tsx
+msgctxt "trezor.connect"
+msgid "Connect Trezor"
+msgstr "Connect Trezor"
+
+#: packages/wallet/src/components/HardwarePickers.tsx
+msgctxt "trezor.ready"
+msgid "Trezor {m}{l}"
+msgstr "Trezor {m}{l}"
+
+#: packages/wallet/src/components/HardwarePickers.tsx
+msgctxt "trezor.unavailable"
+msgid "A Trezor connects from the browser extension. On the phone you can watch its address and sign on your paired computer — pair it under Settings › Devices."
+msgstr "A Trezor connects from the browser extension. On the phone you can watch its address and sign on your paired computer — pair it under Settings › Devices."
 
 #: packages/wallet/src/screens/Unlock.tsx
 msgctxt "unlock.help"

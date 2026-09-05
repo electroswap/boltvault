@@ -8,7 +8,7 @@ import { createEngine, type ActivityEntry, type AllowanceView, type Engine, type
 import { createMemoryPlatform } from '@boltvault/platform/memory'
 import { z } from 'zod'
 
-export type FixtureScenario = 'fresh' | 'locked' | 'unlocked' | 'funded' | 'connect' | 'sign'
+export type FixtureScenario = 'fresh' | 'locked' | 'unlocked' | 'funded' | 'connect' | 'sign' | 'keystone'
 
 const FIXED_NOW = 1_757_000_000_000
 const PASSWORD = 'fixture password'
@@ -34,7 +34,7 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
   if (scenario !== 'fresh') {
     const { seedId, accounts } = await engine.engine.vault.import({ mnemonic: MNEMONIC, password: PASSWORD })
     const account = accounts[0]
-    if (scenario === 'funded' || scenario === 'connect' || scenario === 'sign') {
+    if (scenario === 'funded' || scenario === 'connect' || scenario === 'sign' || scenario === 'keystone') {
       // A mature account: the backup quiz has been passed, so no gate plate on Home.
       const words = MNEMONIC.split(' ')
       const quiz = await engine.engine.vault.backupQuiz({ seedId })
@@ -74,7 +74,7 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
     }
     if (scenario === 'locked') await engine.engine.vault.lock()
   }
-  if (scenario === 'funded') {
+  if (scenario === 'funded' || scenario === 'keystone') {
     const accountId = (await engine.engine.accounts.list())[0]?.id ?? 'fixture'
     const address = (await engine.engine.accounts.list())[0]?.address ?? '0x0000000000000000000000000000000000000000'
     const snap = fixtureSnapshot(accountId)
@@ -288,7 +288,13 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
       status: { input: Any, handler: async (arg) => transfers.find((x) => x.id === (arg as { id: string }).id) ?? null },
     })
   }
+  if (scenario === 'keystone') {
+    // M8: a signing request waiting on the Keystone — the prompt sheet over Home (frames are placeholders; a real request is the same shape).
+    const address = (await engine.engine.accounts.list())[0]?.address ?? '0x0000000000000000000000000000000000000000'
+    const frames = ['UR:ETH-SIGN-REQUEST/1-2/LPADAOCFADHDCYWEHGLGHDCSOEADTPDAGDWEDRGSBBFTMOAOCXAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAE', 'UR:ETH-SIGN-REQUEST/2-2/LPAOAOCFADHDCYWEHGLGHDCSOEADTPDAGDWEDRGSBBFTMOAOCXAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAEAE']
+    engine.host.override('hardware', { keystonePending: { handler: async () => [{ id: 'fx-keystone', frames, kind: 'transaction', address, path: "m/44'/60'/0'/0/0", createdAt: FIXED_NOW - 5_000 }] } })
+  }
   return engine
 }
 
-export const FIXTURE_SCENARIOS: readonly FixtureScenario[] = ['fresh', 'locked', 'unlocked', 'funded', 'connect', 'sign']
+export const FIXTURE_SCENARIOS: readonly FixtureScenario[] = ['fresh', 'locked', 'unlocked', 'funded', 'connect', 'sign', 'keystone']

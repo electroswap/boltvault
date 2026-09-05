@@ -24,7 +24,7 @@ import { ConnectDecisionDataSchema, type ApprovalPayload, type AssessmentView, t
 import type { ApprovalStore } from '../approvals'
 import { EngineError } from '../errors'
 import type { EventBus } from '../host'
-import type { ActivityEntry, ApprovalRequest } from '../schema'
+import type { ActivityEntry, ApprovalRequest, AccountView } from '../schema'
 import type { SettingsStore } from '../settingsStore'
 import type { MessageChannelLike } from '../transport'
 import type { ChainsService } from './chains'
@@ -63,6 +63,13 @@ export interface PortInfo {
 const HEAD_POLL_MS = 5_000
 
 export class ProviderService {
+  private remote: RemoteSigner | null = null
+
+  /** Remote sign is wired after construction: it needs the provider and the provider needs it. */
+  setRemote(remote: RemoteSigner): void {
+    this.remote = remote
+  }
+
   private readonly flow: RpcFlow
   private readonly ports = new Map<string, Set<(event: ProviderEvent) => void>>()
   private readonly headPolls = new Map<number, { timer: ReturnType<typeof setInterval>; subs: Map<string, { origin: string; id: Hex }> }>()
@@ -134,8 +141,8 @@ export class ProviderService {
    * the router call): `result` resolves with the hash or signature once the
    * sheet approved and the step executed, and rejects on Reject or a block.
    */
-  async runInternal(intent: Extract<ApprovalIntent, { kind: 'send_transaction' | 'sign_typed_data' }>): Promise<{ requestId: string; result: Promise<unknown> }> {
-    if (!intent.origin.startsWith('internal:')) throw new EngineError('invalid_argument', 'runInternal is for internal origins')
+  async runInternal(intent: Extract<ApprovalIntent, { kind: 'send_transaction' | 'sign_typed_data' | 'sign_message' }>): Promise<{ requestId: string; result: Promise<unknown> }> {
+    if (!intent.origin.startsWith('internal:') && !intent.origin.startsWith('device:')) throw new EngineError('invalid_argument', 'runInternal is for internal and paired-device origins')
     const d = this.deps
     const payload = await this.payloadFor(intent)
     const request = await d.approvals.create({ kind: intent.kind, origin: intent.origin, accountId: intent.accountId, chainId: intent.chainId, payload })
@@ -448,6 +455,7 @@ export class ProviderService {
       }
       case 'send_transaction': {
         const payload = request.payload as Extract<ApprovalPayload, { kind: 'send_transaction' }>
+        if (intent.signOnly) return this.signOnly(intent, payload.tx)
         return this.broadcast(intent, request, payload.tx, payload.assessment)
       }
     }
@@ -466,7 +474,18 @@ export class ProviderService {
         throw new RpcError(RPC.INTERNAL, err instanceof Error ? err.message : 'The device did not answer.')
       }
     }
+    // Not signable here: a paired device that can may (§6, §8.16).
+    if (account && this.remote) {
+      const far = await this.remote.signerFor(account)
+      if (far) return far
+    }
     throw new RpcError(RPC.UNAUTHORIZED, 'This account cannot sign here.')
+  }
+
+  /** Remote sign, the signing side: the prepared fields exactly as the requester sent them, signed and returned raw (§6). */
+  private async signOnly(intent: Extract<ApprovalIntent, { kind: 'send_transaction' }>, tx: PreparedTx): Promise<Hex> {
+    const account = await this.signer(intent.accountId)
+    return account.signTransaction(toSerializable(intent.chainId, tx))
   }
 
   private async broadcast(intent: Extract<ApprovalIntent, { kind: 'send_transaction' }>, request: ApprovalRequest, tx: PreparedTx, assessment: AssessmentView): Promise<Hex> {
@@ -495,15 +514,7 @@ export class ProviderService {
     let raw: Hex
     try {
       const account = await this.signer(intent.accountId)
-      raw = await account.signTransaction({
-        chainId: intent.chainId,
-        to: (tx.to as Hex | null) ?? undefined,
-        value: BigInt(tx.value),
-        data: tx.data as Hex,
-        nonce: tx.nonce,
-        gas: BigInt(tx.gas),
-        ...(tx.type === 'eip1559' ? { type: 'eip1559' as const, maxFeePerGas: BigInt(tx.maxFeePerGas ?? '0x0'), maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas ?? '0x0') } : { type: 'legacy' as const, gasPrice: BigInt(tx.gasPrice ?? '0x0') }),
-      })
+      raw = await account.signTransaction(toSerializable(intent.chainId, tx))
     } catch (err) {
       const reason = err instanceof Error ? err.message : 'signing failed'
       await d.activity.update(request.id, { status: 'failed', statements: [...entry.statements, reason] }).catch(() => undefined)
@@ -538,7 +549,24 @@ export class ProviderService {
   }
 }
 
+/** What remote sign (§6) offers the signing router — declared here so the two never import each other. */
+export interface RemoteSigner {
+  signerFor(account: AccountView): Promise<LocalAccount | null>
+}
+
 let ethSignEnabledSync = false
+
+function toSerializable(chainId: number, tx: PreparedTx): Parameters<LocalAccount['signTransaction']>[0] {
+  return {
+    chainId,
+    to: (tx.to as Hex | null) ?? undefined,
+    value: BigInt(tx.value),
+    data: tx.data as Hex,
+    nonce: tx.nonce,
+    gas: BigInt(tx.gas),
+    ...(tx.type === 'eip1559' ? { type: 'eip1559' as const, maxFeePerGas: BigInt(tx.maxFeePerGas ?? '0x0'), maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas ?? '0x0') } : { type: 'legacy' as const, gasPrice: BigInt(tx.gasPrice ?? '0x0') }),
+  }
+}
 
 function toView(a: Assessment): AssessmentView {
   return {

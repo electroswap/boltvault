@@ -1,6 +1,6 @@
 /** Settings › Devices & sync (master plan §6): pair, confirm the code, push/pull. */
 import { Body, Column, Icon, Input, Key, Plate, QR, Readout, Row, ScrollView, metrics, paint } from '@boltvault/ui'
-import type { SyncStatus } from '@boltvault/engine'
+import type { RemoteRequest, SyncStatus } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
@@ -19,12 +19,15 @@ export function Devices({ body }: { body: 'extension-popup' | 'extension-tab' | 
   const [label, setLabel] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  const [remote, setRemote] = useState<{ outgoing: RemoteRequest[]; incoming: RemoteRequest[] }>({ outgoing: [], incoming: [] })
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
 
   useEffect(() => {
     engine.sync.status().then(setStatus, () => undefined)
+    engine.remote.list().then(setRemote, () => undefined)
     return engine.events.subscribe((e) => {
       if (e.type === 'sync.changed') setStatus(e.status)
+      if (e.type === 'remote.changed') setRemote({ outgoing: e.outgoing, incoming: e.incoming })
     })
   }, [engine])
 
@@ -119,6 +122,31 @@ export function Devices({ body }: { body: 'extension-popup' | 'extension-tab' | 
           <Key label={t({ id: 'cancel', message: 'Cancel' })} kind="secondary" onPress={() => run(async () => { await engine.sync.cancelPairing(); setMode('idle'); setAnswer(null) })} />
         </Plate>
       ) : null}
+
+      <Plate gap="$2" testID="remote-requests">
+        <Body size="title">{t({ id: 'devices.requests', message: 'Signing requests' })}</Body>
+        <Body tone="mute" size="caption">
+          {t({ id: 'devices.requests.body', message: 'An account whose key lives on another paired device signs there: the request opens as a signing sheet on that device, and the answer comes back here. Only you can approve it, and only after reading what it signs.' })}
+        </Body>
+        {remote.outgoing.length === 0 && remote.incoming.length === 0 ? (
+          <Body tone="mute" size="caption">
+            {t({ id: 'devices.requests.none', message: 'Nothing waiting.' })}
+          </Body>
+        ) : null}
+        {remote.outgoing.map((r) => (
+          <Row key={r.id} justifyContent="space-between" alignItems="center" testID={`remote-out-${r.id}`}>
+            <Body size="caption">{t({ id: 'devices.requests.out', message: 'Waiting for a paired device · {k}', values: { k: r.kind } })}</Body>
+            <Body tone="burn" size="caption" onPress={() => void engine.remote.cancel({ id: r.id })}>
+              {t({ id: 'cancel', message: 'Cancel' })}
+            </Body>
+          </Row>
+        ))}
+        {remote.incoming.map((r) => (
+          <Row key={r.id} justifyContent="space-between" alignItems="center" testID={`remote-in-${r.id}`}>
+            <Body size="caption">{t({ id: 'devices.requests.in', message: 'From {d} · {k} — open in the signing sheet', values: { d: r.from ?? '?', k: r.kind } })}</Body>
+          </Row>
+        ))}
+      </Plate>
 
       <Plate gap="$2" testID="paired">
         <Body size="title">{t({ id: 'devices.paired', message: 'Paired devices' })}</Body>

@@ -50,7 +50,7 @@ import type {
   Positions,
   SyncStatus,
   VaultStatus,
- BridgeQuote, BridgeRoute, BridgeStatus } from './schema'
+ BridgeQuote, BridgeRoute, BridgeStatus, KeystonePending, RemoteRequest } from './schema'
 
 export type Unsubscribe = () => void
 
@@ -298,6 +298,20 @@ export interface HardwareNamespace {
   ledgerAddresses(input: { scheme: 'bip44' | 'live'; from?: number; count?: number; deviceId?: string }): Promise<Array<{ path: string; address: string; index: number }>>
   ledgerVerify(input: { path: string; deviceId?: string }): Promise<{ address: string }>
   verifyAccount(input: { accountId: AccountId }): Promise<{ address: string }>
+  trezorStatus(): Promise<{ available: boolean; model: string | null; label: string | null; problem: string | null }>
+  trezorAddresses(input: { scheme: 'bip44' | 'live'; from?: number; count?: number }): Promise<Array<{ path: string; address: string; index: number }>>
+  trezorVerify(input: { path: string }): Promise<{ address: string }>
+  /** The Keystone's account QR (crypto-hdkey / crypto-account) as picker rows. */
+  keystoneImport(input: { parts: string[]; count?: number }): Promise<{ xfp: string; name: string | null; addresses: Array<{ path: string; address: string; index: number }> }>
+  keystonePending(): Promise<KeystonePending[]>
+  keystoneSubmit(input: { id: string; parts: string[] }): Promise<{ ok: true }>
+  keystoneCancel(input: { id: string }): Promise<{ ok: true }>
+}
+
+/** Remote sign (§6, §8.16): what this device is waiting on, and what paired devices are asking it to sign. */
+export interface RemoteNamespace {
+  list(): Promise<{ outgoing: RemoteRequest[]; incoming: RemoteRequest[] }>
+  cancel(input: { id: string }): Promise<void>
 }
 
 /** The encrypted local activity log (§8.12). Locked vault = empty. */
@@ -353,6 +367,7 @@ export interface WalletEngine {
   readonly watchlist: WatchlistNamespace
   readonly positions: PositionsNamespace
   readonly bridge: BridgeNamespace
+  readonly remote: RemoteNamespace
   readonly events: EngineEvents
 }
 

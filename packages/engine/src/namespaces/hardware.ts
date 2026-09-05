@@ -1,22 +1,31 @@
 /**
- * Hardware devices in the engine (master plan §2.7 S7, §8.1): Ledger over
- * HID from the service worker. Pairing (`requestDevice`) needs a user
- * gesture and happens in tab.html; from then on the engine finds the
- * device through the `HidProvider` it was given (`navigator.hid` in the
- * extension). The signing router asks `signerFor()` for a viem account;
- * everything else — the firewall, the sheet, Activity — is unchanged.
+ * Hardware devices in the engine (master plan §2.7 S7, §8.1, §5.4): Ledger
+ * through one transport seam (WebHID from the service worker, BLE on the
+ * phone), Trezor through Connect's five calls (the hosted popup on the
+ * extension; watch-only + remote sign on the phone), Keystone over animated
+ * QR on every body. The signing router asks `signerFor()` for a viem
+ * account; everything else — the firewall, the sheet, Activity — is
+ * unchanged. Keystone's round trip is a pending table the UI drains.
  */
-import { LedgerEthApp, LedgerError, LedgerHidTransport, LedgerTransportError, ledgerAccount, ledgerModelName, pathFor, LEDGER_VENDOR_ID, type HidDeviceLike, type HidProvider, type PathScheme } from '@boltvault/hardware'
+import { LedgerEthApp, LedgerError, LedgerTransportError, TrezorError, hidLedgerProvider, ledgerAccount, pathFor, trezorAccount, unwrapTrezor, type HidProvider, type KeystoneBridge, type KeystoneRequest, type LedgerTransportProvider, type PathScheme, type TrezorConnectLike } from '@boltvault/hardware'
+import type * as KeystoneCodec from '@boltvault/hardware/keystone'
+import type { Platform } from '@boltvault/platform'
 import type { LocalAccount } from 'viem/accounts'
 import { z } from 'zod'
 import { EngineError } from '../errors'
-import type { NamespaceSpec } from '../host'
-import { AccountIdSchema, type AccountView } from '../schema'
+import type { EventBus, NamespaceSpec } from '../host'
+import { AccountIdSchema, type AccountView, type KeystonePending } from '../schema'
 import type { VaultManager } from './vault'
 
 export interface HardwareDeps {
   readonly hid: HidProvider | null
+  /** A transport provider when the body has one that is not WebHID (BLE on the phone). */
+  readonly ledger?: LedgerTransportProvider | null
+  readonly trezor?: TrezorConnectLike | null
   readonly vault: VaultManager
+  readonly bus: EventBus
+  readonly platform: Platform
+  readonly keystoneTimeoutMs?: number
 }
 
 export interface LedgerDeviceView {
@@ -26,63 +35,78 @@ export interface LedgerDeviceView {
 
 export interface LedgerStatusView {
   readonly available: boolean
+  readonly transport: 'hid' | 'ble' | 'usb' | null
   readonly devices: LedgerDeviceView[]
   readonly app: { readonly version: string; readonly blindSigning: boolean } | null
   readonly problem: string | null
 }
 
-function deviceId(d: HidDeviceLike): string {
-  return `${d.vendorId.toString(16)}:${d.productId.toString(16)}:${d.productName ?? ''}`
+export interface TrezorStatusView {
+  readonly available: boolean
+  readonly model: string | null
+  readonly label: string | null
+  readonly problem: string | null
 }
 
+const TREZOR_MANIFEST = { email: 'wallet@electroswap.io', appUrl: 'https://wallet.electroswap.io' }
+
+/** The QR codec is a worker-only chunk (CBOR registry + Buffer); loaded on the first Keystone call. */
+
+const keystoneCodec = (): Promise<typeof KeystoneCodec> => import('@boltvault/hardware/keystone')
+
 function plain(err: unknown): string {
-  if (err instanceof LedgerError || err instanceof LedgerTransportError) return err.message
+  if (err instanceof LedgerError || err instanceof LedgerTransportError || err instanceof TrezorError) return err.message
   return err instanceof Error ? err.message : String(err)
 }
 
 export class HardwareService {
-  private transports = new Map<string, LedgerHidTransport>()
+  private readonly ledger: LedgerTransportProvider | null
+  private trezorReady: Promise<void> | null = null
+  private keystone = new Map<string, { view: KeystonePending; requestId: Uint8Array; resolve: (sig: Uint8Array) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }>()
 
-  constructor(private readonly deps: HardwareDeps) {}
+  constructor(private readonly deps: HardwareDeps) {
+    this.ledger = deps.ledger ?? (deps.hid ? hidLedgerProvider(deps.hid) : null)
+  }
 
   get available(): boolean {
-    return this.deps.hid !== null
+    return this.ledger !== null
   }
 
-  private async devices(): Promise<HidDeviceLike[]> {
-    if (!this.deps.hid) return []
-    const all = await this.deps.hid.getDevices().catch(() => [] as HidDeviceLike[])
-    return all.filter((d) => d.vendorId === LEDGER_VENDOR_ID)
+  /** Whether this body can drive the account's signer itself (else remote sign, §6). */
+  canSign(account: AccountView): boolean {
+    if (account.kind === 'hd' || account.kind === 'imported') return true
+    if (account.kind === 'ledger') return this.ledger !== null
+    if (account.kind === 'trezor') return !!this.deps.trezor
+    if (account.kind === 'keystone') return true
+    return false
   }
+
+  // ---- Ledger --------------------------------------------------------------------
 
   async listLedgers(): Promise<LedgerDeviceView[]> {
-    return (await this.devices()).map((d) => ({ deviceId: deviceId(d), model: ledgerModelName(d.productId, d.productName) }))
+    if (!this.ledger) return []
+    return (await this.ledger.list().catch(() => [])).map((d) => ({ deviceId: d.id, model: d.model }))
   }
 
   private async app(preferred?: string): Promise<{ app: LedgerEthApp; deviceId: string; model: string }> {
-    if (!this.deps.hid) throw new EngineError('not_implemented', 'Ledger over USB is not available in this body.')
-    const devices = await this.devices()
-    const device = (preferred ? devices.find((d) => deviceId(d) === preferred) : undefined) ?? devices[0]
-    if (!device) throw new EngineError('not_found', 'No Ledger is connected. Plug it in, unlock it and open the Ethereum app.')
-    const id = deviceId(device)
-    let transport = this.transports.get(id)
-    if (!transport || transport.device !== device) {
-      transport = new LedgerHidTransport(device)
-      this.transports.set(id, transport)
-    }
-    return { app: new LedgerEthApp(transport), deviceId: id, model: transport.modelName }
+    if (!this.ledger) throw new EngineError('not_implemented', 'Ledger is not available in this body.')
+    const devices = await this.ledger.list()
+    const device = (preferred ? devices.find((d) => d.id === preferred) : undefined) ?? devices[0]
+    if (!device) throw new EngineError('not_found', this.ledger.kind === 'ble' ? 'No Ledger is in range. Turn it on, unlock it and open the Ethereum app.' : 'No Ledger is connected. Plug it in, unlock it and open the Ethereum app.')
+    const transport = await this.ledger.open(device.id)
+    return { app: new LedgerEthApp(transport), deviceId: device.id, model: transport.model }
   }
 
   async ledgerStatus(): Promise<LedgerStatusView> {
-    if (!this.deps.hid) return { available: false, devices: [], app: null, problem: null }
+    if (!this.ledger) return { available: false, transport: null, devices: [], app: null, problem: null }
     const devices = await this.listLedgers()
-    if (devices.length === 0) return { available: true, devices, app: null, problem: null }
+    if (devices.length === 0) return { available: true, transport: this.ledger.kind, devices, app: null, problem: null }
     try {
       const { app } = await this.app()
       const cfg = await app.getAppConfiguration()
-      return { available: true, devices, app: { version: cfg.version, blindSigning: cfg.blindSigning }, problem: null }
+      return { available: true, transport: this.ledger.kind, devices, app: { version: cfg.version, blindSigning: cfg.blindSigning }, problem: null }
     } catch (err) {
-      return { available: true, devices, app: null, problem: plain(err) }
+      return { available: true, transport: this.ledger.kind, devices, app: null, problem: plain(err) }
     }
   }
 
@@ -115,13 +139,6 @@ export class HardwareService {
     }
   }
 
-  /** The signing router's hook: a viem account for a hardware account, or null when the kind is not one we drive here. */
-  async signerFor(account: AccountView): Promise<LocalAccount | null> {
-    if (account.kind !== 'ledger' || !account.hardware) return null
-    const { app } = await this.app(account.hardware.deviceId)
-    return ledgerAccount({ address: account.address as `0x${string}`, path: account.hardware.path, app })
-  }
-
   /** Whether a Ledger account can sign a transaction with calldata right now (blind signing on). */
   async ledgerCanSignData(): Promise<boolean> {
     try {
@@ -130,6 +147,153 @@ export class HardwareService {
     } catch {
       return false
     }
+  }
+
+  // ---- Trezor --------------------------------------------------------------------
+
+  private async trezor(): Promise<TrezorConnectLike> {
+    const c = this.deps.trezor
+    if (!c) throw new EngineError('not_implemented', 'Trezor signs from the browser extension; on the phone a Trezor account is watch-only and signs on a paired device.')
+    this.trezorReady ??= c.init({ manifest: TREZOR_MANIFEST }).catch((err: unknown) => {
+      this.trezorReady = null
+      throw err
+    })
+    await this.trezorReady
+    return c
+  }
+
+  async trezorStatus(): Promise<TrezorStatusView> {
+    if (!this.deps.trezor) return { available: false, model: null, label: null, problem: null }
+    try {
+      const c = await this.trezor()
+      const f = unwrapTrezor(await c.getFeatures())
+      return { available: true, model: f.model ?? f.internal_model ?? null, label: f.label ?? null, problem: null }
+    } catch (err) {
+      return { available: true, model: null, label: null, problem: plain(err) }
+    }
+  }
+
+  async trezorAddresses(input: { scheme: PathScheme; from?: number; count?: number }): Promise<Array<{ path: string; address: string; index: number }>> {
+    const c = await this.trezor()
+    const from = input.from ?? 0
+    const count = Math.min(input.count ?? 5, 20)
+    const paths = Array.from({ length: count }, (_, i) => pathFor(input.scheme, from + i))
+    try {
+      const rows = unwrapTrezor(await c.ethereumGetAddressBundle({ bundle: paths.map((path) => ({ path, showOnTrezor: false as const })) }))
+      return rows.map((r, i) => ({ path: paths[i] ?? '', address: r.address, index: from + i }))
+    } catch (err) {
+      throw new EngineError('internal', plain(err))
+    }
+  }
+
+  async trezorVerify(input: { path: string }): Promise<{ address: string }> {
+    const c = await this.trezor()
+    try {
+      const r = unwrapTrezor(await c.ethereumGetAddress({ path: input.path, showOnTrezor: true }))
+      return { address: r.address }
+    } catch (err) {
+      throw new EngineError('internal', plain(err))
+    }
+  }
+
+  // ---- Keystone ------------------------------------------------------------------
+
+  /** Parse the device's account QR (crypto-hdkey / crypto-account) into the picker's rows. */
+  async keystoneImport(input: { parts: string[]; count?: number }): Promise<{ xfp: string; name: string | null; addresses: Array<{ path: string; address: string; index: number }> }> {
+    try {
+      const { decodeAccount } = await keystoneCodec()
+      const a = decodeAccount(input.parts, Math.min(input.count ?? 5, 20))
+      return { xfp: a.xfp, name: a.name, addresses: a.addresses }
+    } catch (err) {
+      throw new EngineError('invalid_argument', plain(err))
+    }
+  }
+
+  keystonePending(): KeystonePending[] {
+    return [...this.keystone.values()].map((p) => p.view)
+  }
+
+  private emitKeystone(): void {
+    this.deps.bus.emit({ type: 'hardware.keystone', pending: this.keystonePending() })
+  }
+
+  private get bridge(): KeystoneBridge {
+    return {
+      random: (n) => this.deps.platform.random(n),
+      request: (req: KeystoneRequest) =>
+        new Promise<Uint8Array>((resolve, reject) => {
+          const id = Array.from(req.requestId, (b) => b.toString(16).padStart(2, '0')).join('')
+          const timer = setTimeout(() => {
+            this.keystone.delete(id)
+            this.emitKeystone()
+            reject(new EngineError('internal', 'The Keystone did not answer in time.'))
+          }, this.deps.keystoneTimeoutMs ?? 5 * 60_000)
+          this.keystone.set(id, { view: { id, frames: req.frames, kind: req.dataType, address: req.address, path: req.path, createdAt: this.deps.platform.now() }, requestId: req.requestId, resolve, reject, timer })
+          this.emitKeystone()
+        }),
+    }
+  }
+
+  /** The scanned `eth-signature` for a pending request; the request id must match. */
+  async keystoneSubmit(input: { id: string; parts: string[] }): Promise<{ ok: true }> {
+    const p = this.keystone.get(input.id)
+    if (!p) throw new EngineError('not_found', 'That signing request is no longer waiting.')
+    const { decodeSignature } = await keystoneCodec()
+    let sig: ReturnType<typeof decodeSignature>
+    try {
+      sig = decodeSignature(input.parts)
+    } catch (err) {
+      throw new EngineError('invalid_argument', plain(err))
+    }
+    const got = sig.requestId ? Array.from(sig.requestId, (b) => b.toString(16).padStart(2, '0')).join('') : null
+    if (got && got !== input.id) throw new EngineError('invalid_argument', 'That signature answers a different request. Scan the QR for this one.')
+    clearTimeout(p.timer)
+    this.keystone.delete(input.id)
+    this.emitKeystone()
+    p.resolve(sig.signature)
+    return { ok: true }
+  }
+
+  keystoneCancel(input: { id: string }): { ok: true } {
+    const p = this.keystone.get(input.id)
+    if (p) {
+      clearTimeout(p.timer)
+      this.keystone.delete(input.id)
+      this.emitKeystone()
+      p.reject(new EngineError('rejected', 'Cancelled.'))
+    }
+    return { ok: true }
+  }
+
+  // ---- The signing router's hook -------------------------------------------------
+
+  /** A viem account for a hardware account this body can drive; null when it cannot (remote sign may). */
+  async signerFor(account: AccountView): Promise<LocalAccount | null> {
+    if (!account.hardware) return null
+    if (account.kind === 'ledger') {
+      if (!this.ledger) return null
+      const { app } = await this.app(account.hardware.deviceId)
+      return ledgerAccount({ address: account.address as `0x${string}`, path: account.hardware.path, app })
+    }
+    if (account.kind === 'trezor') {
+      if (!this.deps.trezor) return null
+      const connect = await this.trezor()
+      const status = await this.trezorStatus()
+      return trezorAccount({ address: account.address as `0x${string}`, path: account.hardware.path, connect, hashesOnly: status.model === '1' })
+    }
+    if (account.kind === 'keystone') {
+      const { keystoneAccount } = await keystoneCodec()
+      return keystoneAccount({ address: account.address as `0x${string}`, path: account.hardware.path, xfp: account.hardware.deviceId ?? '00000000', bridge: this.bridge })
+    }
+    return null
+  }
+
+  dispose(): void {
+    for (const p of this.keystone.values()) {
+      clearTimeout(p.timer)
+      p.reject(new EngineError('rejected', 'Shutting down.'))
+    }
+    this.keystone.clear()
   }
 }
 
@@ -140,13 +304,21 @@ export function hardwareNamespace(hardware: HardwareService, vault: VaultManager
     ledgerStatus: { handler: () => hardware.ledgerStatus() },
     ledgerAddresses: { input: z.object({ scheme: SchemeSchema, from: z.number().int().nonnegative().optional(), count: z.number().int().positive().max(20).optional(), deviceId: z.string().optional() }), handler: (arg) => hardware.ledgerAddresses(arg as { scheme: PathScheme; from?: number; count?: number; deviceId?: string }) },
     ledgerVerify: { input: z.object({ path: z.string().min(1), deviceId: z.string().optional() }), handler: (arg) => hardware.ledgerVerify(arg as { path: string; deviceId?: string }) },
-    /** Verify the account's address on the device, given an account id (the Receive screen). */
+    trezorStatus: { handler: () => hardware.trezorStatus() },
+    trezorAddresses: { input: z.object({ scheme: SchemeSchema, from: z.number().int().nonnegative().optional(), count: z.number().int().positive().max(20).optional() }), handler: (arg) => hardware.trezorAddresses(arg as { scheme: PathScheme; from?: number; count?: number }) },
+    trezorVerify: { input: z.object({ path: z.string().min(1) }), handler: (arg) => hardware.trezorVerify(arg as { path: string }) },
+    keystoneImport: { input: z.object({ parts: z.array(z.string().min(1)).min(1), count: z.number().int().positive().max(20).optional() }), handler: async (arg) => hardware.keystoneImport(arg as { parts: string[]; count?: number }) },
+    keystonePending: { handler: async () => hardware.keystonePending() },
+    keystoneSubmit: { input: z.object({ id: z.string(), parts: z.array(z.string().min(1)).min(1) }), handler: async (arg) => hardware.keystoneSubmit(arg as { id: string; parts: string[] }) },
+    keystoneCancel: { input: z.object({ id: z.string() }), handler: async (arg) => hardware.keystoneCancel(arg as { id: string }) },
+    /** Verify the account's address on its device, given an account id (the Receive screen). */
     verifyAccount: {
       input: z.object({ accountId: AccountIdSchema }),
       handler: async (arg) => {
         const a = (await vault.accounts()).find((x) => x.id === (arg as { accountId: string }).accountId)
         if (!a?.hardware) throw new EngineError('invalid_argument', 'not a hardware account')
-        const { address } = await hardware.ledgerVerify({ path: a.hardware.path, ...(a.hardware.deviceId ? { deviceId: a.hardware.deviceId } : {}) })
+        if (a.kind === 'keystone') throw new EngineError('not_implemented', 'A Keystone shows its addresses on the device itself; compare it there.')
+        const { address } = a.kind === 'trezor' ? await hardware.trezorVerify({ path: a.hardware.path }) : await hardware.ledgerVerify({ path: a.hardware.path, ...(a.hardware.deviceId ? { deviceId: a.hardware.deviceId } : {}) })
         if (address.toLowerCase() !== a.address.toLowerCase()) throw new EngineError('internal', 'The device shows a different address for this path.')
         return { address }
       },

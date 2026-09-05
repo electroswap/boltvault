@@ -2,6 +2,25 @@ import react from '@vitejs/plugin-react'
 import { createRequire } from 'node:module'
 import { dirname } from 'node:path'
 import { defineConfig } from 'wxt'
+import type { Plugin } from 'vite'
+
+/**
+ * Prebuilt dependencies (the Keystone UR registry, Trezor Connect) carry
+ * webpack's global getter `new Function("return this")()` inside a try/catch.
+ * Under our CSP it would throw and fall back anyway; rewriting it to
+ * `globalThis` keeps the output free of `new Function` (the M1 gate) instead
+ * of merely never calling it.
+ */
+function noFunctionGlobal(): Plugin {
+  return {
+    name: 'boltvault-no-function-global',
+    enforce: 'post',
+    transform(code, id) {
+      if (!id.includes('node_modules') || !code.includes('Function("return this")')) return null
+      return { code: code.replaceAll('new Function("return this")()', 'globalThis').replaceAll('Function("return this")()', 'globalThis'), map: null }
+    },
+  }
+}
 
 // Resolve react-native-web once, from this app, so workspace packages that
 // import `react-native` (packages/ui) get the web implementation regardless
@@ -37,7 +56,7 @@ export default defineConfig({
     action: { default_title: 'BoltVault' },
   },
   vite: () => ({
-    plugins: [react()],
+    plugins: [react(), noFunctionGlobal()],
     resolve: {
       alias: [
         { find: /^react-native$/, replacement: RNW_DIR },

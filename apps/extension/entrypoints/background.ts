@@ -3,6 +3,7 @@
  * UI Ports and to dApps over provider Ports (master plan §2.4, §3.5, §4.1).
  * Approvals from dApps open sign.html; closing that window rejects.
  */
+import '../src/node-shim'
 import { createEngine, serveChannel, type ApprovalRequest } from '@boltvault/engine'
 import type { HidDeviceLike } from '@boltvault/hardware'
 import { PROVIDER_PORT_NAME } from '@boltvault/protocol'
@@ -12,6 +13,7 @@ import { UI_PORT_NAME } from '../src/engine-client'
 import { createServiceWorkerPlatform } from '../src/platform'
 import { portChannel } from '../src/port-channel'
 import { classifySender } from '../src/sender'
+import { createTrezorConnect } from '../src/trezor'
 
 const SIGN_WIDTH = 380
 const SIGN_HEIGHT = 640
@@ -48,7 +50,7 @@ export default defineBackground(() => {
   // WebHID is available to extension workers since Chrome 117; pairing happens in tab.html (§2.7 S7).
   const nav = globalThis.navigator as unknown as { hid?: { getDevices(): Promise<HidDeviceLike[]> } }
   const hid = nav.hid ? { getDevices: () => nav.hid?.getDevices() ?? Promise.resolve([]) } : null
-  const engine = createEngine({ platform, openApproval, clientVersion: `BoltVault/${browser.runtime.getManifest().version}`, hid })
+  const engine = createEngine({ platform, openApproval, clientVersion: `BoltVault/${browser.runtime.getManifest().version}`, hid, trezor: createTrezorConnect() })
 
   browser.runtime.onInstalled.addListener((details) => {
     if (details.reason === 'install') void engine.ready

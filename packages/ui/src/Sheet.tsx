@@ -51,7 +51,7 @@ export function Sheet({ open, onClose, title, children, quiet = false, testID }:
           {title ? (
             <Row justifyContent="space-between">
               <Body size="title">{title}</Body>
-              <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={12}>
+              <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
                 <Icon name="close" size={20} color={paint.mute} />
               </Pressable>
             </Row>

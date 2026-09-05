@@ -119,6 +119,12 @@ export interface SyncDeps {
 
 export class SyncService {
   private pending: Pending | null = null
+  private hook: ((rec: SyncRecord, from: { deviceId: string; label: string }) => Promise<boolean>) | null = null
+
+  /** Remote sign registers here for the `signRequest` / `signResponse` collections (§6). */
+  setRecordHook(hook: (rec: SyncRecord, from: { deviceId: string; label: string }) => Promise<boolean>): void {
+    this.hook = hook
+  }
 
   constructor(
     private readonly platform: Platform,
@@ -272,6 +278,24 @@ export class SyncService {
     return { pushed }
   }
 
+  /** Seal one record to every paired device now (sign requests and answers, §6). */
+  async pushOne(record: Omit<SyncRecord, 'seq' | 'authorDeviceId' | 'authorLabel' | 'at'>): Promise<{ pushed: number }> {
+    const me = await this.identity()
+    const label = await this.label()
+    const rows = await this.devices()
+    let pushed = 0
+    for (const row of rows) {
+      const relay = this.deps.relayFor(row.relayUrl)
+      const channel: Channel = { pairingId: row.pairingId, key: row.channelKey, sas: '' }
+      row.seqOut += 1
+      const rec: SyncRecord = { ...record, seq: row.seqOut, authorDeviceId: me.deviceId, authorLabel: label, at: this.platform.now() }
+      await relay.put(row.pairingId, sealRecord(channel, me, rec, (n) => this.platform.random(n)))
+      pushed += 1
+    }
+    await this.saveDevices(rows)
+    return { pushed }
+  }
+
   async pull(): Promise<{ applied: number }> {
     const me = await this.identity()
     const rows = await this.devices()
@@ -330,7 +354,7 @@ export class SyncService {
         return true
       }
       default:
-        return false
+        return this.hook ? this.hook(rec, { deviceId: from.deviceId, label: from.label }) : false
     }
   }
 }

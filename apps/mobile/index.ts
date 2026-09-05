@@ -1,4 +1,8 @@
+import { Buffer } from 'buffer';
 import { registerRootComponent } from 'expo';
+
+// The UR registry (Keystone) and Ledger's BLE transport expect Node's Buffer (§2.7 S2).
+if (!('Buffer' in globalThis)) (globalThis as { Buffer?: typeof Buffer }).Buffer = Buffer;
 
 import App from './App';
 

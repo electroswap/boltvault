@@ -2,9 +2,10 @@
  * Accounts (master plan §8.1): the rail of seats grouped by origin, add,
  * rename, hide, reveal (quiet, password), backup state per seed.
  */
-import { Body, Column, Icon, Input, Key, Plate, Row, ScrollView, Signature, Toggle, WordGrid, metrics, paint, shortAddress } from '@boltvault/ui'
+import { Body, Column, Icon, Input, Key, Plate, Row, ScrollView, Signature, Toggle, WordGrid, metrics, paint, shortAddress, Chip } from '@boltvault/ui'
 import type { AccountView, SeedView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
+import { KeystonePicker, TrezorPicker } from '../components/HardwarePickers'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
@@ -19,6 +20,7 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
   const router = useRouter()
   const { vault, accounts, active, refresh } = useWalletState()
   const [adding, setAdding] = useState<Adding>(null)
+  const [hwKind, setHwKind] = useState<'ledger' | 'trezor' | 'keystone'>('ledger')
   const [editing, setEditing] = useState<string | null>(null)
   const [label, setLabel] = useState('')
   const [field, setField] = useState('')
@@ -162,7 +164,20 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
             <Key label={t({ id: 'acct.add.watch.key', message: 'Watch address' })} disabled={busy || !/^0x[0-9a-fA-F]{40}$/.test(field.trim())} onPress={() => run(async () => { await engine.accounts.addWatch({ address: field.trim() }); setField(''); setAdding(null) })} />
           </Column>
         ) : null}
-        {adding === 'hardware' ? <LedgerPicker onAdded={() => setAdding(null)} /> : null}
+        {adding === 'hardware' ? (
+          <Column gap="$3">
+            <Row gap="$2" flexWrap="wrap" testID="hardware-kinds">
+              {(['ledger', 'trezor', 'keystone'] as const).map((k) => (
+                <Chip key={k} onPress={() => setHwKind(k)} cursor="pointer" minHeight={36} justifyContent="center" borderColor={hwKind === k ? paint.arc : undefined} testID={`hardware-kind-${k}`}>
+                  <Body tone={hwKind === k ? 'arc' : 'mute'} size="caption">
+                    {k === 'ledger' ? 'Ledger' : k === 'trezor' ? 'Trezor' : 'Keystone'}
+                  </Body>
+                </Chip>
+              ))}
+            </Row>
+            {hwKind === 'ledger' ? <LedgerPicker onAdded={() => setAdding(null)} /> : hwKind === 'trezor' ? <TrezorPicker onAdded={() => setAdding(null)} /> : <KeystonePicker onAdded={() => setAdding(null)} />}
+          </Column>
+        ) : null}
         {error ? <Body tone="burn">{error}</Body> : null}
       </Plate>
 
@@ -258,7 +273,7 @@ function LedgerPicker({ onAdded }: { onAdded: () => void }) {
     return (
       <Column gap="$2" testID="ledger-unavailable">
         <Body tone="mute" size="caption">
-          {t({ id: 'ledger.unavailable', message: 'Ledger over USB works from the full tab in Chrome. Bluetooth (phone), Trezor and Keystone arrive with M8. You can watch the device address meanwhile.' })}
+          {t({ id: 'ledger.unavailable', message: 'Ledger over USB works from the full tab in Chrome, and over Bluetooth on the phone. In this window you can watch its address, or sign on a paired device.' })}
         </Body>
         {host.openSecretScreen && host.body !== 'extension-tab' ? <Key label={t({ id: 'acct.openTab', message: 'Continue in a full tab' })} onPress={() => host.openSecretScreen?.('accounts')} /> : null}
       </Column>

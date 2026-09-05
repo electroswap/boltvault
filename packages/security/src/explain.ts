@@ -40,6 +40,7 @@ function trim(s: string): string {
 
 function siteName(origin: string): string {
   if (origin.startsWith('internal:')) return 'BoltVault'
+  if (origin.startsWith('device:')) return `your ${origin.slice(7)} (paired device)`
   try {
     return new URL(origin).host
   } catch {

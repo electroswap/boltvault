@@ -830,10 +830,37 @@ export const BridgeStatusSchema = z.object({
 })
 export type BridgeStatus = z.infer<typeof BridgeStatusSchema>
 
+// ---- M8: hardware round trips (§2.7 S7) and remote sign (§6) ------------------------------------
+
+export const KeystonePendingSchema = z.object({
+  id: z.string(),
+  /** The animated QR's frames (one for a small request). */
+  frames: z.array(z.string()),
+  kind: z.enum(['transaction', 'typed_transaction', 'personal_message', 'typed_data']),
+  address: z.string(),
+  path: z.string(),
+  createdAt: z.number(),
+})
+export type KeystonePending = z.infer<typeof KeystonePendingSchema>
+
+export const RemoteRequestSchema = z.object({
+  id: z.string(),
+  address: z.string(),
+  chainId: z.number().int().nonnegative(),
+  kind: z.enum(['transaction', 'message', 'typed_data']),
+  /** The paired device that asked (incoming) or null (outgoing). */
+  from: z.string().nullable(),
+  at: z.number(),
+  state: z.enum(['waiting', 'done', 'failed']),
+})
+export type RemoteRequest = z.infer<typeof RemoteRequestSchema>
+
 export const EngineEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('swap.progress'), flow: SwapFlowSchema }),
   z.object({ type: z.literal('positions.changed'), positions: PositionsSchema }),
   z.object({ type: z.literal('bridge.changed'), transfers: z.array(BridgeStatusSchema) }),
+  z.object({ type: z.literal('hardware.keystone'), pending: z.array(KeystonePendingSchema) }),
+  z.object({ type: z.literal('remote.changed'), outgoing: z.array(RemoteRequestSchema), incoming: z.array(RemoteRequestSchema) }),
   z.object({ type: z.literal('watchlist.changed'), items: z.array(WatchItemSchema) }),
   z.object({ type: z.literal('limit.changed'), accountId: AccountIdSchema, chainId: z.number().int().positive(), orders: z.array(LimitOrderViewSchema) }),
   z.object({ type: z.literal('tokens.changed'), chainId: z.number().int().positive() }),

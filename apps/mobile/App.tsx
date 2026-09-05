@@ -4,7 +4,9 @@ import { App as WalletApp, type UiHost } from '@boltvault/wallet'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useState } from 'react'
 import { Linking, SafeAreaView, StyleSheet, Text } from 'react-native'
+import { bleLedgerProvider } from './src/ledger-ble'
 import { createMobilePlatform } from './src/platform'
+import { ScanHost, scanQr } from './src/scan'
 
 const host: Partial<UiHost> = {
   body: 'mobile',
@@ -19,6 +21,7 @@ const host: Partial<UiHost> = {
   openUrl: async (url) => {
     await Linking.openURL(url)
   },
+  scanQr,
 }
 
 export default function App() {
@@ -27,7 +30,7 @@ export default function App() {
     let alive = true
     createMobilePlatform()
       .then((platform) => {
-        if (alive) setEngine(createEngine({ platform }))
+        if (alive) setEngine(createEngine({ platform, ledger: bleLedgerProvider() }))
       })
       .catch((err: unknown) => console.error('platform failed', err))
     return () => {
@@ -38,6 +41,7 @@ export default function App() {
     <SafeAreaView style={styles.root}>
       <StatusBar style="light" />
       {engine ? <WalletApp engine={engine.engine} body="mobile" host={host} /> : <Text style={styles.boot}>BoltVault</Text>}
+      <ScanHost />
     </SafeAreaView>
   )
 }
