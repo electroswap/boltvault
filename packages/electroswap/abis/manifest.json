@@ -1,0 +1,56 @@
+{
+  "YieldFarm": {
+    "source": "apps/interface/src/abis/yield-farm.json",
+    "sha256": "e628155ac71e6d2aa04cbc9cee3c8f465df600ef67440b238c4d5612f59de644",
+    "functions": 26,
+    "events": 13
+  },
+  "EsDividendDistributorV2": {
+    "source": "apps/interface/src/abis/dividend-distributor.json",
+    "sha256": "c2c13cb456c06430c544bac217d731430dd3d9bd9f1671e757dc46e3a07793e1",
+    "functions": 17,
+    "events": 0
+  },
+  "ElectricLegends": {
+    "source": "apps/interface/src/abis/electric-legends.json",
+    "sha256": "4b35142a8657ff68479e34dd85a403db3f015091fef6a93e0f53191cffb743fc",
+    "functions": 29,
+    "events": 7
+  },
+  "LaunchpadAffiliateRewards": {
+    "source": "apps/interface/src/abis/launchpadAffiliateRewards.json",
+    "sha256": "1fbbc63bef84bee4687cc08a4e16624070ba4e30f5e902a852637ea579203bea",
+    "functions": 7,
+    "events": 3
+  },
+  "LaunchpadLpFeeProcessor": {
+    "source": "apps/interface/src/abis/launchpadLpFeeProcessor.json",
+    "sha256": "0ce53f59d3967c3a795e04d2e515cb02e3baa70918009ec91206a8995b35ca17",
+    "functions": 28,
+    "events": 5
+  },
+  "ERC20": {
+    "source": "apps/interface/src/abis/erc20.json",
+    "sha256": "6fcb7ab4f5218c1a3974716af22a6c2be8a1fe0dbd74e4db588d0605988458bf",
+    "functions": 9,
+    "events": 2
+  },
+  "ERC721": {
+    "source": "apps/interface/src/abis/erc721.json",
+    "sha256": "3654a41dc351714168729d38e4c3008b7d9bb32cffc882b675c21849af643c7d",
+    "functions": 29,
+    "events": 7
+  },
+  "ERC1155": {
+    "source": "apps/interface/src/abis/erc1155.json",
+    "sha256": "9cf1c9d61243ded21c5dffa2d1b1095679b693cd3ea0b905091aafebff91765a",
+    "functions": 8,
+    "events": 4
+  },
+  "EIP2612": {
+    "source": "apps/interface/src/abis/eip_2612.json",
+    "sha256": "ddd1f420676eea1b72995382a9d0747d78f875b8d31d8f76cdb5f7615025e800",
+    "functions": 2,
+    "events": 0
+  }
+}

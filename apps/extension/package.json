@@ -1,41 +1,34 @@
 {
   "name": "@boltvault/extension",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "wxt prepare && tsc --noEmit",
     "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
     "dev": "wxt",
     "test": "vitest run --passWithNoTests",
-    "screenshots": "node scripts/screenshots.mjs"
+    "e2e": "playwright test"
   },
   "dependencies": {
-    "@boltvault/chains": "workspace:*",
-    "@boltvault/core": "workspace:*",
-    "@boltvault/design": "workspace:*",
-    "@boltvault/electroswap": "workspace:*",
-    "@boltvault/farm": "workspace:*",
-    "@boltvault/launchpad": "workspace:*",
-    "@boltvault/nft": "workspace:*",
-    "@boltvault/portfolio": "workspace:*",
-    "@boltvault/provider-protocol": "workspace:*",
-    "@boltvault/security": "workspace:*",
-    "@boltvault/swap": "workspace:*",
-    "@boltvault/token-catalog": "workspace:*"
+    "@boltvault/engine": "workspace:*",
+    "@boltvault/platform": "workspace:*",
+    "@boltvault/ui": "workspace:*",
+    "@boltvault/wallet": "workspace:*",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native-web": "^0.21.2"
   },
   "devDependencies": {
-    "@testing-library/react": "^16.3.3",
-    "@types/react": "^18.3.31",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.20.1",
+    "@types/react": "~19.2.2",
     "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^5.0.0",
     "happy-dom": "^20.14.0",
-    "playwright": "^1.63.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
     "typescript": "^5.6.3",
-    "vite": "^6.4.3",
+    "vite": "^7.1.0",
     "vitest": "^2.1.8",
     "wxt": "^0.21.4"
   }

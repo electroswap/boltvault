@@ -1,15 +1,19 @@
-node_modules/
-dist/
-.out/
-build/
-*.log
-.DS_Store
-coverage/
-.turbo/
+apps/extension/.output/
+apps/extension/screenshots/
 apps/mobile/android/
 apps/mobile/ios/
+build/
+coverage/
+dist/
+.DS_Store
+e2e-results/
+.expo/
+.expo-export/
+*.log
+node_modules/
+.out/
 pnpm-lock.yaml.lock
-apps/extension/.output/
+.turbo/
 
 # Internal working documents, not published
 internal-docs/

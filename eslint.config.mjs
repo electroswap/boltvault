@@ -71,4 +71,10 @@ export default tseslint.config(
     files: ['**/tests/**', '**/*.test.ts', '**/*.test.tsx', 'tools/**', 'packages/testing/**'],
     rules: { 'no-console': 'off', 'no-restricted-syntax': 'off' },
   },
+  {
+    // Metro/Babel configs are CommonJS by contract with their loaders.
+    files: ['**/metro.config.js', '**/babel.config.js', '**/*.config.cjs', '.dependency-cruiser.cjs'],
+    languageOptions: { sourceType: 'commonjs' },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
 )

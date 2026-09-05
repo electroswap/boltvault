@@ -1,0 +1,1247 @@
+[
+  {
+    "type": "constructor",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      {
+        "type": "string",
+        "name": "_rewardName",
+        "internalType": "string"
+      },
+      {
+        "type": "string",
+        "name": "_rewardSymbol",
+        "internalType": "string"
+      },
+      {
+        "type": "uint256",
+        "name": "_rewardSupply",
+        "internalType": "uint256"
+      },
+      {
+        "type": "uint256",
+        "name": "_rewardPerBlock",
+        "internalType": "uint256"
+      },
+      {
+        "type": "address",
+        "name": "_wetnAddress",
+        "internalType": "address"
+      },
+      {
+        "type": "address",
+        "name": "_boltToken",
+        "internalType": "address"
+      },
+      {
+        "type": "address",
+        "name": "_v2Factory",
+        "internalType": "address"
+      },
+      {
+        "type": "address",
+        "name": "_v2Router",
+        "internalType": "address"
+      },
+      {
+        "type": "address",
+        "name": "_v3Factory",
+        "internalType": "address"
+      },
+      {
+        "type": "address",
+        "name": "_positionManager",
+        "internalType": "address"
+      },
+      {
+        "type": "address",
+        "name": "_feeHelper",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OwnableInvalidOwner",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "owner",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OwnableUnauthorizedAccount",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "account",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
+  },
+  {
+    "type": "event",
+    "name": "BoltMultiplierUpdated",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "amountBolt",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "multiplier",
+        "internalType": "uint256",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FarmAllocationUpdated",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "farmId",
+        "internalType": "uint256",
+        "indexed": true
+      },
+      {
+        "type": "address",
+        "name": "poolAddr",
+        "internalType": "address",
+        "indexed": true
+      },
+      {
+        "type": "uint256",
+        "name": "allocPoints",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "totalAllocPoints",
+        "internalType": "uint256",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FarmCreated",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "farmId",
+        "internalType": "uint256",
+        "indexed": true
+      },
+      {
+        "type": "address",
+        "name": "poolAddr",
+        "internalType": "address",
+        "indexed": true
+      },
+      {
+        "type": "uint256",
+        "name": "version",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "tokenId",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "allocPoints",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "totalAllocPoints",
+        "internalType": "uint256",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FarmDeactivated",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "farmId",
+        "internalType": "uint256",
+        "indexed": true
+      },
+      {
+        "type": "address",
+        "name": "poolAddr",
+        "internalType": "address",
+        "indexed": true
+      },
+      {
+        "type": "uint256",
+        "name": "version",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "tokenId",
+        "internalType": "uint256",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FarmDeposit",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "farmId",
+        "internalType": "uint256",
+        "indexed": true
+      },
+      {
+        "type": "address",
+        "name": "farmer",
+        "internalType": "address",
+        "indexed": true
+      },
+      {
+        "type": "uint256",
+        "name": "amount0Added",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "amount1Added",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "liquidityAdded",
+        "internalType": "uint256",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FarmIncrease",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "farmId",
+        "internalType": "uint256",
+        "indexed": true
+      },
+      {
+        "type": "address",
+        "name": "farmer",
+        "internalType": "address",
+        "indexed": true
+      },
+      {
+        "type": "uint256",
+        "name": "amount0Added",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "amount1Added",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "liquidityAdded",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "adjustedStartingBlock",
+        "internalType": "uint256",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FarmNameUpdated",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "farmId",
+        "internalType": "uint256",
+        "indexed": true
+      },
+      {
+        "type": "address",
+        "name": "poolAddr",
+        "internalType": "address",
+        "indexed": true
+      },
+      {
+        "type": "string",
+        "name": "_name",
+        "internalType": "string",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FarmWithdrawl",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "farmId",
+        "internalType": "uint256",
+        "indexed": true
+      },
+      {
+        "type": "address",
+        "name": "farmer",
+        "internalType": "address",
+        "indexed": true
+      },
+      {
+        "type": "uint256",
+        "name": "amount0Withdrawn",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "amount1Withdrawn",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "amountRewards",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "fees0Collected",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "fees1Collected",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "thirdPartyRewardsCollected",
+        "internalType": "uint256",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferred",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "previousOwner",
+        "internalType": "address",
+        "indexed": true
+      },
+      {
+        "type": "address",
+        "name": "newOwner",
+        "internalType": "address",
+        "indexed": true
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RewardsPerBlockUpdated",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "rewardPerBlock",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "prevRewardPerBlock",
+        "internalType": "uint256",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ThirdPartyRewardAdded",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "farmId",
+        "internalType": "uint256",
+        "indexed": true
+      },
+      {
+        "type": "address",
+        "name": "rewardToken",
+        "internalType": "address",
+        "indexed": true
+      },
+      {
+        "type": "address",
+        "name": "tokenManager",
+        "internalType": "address",
+        "indexed": true
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ThirdPartyRewardDeposited",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "farmId",
+        "internalType": "uint256",
+        "indexed": true
+      },
+      {
+        "type": "address",
+        "name": "rewardToken",
+        "internalType": "address",
+        "indexed": true
+      },
+      {
+        "type": "uint256",
+        "name": "tokensPerBlock",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "endBlock",
+        "internalType": "uint256",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ThirdPartyRewardUpdated",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "farmId",
+        "internalType": "uint256",
+        "indexed": true
+      },
+      {
+        "type": "address",
+        "name": "tokenManager",
+        "internalType": "address",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "fallback",
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "adminAddThirdPartyReward",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_farmId",
+        "internalType": "uint256"
+      },
+      {
+        "type": "address",
+        "name": "_token",
+        "internalType": "address"
+      },
+      {
+        "type": "address",
+        "name": "_tokenManager",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "adminCreateFarm_V2",
+    "inputs": [
+      {
+        "type": "string",
+        "name": "_name",
+        "internalType": "string"
+      },
+      {
+        "type": "address",
+        "name": "_pairAddr",
+        "internalType": "address"
+      },
+      {
+        "type": "uint256",
+        "name": "_allocPoint",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "adminCreateFarm_V3",
+    "inputs": [
+      {
+        "type": "string",
+        "name": "_name",
+        "internalType": "string"
+      },
+      {
+        "type": "uint256",
+        "name": "_tokenId",
+        "internalType": "uint256"
+      },
+      {
+        "type": "uint256",
+        "name": "_allocPoint",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "adminDeactivateFarm",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_farmId",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "adminUpdateBoltMultiplier",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_amountBolt",
+        "internalType": "uint256"
+      },
+      {
+        "type": "uint256",
+        "name": "_multiplier",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "adminUpdateFarmAllocPoints",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_farmId",
+        "internalType": "uint256"
+      },
+      {
+        "type": "uint256",
+        "name": "_allocPoint",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "adminUpdateFarmName",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_farmId",
+        "internalType": "uint256"
+      },
+      {
+        "type": "string",
+        "name": "_name",
+        "internalType": "string"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "adminUpdateRewardsPerBlock",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_rewardPerBlock",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "outputs": [
+      {
+        "type": "uint256",
+        "name": "",
+        "internalType": "uint256"
+      }
+    ],
+    "name": "calculateDurationMultiplier",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "blocksServed",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "payable",
+    "outputs": [],
+    "name": "deposit",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_farmId",
+        "internalType": "uint256"
+      },
+      {
+        "type": "uint256",
+        "name": "_amount0",
+        "internalType": "uint256"
+      },
+      {
+        "type": "uint256",
+        "name": "_amount1",
+        "internalType": "uint256"
+      },
+      {
+        "type": "uint256",
+        "name": "_amountBolt",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "depositThirdPartyReward",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_farmId",
+        "internalType": "uint256"
+      },
+      {
+        "type": "uint256",
+        "name": "_amountToken",
+        "internalType": "uint256"
+      },
+      {
+        "type": "uint256",
+        "name": "_distributeOverBlockCount",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "outputs": [
+      {
+        "type": "uint256",
+        "name": "",
+        "internalType": "uint256"
+      }
+    ],
+    "name": "farmCount",
+    "inputs": []
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "outputs": [
+      {
+        "type": "tuple",
+        "name": "farm",
+        "internalType": "struct YieldFarm.Farm",
+        "components": [
+          {
+            "type": "uint256",
+            "name": "id",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint8",
+            "name": "version",
+            "internalType": "uint8"
+          },
+          {
+            "type": "string",
+            "name": "name",
+            "internalType": "string"
+          },
+          {
+            "type": "address",
+            "name": "poolAddr",
+            "internalType": "address"
+          },
+          {
+            "type": "uint256",
+            "name": "liquidity",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "allocPoint",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "lastCalcBlock",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "accRewardsPerShare",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "accThirdPartyRewardsPerShare",
+            "internalType": "uint256"
+          },
+          {
+            "type": "address[]",
+            "name": "farmers",
+            "internalType": "address[]"
+          },
+          {
+            "type": "uint256",
+            "name": "farmerCount",
+            "internalType": "uint256"
+          },
+          {
+            "type": "address",
+            "name": "token0",
+            "internalType": "address"
+          },
+          {
+            "type": "address",
+            "name": "token1",
+            "internalType": "address"
+          },
+          {
+            "type": "uint256",
+            "name": "tokenId",
+            "internalType": "uint256"
+          },
+          {
+            "type": "int24",
+            "name": "tickLower",
+            "internalType": "int24"
+          },
+          {
+            "type": "int24",
+            "name": "tickUpper",
+            "internalType": "int24"
+          },
+          {
+            "type": "uint24",
+            "name": "fee",
+            "internalType": "uint24"
+          },
+          {
+            "type": "uint256",
+            "name": "accFees0PerShare",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "accFees1PerShare",
+            "internalType": "uint256"
+          },
+          {
+            "type": "bool",
+            "name": "active",
+            "internalType": "bool"
+          }
+        ]
+      }
+    ],
+    "name": "getFarmById",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_farmId",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "outputs": [
+      {
+        "type": "uint256[]",
+        "name": "",
+        "internalType": "uint256[]"
+      }
+    ],
+    "name": "getFarmIdsByPoolAddress",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_poolAddr",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "outputs": [
+      {
+        "type": "tuple",
+        "name": "farmer",
+        "internalType": "struct YieldFarm.Farmer",
+        "components": [
+          {
+            "type": "address",
+            "name": "addr",
+            "internalType": "address"
+          },
+          {
+            "type": "uint256",
+            "name": "liquidity",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "boltMultiplier",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "boltDeposited",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "durationMultiplier",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "startingBlock",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "rewards",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "rewardDebt",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "thirdPartyRewards",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "thirdPartyRewardDebt",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "fees0",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "fees0Debt",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "fees1",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "fees1Debt",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "name": "getFarmerByFarmIdAndAddress",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_farmId",
+        "internalType": "uint256"
+      },
+      {
+        "type": "address",
+        "name": "_farmerAddress",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "outputs": [
+      {
+        "type": "tuple",
+        "name": "",
+        "internalType": "struct YieldFarm.Farmer",
+        "components": [
+          {
+            "type": "address",
+            "name": "addr",
+            "internalType": "address"
+          },
+          {
+            "type": "uint256",
+            "name": "liquidity",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "boltMultiplier",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "boltDeposited",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "durationMultiplier",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "startingBlock",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "rewards",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "rewardDebt",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "thirdPartyRewards",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "thirdPartyRewardDebt",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "fees0",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "fees0Debt",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "fees1",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "fees1Debt",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "name": "getFarmerByFarmIdAndIndex",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_farmId",
+        "internalType": "uint256"
+      },
+      {
+        "type": "uint256",
+        "name": "_farmerIndex",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "outputs": [
+      {
+        "type": "tuple",
+        "name": "",
+        "internalType": "struct YieldFarm.ThirdPartyReward",
+        "components": [
+          {
+            "type": "address",
+            "name": "token",
+            "internalType": "address"
+          },
+          {
+            "type": "address",
+            "name": "tokenManager",
+            "internalType": "address"
+          },
+          {
+            "type": "uint256",
+            "name": "tokensPerBlock",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "endBlock",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "name": "getThirdPartyRewardConfigByFarmId",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_farmId",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "pure",
+    "outputs": [
+      {
+        "type": "bytes4",
+        "name": "",
+        "internalType": "bytes4"
+      }
+    ],
+    "name": "onERC721Received",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "",
+        "internalType": "address"
+      },
+      {
+        "type": "address",
+        "name": "",
+        "internalType": "address"
+      },
+      {
+        "type": "uint256",
+        "name": "",
+        "internalType": "uint256"
+      },
+      {
+        "type": "bytes",
+        "name": "",
+        "internalType": "bytes"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "outputs": [
+      {
+        "type": "address",
+        "name": "",
+        "internalType": "address"
+      }
+    ],
+    "name": "owner",
+    "inputs": []
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "renounceOwnership",
+    "inputs": []
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "outputs": [
+      {
+        "type": "uint256",
+        "name": "",
+        "internalType": "uint256"
+      }
+    ],
+    "name": "rewardPerBlock",
+    "inputs": []
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "outputs": [
+      {
+        "type": "address",
+        "name": "",
+        "internalType": "contract RewardToken"
+      }
+    ],
+    "name": "rewardToken",
+    "inputs": []
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "outputs": [
+      {
+        "type": "uint256",
+        "name": "",
+        "internalType": "uint256"
+      }
+    ],
+    "name": "totalAllocPoint",
+    "inputs": []
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "transferOwnership",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "newOwner",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "updateThirdPartyRewardManager",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_farmId",
+        "internalType": "uint256"
+      },
+      {
+        "type": "address",
+        "name": "_tokenManager",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "withdraw",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_farmId",
+        "internalType": "uint256"
+      },
+      {
+        "type": "uint256",
+        "name": "_liquidityAmt",
+        "internalType": "uint256"
+      },
+      {
+        "type": "bool",
+        "name": "_asNative",
+        "internalType": "bool"
+      }
+    ]
+  },
+  {
+    "type": "receive",
+    "stateMutability": "payable"
+  }
+]

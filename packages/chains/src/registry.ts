@@ -52,7 +52,7 @@ const ETHEREUM: ChainDef = {
   name: 'Ethereum',
   shortName: 'ETH',
   nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-  rpcUrls: ['https://cloudflare-eth.com', 'https://eth.drpc.org'],
+  rpcUrls: ['https://eth.drpc.org', 'https://ethereum-rpc.publicnode.com', 'https://cloudflare-eth.com'],
   explorer: { name: 'Etherscan', url: 'https://etherscan.io' },
   blockTimeMs: 12_000,
 }

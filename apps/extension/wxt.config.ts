@@ -1,29 +1,50 @@
+import react from '@vitejs/plugin-react'
 import { defineConfig } from 'wxt'
 
 /**
- * WXT MV3 shell (T3.1).
+ * WXT MV3 shell (master plan §2.1, §3.5).
  *
- * The extension ID is pinned via a private key so dApp allowlists + the
- * ElectroSwap GraphQL `X-BoltVault-Key` origin checks stay stable across builds.
- * Design C4: reuse the fork's ID `lfhdjnfgkkkljmpdeicibgfdpjfmfndd` *if ops
- * keeps the fork's key*; until ops hands over that private key, we pin a fresh
- * identity below (documented as an open question in the design). The ID this
- * key derives to is `ggmabmmmdnkckkpolkbbblbeoaoonpgf`.
- *
- * To swap in the fork's identity later, replace `manifest.key` with the fork's
- * base64 key — the ID will become `lfhdjnfgkkkljmpdeicibgfdpjfmfndd` and no
- * other code changes.
+ * - Pages: popup (360×600), tab (full theater), sign (approval window, M3).
+ * - CSP: exactly `script-src 'self' 'wasm-unsafe-eval'; object-src 'self'`.
+ *   No offscreen document, no remote code, no externally_connectable.
+ * - The extension ID is pinned through `manifest.key`. The fork's ID is NOT
+ *   reused (owner decision §13.2 #5); this key derives to a fresh identity
+ *   that the ElectroSwap API allow-lists alongside the wallet key (§9.1).
+ * - react-native-web + Tamagui render the shared screens; `react-native` is
+ *   aliased to `react-native-web` for the whole bundle.
  */
 export default defineConfig({
+  srcDir: '.',
   manifest: {
     name: 'BoltVault',
-    description:
-      'One brain, two bodies, one face — Electroneum wallet + ElectroSwap uber-app.',
+    description: 'The Electroneum wallet and ElectroSwap uber-app.',
     version: '0.1.0',
-    // Pinned identity → stable extension ID (see comment above).
     key: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAszcj6eWrS7qV2fSKdV8Z23VNTrdvhUfuwu/MFh2l5JunYWDMm0JIw2Ez0E55ueD6uYiv3nev0s9JqpgW2MGpiw+vlAxg4+zAuJt287yUwOM+IrgJlmgGw1+wgcl128PUiXLyBWANFOnyfV7h/xerqPjr8eZSy8WBNBAPLqdO8/pY0iNrDakDsbHx/3RYdbzoXsTY9LuHfQjhFoT8PI2a++o24nWqPTeu8eV+Sm6Xi6FJnHoFw9+ExssWZ9s2eMXOZuM0hmEf3ykl0uML5r9M8UVWQvocU3XPBPuuVUD2uKekwYS6uIzMtNRgPl4vGd5Z64XUoaHmvHGXiJXbrAuJhQIDAQAB',
-    // T3.4 needs to inject page-provider on every page + do cross-origin fetches.
+    minimum_chrome_version: '117',
+    permissions: ['storage', 'alarms', 'scripting', 'notifications', 'activeTab'],
     host_permissions: ['<all_urls>'],
-    permissions: ['storage', 'contextMenus', 'offscreen', 'scripting'],
+    content_security_policy: {
+      extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
+    },
+    action: { default_title: 'BoltVault' },
   },
+  vite: () => ({
+    plugins: [react()],
+    resolve: {
+      alias: { 'react-native': 'react-native-web' },
+      extensions: ['.web.tsx', '.web.ts', '.web.js', '.tsx', '.ts', '.jsx', '.js', '.mjs', '.json'],
+    },
+    define: {
+      __DEV__: JSON.stringify(process.env['NODE_ENV'] !== 'production'),
+      'process.env.NODE_ENV': JSON.stringify(process.env['NODE_ENV'] ?? 'production'),
+      'process.env.TAMAGUI_TARGET': JSON.stringify('web'),
+    },
+    optimizeDeps: {
+      esbuildOptions: { loader: { '.js': 'jsx' }, resolveExtensions: ['.web.js', '.js', '.ts', '.tsx'] },
+    },
+    build: {
+      target: 'es2022',
+      sourcemap: false,
+    },
+  }),
 })

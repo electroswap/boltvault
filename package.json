@@ -14,7 +14,7 @@
     "no-any": "node tools/no-any.mjs",
     "registry:verify": "tsx tools/registry-verify.ts",
     "abi:sync": "tsx tools/abi-sync.ts",
-    "ci": "pnpm typecheck && pnpm lint && pnpm no-any && pnpm depcruise && SKIP_LIVE=1 pnpm test:ci && pnpm --filter @boltvault/extension build"
+    "check": "pnpm typecheck && pnpm lint && pnpm no-any && pnpm depcruise && SKIP_LIVE=1 pnpm test:ci && pnpm --filter @boltvault/extension build"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

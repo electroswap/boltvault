@@ -6,16 +6,17 @@ declare module "wxt/browser" {
     | ""
     | "/"
     | "/background.js"
-    | "/content-scripts/content-bridge.js"
-    | "/content-scripts/page-provider.js"
     | "/fonts/fonts.css"
     | "/fonts/oxanium-400.woff2"
     | "/fonts/oxanium-600.woff2"
     | "/fonts/sora-400.woff2"
     | "/fonts/sora-600.woff2"
-    | "/full-tab.html"
-    | "/notification.html"
+    | "/icon/128.png"
+    | "/icon/16.png"
+    | "/icon/32.png"
+    | "/icon/48.png"
     | "/popup.html"
+    | "/tab.html"
   type HtmlPublicPath = Extract<PublicPath, `${string}.html`>
   export interface WxtRuntime {
     getURL(path: PublicPath): string;

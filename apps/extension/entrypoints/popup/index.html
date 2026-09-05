@@ -1,14 +1,21 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-body="extension-popup">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Self-hosted faces (design §Type: no Google Fonts CSS — MV3 FOUTs kill the
-         Chamber on first open). Sora for text, Oxanium for totals/countdowns. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BoltVault</title>
     <link rel="stylesheet" href="/fonts/fonts.css" />
+    <link rel="preload" href="/fonts/sora-400.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/oxanium-600.woff2" as="font" type="font/woff2" crossorigin />
+    <style>
+      html, body { margin: 0; padding: 0; background: #060913; color-scheme: dark; }
+      body { width: 360px; height: 600px; overflow: hidden; }
+      #root { width: 360px; height: 600px; display: flex; }
+      #root > * { flex: 1; }
+    </style>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="./index.tsx"></script>
+    <script type="module" src="./main.tsx"></script>
   </body>
 </html>

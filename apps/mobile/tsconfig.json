@@ -1,7 +1,12 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "expo/tsconfig.base",
   "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "jsx": "react-jsx",
+    "moduleResolution": "Bundler",
     "types": ["vitest/globals"]
   },
-  "include": ["src", "tests"]
+  "include": ["App.tsx", "index.ts", "src", "app.json"]
 }
