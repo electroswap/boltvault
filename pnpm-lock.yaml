@@ -221,6 +221,22 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)
 
+  packages/farm:
+    dependencies:
+      '@boltvault/chains':
+        specifier: workspace:*
+        version: link:../chains
+      viem:
+        specifier: ^2.56.3
+        version: 2.56.3(typescript@5.9.3)
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)
+
   packages/history:
     dependencies:
       '@boltvault/core':
@@ -236,6 +252,22 @@ importers:
       '@types/node':
         specifier: ^22
         version: 22.20.1
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)
+
+  packages/launchpad:
+    dependencies:
+      '@boltvault/chains':
+        specifier: workspace:*
+        version: link:../chains
+      viem:
+        specifier: ^2.56.3
+        version: 2.56.3(typescript@5.9.3)
+    devDependencies:
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
@@ -274,6 +306,22 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)
 
+  packages/nft:
+    dependencies:
+      '@boltvault/chains':
+        specifier: workspace:*
+        version: link:../chains
+      viem:
+        specifier: ^2.56.3
+        version: 2.56.3(typescript@5.9.3)
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)
+
   packages/other-chain:
     dependencies:
       '@boltvault/chains':
@@ -290,7 +338,29 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)
 
+  packages/page-provider:
+    dependencies:
+      '@boltvault/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)
+
   packages/passkey:
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)
+
+  packages/platform:
     devDependencies:
       typescript:
         specifier: ^5.6.3
@@ -324,6 +394,19 @@ importers:
       '@types/node':
         specifier: ^22
         version: 22.20.1
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)
+
+  packages/security:
+    dependencies:
+      '@boltvault/chains':
+        specifier: workspace:*
+        version: link:../chains
+    devDependencies:
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
@@ -365,6 +448,22 @@ importers:
       viem:
         specifier: ^2.56.3
         version: 2.56.3(typescript@5.9.3)
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)
+
+  packages/sync:
+    dependencies:
+      '@boltvault/core':
+        specifier: workspace:*
+        version: link:../core
+      '@noble/hashes':
+        specifier: ^2.0.1
+        version: 2.4.0
     devDependencies:
       typescript:
         specifier: ^5.6.3
@@ -789,6 +888,10 @@ packages:
   '@noble/hashes@1.8.0':
     resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
     engines: {node: ^14.21.3 || >=16}
+
+  '@noble/hashes@2.4.0':
+    resolution: {integrity: sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==}
+    engines: {node: '>= 20.19.0'}
 
   '@rollup/rollup-android-arm-eabi@4.63.1':
     resolution: {integrity: sha512-UZ8sUxPTiHWYX9QNdJedb1kDZSpS1t/VPWBWGSgqHNi9w3Cu6IXvu2mzbhiTiPvtrqgTQJ+zqiAq2iPIPilpaQ==}
@@ -1960,6 +2063,8 @@ snapshots:
       '@noble/hashes': 1.8.0
 
   '@noble/hashes@1.8.0': {}
+
+  '@noble/hashes@2.4.0': {}
 
   '@rollup/rollup-android-arm-eabi@4.63.1':
     optional: true
