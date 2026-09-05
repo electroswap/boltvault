@@ -1,4 +1,6 @@
 import { defineBackground } from '#imports'
+import { createChainClient } from '@boltvault/chains'
+import { resolveChainList } from '@boltvault/token-catalog'
 import {
   RpcFlow,
   RpcError,
@@ -13,6 +15,7 @@ import {
   type CreatedVault,
   type VaultStores,
 } from '../src/vault-service'
+import { DataEngine, noOpPrices, type RpcReader } from '../src/data-engine'
 import { localStore, sessionStore } from '../src/storage'
 
 /**
@@ -33,6 +36,46 @@ export default defineBackground(() => {
   const vault = VaultService.connect(stores, '5min')
   const registry = new SiteRegistry(localSitesStore(localStore))
   void registry.hydrate()
+
+  // E0b: the current account (address) the portfolio reads for. Set on
+  // unlock/create/import; the popup queries `bv:accounts` to learn it.
+  let currentAccounts: string[] = []
+
+  // E0b data engine — the SW-side of the popup data layer (block head,
+  // portfolio, prices). A viem-backed reader + no-op prices for v1 (display).
+  // v1 is ETN-first, so the reader is bound to ELECTRONEUM (52014).
+  const etn = createChainClient(52014)
+  const reader: RpcReader = {
+    blockNumber: () => etn.getBlockNumber(),
+    nativeBalance: (address) => etn.getBalance({ address: address as any }),
+    erc20Balances: async (account, tokens) => {
+      const out: Record<string, bigint> = {}
+      const CH = 50 // design: multicall3 with a batch cap
+      for (let i = 0; i < tokens.length; i += CH) {
+        const slice = tokens.slice(i, i + CH)
+        const contracts = slice.map((t) => ({
+          address: t.address as any,
+          functionName: 'balanceOf' as const,
+          args: [account as any],
+        }))
+        const results = await etn.multicall({ contracts: contracts as any, allowFailure: true })
+        for (let j = 0; j < slice.length; j++) {
+          const r = results[j] as any
+          const res = slice[j]
+          if (!res) continue
+          out[res.address.toLowerCase()] = typeof r?.result === 'bigint' ? (r.result as bigint) : 0n
+        }
+      }
+      return out
+    },
+  }
+  const dataEngine = new DataEngine({
+    reader,
+    prices: noOpPrices,
+    universe: async (chainId) => (await resolveChainList(chainId)).tokens,
+  })
+
+
 
   // Live provider Ports, keyed by origin, so `emit` can push chainChanged /
   // accountsChanged to exactly the right tab (design: chainChanged only to
@@ -78,8 +121,9 @@ export default defineBackground(() => {
             }
             case 'bv:vault:unlock': {
               const accounts = await vault.unlock(message.password)
+              currentAccounts = accounts.map((a) => a.address)
               ctx.setAccounts?.(accounts)
-              return { accounts }
+              return { accounts, current: currentAccounts }
             }
             case 'bv:vault:lock':
               await vault.lock()
@@ -88,6 +132,14 @@ export default defineBackground(() => {
               return { mnemonic: await vault.revealMnemonic(message.password) }
             case 'bv:vault:state':
               return { hasVault: await vault.hasVault(), unlocked: await vault.isUnlocked() }
+            case 'bv:accounts':
+              return { accounts: currentAccounts }
+            case 'bv:block:head':
+              return await dataEngine.blockHead(message.chainId)
+            case 'bv:portfolio':
+              return await dataEngine.portfolio(message.chainId, message.account)
+            case 'bv:price':
+              return await dataEngine.price(message.chainId, message.address)
             default:
               return { ok: false, error: 'unknown method' }
           }

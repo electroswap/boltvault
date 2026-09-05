@@ -1,6 +1,7 @@
 import { type CSSProperties } from 'react'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { SwapView } from './SwapView'
+import { useBlockHeartbeat, usePortfolio, type SafeRow } from './data-layer'
 import {
   IconHome,
   IconSwap,
@@ -32,13 +33,6 @@ const TABS: { id: 'home' | 'swap' | 'activity' | 'settings'; label: string; icon
   { id: 'activity', label: 'Act', icon: IconActivity },
   { id: 'settings', label: 'Set', icon: IconSettings },
 ]
-
-/** Placeholder portfolio (ETN share of portfolio) — replaced by T4.2. */
-const PORTFOLIO = [
-  { symbol: 'ETN', share: 0.62 },
-  { symbol: 'BOLT', share: 0.28 },
-  { symbol: 'USDC', share: 0.1 },
-] as const
 
 /** Placeholder history — @boltvault/activity merge fills this (T6.1). */
 const ACTIVITY_STUB = [
@@ -135,6 +129,33 @@ function BusBar({
 export default function App() {
   const [tab, setTab] = useState<'home' | 'swap' | 'activity' | 'settings'>('home')
   const [selectedBar, setSelectedBar] = useState<string>('ETN')
+  const [account, setAccount] = useState<string | null>(null)
+
+  // E0b: the block heartbeat drives the filament + head; the portfolio hook
+  // drives the total + bus bars with last-good + refresh (ETN 15s).
+  const { state: hb } = useBlockHeartbeat(52014)
+  const pf = usePortfolio(52014, account ?? '', { client: undefined })
+
+  // Learn the current account from the SW once (first address after unlock).
+  useEffect(() => {
+    const b = (globalThis as any).browser
+    if (b?.runtime?.sendMessage) {
+      void b.runtime
+        .sendMessage({ type: 'bv:accounts' })
+        .then((r: any) => {
+          const first = r?.accounts?.[0]
+          if (typeof first === 'string' && first) setAccount(first)
+        })
+        .catch(() => {})
+    }
+  }, [])
+
+  const total = pf.data?.pricedTotalUsd ?? null
+  const bars: { symbol: string; share: number }[] = useMemo(() => {
+    const rows: SafeRow[] = pf.data ? [...(pf.data.native ? [pf.data.native] : []), ...pf.data.rows] : []
+    return rows.map((r) => ({ symbol: r.symbol, share: r.share }))
+  }, [pf.data])
+
   return (
     <div
       data-testid="chamber"
@@ -166,7 +187,8 @@ export default function App() {
       <main style={{ flex: 1, padding: '0 var(--bv-inset)', overflowY: 'auto' }}>
         {tab === 'home' && (
           <>
-            {/* Big total — Oxanium, left-aligned */}
+            {/* Big total — Oxanium, left-aligned. Real data (pricedTotalUsd);
+                quiet placeholder until the first read lands (no spinner). */}
             <div
               data-testid="total"
               style={{
@@ -174,28 +196,56 @@ export default function App() {
                 fontSize: '32px',
                 letterSpacing: '-0.04em',
                 fontWeight: 600,
+                color: total == null ? 'var(--bv-mute)' : 'var(--bv-ink)',
               }}
             >
-              12,480.22
+              {total == null ? '—' : `$${total.toFixed(2)}`}
             </div>
-            <div style={{ color: 'var(--bv-ember)', fontSize: '13px', marginTop: '2px' }}>
-              ETN&ensp;+2.1%
+            <div
+              data-testid="head"
+              style={{ color: 'var(--bv-ember)', fontSize: '13px', marginTop: '2px' }}
+            >
+              {hb.block != null ? `ETN · ${hb.block.toLocaleString()}` : 'ETN'}
             </div>
 
-            <Filament active />
+            <Filament active={!hb.stale} />
 
-            {/* Bus bars — single selection, arc-stroke + arc fill on the seated bar */}
+            {/* Bus bars — single selection, arc-stroke + arc fill on the seated
+                bar. Real rows (native + priced tokens); empty invitation when
+                nothing has loaded yet. */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {PORTFOLIO.map((t) => (
-                <BusBar
-                  key={t.symbol}
-                  symbol={t.symbol}
-                  share={t.share}
-                  selected={selectedBar === t.symbol}
-                  onSelect={() => setSelectedBar(t.symbol)}
-                />
-              ))}
+              {bars.length === 0 ? (
+                <div
+                  data-testid="portfolio-empty"
+                  style={{ color: 'var(--bv-mute)', fontSize: '13px', padding: '16px 4px' }}
+                >
+                  {pf.loading ? 'Reading your chamber…' : 'Nothing here yet — Receive ETN to begin.'}
+                </div>
+              ) : (
+                bars.map((t) => (
+                  <BusBar
+                    key={t.symbol}
+                    symbol={t.symbol}
+                    share={t.share}
+                    selected={selectedBar === t.symbol}
+                    onSelect={() => setSelectedBar(t.symbol)}
+                  />
+                ))
+              )}
             </div>
+            {pf.stale && pf.data && (
+              <div data-testid="stall" style={{ color: 'var(--bv-mute)', fontSize: '11px', marginTop: '8px' }}>
+                Holding last read —{' '}
+                <span
+                  data-testid="stall-retry"
+                  role="button"
+                  style={{ color: 'var(--bv-arc)', cursor: 'pointer' }}
+                  onClick={() => void pf.refresh()}
+                >
+                  Retry
+                </span>
+              </div>
+            )}
 
             {/* One accessory chip slot (bridge > farm > campaign) */}
             <div

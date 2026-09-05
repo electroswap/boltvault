@@ -16,8 +16,10 @@
     "@boltvault/core": "workspace:*",
     "@boltvault/design": "workspace:*",
     "@boltvault/electroswap": "workspace:*",
+    "@boltvault/portfolio": "workspace:*",
     "@boltvault/provider-protocol": "workspace:*",
-    "@boltvault/swap": "workspace:*"
+    "@boltvault/swap": "workspace:*",
+    "@boltvault/token-catalog": "workspace:*"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.3",

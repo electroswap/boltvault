@@ -32,12 +32,18 @@ importers:
       '@boltvault/electroswap':
         specifier: workspace:*
         version: link:../../packages/electroswap
+      '@boltvault/portfolio':
+        specifier: workspace:*
+        version: link:../../packages/portfolio
       '@boltvault/provider-protocol':
         specifier: workspace:*
         version: link:../../packages/provider-protocol
       '@boltvault/swap':
         specifier: workspace:*
         version: link:../../packages/swap
+      '@boltvault/token-catalog':
+        specifier: workspace:*
+        version: link:../../packages/token-catalog
     devDependencies:
       '@testing-library/react':
         specifier: ^16.3.3
