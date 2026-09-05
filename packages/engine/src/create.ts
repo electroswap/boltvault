@@ -128,7 +128,8 @@ const sharedMemoryRelay = new MemoryRelay()
 
 export function createEngine(deps: EngineDeps): Engine {
   const host = new EngineHost()
-  const fetchImpl = deps.fetch ?? fetch
+  // A bare `fetch` loses its Window receiver when called as a method ("illegal invocation" in browsers): always wrap.
+  const fetchImpl: typeof fetch = deps.fetch ?? ((input, init) => fetch(input, init))
   let staticsRef: StaticsService | null = null
   const settings = new SettingsStore(deps.platform, host.events, deps.os)
   const vault = new VaultManager(deps.platform, host.events, settings, deps.kdf ? { kdf: deps.kdf } : {})
