@@ -185,8 +185,9 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   return (
     <Column flex={1} backgroundColor="$void">
       <Column flex={1}>{screen}</Column>
-      <HardwarePrompt body={body} />
       {showTabs ? <TabBar items={items} activeId={state.tab} onSelect={(id) => router.setTab(id as TabId)} testID="tabs" /> : null}
+      {/* Last child, so a device round trip sheet paints above the tab bar (§7.5). */}
+      <HardwarePrompt body={body} reducedMotion={reducedMotionOverride} />
     </Column>
   )
 }

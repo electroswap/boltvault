@@ -28,10 +28,10 @@ export function urPartsDone(parts: readonly string[]): boolean {
   return expected > 0 && total.size >= expected
 }
 
-export function HardwarePrompt({ body }: { body: 'extension-popup' | 'extension-tab' | 'mobile' }) {
+export function HardwarePrompt({ body, reducedMotion: reducedMotionOverride }: { body: 'extension-popup' | 'extension-tab' | 'mobile'; reducedMotion?: boolean }) {
   const engine = useEngine()
   const host = useHost()
-  const reducedMotion = useReducedMotion()
+  const reducedMotion = useReducedMotion(reducedMotionOverride)
   const [pending, setPending] = useState<KeystonePending[]>([])
   const [outgoing, setOutgoing] = useState<RemoteRequest[]>([])
   const [pasted, setPasted] = useState('')

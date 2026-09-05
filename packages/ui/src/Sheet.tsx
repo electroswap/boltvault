@@ -29,7 +29,7 @@ export function Sheet({ open, onClose, title, children, quiet = false, reducedMo
   return (
     <Animated.View
       style={[
-        { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, justifyContent: 'flex-end', backgroundColor: quiet ? 'rgba(2,3,8,0.86)' : 'rgba(2,3,8,0.6)' },
+        { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 10, justifyContent: 'flex-end', backgroundColor: quiet ? 'rgba(2,3,8,0.86)' : 'rgba(2,3,8,0.6)' },
         still
           ? null
           : { animationName: { from: { opacity: 0 }, to: { opacity: 1 } }, animationDuration: `${motion.sheet}ms`, animationFillMode: 'forwards' },
