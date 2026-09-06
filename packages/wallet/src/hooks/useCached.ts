@@ -20,7 +20,7 @@ export interface CachedState<T> {
 }
 
 export type CachedAction<T> =
-  | { type: 'reset' }
+  | { type: 'seed'; seeded: Cached<T> | null }
   | { type: 'cached'; cached: Cached<T> }
   | { type: 'refreshing' }
   | { type: 'fresh'; value: T; at: number }
@@ -31,8 +31,14 @@ export const INITIAL: CachedState<never> = { value: null, freshness: 'loading', 
 /** A value never becomes null on an error; an error next to a value is a note, not a state. */
 export function reduceCached<T>(state: CachedState<T>, action: CachedAction<T>): CachedState<T> {
   switch (action.type) {
-    case 'reset':
-      return INITIAL
+    case 'seed':
+      // A remount starts from what this key last showed, not from nothing.
+      // `cached()` is a round trip to the service worker, so resetting to
+      // INITIAL meant every mount rendered a skeleton first and the screen
+      // went there -> gone -> there. Refreshing is true because the effect
+      // that seeds also goes and revalidates.
+      if (action.seeded === null) return INITIAL as CachedState<T>
+      return { value: action.seeded.value, observedAt: action.seeded.observedAt, freshness: 'cached', error: null, refreshing: true }
     case 'cached':
       // A cached read never downgrades a fresh value.
       if (state.freshness === 'fresh') return state
@@ -62,21 +68,62 @@ export interface UseCachedResult<T> extends CachedState<T> {
   refresh(): void
 }
 
+/**
+ * What each key last showed, for the life of this page.
+ *
+ * The engine already persists last-good documents, but reading one is a Port
+ * round trip, and React state does not survive an unmount — and the shell
+ * unmounts a screen on every navigation. So a screen you had already seen
+ * still blanked on the way back in. This is the synchronous half: it lets the
+ * very first render paint, and the engine's answer arrives behind it.
+ */
+const lastGood = new Map<string, Cached<unknown>>()
+/** A popup session is short; this is only a guard against unbounded growth. */
+const LAST_GOOD_MAX = 60
+
+function remember(key: string, hit: Cached<unknown>): void {
+  if (lastGood.size >= LAST_GOOD_MAX && !lastGood.has(key)) {
+    const oldest = lastGood.keys().next().value
+    if (oldest !== undefined) lastGood.delete(oldest)
+  }
+  lastGood.delete(key)
+  lastGood.set(key, hit)
+}
+
+function seedOf<T>(key: string | null): Cached<T> | null {
+  if (key === null) return null
+  return (lastGood.get(key) as Cached<T> | undefined) ?? null
+}
+
 export function useCached<T>(opts: UseCachedOptions<T>): UseCachedResult<T> {
   const engine = useEngine()
-  const [state, dispatch] = useReducer(reduceCached as (s: CachedState<T>, a: CachedAction<T>) => CachedState<T>, INITIAL as CachedState<T>)
+  const [state, dispatch] = useReducer(
+    reduceCached as (s: CachedState<T>, a: CachedAction<T>) => CachedState<T>,
+    // Seeded on the first render, so a screen that has been open before never
+    // shows a skeleton on the way back in.
+    opts.key,
+    (k: string | null): CachedState<T> => {
+      const hit = seedOf<T>(k)
+      return hit === null ? (INITIAL as CachedState<T>) : { value: hit.value, observedAt: hit.observedAt, freshness: 'cached', error: null, refreshing: true }
+    },
+  )
   // The readers may be inline lambdas; the effects key on `key` alone.
   const readers = useRef(opts)
   readers.current = opts
   const { key, live = true, maxAgeMs = 0 } = opts
 
   const runFresh = useCallback(
-    (alive: () => boolean) => {
+    (alive: () => boolean, forKey: string | null) => {
       const fresh = readers.current.fresh
       if (!fresh) return
       dispatch({ type: 'refreshing' })
       fresh(engine).then(
-        (value) => alive() && dispatch({ type: 'fresh', value, at: Date.now() }),
+        (value) => {
+          if (!alive()) return
+          const at = Date.now()
+          if (forKey !== null) remember(forKey, { value, observedAt: at })
+          dispatch({ type: 'fresh', value, at })
+        },
         (err: unknown) => alive() && dispatch({ type: 'error', message: err instanceof Error ? err.message : String(err) }),
       )
     },
@@ -84,18 +131,21 @@ export function useCached<T>(opts: UseCachedOptions<T>): UseCachedResult<T> {
   )
 
   useEffect(() => {
-    dispatch({ type: 'reset' })
+    dispatch({ type: 'seed', seeded: seedOf<T>(key) })
     if (key === null) return
     let on = true
     const alive = (): boolean => on
     readers.current.cached(engine).then(
       (hit) => {
         if (!on) return
-        if (hit) dispatch({ type: 'cached', cached: hit })
+        if (hit) {
+          remember(key, hit)
+          dispatch({ type: 'cached', cached: hit })
+        }
         if (hit && maxAgeMs > 0 && Date.now() - hit.observedAt < maxAgeMs) return
-        runFresh(alive)
+        runFresh(alive, key)
       },
-      () => on && runFresh(alive),
+      () => on && runFresh(alive, key),
     )
     return () => {
       on = false
@@ -106,12 +156,19 @@ export function useCached<T>(opts: UseCachedOptions<T>): UseCachedResult<T> {
     if (key === null || !live) return
     return engine.events.subscribe((e) => {
       if (e.type !== 'cache.changed' || e.key !== key) return
-      readers.current.cached(engine).then((hit) => hit && dispatch({ type: 'cached', cached: hit }), () => undefined)
+      readers.current.cached(engine).then(
+        (hit) => {
+          if (!hit) return
+          remember(key, hit)
+          dispatch({ type: 'cached', cached: hit })
+        },
+        () => undefined,
+      )
     })
   }, [engine, key, live])
 
   const refresh = useCallback(() => {
-    if (key !== null) runFresh(() => true)
+    if (key !== null) runFresh(() => true, key)
   }, [key, runFresh])
 
   return { ...state, refresh }

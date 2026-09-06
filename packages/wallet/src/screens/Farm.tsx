@@ -15,6 +15,7 @@ import { PairAvatars } from '../components/cards/FarmCard'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
 import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
+import { useLastGood } from '../hooks/useLastGood'
 import { useChainHead } from '../hooks/useChainHead'
 import { formatFiat, formatRaw } from '../format'
 import { t } from '../i18n'
@@ -39,7 +40,8 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
   const { flow, dismiss } = useActiveFlow(['farm'])
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const wide = body === 'extension-tab'
-  const [farm, setFarm] = useState<FarmView | null>(null)
+  const [loadedFarm, setFarm] = useState<FarmView | null>(null)
+  const farm = useLastGood(`farm:${chainId}:${farmId}`, loadedFarm)
   const [sheet, setSheet] = useState<SheetKind>(null)
   const [amount0, setAmount0] = useState('')
   const [amount1, setAmount1] = useState('')

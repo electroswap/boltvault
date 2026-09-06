@@ -13,6 +13,7 @@ import { DividendsCard } from '../components/DividendsCard'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
 import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
+import { useLastGood } from '../hooks/useLastGood'
 import { formatRaw } from '../format'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
@@ -31,8 +32,13 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const wide = body === 'extension-tab'
   const contentWidth = Math.min(width, wide ? 680 : width) - inset * 2
-  const [collection, setCollection] = useState<CollectionView | null>(null)
-  const [assets, setAssets] = useState<AssetView[]>([])
+  const [loaded, setCollection] = useState<CollectionView | null>(null)
+  const [loadedAssets, setAssets] = useState<AssetView[]>([])
+  // Navigating away unmounts this screen and the reload is a round trip, so
+  // coming back used to blank the hero and the grid before repainting them.
+  // Keyed on the collection, so a *different* one still starts empty.
+  const collection = useLastGood(`collection:${chainId}:${address}`, loaded)
+  const assets = useLastGood(`collection-assets:${chainId}:${address}`, loadedAssets) ?? []
   const [next, setNext] = useState<string | null>(null)
   const [orderBy, setOrderBy] = useState<'PRICE' | 'RARITY'>('PRICE')
   const [listedOnly, setListedOnly] = useState(false)

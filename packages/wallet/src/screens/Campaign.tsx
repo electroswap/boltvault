@@ -15,6 +15,7 @@ import { alertable, PhasePill, RaiseBar } from '../components/cards/CampaignCard
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
 import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
+import { useLastGood } from '../hooks/useLastGood'
 import { formatRaw } from '../format'
 import { useHost } from '../host'
 import { t } from '../i18n'
@@ -37,7 +38,8 @@ export function Campaign({ body, chainId, pool, reducedMotion = false }: { body:
   const { flow, dismiss } = useActiveFlow(['launchpad'])
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const wide = body === 'extension-tab'
-  const [c, setC] = useState<CampaignView | null>(null)
+  const [loadedCampaign, setC] = useState<CampaignView | null>(null)
+  const c = useLastGood(`campaign:${chainId}:${pool}`, loadedCampaign)
   const [sheet, setSheet] = useState(false)
   const [amount, setAmount] = useState('')
   const [expanded, setExpanded] = useState(false)

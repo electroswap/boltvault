@@ -11,6 +11,7 @@ import type { AssetView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
 import { useEngine } from '../engine/EngineProvider'
+import { useLastGood } from '../hooks/useLastGood'
 import { useHost } from '../host'
 import { formatRaw } from '../format'
 import { t } from '../i18n'
@@ -31,7 +32,8 @@ export function Piece({ body, chainId, address, tokenId, reducedMotion = false }
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const { width: windowWidth } = useWindowDimensions()
   const width = Math.min(windowWidth, body === 'extension-tab' ? 640 : windowWidth) - inset * 2
-  const [asset, setAsset] = useState<AssetView | null>(null)
+  const [loadedAsset, setAsset] = useState<AssetView | null>(null)
+  const asset = useLastGood(`piece:${chainId}:${address}:${tokenId}`, loadedAsset)
   const [sheet, setSheet] = useState<SheetKind>(null)
   const [price, setPrice] = useState('')
   const [days, setDays] = useState('7')

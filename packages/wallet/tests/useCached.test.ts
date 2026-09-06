@@ -33,8 +33,28 @@ describe('reduceCached', () => {
     expect(reduceCached(fresh, { type: 'cached', cached: { value: 'old', observedAt: 10 } })).toBe(fresh)
   })
 
-  it('reset returns to the initial state', () => {
+  it('seeding with nothing returns to the initial state', () => {
     const fresh = reduceCached(start, { type: 'fresh', value: 'new', at: 20 })
-    expect(reduceCached(fresh, { type: 'reset' })).toBe(INITIAL)
+    expect(reduceCached(fresh, { type: 'seed', seeded: null })).toBe(INITIAL)
+  })
+
+  it('seeding with a remembered value paints it at once, still refreshing', () => {
+    // The point of the seed: a screen that has been open before must not go
+    // back through `loading` on the way in. There -> there (refreshing) ->
+    // there, never there -> gone -> there.
+    const seeded = reduceCached(INITIAL as typeof start, { type: 'seed', seeded: { value: 'remembered', observedAt: 7 } })
+    expect(seeded.value).toBe('remembered')
+    expect(seeded.freshness).toBe('cached')
+    expect(seeded.observedAt).toBe(7)
+    expect(seeded.refreshing).toBe(true)
+  })
+
+  it('a seeded value survives until the fresh one replaces it', () => {
+    const seeded = reduceCached(INITIAL as typeof start, { type: 'seed', seeded: { value: 'remembered', observedAt: 7 } })
+    const refreshing = reduceCached(seeded, { type: 'refreshing' })
+    expect(refreshing.value).toBe('remembered')
+    const failed = reduceCached(refreshing, { type: 'error', message: 'offline' })
+    expect(failed.value).toBe('remembered')
+    expect(reduceCached(refreshing, { type: 'fresh', value: 'new', at: 20 }).value).toBe('new')
   })
 })
