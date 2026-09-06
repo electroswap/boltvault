@@ -5,6 +5,11 @@
  * Passkeys are WebAuthn with PRF in every page.
  */
 import { createWebAuthnPasskeys, type ScreenId, type UiHost } from '@boltvault/wallet'
+
+function openTab(query: URLSearchParams, closeSelf: boolean): void {
+  void browser.tabs.create({ url: browser.runtime.getURL(`/tab.html?${query.toString()}`) })
+  if (closeSelf) window.close()
+}
 import { scanQr } from './qr-scan'
 
 export function extensionUiHost(body: 'extension-popup' | 'extension-tab' | 'extension-sign'): UiHost {
@@ -17,9 +22,13 @@ export function extensionUiHost(body: 'extension-popup' | 'extension-tab' | 'ext
     buildHash: __BUILD_HASH__ || null,
     // The system's reduce-motion preference is the default; Settings › Appearance can force it on (plan A4).
     prefersReducedMotion: () => (typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false),
-    openSecretScreen: (screen: ScreenId) => {
-      void browser.tabs.create({ url: browser.runtime.getURL(`/tab.html?screen=${screen}`) })
-      if (body !== 'extension-tab') window.close()
+    openSecretScreen: (screen: ScreenId) => openTab(new URLSearchParams({ screen }), body !== 'extension-tab'),
+    openInTab: (target) => {
+      const q = new URLSearchParams()
+      if (target.tab) q.set('tab', target.tab)
+      if (target.screen) q.set('screen', target.screen)
+      if (target.params !== undefined) q.set('p', JSON.stringify(target.params))
+      openTab(q, body !== 'extension-tab')
     },
     copy: async (text) => {
       await navigator.clipboard.writeText(text)

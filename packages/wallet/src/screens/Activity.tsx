@@ -99,7 +99,10 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
     else if (kind === 'collection' && id) router.navigate('collection', { chainId: ETN, address: id })
     else if (kind === 'legends') router.navigate('legends')
     else if (kind === 'offers') router.navigate('offers')
-    else if (kind === 'positions') router.setTab('home')
+    else if (kind === 'positions') {
+      router.setTab('home')
+      router.navigate('portfolio')
+    }
   }
 
   const shown = entries.filter((e) => matches(e, filter))

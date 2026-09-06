@@ -28,6 +28,7 @@ const CASES: Array<{ screen: string; scenario: string; sizes: Array<keyof typeof
   { screen: 'home', scenario: 'funded', sizes: ['popup', 'tab', 'mobile'] },
   { screen: 'swap', scenario: 'funded', sizes: ['popup', 'mobile'] },
   { screen: 'explore', scenario: 'funded', sizes: ['popup'] },
+  { screen: 'portfolio', scenario: 'funded', sizes: ['popup', 'tab'] },
   { screen: 'activity', scenario: 'funded', sizes: ['popup'] },
   { screen: 'settings', scenario: 'funded', sizes: ['popup'] },
   { screen: 'moments', scenario: 'funded', sizes: ['tab', 'mobile'] },

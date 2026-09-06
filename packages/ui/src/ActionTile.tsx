@@ -27,7 +27,7 @@ const BADGE_BG: Record<ActionTileBadge['tone'], string> = { arc: 'rgba(79, 195, 
 function Badge({ badge }: { badge: ActionTileBadge }) {
   return (
     <View style={{ paddingHorizontal: 7, paddingVertical: 1, borderRadius: 999, backgroundColor: BADGE_BG[badge.tone], alignSelf: 'flex-start', maxWidth: '100%' }}>
-      <Body size="caption" tone={badge.tone} fontWeight="600" numberOfLines={1}>
+      <Body size="caption" tone={badge.tone} fontWeight="600" fontSize={11} lineHeight={14} numberOfLines={1}>
         {badge.text}
       </Body>
     </View>
@@ -39,12 +39,12 @@ export function ActionTile({ icon, label, badge = null, onPress, layout = 'stack
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={badge ? `${label}, ${badge.text}` : label} testID={testID} style={{ flex: stacked ? 1 : undefined, minHeight: 44 }}>
       {stacked ? (
-        <Plate role="tile" height={74} padding={12} justifyContent="space-between">
+        <Plate role="tile" height={70} paddingVertical={10} paddingHorizontal={10} justifyContent="space-between">
           <Row justifyContent="space-between" alignItems="flex-start">
             <Icon name={icon} size={22} color={paint.arc} />
             {badge ? <Badge badge={badge} /> : null}
           </Row>
-          <Body size="caption" fontWeight="600" numberOfLines={1}>
+          <Body size="caption" fontWeight="600" fontSize={12} lineHeight={16} numberOfLines={1}>
             {label}
           </Body>
         </Plate>

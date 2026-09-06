@@ -50,7 +50,8 @@ export interface UseCachedOptions<T> {
   /** Null disables the hook (no account yet). Must equal the engine's `cacheKey(...)` for the resource. */
   readonly key: string | null
   cached(engine: WalletEngine): Promise<Cached<T> | null>
-  fresh(engine: WalletEngine): Promise<T>
+  /** Absent = never refresh from here; the value comes from the cache and its `cache.changed` events only. */
+  fresh?(engine: WalletEngine): Promise<T>
   /** Re-read `cached()` when a `cache.changed` event names this key (default true). */
   readonly live?: boolean
   /** Skip `fresh()` when the cached value is younger than this (default 0: always refresh). */
@@ -71,8 +72,10 @@ export function useCached<T>(opts: UseCachedOptions<T>): UseCachedResult<T> {
 
   const runFresh = useCallback(
     (alive: () => boolean) => {
+      const fresh = readers.current.fresh
+      if (!fresh) return
       dispatch({ type: 'refreshing' })
-      readers.current.fresh(engine).then(
+      fresh(engine).then(
         (value) => alive() && dispatch({ type: 'fresh', value, at: Date.now() }),
         (err: unknown) => alive() && dispatch({ type: 'error', message: err instanceof Error ? err.message : String(err) }),
       )

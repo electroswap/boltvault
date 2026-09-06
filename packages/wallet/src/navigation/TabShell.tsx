@@ -4,7 +4,7 @@
  * screens is replaced by Unlock. A pending dApp approval takes over the
  * popup and the mobile body (the sign window mounts it by route).
  */
-import { Column, TabBar } from '@boltvault/ui'
+import { Column, Field, TabBar, useWindowDimensions } from '@boltvault/ui'
 import { t } from '../i18n'
 import { Accounts } from '../screens/Accounts'
 import { Activity } from '../screens/Activity'
@@ -14,6 +14,7 @@ import { Backup } from '../screens/Backup'
 import { ConnectedSites } from '../screens/ConnectedSites'
 import { Devices } from '../screens/Devices'
 import { Home, type HomeProps } from '../screens/Home'
+import { Portfolio } from '../screens/Portfolio'
 import { Moments } from '../screens/Moments'
 import { Onboarding } from '../screens/Onboarding'
 import { Receive } from '../screens/Receive'
@@ -47,8 +48,13 @@ import { useFeelEvents } from '../feel'
 import { useWalletState } from '../state/useWalletState'
 import { MotionContext, useReducedMotion } from '../state/useReducedMotion'
 import { useNotifications } from '../hooks/useNotifications'
-import { TABS, TAB_ORDER, type TabId } from './registry'
+import { useChainHead } from '../hooks/useChainHead'
+import { useHolderTier } from '../hooks/useHolderTier'
+import { SCREENS, TABS, TAB_ORDER, type TabId } from './registry'
 import { useRouter } from './router'
+
+const ETN = 52014
+const NO_ACCOUNT_SEED = '0x0000000000000000000000000000000000000e7n'
 
 export interface TabShellProps {
   readonly body: HomeProps['body']
@@ -57,7 +63,11 @@ export interface TabShellProps {
 
 export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   const router = useRouter()
-  const { vault, loading } = useWalletState()
+  const { vault, loading, active } = useWalletState()
+  const { width, height } = useWindowDimensions()
+  // The Grid (plan B2): one Field behind every `grid` screen, pulsed by the ETN head, warmed by the holder tier.
+  const head = useChainHead(ETN)
+  const tier = useHolderTier(active?.id ?? null)
   const { pending } = useApprovals()
   const { current, state } = router
   // One answer for every screen (plan A4): the setting, the system preference, or the harness override.
@@ -68,7 +78,8 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   useFeelEvents()
   useLinks()
   const items = TAB_ORDER.map((id) => ({ id, label: t({ id: TABS[id].labelId, message: TABS[id].labelMessage }), icon: TABS[id].icon, ...(id === 'activity' && unread > 0 ? { badge: unread } : {}) }))
-  const showTabs = state.stack.length === 0
+  const meta = SCREENS[current.screen]
+  const showTabs = meta.dock
 
   const locked = !loading && !!vault?.exists && !vault.unlocked
   if (locked && current.screen !== 'onboarding' && current.screen !== 'moments') {
@@ -95,14 +106,18 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
     case 'home':
       screen = <Home body={body} reducedMotionOverride={reducedMotion} />
       break
+    case 'portfolio':
+      screen = <Portfolio body={body} />
+      break
     case 'swap': {
       const p = current.params as { tokenIn?: string; tokenOut?: string } | undefined
-      screen = <Swap body={body} reducedMotion={reducedMotion} {...(p?.tokenIn ? { tokenIn: p.tokenIn } : {})} {...(p?.tokenOut ? { tokenOut: p.tokenOut } : {})} />
+      // Keyed on its prefill so Token → Swap remounts with the new pair (plan B2).
+      screen = <Swap key={`${p?.tokenIn ?? ''}>${p?.tokenOut ?? ''}`} body={body} reducedMotion={reducedMotion} {...(p?.tokenIn ? { tokenIn: p.tokenIn } : {})} {...(p?.tokenOut ? { tokenOut: p.tokenOut } : {})} />
       break
     }
     case 'explore': {
-      const p = current.params as { segment?: 'tokens' | 'collectibles' | 'launch' | 'farms' } | undefined
-      screen = <Explore body={body} {...(p?.segment ? { segment: p.segment } : {})} />
+      const p = current.params as { segment?: 'tokens' | 'collectibles' | 'launch' | 'farms'; search?: boolean } | undefined
+      screen = <Explore body={body} {...(p?.segment ? { segment: p.segment } : {})} {...(p?.search ? { search: true } : {})} />
       break
     }
     case 'collection': {
@@ -217,7 +232,12 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   return (
     <MotionContext.Provider value={reducedMotion}>
       <Column flex={1} backgroundColor="$void">
-        <Column flex={1}>{screen}</Column>
+        {meta.grid ? (
+          <Field address={active?.address ?? NO_ACCOUNT_SEED} pulse={head?.live ? 1 : 0} warmth={tier ? Math.min(1, tier.tier / 4) : 0} intensity={current.screen === 'home' ? (body === 'extension-popup' ? 0.75 : 1) : 0.5} quiet={!vault?.unlocked} reducedMotion={reducedMotion} fps={body === 'extension-popup' ? 30 : 60} width={width} height={height} testID="field" />
+        ) : null}
+        <Column flex={1} zIndex={1}>
+          {screen}
+        </Column>
         {showTabs ? <TabBar items={items} activeId={state.tab} onSelect={(id) => router.setTab(id as TabId)} testID="tabs" /> : null}
         {/* Last child, so a device round trip sheet paints above the tab bar (§7.5). */}
         <HardwarePrompt body={body} reducedMotion={reducedMotion} />

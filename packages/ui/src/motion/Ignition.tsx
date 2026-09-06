@@ -12,7 +12,7 @@ export interface IgnitionProps {
   readonly children: ReactNode
   readonly reducedMotion?: boolean
   /** Stagger index: 0 for the Field, 1 filament, 2 readout, 3 plates. */
-  readonly order?: 0 | 1 | 2 | 3
+  readonly order?: number
   readonly testID?: string
 }
 

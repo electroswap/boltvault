@@ -9,6 +9,7 @@ import { Artwork, Body, Column, IconButton, Input, Plate, Pressable, Row, Scroll
 import { cacheKey, type CampaignView, type CollectionView, type ExploreToken, type FarmView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { FreshnessLine } from '../components/FreshnessLine'
+import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { useCached } from '../hooks/useCached'
@@ -23,7 +24,7 @@ const ETN = 52014
 type Segment = 'tokens' | 'collectibles' | 'launch' | 'farms'
 type BodyKind = 'extension-popup' | 'extension-tab' | 'mobile'
 
-export function Explore({ body, segment: initial = 'tokens' }: { body: BodyKind; segment?: Segment }) {
+export function Explore({ body, segment: initial = 'tokens', search = false }: { body: BodyKind; segment?: Segment; search?: boolean }) {
   const engine = useEngine()
   const router = useRouter()
   const host = useHost()
@@ -92,14 +93,16 @@ export function Explore({ body, segment: initial = 'tokens' }: { body: BodyKind;
   const live = (campaigns.value ?? []).filter((c) => c.phase === 'live')
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="explore">
-      <Row justifyContent="space-between" alignItems="center">
-        <Body size="title">{t({ id: 'explore.title', message: 'Explore Electroneum' })}</Body>
-        <Row gap="$1">
-          {host.browser ? <IconButton icon="external" label={t({ id: 'explore.browser', message: 'Browser' })} onPress={() => router.navigate('browser')} testID="explore-browser" /> : null}
-          <IconButton icon="bell" label={t({ id: 'explore.alerts', message: 'Alerts' })} badge={unread} onPress={() => router.navigate('alerts')} testID="explore-alerts" />
-        </Row>
-      </Row>
-      <Input value={query} onChange={setQuery} placeholder={t({ id: 'explore.search', message: 'Search tokens, collections, campaigns' })} testID="explore-search" />
+      <PageHeader
+        title={t({ id: 'market.title', message: 'Market' })}
+        right={
+          <>
+            {host.browser ? <IconButton icon="external" label={t({ id: 'explore.browser', message: 'Browser' })} onPress={() => router.navigate('browser')} testID="explore-browser" /> : null}
+            <IconButton icon="bell" label={t({ id: 'explore.alerts', message: 'Alerts' })} badge={unread} onPress={() => router.navigate('alerts')} testID="explore-alerts" />
+          </>
+        }
+      />
+      <Input value={query} onChange={setQuery} placeholder={t({ id: 'explore.search', message: 'Search tokens, collections, campaigns' })} autoFocus={search} testID="explore-search" />
       {available === false ? (
         <Plate gap="$2" testID="explore-unavailable">
           <Body size="title">{t({ id: 'explore.off.title', message: 'Markets are on Electroneum' })}</Body>

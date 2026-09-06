@@ -65,7 +65,7 @@ export function Alerts({ body }: { body: BodyKind }) {
           <Body tone="mute" size="caption">
             {t({ id: 'alerts.empty', message: 'Nothing starred yet.' })}
           </Body>
-          <Key label={t({ id: 'alerts.explore', message: 'Explore' })} kind="secondary" onPress={() => router.setTab('explore')} testID="alerts-explore" />
+          <Key label={t({ id: 'alerts.explore', message: 'Explore' })} kind="secondary" onPress={() => router.navigate('explore')} testID="alerts-explore" />
         </Plate>
       ) : null}
       {items.map((i) => (

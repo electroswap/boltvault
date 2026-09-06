@@ -51,9 +51,13 @@ test('home balances, send to a broadcast, receive, allowances revoke', async () 
     await popup.setViewportSize({ width: 360, height: 600 })
     await popup.goto(ext.url('popup.html'))
     await expect(popup.getByTestId('home')).toBeVisible({ timeout: 15_000 })
+    // The mini-portfolio opens the Portfolio, where the token cards live (plan B3).
+    await popup.getByTestId('home-portfolio').click()
     await expect(popup.getByTestId('bus-bars')).toContainText('ETN', { timeout: 20_000 })
     await expect(popup.getByTestId('bus-bars')).toContainText('FIX', { timeout: 30_000 })
     await expect(popup.getByTestId('bus-bars')).toContainText('12.5', { timeout: 30_000 })
+
+    await popup.getByTestId('back').click()
 
     // Receive shows the address and the chain.
     await popup.getByTestId('key-receive').click()

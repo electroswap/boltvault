@@ -544,6 +544,15 @@ export const NotificationViewSchema = z.object({
 })
 export type NotificationView = z.infer<typeof NotificationViewSchema>
 
+/** Per-install UI preferences (plan B2): remembered choices that are not settings. `homeScope` is a chain id or 'all' (= every enabled chain). */
+export const PrefsSchema = z.object({
+  homeScope: z.union([z.literal('all'), z.number().int().positive()]),
+  swapCoachDismissed: z.boolean(),
+  chartDuration: z.enum(['1D', '1W', '1M', '1Y']),
+  collectionsShowAll: z.boolean(),
+})
+export type Prefs = z.infer<typeof PrefsSchema>
+
 /** What the inbound-transfer scan last did for an account (plan A2). */
 export const ScanSummarySchema = z.object({
   accountId: AccountIdSchema,
@@ -997,5 +1006,6 @@ export const EngineEventSchema = z.discriminatedUnion('type', [
   /** A cached resource was written or dropped; pages re-read `cached…()` for that key (the value never rides the event). */
   z.object({ type: z.literal('cache.changed'), key: z.string(), observedAt: z.number().int().nonnegative() }),
   z.object({ type: z.literal('notifications.changed'), unread: z.number().int().nonnegative() }),
+  z.object({ type: z.literal('prefs.changed'), prefs: PrefsSchema }),
 ])
 export type EngineEvent = z.infer<typeof EngineEventSchema>

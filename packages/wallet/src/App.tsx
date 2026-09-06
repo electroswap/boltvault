@@ -7,7 +7,7 @@ import { DEFAULT_RELAY, HostProvider, type UiHost } from './host'
 import { i18n, setupI18n } from './i18n'
 import { RouterProvider, RouterStore, type Route } from './navigation/router'
 import { TabShell } from './navigation/TabShell'
-import type { ScreenId, ScreenParams, TabId } from './navigation/registry'
+import { isTabId, type ScreenId, type ScreenParams, type TabId } from './navigation/registry'
 import type { HomeProps } from './screens/Home'
 
 export interface AppProps {
@@ -24,14 +24,16 @@ export interface AppProps {
   readonly host?: Partial<UiHost>
 }
 
-const TAB_IDS: readonly string[] = ['home', 'swap', 'explore', 'activity']
-
 /** The shared root for every body. */
 export function App({ engine, body, initialTab, initialScreen, initialParams, reducedMotion, host }: AppProps) {
   const router = useMemo(() => {
     setupI18n()
     const store = new RouterStore({ tab: initialTab ?? 'home' })
-    if (initialScreen && !TAB_IDS.includes(initialScreen)) store.navigate(initialParams === undefined ? { screen: initialScreen } : ({ screen: initialScreen, params: initialParams } as Route))
+    if (initialScreen && isTabId(initialScreen)) {
+      if (initialParams !== undefined) store.setTab(initialScreen, initialParams)
+    } else if (initialScreen) {
+      store.navigate(initialParams === undefined ? { screen: initialScreen } : ({ screen: initialScreen, params: initialParams } as Route))
+    }
     return store
   }, [initialTab, initialScreen, initialParams])
   const uiHost = useMemo<UiHost>(

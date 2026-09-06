@@ -4,7 +4,7 @@
  * popup opens secret flows in tab.html (§3.2); mobile navigates in place.
  */
 import { createContext, useContext, type ReactNode } from 'react'
-import type { ScreenId } from './navigation/registry'
+import type { ScreenId, ScreenParams, TabId } from './navigation/registry'
 
 export interface PasskeyResult {
   readonly credentialId: string
@@ -26,6 +26,8 @@ export interface UiHost {
   readonly secretsAllowed: boolean
   /** Open a screen in a surface where secrets are allowed (the extension tab). */
   openSecretScreen?(screen: ScreenId): void
+  /** Open the wallet in a full tab on a dock tab, a screen and its params (plan B2); the popup closes. */
+  openInTab?(target: { tab?: TabId; screen?: ScreenId; params?: ScreenParams[ScreenId] }): void
   readonly passkeys: PasskeyProvider | null
   /** Open the camera; with `onPart`, keep reading distinct codes until it returns true (multi-part URs). */
   scanQr?(onPart?: (text: string) => boolean): Promise<string>

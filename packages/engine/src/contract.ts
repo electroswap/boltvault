@@ -46,6 +46,7 @@ import type {
   NameLookup,
   NftActivityView,
   NotificationView,
+  Prefs,
   OffersInbox,
   PortfolioSnapshot,
   Positions,
@@ -156,6 +157,8 @@ export interface PortfolioNamespace {
   refresh(input: { accountId: AccountId; chainIds?: number[] }): Promise<PortfolioSnapshot>
   /** "Since you last looked" (§7.13): the previous first-open total, and record this open. */
   lastLook(input: { accountId: AccountId }): Promise<{ previous: { at: number; total: number | null } | null; total: number | null }>
+  /** The persisted last-good snapshot, no refresh (plan C1): balances beside an account, badges on Home. */
+  cached(input: { accountId: AccountId }): Promise<PortfolioSnapshot | null>
 }
 
 export interface ActivityScanNamespace {
@@ -362,6 +365,12 @@ export interface NotificationsNamespace {
   clear(): Promise<void>
 }
 
+/** UI preferences (plan B2): the Home scope, the dismissed coach, the chart timeframe. */
+export interface PrefsNamespace {
+  get(): Promise<Prefs>
+  set(input: Partial<Prefs>): Promise<Prefs>
+}
+
 export interface FlagsNamespace {
   get(): Promise<FlagsView>
   refresh(): Promise<{ flags: 'updated' | 'kept' | 'refused'; scam: 'updated' | 'kept' | 'refused' }>
@@ -432,6 +441,7 @@ export interface WalletEngine {
   readonly flags: FlagsNamespace
   readonly about: AboutNamespace
   readonly notifications: NotificationsNamespace
+  readonly prefs: PrefsNamespace
   readonly events: EngineEvents
 }
 

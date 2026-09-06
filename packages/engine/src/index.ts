@@ -18,6 +18,7 @@ export { ApprovalStore, APPROVAL_TTL_MS, type CreateApprovalInput } from './appr
 export { readDoc, writeDoc, type DocSpec, type ReadDocResult } from './storage'
 export { DocCache, cacheKey, cachedSchema, type Cached, type CacheSpec } from './cache'
 export { NotificationsService } from './namespaces/notifications'
+export { PrefsService, DEFAULT_PREFS } from './namespaces/prefs'
 export { SettingsStore } from './settingsStore'
 export { ActivityStore } from './activityStore'
 export { VaultManager, AUTOLOCK_ALARM, toView as accountToView } from './namespaces/vault'

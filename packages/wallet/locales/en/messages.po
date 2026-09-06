@@ -1349,11 +1349,6 @@ msgid "Search tokens, collections, campaigns"
 msgstr "Search tokens, collections, campaigns"
 
 #: packages/wallet/src/screens/Explore.tsx
-msgctxt "explore.title"
-msgid "Explore Electroneum"
-msgstr "Explore Electroneum"
-
-#: packages/wallet/src/screens/Explore.tsx
 msgctxt "explore.tokens"
 msgid "Tokens"
 msgstr "Tokens"
@@ -1863,7 +1858,7 @@ msgctxt "fresh.moment"
 msgid "As of a moment ago"
 msgstr "As of a moment ago"
 
-#: packages/wallet/src/components/PageHeader.tsx
+#: packages/wallet/src/screens/Home.tsx
 msgctxt "header.expand"
 msgid "Open in a full tab"
 msgstr "Open in a full tab"
@@ -1904,6 +1899,31 @@ msgid "Back up your recovery phrase"
 msgstr "Back up your recovery phrase"
 
 #: packages/wallet/src/screens/Home.tsx
+msgctxt "home.badge.arriving"
+msgid "Arriving"
+msgstr "Arriving"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.badge.collect"
+msgid "{d} DYNO"
+msgstr "{d} DYNO"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.badge.live"
+msgid "{n} live"
+msgstr "{n} live"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.badge.offers"
+msgid "{n} offers"
+msgstr "{n} offers"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.change.none"
+msgid "No change to report yet"
+msgstr "No change to report yet"
+
+#: packages/wallet/src/screens/Home.tsx
 msgctxt "home.create.body"
 msgid "Create a new recovery phrase or import one you already have. Electroneum is your home chain."
 msgstr "Create a new recovery phrase or import one you already have. Electroneum is your home chain."
@@ -1918,20 +1938,15 @@ msgctxt "home.create.title"
 msgid "Your vault is not created yet"
 msgstr "Your vault is not created yet"
 
-#: packages/wallet/src/screens/Home.tsx
+#: packages/wallet/src/screens/Portfolio.tsx
 msgctxt "home.fund.body"
 msgid "This is Electroneum Smart Chain (52014). Send ETN here from an exchange that supports the smart chain, or bridge USDC from Ethereum — you will need a little ETN for fees."
 msgstr "This is Electroneum Smart Chain (52014). Send ETN here from an exchange that supports the smart chain, or bridge USDC from Ethereum — you will need a little ETN for fees."
 
-#: packages/wallet/src/screens/Home.tsx
+#: packages/wallet/src/screens/Portfolio.tsx
 msgctxt "home.fund.title"
 msgid "Receive ETN to get started"
 msgstr "Receive ETN to get started"
-
-#: packages/wallet/src/screens/Home.tsx
-msgctxt "home.launch"
-msgid "{s} is live on the launchpad"
-msgstr "{s} is live on the launchpad"
 
 #: packages/wallet/src/screens/Home.tsx
 msgctxt "home.locked.body"
@@ -1948,27 +1963,27 @@ msgctxt "home.locked.title"
 msgid "Locked"
 msgstr "Locked"
 
-#: packages/wallet/src/screens/Home.tsx
+#: packages/wallet/src/screens/Portfolio.tsx
 msgctxt "home.mark.custom"
 msgid "Custom"
 msgstr "Custom"
 
 #: packages/wallet/src/screens/Home.tsx
+msgctxt "home.portfolio.a11y"
+msgid "Open your portfolio"
+msgstr "Open your portfolio"
+
+#: packages/wallet/src/screens/Portfolio.tsx
 msgctxt "home.pos.campaign"
 msgid "{s}: {a} ETN contributed{k}"
 msgstr "{s}: {a} ETN contributed{k}"
 
-#: packages/wallet/src/screens/Home.tsx
+#: packages/wallet/src/screens/Portfolio.tsx
 msgctxt "home.pos.order"
 msgid "Open order: {a} {s} → at least {b} {u}"
 msgstr "Open order: {a} {s} → at least {b} {u}"
 
-#: packages/wallet/src/screens/Home.tsx
-msgctxt "home.pos.pending"
-msgid "{d} DYNO to collect"
-msgstr "{d} DYNO to collect"
-
-#: packages/wallet/src/screens/Home.tsx
+#: packages/wallet/src/screens/Portfolio.tsx
 msgctxt "home.positions.empty"
 msgid "No farm positions, open orders or bridges in flight."
 msgstr "No farm positions, open orders or bridges in flight."
@@ -1978,47 +1993,77 @@ msgctxt "home.receive"
 msgid "Receive"
 msgstr "Receive"
 
-#: packages/wallet/src/screens/Home.tsx
+#: packages/wallet/src/components/ChainScope.tsx
+msgctxt "home.scope.a11y"
+msgid "Chains shown: {s}"
+msgstr "Chains shown: {s}"
+
+#: packages/wallet/src/components/ChainScope.tsx
 msgctxt "home.scope.all"
 msgid "All chains"
 msgstr "All chains"
 
-#: packages/wallet/src/screens/Home.tsx
+#: packages/wallet/src/components/ChainScope.tsx
+msgctxt "home.scope.all.caption"
+msgid "Electroneum and {n} more"
+msgstr "Electroneum and {n} more"
+
+#: packages/wallet/src/components/ChainScope.tsx
 msgctxt "home.scope.etn"
 msgid "Electroneum"
 msgstr "Electroneum"
 
-#: packages/wallet/src/screens/Home.tsx
+#: packages/wallet/src/components/ChainScope.tsx
+msgctxt "home.scope.etn.caption"
+msgid "Your home chain"
+msgstr "Your home chain"
+
+#: packages/wallet/src/components/ChainScope.tsx
+msgctxt "home.scope.manage"
+msgid "Manage networks"
+msgstr "Manage networks"
+
+#: packages/wallet/src/screens/Portfolio.tsx
 msgctxt "home.scope.none"
 msgid "No balances yet"
 msgstr "No balances yet"
 
-#: packages/wallet/src/screens/Home.tsx
+#: packages/wallet/src/components/ChainScope.tsx
+msgctxt "home.scope.title"
+msgid "Show balances for"
+msgstr "Show balances for"
+
+#: packages/wallet/src/screens/Portfolio.tsx
 msgctxt "home.seg.collectibles"
 msgid "Collectibles"
 msgstr "Collectibles"
 
-#: packages/wallet/src/screens/Home.tsx
+#: packages/wallet/src/screens/Portfolio.tsx
 msgctxt "home.seg.positions"
 msgid "Positions"
 msgstr "Positions"
 
-#: packages/wallet/src/screens/Home.tsx
+#: packages/wallet/src/screens/Portfolio.tsx
 msgctxt "home.seg.tokens"
 msgid "Tokens"
 msgstr "Tokens"
 
 #: packages/wallet/src/screens/Home.tsx
+msgctxt "home.settings"
+msgid "Settings"
+msgstr "Settings"
+
+#: packages/wallet/src/screens/Portfolio.tsx
 msgctxt "home.since"
 msgid "Since {d}"
 msgstr "Since {d}"
 
-#: packages/wallet/src/screens/Home.tsx
+#: packages/wallet/src/screens/Portfolio.tsx
 msgctxt "home.since.change"
 msgid "{from} → {to}"
 msgstr "{from} → {to}"
 
-#: packages/wallet/src/screens/Home.tsx
+#: packages/wallet/src/screens/Portfolio.tsx
 msgctxt "home.since.none"
 msgid "No priced change to report."
 msgstr "No priced change to report."
@@ -2033,20 +2078,55 @@ msgctxt "home.today"
 msgid "today"
 msgstr "today"
 
-#: packages/wallet/src/screens/Home.tsx
+#: packages/wallet/src/screens/Portfolio.tsx
+msgctxt "home.tokens.many"
+msgid "{n} tokens"
+msgstr "{n} tokens"
+
+#: packages/wallet/src/screens/Portfolio.tsx
+msgctxt "home.tokens.one"
+msgid "1 token"
+msgstr "1 token"
+
+#: packages/wallet/src/screens/Portfolio.tsx
 msgctxt "home.unpriced"
 msgid "{n} without price"
 msgstr "{n} without price"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "key.alerts"
+msgid "Alerts"
+msgstr "Alerts"
 
 #: packages/wallet/src/screens/Token.tsx
 msgctxt "key.bridge"
 msgid "Bridge"
 msgstr "Bridge"
 
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "key.collectibles"
+msgid "Collectibles"
+msgstr "Collectibles"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "key.farms"
+msgid "Farms"
+msgstr "Farms"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "key.launchpad"
+msgid "Launchpad"
+msgstr "Launchpad"
+
 #: packages/wallet/src/screens/Token.tsx
 msgctxt "key.receive"
 msgid "Receive"
 msgstr "Receive"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "key.search"
+msgid "Search"
+msgstr "Search"
 
 #: packages/wallet/src/screens/Token.tsx
 msgctxt "key.send"
@@ -2057,6 +2137,11 @@ msgstr "Send"
 msgctxt "key.swap"
 msgid "Swap"
 msgstr "Swap"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "key.tokens"
+msgid "Tokens"
+msgstr "Tokens"
 
 #: packages/wallet/src/components/HardwarePrompt.tsx
 msgctxt "keystone.body"
@@ -2342,6 +2427,11 @@ msgstr "{a} {s} → at least {b} {u}"
 msgctxt "limit.working"
 msgid "Placing your order…"
 msgstr "Placing your order…"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "market.title"
+msgid "Market"
+msgstr "Market"
 
 #: packages/wallet/src/screens/Bridge.tsx
 msgctxt "max"
@@ -2868,6 +2958,21 @@ msgctxt "pin.on"
 msgid "Pin to Home"
 msgstr "Pin to Home"
 
+#: packages/wallet/src/screens/Portfolio.tsx
+msgctxt "portfolio.hidden.many"
+msgid "{n} hidden tokens"
+msgstr "{n} hidden tokens"
+
+#: packages/wallet/src/screens/Portfolio.tsx
+msgctxt "portfolio.hidden.one"
+msgid "1 hidden token"
+msgstr "1 hidden token"
+
+#: packages/wallet/src/screens/Portfolio.tsx
+msgctxt "portfolio.title"
+msgid "Portfolio"
+msgstr "Portfolio"
+
 #: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "pw.good"
 msgid "Good"
@@ -3297,6 +3402,11 @@ msgstr "Notifications"
 msgctxt "settings.notifications.rows"
 msgid "Watchlist alerts, campaigns going live, rewards and dividends"
 msgstr "Watchlist alerts, campaigns going live, rewards and dividends"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.openTab"
+msgid "Open BoltVault in a full tab"
+msgstr "Open BoltVault in a full tab"
 
 #: packages/wallet/src/screens/shells.tsx
 msgctxt "settings.security"

@@ -74,6 +74,12 @@ export class PortfolioService {
     return { accountId, chainIds: [...chainIds], currency: 'USD', total: null, change24h: null, unpricedCount: 0, rows: [], observedAt: 0, stale: true }
   }
 
+  /** The persisted last-good snapshot, no refresh (plan C1). */
+  async cached(accountId: string): Promise<PortfolioSnapshot | null> {
+    const { value } = await readDoc(this.deps.platform.storage.local, snapDoc(accountId), () => this.deps.platform.now())
+    return value ? { ...value, stale: true } : null
+  }
+
   async refresh(accountId: string, chainIds: readonly number[] = [HOME_CHAIN_ID]): Promise<PortfolioSnapshot> {
     const k = `${accountId}:${chainIds.join(',')}`
     const open = this.inFlight.get(k)
@@ -242,5 +248,6 @@ export function portfolioNamespace(portfolio: PortfolioService): NamespaceSpec {
       },
     },
     lastLook: { input: z.object({ accountId: AccountIdSchema }), handler: (arg) => portfolio.lastLook((arg as { accountId: string }).accountId) },
+    cached: { input: z.object({ accountId: AccountIdSchema }), handler: (arg) => portfolio.cached((arg as { accountId: string }).accountId) },
   }
 }

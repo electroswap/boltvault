@@ -5,6 +5,7 @@
  */
 import { Body, Column, Icon, IconButton, Plate, Row, ScrollView, metrics, paint } from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
+import { useOpenInTab } from '../hooks/useOpenInTab'
 import { useEngine } from '../engine/EngineProvider'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
@@ -26,6 +27,7 @@ export function ActivityShell({ body }: { body: Body_ }) {
 export function SettingsShell({ body }: { body: Body_ }) {
   const router = useRouter()
   const engine = useEngine()
+  const openInTab = useOpenInTab()
   const groups: Array<{ id: string; title: string; rows: string[] }> = [
     { id: 'accounts', title: t({ id: 'settings.accounts', message: 'Accounts' }), rows: [t({ id: 'settings.accounts.rows', message: 'Seeds, backups, identity' })] },
     { id: 'security', title: t({ id: 'settings.security', message: 'Security' }), rows: [t({ id: 'settings.security.rows', message: 'Password, auto-lock, passkeys, hardware' })] },
@@ -41,6 +43,17 @@ export function SettingsShell({ body }: { body: Body_ }) {
   return (
     <ScrollView contentContainerStyle={{ padding: insetFor(body), gap: 12 }} testID="settings">
       <PageHeader title={t({ id: 'settings.title', message: 'Settings' })} right={<IconButton icon="lock" label={t({ id: 'settings.lock', message: 'Lock' })} onPress={() => void engine.vault.lock()} testID="lock-key" />} />
+      {openInTab ? (
+        <Plate role="card" gap={2} onPress={() => openInTab({ screen: 'settings' })} cursor="pointer" testID="settings-open-tab">
+          <Row justifyContent="space-between" alignItems="center">
+            <Row gap="$2" alignItems="center">
+              <Icon name="expand" size={18} color={paint.arc} />
+              <Body>{t({ id: 'settings.openTab', message: 'Open BoltVault in a full tab' })}</Body>
+            </Row>
+            <Icon name="chevronRight" size={18} color={paint.mute} />
+          </Row>
+        </Plate>
+      ) : null}
       {groups.map((g) => {
         const target = g.id === 'accounts' ? 'accounts' : g.id === 'security' ? 'security' : g.id === 'devices' ? 'devices' : g.id === 'sites' ? 'sites' : g.id === 'approvals' ? 'allowances' : g.id === 'spending' ? 'spending' : g.id === 'notifications' ? 'alerts' : g.id === 'networks' ? 'networks' : g.id === 'feel' ? 'feel' : g.id === 'about' ? 'about' : null
         return (

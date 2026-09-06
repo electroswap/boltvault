@@ -1,11 +1,11 @@
 /**
  * PageHeader — ScreenHeader wired to the router (plan B1): Back pops the
  * stack, and in the popup an "Open in a full tab" control opens the same
- * screen in tab.html (the popup then closes).
+ * screen (params included) in tab.html; the popup then closes (plan B2).
  */
 import { IconButton, ScreenHeader, type ScreenHeaderProps } from '@boltvault/ui'
 import type { ReactNode } from 'react'
-import { useHost } from '../host'
+import { useOpenInTab } from '../hooks/useOpenInTab'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 
@@ -19,9 +19,8 @@ export interface PageHeaderProps extends Omit<ScreenHeaderProps, 'onBack' | 'bac
 
 export function PageHeader({ root = false, right, noExpand = false, ...rest }: PageHeaderProps) {
   const router = useRouter()
-  const host = useHost()
-  const canExpand = !noExpand && host.body === 'extension-popup' && !!host.openSecretScreen
-  const expand = canExpand ? <IconButton icon="expand" label={t({ id: 'header.expand', message: 'Open in a full tab' })} onPress={() => host.openSecretScreen?.(router.current.screen)} testID="open-tab" /> : null
+  const openInTab = useOpenInTab()
+  const expand = !noExpand && openInTab ? <IconButton icon="expand" label={t({ id: 'header.expand', message: 'Open in a full tab' })} onPress={() => openInTab()} testID="open-tab" /> : null
   const rightSlot =
     right || expand ? (
       <>

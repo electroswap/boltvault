@@ -102,7 +102,7 @@ export function Token({ chainId, address, body }: { chainId: number; address: st
         <Key label={t({ id: 'key.send', message: 'Send' })} kind="secondary" stacked onPress={() => router.navigate('send', { token: address, chainId })} icon={<Icon name="send" size={20} color={paint.ink} />} testID="token-send" />
         <Key label={t({ id: 'key.receive', message: 'Receive' })} kind="secondary" stacked onPress={() => router.navigate('receive', { token: address, chainId })} icon={<Icon name="receive" size={20} color={paint.ink} />} testID="token-receive" />
         {bridgeable ? <Key label={t({ id: 'key.bridge', message: 'Bridge' })} kind="secondary" stacked onPress={() => router.navigate('bridge', { chainId, token: address })} icon={<Icon name="bridge" size={20} color={paint.ink} />} testID="token-bridge" /> : null}
-        <Key label={t({ id: 'key.swap', message: 'Swap' })} kind="secondary" stacked onPress={() => router.setTab('swap')} icon={<Icon name="swap" size={20} color={paint.ink} />} testID="token-swap" />
+        <Key label={t({ id: 'key.swap', message: 'Swap' })} kind="secondary" stacked onPress={() => router.setTab('swap', isNative ? undefined : { tokenIn: 'native', tokenOut: address })} icon={<Icon name="swap" size={20} color={paint.ink} />} testID="token-swap" />
       </Row>
 
       <Plate gap="$1" testID="token-market">

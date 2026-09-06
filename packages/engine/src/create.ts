@@ -44,6 +44,7 @@ import { SwapService, swapNamespace } from './namespaces/swap'
 import { aboutNamespace } from './namespaces/about'
 import { DocCache } from './cache'
 import { NotificationsService, notificationsNamespace } from './namespaces/notifications'
+import { PrefsService, prefsNamespace } from './namespaces/prefs'
 import { SitesService, sitesNamespace } from './namespaces/sites'
 import { HttpRelay, MemoryRelay, SyncService, syncNamespace, type Relay } from './namespaces/sync'
 import { TokensService, tokensNamespace } from './namespaces/tokens'
@@ -150,6 +151,7 @@ export function createEngine(deps: EngineDeps): Engine {
   const settings = new SettingsStore(deps.platform, host.events, deps.os)
   const cache = new DocCache(deps.platform.storage.local, host.events, () => deps.platform.now())
   const notifications = new NotificationsService(deps.platform, host.events)
+  const prefs = new PrefsService(deps.platform, host.events)
   // Every OS notification the watcher sends is also an inbox entry (plan A6): the tag says what it was about.
   const notifyingPlatform: Platform = {
     ...deps.platform,
@@ -307,6 +309,7 @@ export function createEngine(deps: EngineDeps): Engine {
   host.register('flags', flagsNamespace(statics))
   host.register('about', aboutNamespace({ apiOrigin, apiIsDefault: apiOrigin === DEFAULT_API_ORIGIN, features }))
   host.register('notifications', notificationsNamespace(notifications))
+  host.register('prefs', prefsNamespace(prefs))
 
   const ready = Promise.all([approvals.hydrate(), sites.hydrate(), settings.get(), provider.init(), watchlist.hydrate(), statics.hydrate()]).then(() => {
     // Signed flags refresh in the background; nothing waits on the network (§3.7).
