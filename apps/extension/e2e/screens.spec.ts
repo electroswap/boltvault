@@ -22,7 +22,7 @@ const SIZES = {
   mobile: { body: 'mobile', width: 390, height: 844 },
 } as const
 
-const CASES: Array<{ screen: string; scenario: string; sizes: Array<keyof typeof SIZES> }> = [
+const CASES: Array<{ screen: string; scenario: string; sizes: Array<keyof typeof SIZES>; query?: string; name?: string }> = [
   { screen: 'home', scenario: 'fresh', sizes: ['popup', 'mobile'] },
   { screen: 'home', scenario: 'locked', sizes: ['popup'] },
   { screen: 'home', scenario: 'funded', sizes: ['popup', 'tab', 'mobile'] },
@@ -30,6 +30,7 @@ const CASES: Array<{ screen: string; scenario: string; sizes: Array<keyof typeof
   // The first-swap coach overlay: an account that has not swapped and has not dismissed it.
   { screen: 'swap', scenario: 'unlocked', sizes: ['popup'] },
   { screen: 'explore', scenario: 'funded', sizes: ['popup'] },
+  { screen: 'explore', scenario: 'funded', sizes: ['popup'], query: 'segment=collectibles', name: 'explore-collectibles' },
   { screen: 'portfolio', scenario: 'funded', sizes: ['popup', 'tab'] },
   { screen: 'activity', scenario: 'funded', sizes: ['popup'] },
   { screen: 'settings', scenario: 'funded', sizes: ['popup'] },
@@ -86,7 +87,7 @@ test('every screen renders in every size and matches its baseline', async () => 
         const page = await ext.context.newPage()
         const errors = collectErrors(page)
         await page.setViewportSize({ width: s.width, height: s.height })
-        const url = ext.url(`harness.html?scenario=${c.scenario}&screen=${c.screen}&body=${s.body}&motion=reduced`)
+        const url = ext.url(`harness.html?scenario=${c.scenario}&screen=${c.screen}&body=${s.body}&motion=reduced${c.query ? `&${c.query}` : ''}`)
         await page.goto(url)
         try {
           await page.waitForFunction(() => document.documentElement.dataset['ready'] === '1', undefined, { timeout: 30_000 })
@@ -106,7 +107,7 @@ test('every screen renders in every size and matches its baseline', async () => 
         )
         for (const sm of small) tooSmall.push(`${c.screen}/${c.scenario}/${size}: ${sm}`)
 
-        const name = `${c.screen}--${c.scenario}--${size}.png`
+        const name = `${c.name ?? c.screen}--${c.scenario}--${size}.png`
         const buf = await page.screenshot({ path: join(OUT, name), fullPage: false })
         const baselinePath = join(BASELINES, name)
         if (UPDATE || !existsSync(baselinePath)) {

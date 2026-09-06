@@ -5,7 +5,7 @@
  * Accept offer · Transfer; visitor: Buy · Offer. A Legend says what it
  * earns. Every verb runs through the sheet and lands here as a Discharge.
  */
-import { Artwork, Body, Chip, Column, Icon, Input, Key, Plate, Row, ScrollView, Sheet, metrics, paint, shortAddress } from '@boltvault/ui'
+import { Artwork, Body, Chip, Column, Icon, Input, Key, Pill, Plate, Row, ScrollView, Sheet, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
 import type { AssetView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
@@ -29,7 +29,8 @@ export function Piece({ body, chainId, address, tokenId, reducedMotion = false }
   const { setActive } = useSwapFlow()
   const { flow, dismiss } = useActiveFlow(['nft'])
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
-  const width = (body === 'extension-popup' ? 360 : 640) - inset * 2
+  const { width: windowWidth } = useWindowDimensions()
+  const width = Math.min(windowWidth, body === 'extension-tab' ? 640 : windowWidth) - inset * 2
   const [asset, setAsset] = useState<AssetView | null>(null)
   const [sheet, setSheet] = useState<SheetKind>(null)
   const [price, setPrice] = useState('')
@@ -76,17 +77,9 @@ export function Piece({ body, chainId, address, tokenId, reducedMotion = false }
   const best = asset?.bestBid ?? null
 
   return (
-    <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="piece">
-      <PageHeader title={asset?.name ?? ''} right={<>{asset ? (
-          <Chip onPress={() => router.navigate('collection', { chainId, address })} cursor="pointer" minHeight={44} justifyContent="center" testID="piece-collection">
-            <Row gap="$1" alignItems="center">
-              <Body tone="mute" size="caption" numberOfLines={1}>
-                {asset.collectionName}
-              </Body>
-              {asset.collectionVerified ? <Icon name="check" size={14} color={paint.arc} /> : null}
-            </Row>
-          </Chip>
-        ) : null}</>} />
+    <Column flex={1}>
+    <ScrollView contentContainerStyle={{ padding: inset, gap: 12, ...(body === 'extension-tab' ? { maxWidth: 640, width: '100%', alignSelf: 'center' } : {}) }} testID="piece">
+      <PageHeader title={asset?.name ?? ''} right={<>{asset ? <Pill label={asset.collectionName} icon={asset.collectionVerified ? <Icon name="check" size={14} color={paint.arc} /> : undefined} size="sm" onPress={() => router.navigate('collection', { chainId, address })} testID="piece-collection" /> : null}</>} />
       {loadError ? <Body tone="burn">{loadError}</Body> : null}
       {!asset && !loadError ? (
         <Body tone="mute" size="caption">
@@ -149,19 +142,24 @@ export function Piece({ body, chainId, address, tokenId, reducedMotion = false }
               ))}
             </Row>
           ) : null}
+          {asset.custom ? (
+            <Body tone="mute" size="caption" testID="piece-custom-note">
+              {t({ id: 'piece.custom', message: 'From a collection you added: read from the contract, not on the marketplace.' })}
+            </Body>
+          ) : null}
           {active ? (
             <Row gap="$2" flexWrap="wrap" testID="piece-keys">
               {mine ? (
                 <>
-                  {!listing ? <Key label={t({ id: 'piece.list', message: 'List' })} onPress={() => setSheet('list')} testID="piece-list" /> : null}
+                  {!listing && !asset.custom ? <Key label={t({ id: 'piece.list', message: 'List' })} size="compact" onPress={() => setSheet('list')} testID="piece-list" /> : null}
                   {listing && listing.actionable && listing.orderHash ? <Key label={t({ id: 'piece.cancelListing', message: 'Cancel listing' })} kind="secondary" disabled={busy} onPress={() => void run(() => engine.nft.cancel({ accountId: active.id, chainId, address, tokenId, orderHash: listing.orderHash ?? '' }))} testID="piece-cancel" /> : null}
                   {best && best.actionable && best.orderHash ? <Key label={t({ id: 'piece.accept', message: 'Accept offer' })} disabled={busy} onPress={() => void run(() => engine.nft.accept({ accountId: active.id, chainId, address, tokenId, orderHash: best.orderHash ?? '' }))} testID="piece-accept" /> : null}
-                  <Key label={t({ id: 'piece.transfer', message: 'Send' })} kind="secondary" onPress={() => setSheet('transfer')} testID="piece-transfer" />
+                  <Key label={t({ id: 'piece.transfer', message: 'Send' })} kind="secondary" size="compact" onPress={() => setSheet('transfer')} testID="piece-transfer" />
                 </>
               ) : (
                 <>
                   {listing && listing.actionable ? <Key label={t({ id: 'piece.buy', message: 'Buy' })} disabled={busy} onPress={() => void run(() => engine.nft.buy({ accountId: active.id, chainId, address, tokenId }))} testID="piece-buy" /> : null}
-                  <Key label={t({ id: 'piece.offer', message: 'Offer' })} kind="secondary" onPress={() => setSheet('offer')} testID="piece-offer" />
+                  {!asset.custom ? <Key label={t({ id: 'piece.offer', message: 'Offer' })} kind="secondary" size="compact" onPress={() => setSheet('offer')} testID="piece-offer" /> : null}
                 </>
               )}
             </Row>
@@ -185,19 +183,13 @@ export function Piece({ body, chainId, address, tokenId, reducedMotion = false }
               {asset.description}
             </Body>
           ) : null}
-          <Chip onPress={() => host.openUrl?.(`https://app.electroswap.io/nfts/asset/${address}/${tokenId}`)} cursor="pointer" minHeight={44} justifyContent="center" alignSelf="flex-start">
-            <Row gap="$1" alignItems="center">
-              <Icon name="external" size={14} color={paint.mute} />
-              <Body tone="mute" size="caption">
-                {t({ id: 'piece.web', message: 'On ElectroSwap' })}
-              </Body>
-            </Row>
-          </Chip>
+          {!asset.custom ? <Pill label={t({ id: 'piece.web', message: 'On ElectroSwap' })} icon={<Icon name="external" size={14} color={paint.mute} />} size="sm" onPress={() => void host.openUrl?.(`https://app.electroswap.io/nfts/asset/${address}/${tokenId}`)} /> : null}
         </>
       ) : null}
 
-      <Sheet open={sheet !== null} onClose={() => setSheet(null)} title={sheet === 'list' ? t({ id: 'piece.list.title', message: 'List for sale' }) : sheet === 'offer' ? t({ id: 'piece.offer.title', message: 'Make an offer' }) : t({ id: 'piece.transfer.title', message: 'Send this piece' })} testID="piece-sheet">
-        <Column padding={20} gap="$3">
+    </ScrollView>
+      <Sheet open={sheet !== null} onClose={() => setSheet(null)} title={sheet === 'list' ? t({ id: 'piece.list.title', message: 'List for sale' }) : sheet === 'offer' ? t({ id: 'piece.offer.title', message: 'Make an offer' }) : t({ id: 'piece.transfer.title', message: 'Send this piece' })} reducedMotion={reducedMotion} testID="piece-sheet">
+        <Column gap="$3">
           {sheet === 'transfer' ? (
             <>
               <Input value={to} onChange={setTo} mono placeholder="0x…" label={t({ id: 'piece.transfer.to', message: 'To' })} testID="piece-transfer-to" />
@@ -211,11 +203,7 @@ export function Piece({ body, chainId, address, tokenId, reducedMotion = false }
               <Input value={price} onChange={setPrice} placeholder="0" label={sheet === 'list' ? t({ id: 'piece.price', message: 'Price in ETN' }) : t({ id: 'piece.offer.price', message: 'Offer in WETN' })} testID="piece-price" />
               <Row gap="$2" flexWrap="wrap">
                 {['1', '7', '30'].map((d) => (
-                  <Chip key={d} onPress={() => setDays(d)} cursor="pointer" minHeight={44} justifyContent="center" borderColor={days === d ? paint.arc : undefined} testID={`piece-days-${d}`}>
-                    <Body tone={days === d ? 'arc' : 'mute'} size="caption">
-                      {t({ id: 'piece.days', message: '{d} days', values: { d } })}
-                    </Body>
-                  </Chip>
+                  <Pill key={d} label={t({ id: 'piece.days', message: '{d} days', values: { d } })} selected={days === d} onPress={() => setDays(d)} testID={`piece-days-${d}`} />
                 ))}
               </Row>
               {sheet === 'list' && price && Number(price) > 0 ? (
@@ -234,6 +222,6 @@ export function Piece({ body, chainId, address, tokenId, reducedMotion = false }
           )}
         </Column>
       </Sheet>
-    </ScrollView>
+    </Column>
   )
 }

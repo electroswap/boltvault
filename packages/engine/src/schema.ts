@@ -612,6 +612,10 @@ export const CollectionViewSchema = z.object({
   starred: z.boolean(),
   /** How many the active account owns (Explore shows "you own 3"). */
   owned: z.number().int().nonnegative(),
+  /** Added by the user by address (plan A3); not on the indexer. */
+  custom: z.boolean().optional(),
+  /** Read from the chain on the collection page (plan C1): null when the collection has no minter. */
+  mint: z.object({ mintable: z.boolean(), priceWei: z.string(), mintableCount: z.number().int().nonnegative(), totalSupply: z.number().int().nonnegative() }).nullable().optional(),
 })
 export type CollectionView = z.infer<typeof CollectionViewSchema>
 
@@ -658,6 +662,8 @@ export const AssetViewSchema = z.object({
   /** Electric Legend: unclaimed dividends for this piece, wei string; null for other collections. */
   dividendsWei: z.string().nullable(),
   paysDividends: z.boolean(),
+  /** A piece from a custom collection: no marketplace verbs, metadata from its own URI (plan A3). */
+  custom: z.boolean().optional(),
 })
 export type AssetView = z.infer<typeof AssetViewSchema>
 
@@ -665,7 +671,7 @@ export const InventorySchema = z.object({
   accountId: AccountIdSchema,
   chainId: z.number().int().positive(),
   assets: z.array(AssetViewSchema),
-  collections: z.array(z.object({ address: z.string(), name: z.string(), logoUrl: z.string().nullable(), balance: z.number().int(), floorEtn: Fiat })),
+  collections: z.array(z.object({ address: z.string(), name: z.string(), logoUrl: z.string().nullable(), balance: z.number().int(), floorEtn: Fiat, custom: z.boolean().optional() })),
   /** Sum of floors × counts, ETN, where floors exist. */
   floorValueEtn: Fiat,
   listedCount: z.number().int().nonnegative(),

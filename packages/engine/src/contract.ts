@@ -11,6 +11,7 @@
  * `not_implemented`, which the UI renders as an honest empty state.
  */
 import type { Cached } from './cache'
+import type { CustomCollection } from './namespaces/nftCustom'
 import type {
   AboutView,
   AccountId,
@@ -252,8 +253,9 @@ export interface ExploreNamespace {
   /** Locked liquidity for a token (native → WETN); null when the market is unreachable. */
   liquidity(input: { chainId: number; address: string }): Promise<LiquidityView | null>
   cachedLiquidity(input: { chainId: number; address: string }): Promise<Cached<LiquidityView> | null>
-  collections(input: { chainId: number; accountId?: AccountId }): Promise<CollectionView[]>
-  cachedCollections(input: { chainId: number; accountId?: AccountId }): Promise<Cached<CollectionView[]> | null>
+  /** Listed collections by default (verified, traded, listed or owned) plus the user's own; `all` for the whole index (plan C3). */
+  collections(input: { chainId: number; accountId?: AccountId; all?: boolean }): Promise<CollectionView[]>
+  cachedCollections(input: { chainId: number; accountId?: AccountId; all?: boolean }): Promise<Cached<CollectionView[]> | null>
   collection(input: { chainId: number; address: string; accountId?: AccountId }): Promise<CollectionView | null>
   search(input: { chainId: number; query: string }): Promise<{ tokens: ExploreToken[]; collections: CollectionView[] }>
 }
@@ -272,8 +274,13 @@ export interface NftNamespace {
   accept(input: { accountId: AccountId; chainId: number; address: string; tokenId: string; orderHash: string }): Promise<{ flowId: string; requestId: string | null }>
   cancel(input: { accountId: AccountId; chainId: number; address: string; tokenId: string; orderHash: string }): Promise<{ flowId: string; requestId: string | null }>
   transfer(input: { accountId: AccountId; chainId: number; address: string; tokenId: string; to: string }): Promise<{ flowId: string; requestId: string | null }>
-  mint(input: { accountId: AccountId; chainId: number; count: number }): Promise<{ flowId: string; requestId: string | null }>
+  mint(input: { accountId: AccountId; chainId: number; count: number; address?: string }): Promise<{ flowId: string; requestId: string | null }>
   collectionApproved(input: { accountId: AccountId; chainId: number; address: string }): Promise<boolean>
+  /** Custom collections (plan A3): the chain's word on a contract, add, remove, list. */
+  previewCollection(input: { chainId: number; address: string }): Promise<{ chainId: number; address: string; name: string; symbol: string; standard: 'ERC721' | 'ERC1155'; enumerable: boolean }>
+  addCollection(input: { chainId: number; address: string }): Promise<CustomCollection>
+  removeCollection(input: { chainId: number; address: string }): Promise<void>
+  customCollections(input: { chainId: number }): Promise<CustomCollection[]>
 }
 
 /** Electric Legends dividends (§8.10). */

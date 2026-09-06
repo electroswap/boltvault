@@ -193,8 +193,8 @@ function collectionView(n: z.infer<typeof CollectionNodeSchema>): CollectionView
 
 const edges = <T extends z.ZodTypeAny>(node: T) => z.object({ edges: z.array(z.object({ node })).nullable().optional(), pageInfo: z.object({ hasNextPage: z.boolean().nullable().optional(), endCursor: z.string().nullable().optional() }).nullable().optional(), totalCount: z.number().nullable().optional() }).nullable().optional()
 
-export async function fetchTopCollections(client: ElectroSwapClient, chainId: number, first = 50): Promise<CollectionView[]> {
-  const data = await client.query<unknown>(TOP_COLLECTIONS, { chains: [chainEnum(chainId)], first })
+export async function fetchTopCollections(client: ElectroSwapClient, chainId: number, first = 50, listed = false): Promise<CollectionView[]> {
+  const data = await client.query<unknown>(TOP_COLLECTIONS, { chains: [chainEnum(chainId)], first, listed })
   const parsed = z.object({ topCollections: edges(CollectionNodeSchema) }).parse(data)
   return (parsed.topCollections?.edges ?? []).map((e) => collectionView(e.node))
 }

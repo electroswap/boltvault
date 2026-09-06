@@ -1163,10 +1163,50 @@ msgctxt "collection.activity.hide"
 msgid "Hide activity"
 msgstr "Hide activity"
 
+#: packages/wallet/src/components/AddCollectionSheet.tsx
+msgctxt "collection.add.body"
+msgid "Paste the contract address of an NFT collection on Electroneum. BoltVault reads its pieces and their images from the contract itself."
+msgstr "Paste the contract address of an NFT collection on Electroneum. BoltVault reads its pieces and their images from the contract itself."
+
+#: packages/wallet/src/components/AddCollectionSheet.tsx
+msgctxt "collection.add.enumerable"
+msgid "lists its pieces"
+msgstr "lists its pieces"
+
+#: packages/wallet/src/components/AddCollectionSheet.tsx
+msgctxt "collection.add.key"
+msgid "Add collection"
+msgstr "Add collection"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "collection.add.pill"
+msgid "Add a collection"
+msgstr "Add a collection"
+
+#: packages/wallet/src/components/AddCollectionSheet.tsx
+msgctxt "collection.add.scan"
+msgid "pieces found from transfers"
+msgstr "pieces found from transfers"
+
+#: packages/wallet/src/components/AddCollectionSheet.tsx
+msgctxt "collection.add.title"
+msgid "Add a collection"
+msgstr "Add a collection"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "collection.custom"
+msgid "Custom"
+msgstr "Custom"
+
 #: packages/wallet/src/screens/Collection.tsx
-msgctxt "collection.dividends"
-msgid "Pays marketplace dividends to holders"
-msgstr "Pays marketplace dividends to holders"
+msgctxt "collection.custom.body"
+msgid "Added by you. Pieces and images are read from the contract; there is no market data or marketplace here."
+msgstr "Added by you. Pieces and images are read from the contract; there is no market data or marketplace here."
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "collection.custom.none"
+msgid "None of this collection’s pieces are in your wallet."
+msgstr "None of this collection’s pieces are in your wallet."
 
 #: packages/wallet/src/screens/Collection.tsx
 msgctxt "collection.floor"
@@ -1199,6 +1239,11 @@ msgid "Mint"
 msgstr "Mint"
 
 #: packages/wallet/src/screens/Collection.tsx
+msgctxt "collection.mint.title"
+msgid "Minting now"
+msgstr "Minting now"
+
+#: packages/wallet/src/screens/Collection.tsx
 msgctxt "collection.more"
 msgid "More"
 msgstr "More"
@@ -1207,6 +1252,11 @@ msgstr "More"
 msgctxt "collection.owners"
 msgid "Owners"
 msgstr "Owners"
+
+#: packages/wallet/src/screens/Collection.tsx
+msgctxt "collection.remove"
+msgid "Remove this collection"
+msgstr "Remove this collection"
 
 #: packages/wallet/src/screens/Collection.tsx
 msgctxt "collection.sort.price"
@@ -1469,9 +1519,24 @@ msgid "Collectibles"
 msgstr "Collectibles"
 
 #: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.collections.all"
+msgid "Showing everything"
+msgstr "Showing everything"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.collections.listed"
+msgid "Listed collections"
+msgstr "Listed collections"
+
+#: packages/wallet/src/screens/Collection.tsx
 msgctxt "explore.dividends"
 msgid "Pays dividends"
 msgstr "Pays dividends"
+
+#: packages/wallet/src/components/cards/CollectionCard.tsx
+msgctxt "explore.dividends.short"
+msgid "Dividends"
+msgstr "Dividends"
 
 #: packages/wallet/src/screens/Explore.tsx
 msgctxt "explore.farms"
@@ -1483,7 +1548,7 @@ msgctxt "explore.farms.empty"
 msgid "No farms to show."
 msgstr "No farms to show."
 
-#: packages/wallet/src/screens/Explore.tsx
+#: packages/wallet/src/components/cards/CollectionCard.tsx
 msgctxt "explore.floor"
 msgid "Floor {f} ETN"
 msgstr "Floor {f} ETN"
@@ -1498,7 +1563,7 @@ msgctxt "explore.launch.live"
 msgid "Launch · {n}"
 msgstr "Launch · {n}"
 
-#: packages/wallet/src/screens/Explore.tsx
+#: packages/wallet/src/components/cards/CollectionCard.tsx
 msgctxt "explore.listed"
 msgid "{p}% listed"
 msgstr "{p}% listed"
@@ -1518,7 +1583,7 @@ msgctxt "explore.off.title"
 msgid "Markets are on Electroneum"
 msgstr "Markets are on Electroneum"
 
-#: packages/wallet/src/screens/Explore.tsx
+#: packages/wallet/src/components/cards/CollectionCard.tsx
 msgctxt "explore.own"
 msgid "you own {n}"
 msgstr "you own {n}"
@@ -1548,7 +1613,7 @@ msgctxt "explore.vol"
 msgid "Vol {v}"
 msgstr "Vol {v}"
 
-#: packages/wallet/src/screens/Explore.tsx
+#: packages/wallet/src/components/cards/CollectionCard.tsx
 msgctxt "explore.vol24"
 msgid "{v} ETN today"
 msgstr "{v} ETN today"
@@ -2478,15 +2543,10 @@ msgctxt "ledger.unavailable"
 msgid "Ledger over USB works from the full tab in Chrome, and over Bluetooth on the phone. In this window you can watch its address, or sign on a paired device."
 msgstr "Ledger over USB works from the full tab in Chrome, and over Bluetooth on the phone. In this window you can watch its address, or sign on a paired device."
 
-#: packages/wallet/src/components/LegendsVault.tsx
+#: packages/wallet/src/components/DividendsCard.tsx
 msgctxt "legends.activate"
 msgid "Activate dividends"
 msgstr "Activate dividends"
-
-#: packages/wallet/src/components/LegendsVault.tsx
-msgctxt "legends.activate.body"
-msgid "{n} of your pieces are not earning yet — activate them once and they share every fee from then on."
-msgstr "{n} of your pieces are not earning yet — activate them once and they share every fee from then on."
 
 #: packages/wallet/src/screens/Legends.tsx
 msgctxt "legends.activated"
@@ -2498,45 +2558,50 @@ msgctxt "legends.activateVerb"
 msgid "Activate"
 msgstr "Activate"
 
-#: packages/wallet/src/components/LegendsVault.tsx
-msgctxt "legends.body"
-msgid "Marketplace fees shared with holders. Fees keep flowing in; the vessel fills until you claim."
-msgstr "Marketplace fees shared with holders. Fees keep flowing in; the vessel fills until you claim."
-
 #: packages/wallet/src/screens/Legends.tsx
 msgctxt "legends.browse"
 msgid "See the collection"
 msgstr "See the collection"
 
-#: packages/wallet/src/components/LegendsVault.tsx
+#: packages/wallet/src/components/DividendsCard.tsx
 msgctxt "legends.claim"
 msgid "Claim"
 msgstr "Claim"
-
-#: packages/wallet/src/components/LegendsVault.tsx
-msgctxt "legends.claimable"
-msgid "{a} ETN to claim"
-msgstr "{a} ETN to claim"
 
 #: packages/wallet/src/screens/Legends.tsx
 msgctxt "legends.claimed"
 msgid "Claimed"
 msgstr "Claimed"
 
-#: packages/wallet/src/components/LegendsVault.tsx
-msgctxt "legends.count"
-msgid "{n} piece{s}"
-msgstr "{n} piece{s}"
+#: packages/wallet/src/components/DividendsCard.tsx
+msgctxt "legends.count.many"
+msgid "{n} pieces"
+msgstr "{n} pieces"
+
+#: packages/wallet/src/components/DividendsCard.tsx
+msgctxt "legends.count.one"
+msgid "1 piece"
+msgstr "1 piece"
+
+#: packages/wallet/src/components/DividendsCard.tsx
+msgctxt "legends.earning.all"
+msgid "Every piece is earning."
+msgstr "Every piece is earning."
+
+#: packages/wallet/src/components/DividendsCard.tsx
+msgctxt "legends.earning.none"
+msgid "Hold a Legend and it shares a third of every marketplace fee."
+msgstr "Hold a Legend and it shares a third of every marketplace fee."
+
+#: packages/wallet/src/components/DividendsCard.tsx
+msgctxt "legends.earning.some"
+msgid "{e} of {n} pieces earning — activate the rest once and they share every fee from then on."
+msgstr "{e} of {n} pieces earning — activate the rest once and they share every fee from then on."
 
 #: packages/wallet/src/screens/Legends.tsx
 msgctxt "legends.how"
 msgid "How it works: the marketplace fee receiver is the dividend distributor. It keeps two thirds for ElectroSwap and credits one third to every registered Legend. Claiming pays the ETN straight to you; there is no allowance involved."
 msgstr "How it works: the marketplace fee receiver is the dividend distributor. It keeps two thirds for ElectroSwap and credits one third to every registered Legend. Claiming pays the ETN straight to you; there is no allowance involved."
-
-#: packages/wallet/src/components/LegendsVault.tsx
-msgctxt "legends.lifetime"
-msgid "Lifetime paid to Legends holders: {a} ETN"
-msgstr "Lifetime paid to Legends holders: {a} ETN"
 
 #: packages/wallet/src/screens/Legends.tsx
 msgctxt "legends.minted"
@@ -2553,15 +2618,45 @@ msgctxt "legends.screen"
 msgid "Electric Legends"
 msgstr "Electric Legends"
 
-#: packages/wallet/src/components/LegendsVault.tsx
-msgctxt "legends.share"
-msgid "Your share of the next fee: {p}%"
-msgstr "Your share of the next fee: {p}%"
+#: packages/wallet/src/components/DividendsCard.tsx
+msgctxt "legends.stat.active"
+msgid "Earning"
+msgstr "Earning"
 
-#: packages/wallet/src/components/LegendsVault.tsx
+#: packages/wallet/src/components/DividendsCard.tsx
+msgctxt "legends.stat.active.caption"
+msgid "Legends in all"
+msgstr "Legends in all"
+
+#: packages/wallet/src/components/DividendsCard.tsx
+msgctxt "legends.stat.lifetime"
+msgid "Lifetime paid"
+msgstr "Lifetime paid"
+
+#: packages/wallet/src/components/DividendsCard.tsx
+msgctxt "legends.stat.lifetime.caption"
+msgid "to all holders"
+msgstr "to all holders"
+
+#: packages/wallet/src/components/DividendsCard.tsx
+msgctxt "legends.stat.share"
+msgid "Your share"
+msgstr "Your share"
+
+#: packages/wallet/src/components/DividendsCard.tsx
+msgctxt "legends.stat.share.caption"
+msgid "of each fee"
+msgstr "of each fee"
+
+#: packages/wallet/src/components/DividendsCard.tsx
 msgctxt "legends.title"
 msgid "Electric Legends dividends"
 msgstr "Electric Legends dividends"
+
+#: packages/wallet/src/components/DividendsCard.tsx
+msgctxt "legends.toclaim"
+msgid "ETN to claim"
+msgstr "ETN to claim"
 
 #: packages/wallet/src/screens/Legends.tsx
 msgctxt "legends.working"
@@ -2647,6 +2742,16 @@ msgstr "Market"
 msgctxt "max"
 msgid "Max"
 msgstr "Max"
+
+#: packages/wallet/src/screens/Legends.tsx
+msgctxt "mint.fewer"
+msgid "One fewer"
+msgstr "One fewer"
+
+#: packages/wallet/src/screens/Legends.tsx
+msgctxt "mint.more"
+msgid "One more"
+msgstr "One more"
 
 #: packages/wallet/src/screens/Moments.tsx
 msgctxt "moments.discharge"
@@ -3014,6 +3119,11 @@ msgid "Cancel listing"
 msgstr "Cancel listing"
 
 #: packages/wallet/src/screens/Piece.tsx
+msgctxt "piece.custom"
+msgid "From a collection you added: read from the contract, not on the marketplace."
+msgstr "From a collection you added: read from the contract, not on the marketplace."
+
+#: packages/wallet/src/screens/Piece.tsx
 msgctxt "piece.days"
 msgid "{d} days"
 msgstr "{d} days"
@@ -3209,19 +3319,19 @@ msgid "Those words do not match your phrase. Check the numbers and try again."
 msgstr "Those words do not match your phrase. Check the numbers and try again."
 
 #: packages/wallet/src/screens/Rack.tsx
-msgctxt "rack.all"
-msgid "All"
-msgstr "All"
+msgctxt "rack.all.collections"
+msgid "All collections"
+msgstr "All collections"
 
 #: packages/wallet/src/screens/Rack.tsx
-msgctxt "rack.count"
-msgid "{n} piece{s}"
-msgstr "{n} piece{s}"
+msgctxt "rack.collection"
+msgid "Collection"
+msgstr "Collection"
 
 #: packages/wallet/src/screens/Rack.tsx
 msgctxt "rack.empty"
-msgid "Nothing on the shelves yet. Explore collections on Electroneum — buying a piece lands it here."
-msgstr "Nothing on the shelves yet. Explore collections on Electroneum — buying a piece lands it here."
+msgid "Nothing on the shelves yet. Explore collections on Electroneum — buying a piece lands it here — or add a collection by address."
+msgstr "Nothing on the shelves yet. Explore collections on Electroneum — buying a piece lands it here — or add a collection by address."
 
 #: packages/wallet/src/screens/Rack.tsx
 msgctxt "rack.explore"
@@ -3239,24 +3349,24 @@ msgid "Listed"
 msgstr "Listed"
 
 #: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.f.offers"
+msgid "Offers"
+msgstr "Offers"
+
+#: packages/wallet/src/screens/Rack.tsx
 msgctxt "rack.f.unlisted"
 msgid "Unlisted"
 msgstr "Unlisted"
 
 #: packages/wallet/src/screens/Rack.tsx
-msgctxt "rack.floor"
-msgid "{v} ETN at floor"
-msgstr "{v} ETN at floor"
-
-#: packages/wallet/src/screens/Rack.tsx
 msgctxt "rack.inbox"
-msgid "Offers inbox"
-msgstr "Offers inbox"
+msgid "Offers"
+msgstr "Offers"
 
 #: packages/wallet/src/screens/Rack.tsx
-msgctxt "rack.listed"
-msgid "{n} listed"
-msgstr "{n} listed"
+msgctxt "rack.none"
+msgid "Nothing matches these filters."
+msgstr "Nothing matches these filters."
 
 #: packages/wallet/src/screens/Rack.tsx
 msgctxt "rack.offer"
@@ -3264,14 +3374,59 @@ msgid "Offer"
 msgstr "Offer"
 
 #: packages/wallet/src/screens/Rack.tsx
-msgctxt "rack.offers"
-msgid "{n} with offers"
-msgstr "{n} with offers"
+msgctxt "rack.offers.n"
+msgid "Offers · {n}"
+msgstr "Offers · {n}"
 
 #: packages/wallet/src/screens/Rack.tsx
 msgctxt "rack.open"
 msgid "Open the Rack"
 msgstr "Open the Rack"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.pick.collection"
+msgid "Collection"
+msgstr "Collection"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.pick.floor"
+msgid "floor {f} ETN"
+msgstr "floor {f} ETN"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.sort"
+msgid "Sort by"
+msgstr "Sort by"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.sort.name"
+msgid "Name"
+msgstr "Name"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.sort.recent"
+msgid "Recent"
+msgstr "Recent"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.sort.value"
+msgid "Value"
+msgstr "Value"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.stat.floor"
+msgid "At floor"
+msgstr "At floor"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.stat.listed"
+msgid "Listed"
+msgstr "Listed"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.stat.pieces"
+msgid "Pieces"
+msgstr "Pieces"
 
 #: packages/wallet/src/screens/Rack.tsx
 msgctxt "rack.title"
@@ -4364,14 +4519,9 @@ msgid "Watch-only — import a key or pair a device."
 msgstr "Watch-only — import a key or pair a device."
 
 #: packages/wallet/src/screens/Collection.tsx
-msgctxt "watch.star"
-msgid "Star"
-msgstr "Star"
-
-#: packages/wallet/src/screens/Collection.tsx
-msgctxt "watch.starred"
-msgid "Starred"
-msgstr "Starred"
+msgctxt "watch.unstar"
+msgid "Stop alerts"
+msgstr "Stop alerts"
 
 #: packages/wallet/src/screens/ConnectedSites.tsx
 msgctxt "wc.body"

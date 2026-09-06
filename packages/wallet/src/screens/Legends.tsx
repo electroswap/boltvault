@@ -3,12 +3,12 @@
  * piece as a medallion, Activate and Claim, and the mint plate when the
  * collection is minting. Reached from Home › Positions and the accessory.
  */
-import { Body, Key, Plate, Row, ScrollView, metrics } from '@boltvault/ui'
+import { Body, IconButton, Key, Plate, Row, ScrollView, metrics } from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
 import type { LegendsStatus } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
-import { LegendsVault } from '../components/LegendsVault'
+import { DividendsCard } from '../components/DividendsCard'
 import { useEngine } from '../engine/EngineProvider'
 import { formatRaw } from '../format'
 import { t } from '../i18n'
@@ -61,13 +61,13 @@ export function Legends({ body, reducedMotion = false }: { body: BodyKind; reduc
       {error ? <Body tone="burn">{error}</Body> : null}
       {status && active ? (
         <>
-          <LegendsVault status={status} busy={busy} reducedMotion={reducedMotion} onActivate={() => void run(() => engine.legends.activate({ accountId: active.id, chainId: ETN }))} onClaim={() => void run(() => engine.legends.claim({ accountId: active.id, chainId: ETN }))} onPiece={(tokenId) => router.navigate('nft', { chainId: ETN, address: status.collection, tokenId })} />
+          <DividendsCard status={status} busy={busy} reducedMotion={reducedMotion} onActivate={() => void run(() => engine.legends.activate({ accountId: active.id, chainId: ETN }))} onClaim={() => void run(() => engine.legends.claim({ accountId: active.id, chainId: ETN }))} onPiece={(tokenId) => router.navigate('nft', { chainId: ETN, address: status.collection, tokenId })} />
           {status.ownedTokenIds.length === 0 ? (
             <Plate gap="$2" testID="legends-none">
               <Body tone="mute" size="caption">
                 {t({ id: 'legends.none', message: 'You hold no Electric Legends yet. Every Legend shares a third of the marketplace fees, forever.' })}
               </Body>
-              <Key label={t({ id: 'legends.browse', message: 'See the collection' })} kind="secondary" onPress={() => router.navigate('collection', { chainId: ETN, address: status.collection })} testID="legends-browse" />
+              <Key label={t({ id: 'legends.browse', message: 'See the collection' })} kind="secondary" size="compact" onPress={() => router.navigate('collection', { chainId: ETN, address: status.collection })} testID="legends-browse" />
             </Plate>
           ) : null}
           {status.mint?.mintable ? (
@@ -77,12 +77,12 @@ export function Legends({ body, reducedMotion = false }: { body: BodyKind; reduc
                 {t({ id: 'collection.mint.body', message: '{p} ETN each · {n} left for you · {s} minted', values: { p: formatRaw(status.mint.priceWei, 18), n: status.mint.mintableCount, s: status.mint.totalSupply } })}
               </Body>
               <Row gap="$2" alignItems="center">
-                <Key label="−" kind="secondary" disabled={count <= 1} onPress={() => setCount((n) => Math.max(1, n - 1))} testID="legends-mint-minus" />
+                <IconButton icon="minus" label={t({ id: 'mint.fewer', message: 'One fewer' })} disabled={count <= 1} onPress={() => setCount((n) => Math.max(1, n - 1))} testID="legends-mint-minus" />
                 <Body size="title" testID="legends-mint-count">
                   {String(count)}
                 </Body>
-                <Key label="+" kind="secondary" disabled={count >= status.mint.mintableCount} onPress={() => setCount((n) => Math.min(status.mint?.mintableCount ?? 1, n + 1))} testID="legends-mint-plus" />
-                <Key label={t({ id: 'collection.mint.key', message: 'Mint' })} disabled={busy || status.mint.mintableCount === 0} onPress={() => void run(() => engine.legends.mint({ accountId: active.id, chainId: ETN, count }))} testID="legends-mint-go" />
+                <IconButton icon="plus" label={t({ id: 'mint.more', message: 'One more' })} disabled={count >= status.mint.mintableCount} onPress={() => setCount((n) => Math.min(status.mint?.mintableCount ?? 1, n + 1))} testID="legends-mint-plus" />
+                <Key label={t({ id: 'collection.mint.key', message: 'Mint' })} size="compact" disabled={busy || status.mint.mintableCount === 0} onPress={() => void run(() => engine.legends.mint({ accountId: active.id, chainId: ETN, count }))} testID="legends-mint-go" />
               </Row>
             </Plate>
           ) : null}

@@ -44,6 +44,7 @@ import { EngineError } from '../errors'
 import { cacheKey, type Cached, type DocCache } from '../cache'
 import type { NamespaceSpec } from '../host'
 import type { NotificationsService } from './notifications'
+import type { CustomCollectionsService } from './nftCustom'
 import { readMany } from '../multicall'
 import { InventorySchema, AccountIdSchema, type AssetView, type Inventory, type NftActivityView, type OffersInbox, type OrderView } from '../schema'
 import type { ChainsService } from './chains'
@@ -68,6 +69,7 @@ export interface NftDeps {
   readonly legends: LegendsService
   readonly cache: DocCache
   readonly notifications?: NotificationsService
+  readonly custom?: CustomCollectionsService
 }
 
 /** The Rack embedded on Home and the Rack page mount back to back; within this window the second read is the first. */
@@ -163,15 +165,30 @@ export class NftService {
   private async buildInventory(accountId: string, chainId: number): Promise<Inventory> {
     const { client, chainId: cid } = this.client(chainId)
     const account = await this.account(accountId)
-    const [owned, balances] = await Promise.all([fetchOwnedAssets(client, cid, account.address), fetchCollectionBalances(client, cid, account.address).catch(() => [])])
+    const [owned, fetchedBalances] = await Promise.all([fetchOwnedAssets(client, cid, account.address), fetchCollectionBalances(client, cid, account.address).catch(() => [])])
+    const balances: Array<{ address: string; name: string; logoUrl: string | null; balance: number }> = fetchedBalances.map((b) => ({ address: b.address, name: b.name, logoUrl: b.logoUrl, balance: b.balance }))
     const addresses = [...new Set(balances.map((b) => b.address.toLowerCase()))]
     const collections = addresses.length ? await fetchCollections(client, cid, { addresses }).catch(() => []) : []
     const floors = new Map(collections.map((c) => [c.address.toLowerCase(), c.floorEtn]))
     const legendsAddr = ELECTRONEUM_ADDRESSES[cid].electricLegends
     const assets: AssetView[] = []
+    let customAddresses = new Set<string>()
     for (const a of owned) {
       const dividends = same(a.address, legendsAddr) ? await this.deps.legends.claimableFor(cid, BigInt(a.tokenId)).catch(() => 0n) : null
       assets.push(await this.toView(cid, a, account.address, dividends))
+    }
+    // Custom collections (plan A3): the chain's own pieces, marked so the Piece view hides the marketplace verbs.
+    if (this.deps.custom) {
+      try {
+        const mine = await this.deps.custom.ownedPieces(cid, account.address)
+        for (const p of mine.pieces) {
+          assets.push({ chainId: cid, address: p.address, tokenId: p.tokenId, name: p.name, description: p.description, imageUrl: p.imageUrl, smallImageUrl: p.imageUrl, animationUrl: null, mediaType: p.imageUrl ? 'IMAGE' : null, owner: account.address, mine: true, standard: p.standard, collectionName: mine.collections.find((c) => same(c.address, p.address))?.name ?? p.address.slice(0, 10), collectionVerified: false, collectionImageUrl: null, creatorFee: null, suspicious: false, rarityRank: null, traits: p.traits.map((t) => ({ name: t.name, value: t.value, rarity: null })), lastPriceEtn: null, listing: null, bestBid: null, bids: [], dividendsWei: null, paysDividends: false, custom: true })
+        }
+        for (const c of mine.collections) if (c.balance > 0 && !balances.some((b) => same(b.address, c.address))) balances.push({ address: c.address, name: c.name, logoUrl: null, balance: c.balance })
+        customAddresses = new Set(mine.collections.map((c) => c.address.toLowerCase()))
+      } catch {
+        // A custom collection that cannot be read is simply absent this time.
+      }
     }
     let floorValue = 0
     let priced = false
@@ -186,7 +203,7 @@ export class NftService {
       accountId,
       chainId: cid,
       assets,
-      collections: balances.map((b) => ({ address: b.address, name: b.name, logoUrl: b.logoUrl, balance: b.balance, floorEtn: floors.get(b.address.toLowerCase()) ?? null })),
+      collections: balances.map((b) => ({ address: b.address, name: b.name, logoUrl: b.logoUrl, balance: b.balance, floorEtn: floors.get(b.address.toLowerCase()) ?? null, ...(customAddresses.has(b.address.toLowerCase()) ? { custom: true } : {}) })),
       floorValueEtn: priced ? floorValue : null,
       listedCount: assets.filter((a) => a.listing !== null).length,
       withOffersCount: assets.filter((a) => a.bids.length > 0).length,
@@ -434,8 +451,8 @@ export class NftService {
   }
 
   /** Mint from a collection through the marketplace minter; Electric Legends is the collection that pays dividends. */
-  async mint(input: { accountId: string; chainId: number; count: number }): Promise<{ flowId: string; requestId: string | null }> {
-    return this.deps.legends.mint(input.accountId, input.chainId, input.count)
+  async mint(input: { accountId: string; chainId: number; count: number; address?: string }): Promise<{ flowId: string; requestId: string | null }> {
+    return this.deps.legends.mint(input.accountId, input.chainId, input.count, input.address)
   }
 
   /** Whether the collection is approved for the conduit (the "one-time" step the sheet explains). */
@@ -483,7 +500,7 @@ export function nftNamespace(nft: NftService): NamespaceSpec {
     accept: { input: AccountPiece.extend({ orderHash: z.string() }), handler: (arg) => nft.accept(arg as { accountId: string; chainId: number; address: string; tokenId: string; orderHash: string }) },
     cancel: { input: AccountPiece.extend({ orderHash: z.string() }), handler: (arg) => nft.cancel(arg as { accountId: string; chainId: number; address: string; tokenId: string; orderHash: string }) },
     transfer: { input: AccountPiece.extend({ to: z.string() }), handler: (arg) => nft.transfer(arg as { accountId: string; chainId: number; address: string; tokenId: string; to: string }) },
-    mint: { input: Chain.extend({ accountId: AccountIdSchema, count: z.number().int().min(1).max(20) }), handler: (arg) => nft.mint(arg as { accountId: string; chainId: number; count: number }) },
+    mint: { input: Chain.extend({ accountId: AccountIdSchema, count: z.number().int().min(1).max(20), address: z.string().optional() }), handler: (arg) => nft.mint(arg as { accountId: string; chainId: number; count: number; address?: string }) },
     collectionApproved: { input: Chain.extend({ accountId: AccountIdSchema, address: z.string() }), handler: (arg) => nft.collectionApproved((arg as { accountId: string }).accountId, (arg as { chainId: number }).chainId, (arg as { address: string }).address) },
   }
 }

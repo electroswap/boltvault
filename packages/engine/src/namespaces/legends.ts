@@ -106,6 +106,22 @@ export class LegendsService {
     }
   }
 
+  /** The mint capability of any EsNFT collection through the marketplace minter (plan C1); null when the contract has no `isMintable`. */
+  async mintInfo(chainId: number, collection: string, owner: string | null): Promise<{ mintable: boolean; priceWei: string; mintableCount: number; totalSupply: number } | null> {
+    if (!isEtn(chainId)) return null
+    const minter = ELECTRONEUM_ADDRESSES[chainId].nftMinter as Hex
+    const c = collection as Hex
+    const who = (owner ?? '0x0000000000000000000000000000000000000000') as Hex
+    const r = await readMany(this.deps.chains, chainId, [
+      { address: c, abi: LEGENDS_ABI, functionName: 'isMintable', args: [] },
+      { address: minter, abi: MINTER_ABI, functionName: 'mintPrice', args: [c] },
+      { address: minter, abi: MINTER_ABI, functionName: 'mintableCount', args: [c, who] },
+      { address: c, abi: LEGENDS_ABI, functionName: 'totalSupply', args: [] },
+    ]).catch(() => [])
+    if (r[0]?.ok !== true) return null
+    return { mintable: flag(r[0]), priceWei: big(r[1]).toString(), mintableCount: Number(big(r[2])), totalSupply: Number(big(r[3])) }
+  }
+
   /** Unclaimed dividends for one piece (the Piece view's line), wei; 0 when unregistered. */
   async claimableFor(chainId: number, tokenId: bigint): Promise<bigint> {
     if (!isEtn(chainId)) return 0n
@@ -167,15 +183,15 @@ export class LegendsService {
   }
 
   /** Mint through EsMinterV2 at the minter's price (the collection's price plus the marketplace markup). */
-  async mint(accountId: string, chainId: number, count: number): Promise<{ flowId: string; requestId: string | null }> {
+  async mint(accountId: string, chainId: number, count: number, collection?: string): Promise<{ flowId: string; requestId: string | null }> {
     if (!isEtn(chainId)) throw new EngineError('invalid_argument', 'Electric Legends live on Electroneum.')
     if (!Number.isInteger(count) || count < 1 || count > 20) throw new EngineError('invalid_argument', 'Mint between 1 and 20 at a time.')
     const A = ELECTRONEUM_ADDRESSES[chainId]
     const account = await this.account(accountId)
     const [price, mintable, allowed] = await readMany(this.deps.chains, chainId, [
-      { address: A.nftMinter as Hex, abi: MINTER_ABI, functionName: 'mintPrice', args: [A.electricLegends as Hex] },
-      { address: A.electricLegends as Hex, abi: LEGENDS_ABI, functionName: 'isMintable', args: [] },
-      { address: A.nftMinter as Hex, abi: MINTER_ABI, functionName: 'mintableCount', args: [A.electricLegends as Hex, account.address] },
+      { address: A.nftMinter as Hex, abi: MINTER_ABI, functionName: 'mintPrice', args: [(collection ?? A.electricLegends) as Hex] },
+      { address: (collection ?? A.electricLegends) as Hex, abi: LEGENDS_ABI, functionName: 'isMintable', args: [] },
+      { address: A.nftMinter as Hex, abi: MINTER_ABI, functionName: 'mintableCount', args: [(collection ?? A.electricLegends) as Hex, account.address] },
     ])
     if (!flag(mintable)) throw new EngineError('invalid_argument', 'Minting is closed right now.')
     if (Number(big(allowed)) < count) throw new EngineError('invalid_argument', `You can mint ${Number(big(allowed))} more.`)
@@ -185,7 +201,7 @@ export class LegendsService {
       accountId,
       chainId,
       quote: null,
-      steps: [{ step: 'mint', waitReceipt: true, run: () => this.deps.provider.runInternal({ kind: 'send_transaction', origin: 'internal:nft:mint', chainId, accountId, tx: { from: account.address, to: A.nftMinter as Hex, value: hex(value), data: encodeMint(A.electricLegends as Hex, BigInt(count)) }, clientRequestId: `legends:mint:${this.deps.platform.now()}` }) }],
+      steps: [{ step: 'mint', waitReceipt: true, run: () => this.deps.provider.runInternal({ kind: 'send_transaction', origin: 'internal:nft:mint', chainId, accountId, tx: { from: account.address, to: A.nftMinter as Hex, value: hex(value), data: encodeMint((collection ?? A.electricLegends) as Hex, BigInt(count)) }, clientRequestId: `legends:mint:${this.deps.platform.now()}` }) }],
     })
     return { flowId: flow.id, requestId: flow.steps[0]?.requestId ?? null }
   }

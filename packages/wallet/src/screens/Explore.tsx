@@ -5,16 +5,19 @@
  * (plan A2); a first visit shows skeletons, never a blank body. On a token
  * list the star is the pin (plan A5).
  */
-import { Artwork, Body, Column, IconButton, Input, Pill, Plate, Pressable, Row, ScrollView, Segmented, SkeletonRows, TokenAvatar, metrics, paint } from '@boltvault/ui'
+import { Artwork, Body, Column, Icon, IconButton, Input, Pill, Plate, Pressable, Row, ScrollView, Segmented, SkeletonRows, TokenAvatar, metrics, paint } from '@boltvault/ui'
 import { cacheKey, type CampaignView, type CollectionView, type ExploreToken, type FarmView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
+import { AddCollectionSheet } from '../components/AddCollectionSheet'
 import { AddTokenSheet } from '../components/AddTokenSheet'
+import { CollectionCard } from '../components/cards/CollectionCard'
 import { FreshnessLine } from '../components/FreshnessLine'
 import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { useCached } from '../hooks/useCached'
 import { useNotifications } from '../hooks/useNotifications'
+import { usePrefs } from '../hooks/usePrefs'
 import { formatChange, formatFiat, formatPct, formatPrice, formatRaw } from '../format'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
@@ -38,6 +41,9 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
   const [available, setAvailable] = useState<boolean | null>(null)
   const [found, setFound] = useState<{ tokens: ExploreToken[]; collections: CollectionView[] } | null>(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [addCollectionOpen, setAddCollectionOpen] = useState(false)
+  const { prefs, set: setPrefs } = usePrefs()
+  const showAll = prefs.collectionsShowAll
   const accountId = active?.id
 
   const tokens = useCached<ExploreToken[]>({
@@ -47,9 +53,9 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
     maxAgeMs: 60_000,
   })
   const collections = useCached<CollectionView[]>({
-    key: cacheKey('explore', 'collections', ETN, accountId ?? '-'),
-    cached: (e) => e.explore.cachedCollections({ chainId: ETN, ...(accountId ? { accountId } : {}) }),
-    fresh: (e) => e.explore.collections({ chainId: ETN, ...(accountId ? { accountId } : {}) }),
+    key: cacheKey('explore', 'collections', ETN, accountId ?? '-', showAll ? 'all' : 'listed'),
+    cached: (e) => e.explore.cachedCollections({ chainId: ETN, ...(accountId ? { accountId } : {}), all: showAll }),
+    fresh: (e) => e.explore.collections({ chainId: ETN, ...(accountId ? { accountId } : {}), all: showAll }),
     maxAgeMs: 60_000,
   })
   const campaigns = useCached<CampaignView[]>({
@@ -161,6 +167,10 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
             </Column>
           ) : segment === 'collectibles' ? (
             <Column gap="$2" testID="explore-collections">
+              <Row gap="$2" alignItems="center" flexWrap="wrap">
+                <Pill label={showAll ? t({ id: 'explore.collections.all', message: 'Showing everything' }) : t({ id: 'explore.collections.listed', message: 'Listed collections' })} selected={showAll} size="sm" onPress={() => setPrefs({ collectionsShowAll: !showAll })} testID="explore-collections-all" />
+                <Pill label={t({ id: 'collection.add.pill', message: 'Add a collection' })} icon={<Icon name="plus" size={14} color={paint.arc} />} tone="arc" size="sm" onPress={() => setAddCollectionOpen(true)} testID="explore-add-collection" />
+              </Row>
               {(collections.value ?? []).map((c) => (
                 <CollectionCard key={c.address} collection={c} onPress={() => router.navigate('collection', { chainId: ETN, address: c.address })} onStar={() => void star('collection', c.address, c.name, c.starred)} />
               ))}
@@ -190,6 +200,7 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
       )}
     </ScrollView>
     <AddTokenSheet open={addOpen} onClose={() => setAddOpen(false)} initialAddress={query.trim()} reducedMotion={reducedMotion} />
+    <AddCollectionSheet open={addCollectionOpen} onClose={() => setAddCollectionOpen(false)} onAdded={() => collections.refresh()} reducedMotion={reducedMotion} />
     </Column>
   )
 }
@@ -227,30 +238,6 @@ export function TokenRow({ token, onPress, onPin }: { token: ExploreToken; onPre
   )
 }
 
-export function CollectionCard({ collection, onPress, onStar }: { collection: CollectionView; onPress: () => void; onStar: () => void }) {
-  return (
-    <Plate role="card" gap="$2" onPress={onPress} cursor="pointer" testID={`explore-collection-${collection.address}`}>
-      <Row gap="$3" alignItems="center">
-        <Artwork uri={collection.imageUrl} label={collection.name} size={44} />
-        <Column flex={1}>
-          <Row gap="$2" alignItems="center">
-            <Body numberOfLines={1}>{collection.name}</Body>
-            {collection.verified ? <Body tone="arc" size="caption">✓</Body> : null}
-            {collection.paysDividends ? (
-              <Body tone="ember" size="caption">
-                {t({ id: 'explore.dividends', message: 'Pays dividends' })}
-              </Body>
-            ) : null}
-          </Row>
-          <Body tone="mute" size="caption" numberOfLines={1}>
-            {[collection.floorEtn !== null ? t({ id: 'explore.floor', message: 'Floor {f} ETN', values: { f: formatRaw(String(Math.round(collection.floorEtn * 1e6)), 6) } }) : null, collection.volume24hEtn !== null ? t({ id: 'explore.vol24', message: '{v} ETN today', values: { v: Math.round(collection.volume24hEtn) } }) : null, collection.percentListed !== null ? t({ id: 'explore.listed', message: '{p}% listed', values: { p: Math.round(collection.percentListed) } }) : null, collection.owned > 0 ? t({ id: 'explore.own', message: 'you own {n}', values: { n: collection.owned } }) : null].filter(Boolean).join(' · ')}
-          </Body>
-        </Column>
-        <Star on={collection.starred} onPress={onStar} testID={`star-collection-${collection.address}`} />
-      </Row>
-    </Plate>
-  )
-}
 
 /** The Sky (§8.9): live campaigns first, then upcoming, then ended. */
 export function Sky({ campaigns, onOpen, onStar }: { campaigns: CampaignView[]; onOpen: (pool: string) => void; onStar: (c: CampaignView) => void }) {

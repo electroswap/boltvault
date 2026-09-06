@@ -44,6 +44,7 @@ import { SwapService, swapNamespace } from './namespaces/swap'
 import { aboutNamespace } from './namespaces/about'
 import { DocCache } from './cache'
 import { NotificationsService, notificationsNamespace } from './namespaces/notifications'
+import { CustomCollectionsService, customCollectionsNamespace } from './namespaces/nftCustom'
 import { PrefsService, prefsNamespace } from './namespaces/prefs'
 import { SitesService, sitesNamespace } from './namespaces/sites'
 import { HttpRelay, MemoryRelay, SyncService, syncNamespace, type Relay } from './namespaces/sync'
@@ -219,9 +220,10 @@ export function createEngine(deps: EngineDeps): Engine {
   const swap = new SwapService({ statics,  platform: deps.platform, chains, tokens, vault, provider, settings, holder, flows })
   const limit = new LimitService({ platform: deps.platform, bus: host.events, chains, tokens, vault, provider, settings, flows, enabled: features.limitOrders })
   const watchlist = new WatchlistService({ platform: notifyingPlatform, bus: host.events, vault })
-  const explore = new ExploreService({ platform: deps.platform, electroswap, tokens, vault, watchlist, cache, bus: host.events })
   const legends = new LegendsService({ platform: deps.platform, chains, vault, provider, flows })
-  const nft = new NftService({ platform: deps.platform, chains, vault, provider, flows, electroswap, explore, legends, cache, notifications })
+  const customCollections = new CustomCollectionsService({ platform: deps.platform, chains, fetch: fetchImpl })
+  const explore = new ExploreService({ platform: deps.platform, electroswap, tokens, vault, watchlist, cache, bus: host.events, custom: customCollections, legends })
+  const nft = new NftService({ platform: deps.platform, chains, vault, provider, flows, electroswap, explore, legends, cache, notifications, custom: customCollections })
   const farm = new FarmService({ platform: deps.platform, chains, tokens, vault, provider, flows, settings, electroswap, cache })
   const launchpad = new LaunchpadService({ platform: deps.platform, chains, vault, provider, flows, electroswap, names, watchlist, cache })
   const positions = new PositionsService({ platform: deps.platform, bus: host.events, farm, legends, limit, launchpad, tokens })
@@ -298,7 +300,7 @@ export function createEngine(deps: EngineDeps): Engine {
   host.register('limit', limitNamespace(limit))
   host.register('hardware', hardwareNamespace(hardware, vault))
   host.register('explore', exploreNamespace(explore))
-  host.register('nft', nftNamespace(nft))
+  host.register('nft', { ...nftNamespace(nft), ...customCollectionsNamespace(customCollections) })
   host.register('legends', legendsNamespace(legends))
   host.register('farm', farmNamespace(farm))
   host.register('launchpad', launchpadNamespace(launchpad))

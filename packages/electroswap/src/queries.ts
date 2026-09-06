@@ -27,7 +27,7 @@ export const TOKEN_DETAIL = `query TokenDetail($address: String, $chain: Chain) 
 const COLLECTION = `id collectionId name description isVerified numAssets image { url } bannerImage { url } nftContracts { address standard name symbol totalSupply } listingFees { payoutAddress basisPoints } markets(currencies: [ETN]) { floorPrice { value } totalVolume { value } volume(duration: DAY) { value } owners listings { value } percentListed { value } }`
 
 /** Explore › Collectibles. */
-export const TOP_COLLECTIONS = `query TopCollections($chains: [Chain!]!, $first: Int) { topCollections(chains: $chains, listed: false, orderBy: VOLUME, duration: DAY, first: $first) { edges { node { ${COLLECTION} } } } }`
+export const TOP_COLLECTIONS = `query TopCollections($chains: [Chain!]!, $first: Int, $listed: Boolean) { topCollections(chains: $chains, listed: $listed, orderBy: VOLUME, duration: DAY, first: $first) { edges { node { ${COLLECTION} } } } }`
 
 export const NFT_COLLECTIONS = `query NftCollections($chain: Chain, $filter: NftCollectionsFilterInput, $first: Int) { nftCollections(chain: $chain, filter: $filter, first: $first) { edges { node { ${COLLECTION} traits { name values } } } } }`
 

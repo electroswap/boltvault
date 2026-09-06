@@ -8,7 +8,7 @@ import { Body, BusBar, Column, Icon, LiveFilament, Pill, Plate, Row, RollingRead
 import { useEffect, useState } from 'react'
 import { AddTokenSheet } from '../components/AddTokenSheet'
 import { ChainScopeSheet, ScopePill, useHomeScope } from '../components/ChainScope'
-import { LegendsVault } from '../components/LegendsVault'
+import { DividendsCard } from '../components/DividendsCard'
 import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
 import { formatChange, formatFiat, formatQuantity, formatRaw } from '../format'
@@ -147,7 +147,7 @@ export function Portfolio({ body }: { body: BodyKind }) {
           <Rack body={body} embedded limit={6} />
         ) : hasPositions && positions ? (
           <Column gap="$2" testID="positions">
-            {positions.legends && positions.legends.ownedTokenIds.length > 0 ? <LegendsVault status={positions.legends} compact reducedMotion={reducedMotion} onOpen={() => router.navigate('legends')} testID="home-legends" /> : null}
+            {positions.legends && positions.legends.ownedTokenIds.length > 0 ? <DividendsCard status={positions.legends} compact reducedMotion={reducedMotion} onOpen={() => router.navigate('legends')} testID="home-legends" /> : null}
             {positions.farms.map((f) => (
               <FarmCard key={f.id} farm={f} onPress={() => router.navigate('farm', { chainId: ETN, farmId: f.id })} />
             ))}
