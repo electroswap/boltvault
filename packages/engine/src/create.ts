@@ -3,14 +3,16 @@
  * host (to serve over a channel) and an in-process WalletEngine (mobile,
  * tests). `ready` resolves once persisted state is hydrated.
  */
-import type { Argon2idParams } from '@boltvault/core'
+import { fromHex, type Argon2idParams } from '@boltvault/core'
 import type { HidProvider, LedgerTransportProvider, TrezorConnectLike } from '@boltvault/hardware'
 import type { WalletKitLike } from '@boltvault/connect'
 import { ElectroSwapClient } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
 import { ActivityStore } from './activityStore'
+import { createSealedStores } from './blobs'
 import { ApprovalStore } from './approvals'
+import { CacheShards } from './cache'
 import { createEngineClient } from './client'
 import type { WalletEngine } from './contract'
 import { EngineError } from './errors'
@@ -49,7 +51,7 @@ import { PrefsService, prefsNamespace } from './namespaces/prefs'
 import { SitesService, sitesNamespace } from './namespaces/sites'
 import { HttpRelay, MemoryRelay, SyncService, syncNamespace, type Relay } from './namespaces/sync'
 import { TokensService, tokensNamespace } from './namespaces/tokens'
-import { accountsNamespace, VaultManager, vaultNamespace } from './namespaces/vault'
+import { accountsNamespace, KEY_DEK, VaultManager, vaultNamespace } from './namespaces/vault'
 import { AccountIdSchema, ApprovalDecisionSchema, SettingsSchema, type ApprovalDecision, type ApprovalRequest, type Settings } from './schema'
 import { SettingsStore } from './settingsStore'
 import { createInProcessTransport } from './transport'
@@ -150,7 +152,18 @@ export function createEngine(deps: EngineDeps): Engine {
   const fetchImpl: typeof fetch = deps.fetch ?? ((input, init) => fetch(input, init))
   let staticsRef: StaticsService | null = null
   const settings = new SettingsStore(deps.platform, host.events, deps.os)
-  const cache = new DocCache(deps.platform.storage.local, host.events, () => deps.platform.now())
+  // The DEK accessor is needed by every sealed store below, so it is built
+  // before them. `VaultManager.dek()` is the same lookup but private.
+  const dek = async (): Promise<Uint8Array> => {
+    const hex = await deps.platform.storage.session.get(KEY_DEK)
+    if (hex === null) throw new EngineError('locked', 'the vault is locked')
+    return fromHex(hex)
+  }
+  const cacheShards = new CacheShards(deps.platform, dek)
+  const cache = new DocCache(cacheShards, host.events, () => deps.platform.now())
+  // Everything account-scoped lives in a DEK-sealed blob rather than a plaintext
+  // document per account (at-rest audit 2026-09-06; master plan §3.2).
+  const sealed = createSealedStores(deps.platform, dek)
   const notifications = new NotificationsService(deps.platform, host.events)
   const prefs = new PrefsService(deps.platform, host.events)
   // Every OS notification the watcher sends is also an inbox entry (plan A6): the tag says what it was about.
@@ -165,15 +178,10 @@ export function createEngine(deps: EngineDeps): Engine {
       await deps.platform.notify(n)
     },
   }
-  const vault = new VaultManager(deps.platform, host.events, settings, deps.kdf ? { kdf: deps.kdf } : {})
+  const vault = new VaultManager(deps.platform, host.events, settings, { active: sealed.active, ...(deps.kdf ? { kdf: deps.kdf } : {}) })
   const approvals = new ApprovalStore(deps.platform, host.events)
-  const sites = new SitesService(deps.platform, host.events)
+  const sites = new SitesService(deps.platform, host.events, sealed.sites)
   const chains = new ChainsService(deps.platform, host.events, deps.heads)
-  const dek = async (): Promise<Uint8Array> => {
-    const hex = await deps.platform.storage.session.get('vault.dek')
-    if (hex === null) throw new EngineError('locked', 'the vault is locked')
-    return Uint8Array.from(hex.match(/.{2}/g)?.map((b) => parseInt(b, 16)) ?? [])
-  }
   const activity = new ActivityStore(deps.platform, host.events, dek)
   const contacts = new ContactsStore(deps.platform, host.events, dek)
   const relayFor = deps.relayFor ?? ((url: string): Relay => (/^https?:\/\//.test(url) ? new HttpRelay(url, fetchImpl, deps.clientKey) : sharedMemoryRelay))
@@ -210,7 +218,7 @@ export function createEngine(deps: EngineDeps): Engine {
   const features = { limitOrders: deps.features?.limitOrders ?? false }
   const electroswap = deps.electroswapUrl === null ? null : new ElectroSwapClient({ url: deps.electroswapUrl ?? `${apiOrigin}/graphql`, ...(deps.clientKey ? { apiKey: deps.clientKey } : {}), fetchImpl })
   const prices = deps.pricesUrl === null ? null : new GeckoTerminalPrices(fetchImpl, () => deps.platform.now(), ...(deps.pricesUrl ? [deps.pricesUrl] : []))
-  const portfolio = new PortfolioService({ platform: deps.platform, bus: host.events, chains, tokens, vault, electroswap, prices })
+  const portfolio = new PortfolioService({ platform: deps.platform, bus: host.events, chains, tokens, vault, electroswap, prices, snapshots: sealed.portfolio, looks: sealed.looks })
   const names = new NamesService(chains, () => deps.platform.now())
   const allowances = new AllowancesService({ platform: deps.platform, bus: host.events, chains, tokens, vault, provider })
   const send = new SendService({ platform: deps.platform, chains, tokens, names, vault, provider })
@@ -248,6 +256,8 @@ export function createEngine(deps: EngineDeps): Engine {
     if (!e.status.unlocked) {
       activity.forget()
       contacts.forget()
+      sealed.forget()
+      cacheShards.forget()
     } else {
       void provider.resumeWatchers()
       void bridge.resume()

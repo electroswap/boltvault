@@ -14,8 +14,14 @@ import { EngineError } from '../errors'
 import type { PriceSource } from '../prices'
 import type { EventBus, NamespaceSpec } from '../host'
 import { readMany } from '../multicall'
-import { AccountIdSchema, PortfolioSnapshotSchema, type PortfolioRow, type PortfolioSnapshot, type TokenView } from '../schema'
-import { readDoc, writeDoc, type DocSpec } from '../storage'
+import { AccountIdSchema, type PortfolioRow, type PortfolioSnapshot, type TokenView } from '../schema'
+// Snapshots and "since you last looked" used to be one plaintext document per
+// account (`bv:local:portfolio.<accountId>`), which put the USD total, every
+// per-token quantity *and* the account id on disk in the clear, readable with
+// the vault locked (at-rest audit 2026-09-06, F1). Both now live in a
+// DEK-sealed blob keyed by account id; built in `create.ts`.
+import type { LastLook } from '../blobs'
+import type { SealedMap } from '../sealed'
 import type { ChainsService } from './chains'
 import type { TokensService } from './tokens'
 import type { VaultManager } from './vault'
@@ -25,20 +31,6 @@ const DUST_FIAT = 1
 const DIVERGENCE = 0.01
 const REFRESH_DEBOUNCE_MS = 2_500
 const PRICE_BUDGET_MS = 4_000
-
-const snapDoc = (accountId: string): DocSpec<PortfolioSnapshot | null> => ({
-  key: `portfolio.${accountId}`,
-  version: 1,
-  schema: PortfolioSnapshotSchema.nullable(),
-  defaultValue: () => null,
-})
-
-const lookDoc = (accountId: string): DocSpec<{ at: number; total: number | null } | null> => ({
-  key: `portfolio.look.${accountId}`,
-  version: 1,
-  schema: z.object({ at: z.number().int().nonnegative(), total: z.number().nullable() }).nullable(),
-  defaultValue: () => null,
-})
 
 interface PriceRow {
   readonly price: number
@@ -57,6 +49,10 @@ export interface PortfolioDeps {
   readonly electroswap?: ElectroSwapClient | null
   /** Display prices off Electroneum (§10.4); null disables them. */
   readonly prices?: PriceSource | null
+  /** Last-good snapshot per account, sealed under the DEK. */
+  readonly snapshots: SealedMap<PortfolioSnapshot>
+  /** "Since you last looked" per account, sealed under the DEK. */
+  readonly looks: SealedMap<LastLook>
 }
 
 export class PortfolioService {
@@ -67,7 +63,7 @@ export class PortfolioService {
 
   /** The last-good snapshot at once (stale flag set), and a refresh in the background. */
   async snapshot(accountId: string, chainIds: readonly number[] = [HOME_CHAIN_ID]): Promise<PortfolioSnapshot> {
-    const { value } = await readDoc(this.deps.platform.storage.local, snapDoc(accountId), () => this.deps.platform.now())
+    const value = await this.deps.snapshots.get(accountId)
     const last = this.lastRefresh.get(accountId) ?? 0
     if (this.deps.platform.now() - last > REFRESH_DEBOUNCE_MS) void this.refresh(accountId, chainIds).catch(() => undefined)
     if (value) return { ...value, stale: true }
@@ -76,7 +72,7 @@ export class PortfolioService {
 
   /** The persisted last-good snapshot, no refresh (plan C1). */
   async cached(accountId: string): Promise<PortfolioSnapshot | null> {
-    const { value } = await readDoc(this.deps.platform.storage.local, snapDoc(accountId), () => this.deps.platform.now())
+    const value = await this.deps.snapshots.get(accountId)
     return value ? { ...value, stale: true } : null
   }
 
@@ -162,7 +158,7 @@ export class PortfolioService {
       observedAt: d.platform.now(),
       stale: false,
     }
-    await writeDoc(d.platform.storage.local, snapDoc(accountId), snapshot)
+    await d.snapshots.set(accountId, snapshot)
     this.lastRefresh.set(accountId, d.platform.now())
     d.bus.emit({ type: 'portfolio.snapshot', snapshot })
     return snapshot
@@ -223,10 +219,10 @@ export class PortfolioService {
   /** "Since you last looked": the total at the previous first open, then record this one. */
   async lastLook(accountId: string): Promise<{ previous: { at: number; total: number | null } | null; total: number | null }> {
     const d = this.deps
-    const { value: previous } = await readDoc(d.platform.storage.local, lookDoc(accountId), () => d.platform.now())
-    const { value: snap } = await readDoc(d.platform.storage.local, snapDoc(accountId), () => d.platform.now())
+    const previous = await d.looks.get(accountId)
+    const snap = await d.snapshots.get(accountId)
     const total = snap?.total ?? null
-    await writeDoc(d.platform.storage.local, lookDoc(accountId), { at: d.platform.now(), total })
+    await d.looks.set(accountId, { at: d.platform.now(), total })
     return { previous, total }
   }
 }

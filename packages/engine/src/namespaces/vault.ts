@@ -47,13 +47,14 @@ import { privateKeyToAddress } from 'viem/accounts'
 import { HDKey } from '@scure/bip32'
 import { z } from 'zod'
 import { EngineError } from '../errors'
+import type { SealedMap } from '../sealed'
 import type { EventBus, NamespaceSpec } from '../host'
 import { AccountIdSchema, AutoLockSchema, type AccountView, type AutoLock, type SeedView, type VaultStatus } from '../schema'
 import type { SettingsStore } from '../settingsStore'
 import { readDoc, writeDoc, type DocSpec } from '../storage'
 
 const KEY_FILE = 'vault.file'
-const KEY_DEK = 'vault.dek'
+export const KEY_DEK = 'vault.dek'
 const KEY_UNLOCKED_AT = 'vault.unlockedAt'
 const KEY_LOCK_AT = 'vault.lockAt'
 export const AUTOLOCK_ALARM = 'vault.autolock'
@@ -66,13 +67,6 @@ const AUTO_LOCK_MS: Record<AutoLock, number> = {
 }
 /** A touch within this long of the last one is a no-op (the alarm is not rescheduled on every keystroke). */
 const TOUCH_DEBOUNCE_MS = 30_000
-
-const ACTIVE_DOC: DocSpec<{ id: string | null }> = {
-  key: 'accounts.active',
-  version: 1,
-  schema: z.object({ id: z.string().nullable() }),
-  defaultValue: () => ({ id: null }),
-}
 
 const KDF_DOC: DocSpec<Argon2idParams | null> = {
   key: 'vault.kdf',
@@ -122,6 +116,14 @@ const LEDGER_LIVE = (i: number): string => `m/44'/60'/${i}'/0/0`
 export interface VaultManagerOptions {
   /** Override the calibrated KDF (tests). */
   readonly kdf?: Argon2idParams
+  /**
+   * The seated account id, sealed under the DEK. It used to be the plaintext
+   * document `bv:local:accounts.active`, which handed a storage dump the
+   * account id and — via `bv:local:sites` — the address it maps to (at-rest
+   * audit 2026-09-06). Reads return null while locked, which `active()`
+   * already treats as "no account seated".
+   */
+  readonly active: SealedMap<{ id: string | null }>
 }
 
 export class VaultManager {
@@ -132,7 +134,7 @@ export class VaultManager {
     private readonly platform: Platform,
     private readonly bus: EventBus,
     private readonly settings: SettingsStore,
-    private readonly opts: VaultManagerOptions = {},
+    private readonly opts: VaultManagerOptions,
   ) {
     this.crypto = { argon2id: (i) => platform.kdf.argon2id(i), random: (n) => platform.random(n) }
   }
@@ -278,8 +280,7 @@ export class VaultManager {
     const pt: VaultPlaintextV2 = { v: 2, seeds: [seed], importedKeys: {}, accounts: [first] }
     const { file, dek } = await createVaultV2(this.crypto, { password, plaintext: pt, kdf: await this.kdfParams(), now: this.platform.now() })
     await this.writeFile(file)
-    await writeDoc(this.platform.storage.local, ACTIVE_DOC, { id: first.id })
-    return this.unlockWithDek(dek, pt)
+    return this.unlockWithDek(dek, pt, first.id)
   }
 
   /** A vault with no seed — for watch-only or hardware-first users (§8.1). */
@@ -305,10 +306,14 @@ export class VaultManager {
     return { accounts, seedId: seed.id }
   }
 
-  private async unlockWithDek(dek: Uint8Array, pt: VaultPlaintextV2): Promise<AccountView[]> {
+  private async unlockWithDek(dek: Uint8Array, pt: VaultPlaintextV2, seat?: string | null): Promise<AccountView[]> {
     const session = this.platform.storage.session
     await session.set(KEY_DEK, toHex(dek))
     await session.set(KEY_UNLOCKED_AT, String(this.platform.now()))
+    // Seating happens here, not before: the seated id is sealed under the DEK,
+    // so it cannot be written until the DEK is in session — and it must land
+    // before `emitAll`, which reports `activeId` to the UI.
+    if (seat !== undefined) await this.opts.active.set('active', { id: seat })
     await this.scheduleAutoLock()
     await this.emitAll(pt)
     return pt.accounts.map(toView)
@@ -512,8 +517,7 @@ export class VaultManager {
     if (!pt) throw new EngineError('unauthorized', 'wrong code')
     const { file, dek } = await createVaultV2(this.crypto, { password: input.password, plaintext: pt, kdf: await this.kdfParams(), now: this.platform.now() })
     await this.writeFile(file)
-    await writeDoc(this.platform.storage.local, ACTIVE_DOC, { id: pt.accounts[0]?.id ?? null })
-    return { accounts: await this.unlockWithDek(dek, pt) }
+    return { accounts: await this.unlockWithDek(dek, pt, pt.accounts[0]?.id ?? null) }
   }
 
   // ---- accounts ------------------------------------------------------------------
@@ -525,7 +529,7 @@ export class VaultManager {
   }
 
   async activeId(): Promise<string | null> {
-    return (await readDoc(this.platform.storage.local, ACTIVE_DOC, () => this.platform.now())).value.id
+    return (await this.opts.active.get('active'))?.id ?? null
   }
 
   async active(): Promise<AccountView | null> {
@@ -537,7 +541,7 @@ export class VaultManager {
     const accounts = await this.accounts()
     const found = accounts.find((a) => a.id === id)
     if (!found) throw new EngineError('not_found', 'no such account')
-    await writeDoc(this.platform.storage.local, ACTIVE_DOC, { id })
+    await this.opts.active.set('active', { id })
     this.bus.emit({ type: 'accounts.changed', accounts, activeId: id })
     return found
   }
@@ -666,7 +670,7 @@ export class VaultManager {
     })
     if ((await this.activeId()) === id) {
       const next = (await this.accounts()).find((a) => !a.hidden)
-      await writeDoc(this.platform.storage.local, ACTIVE_DOC, { id: next?.id ?? null })
+      await this.opts.active.set('active', { id: next?.id ?? null })
     }
   }
 

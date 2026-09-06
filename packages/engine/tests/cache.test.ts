@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import { createMemoryPlatform } from '@boltvault/platform/memory'
 import { z } from 'zod'
-import { DocCache, cacheKey } from '../src/cache'
+import { CacheShards, DocCache, cacheKey } from '../src/cache'
 import { EventBus } from '../src/host'
 import type { EngineEvent } from '../src/schema'
 
@@ -16,7 +16,8 @@ function boot(now = 1_700_000_000_000) {
   const bus = new EventBus()
   const events: EngineEvent[] = []
   bus.subscribe((e) => events.push(e))
-  const cache = new DocCache(platform.storage.local, bus, () => platform.now())
+  const shards = new CacheShards(platform, async () => new Uint8Array(32).fill(1))
+  const cache = new DocCache(shards, bus, () => platform.now())
   return { platform, bus, events, cache }
 }
 
