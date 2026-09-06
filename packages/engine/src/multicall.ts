@@ -21,29 +21,31 @@ export type ReadResult = { readonly ok: true; readonly value: unknown } | { read
 const CHUNK = 50
 const verified = new Map<number, Hex | null>()
 
-/** The address the registry pins for this chain, if it pins one. */
-function pinned(chainId: number): Hex | null {
-  if (chainId === 52014) return ELECTRONEUM_ADDRESSES[52014].multicall3 as Hex
-  if (chainId === 5201420) return ELECTRONEUM_ADDRESSES[5201420].multicall3 as Hex
-  return null
-}
-
+/**
+ * Canonical first on mainnet, and that ordering is load-bearing.
+ *
+ * It looks like a wasted probe — ETN pins its own multicall3 in the registry,
+ * so why ask about the canonical address first? Because on chain 52014 *both*
+ * addresses hold code (canonical 3808 bytes, the pinned one 3286), and they
+ * are not the same contract. The pinned address answers eth_getCode, passes
+ * the "does it hold code" test, and then returns aggregate3 results that do
+ * not decode — a token's decimals come back empty and adding a custom token
+ * reports "this contract does not look like a token". Reordering these broke
+ * the swap e2e and nothing else, which is how it was found.
+ *
+ * The registry entry for 52014 is worth a second look; until then, canonical
+ * wins on mainnet and the pinned address is only the fallback.
+ */
 function candidates(chainId: number): Hex[] {
-  const own = pinned(chainId)
-  // The pinned address goes first. Neither ETN chain runs the canonical
-  // deployment, so probing canonical first spent an eth_getCode on a certain
-  // miss before falling through to the right one — every cold service worker.
-  return own === null ? [CANONICAL_MULTICALL3] : [own, CANONICAL_MULTICALL3]
+  if (chainId === 52014) return [CANONICAL_MULTICALL3, ELECTRONEUM_ADDRESSES[52014].multicall3 as Hex]
+  if (chainId === 5201420) return [ELECTRONEUM_ADDRESSES[5201420].multicall3 as Hex, CANONICAL_MULTICALL3]
+  return [CANONICAL_MULTICALL3]
 }
 
 /** The multicall address for a chain, verified to hold code; null when none answers. */
 export async function multicallAddress(chains: ChainsService, chainId: number): Promise<Hex | null> {
   const known = verified.get(chainId)
   if (known !== undefined) return known
-  // The probe stays. It is what lets one build work against a chain whose
-  // Multicall3 is at the canonical address and one whose is not — including
-  // every mock chain in the test suite, which registers the canonical one.
-  // Only the order changes, and that is where the saving is.
   for (const address of candidates(chainId)) {
     const code = (await chains.rpc(chainId, 'eth_getCode', [address, 'latest']).catch(() => '0x')) as string
     if (typeof code === 'string' && code.length > 2) {

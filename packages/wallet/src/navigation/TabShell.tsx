@@ -4,42 +4,13 @@
  * screens is replaced by Unlock. A pending dApp approval takes over the
  * popup and the mobile body (the sign window mounts it by route).
  */
-import { Column, Field, MotionProvider, ScreenEnter, TabBar, useWindowDimensions, type EnterDirection } from '@boltvault/ui'
-import { useEffect, useRef } from 'react'
+import { Column, Field, MotionProvider, ScreenEnter, Skeleton, TabBar, metrics, radius, useWindowDimensions, type EnterDirection } from '@boltvault/ui'
+import { Suspense, lazy, useEffect, useRef } from 'react'
 import { t } from '../i18n'
-import { Accounts } from '../screens/Accounts'
-import { Activity } from '../screens/Activity'
-import { Allowances } from '../screens/Allowances'
 import { Approval } from '../screens/Approval'
-import { Backup } from '../screens/Backup'
-import { ConnectedSites } from '../screens/ConnectedSites'
-import { Devices } from '../screens/Devices'
 import { Home, type HomeProps } from '../screens/Home'
-import { Portfolio } from '../screens/Portfolio'
-import { Moments } from '../screens/Moments'
 import { Onboarding } from '../screens/Onboarding'
-import { Receive } from '../screens/Receive'
-import { Security } from '../screens/Security'
-import { Send } from '../screens/Send'
-import { SettingsShell } from '../screens/shells'
-import { Explore } from '../screens/Explore'
-import { Collection } from '../screens/Collection'
-import { Piece } from '../screens/Piece'
-import { Rack } from '../screens/Rack'
-import { Offers } from '../screens/Offers'
-import { Farm } from '../screens/Farm'
-import { Campaign } from '../screens/Campaign'
-import { Legends } from '../screens/Legends'
-import { Alerts } from '../screens/Alerts'
-import { Bridge } from '../screens/Bridge'
-import { Networks } from '../screens/Networks'
-import { Browser } from '../screens/Browser'
-import { Feel } from '../screens/Feel'
-import { About } from '../screens/About'
 import { UpdateRequired } from '../components/UpdateRequired'
-import { Spending } from '../screens/Spending'
-import { Swap } from '../screens/Swap'
-import { Token } from '../screens/Token'
 import { Unlock } from '../screens/Unlock'
 import { useApprovals } from '../state/useApprovals'
 import { HardwarePrompt } from '../components/HardwarePrompt'
@@ -55,6 +26,98 @@ import { SCREENS, TABS, TAB_ORDER, type TabId } from './registry'
 import { useRouter } from './router'
 
 const ETN = 52014
+
+/**
+ * Every screen but the ones needed for the first frame loads on demand.
+ * The popup used to parse the whole app - all thirty-odd screens statically
+ * imported into one ~1.8 MB chunk - before it could paint anything, which is
+ * the black frame at the start of the owner's screencast.
+ *
+ * Home, Unlock, Onboarding and Approval stay eager: they are what the first
+ * frame can be. Everything else is prefetched on idle once Home has painted
+ * (prefetchScreens), so a later tab never waits for a chunk either.
+ */
+const Accounts = lazy(() => import('../screens/Accounts').then((m) => ({ default: m.Accounts })))
+const Activity = lazy(() => import('../screens/Activity').then((m) => ({ default: m.Activity })))
+const Allowances = lazy(() => import('../screens/Allowances').then((m) => ({ default: m.Allowances })))
+const Backup = lazy(() => import('../screens/Backup').then((m) => ({ default: m.Backup })))
+const ConnectedSites = lazy(() => import('../screens/ConnectedSites').then((m) => ({ default: m.ConnectedSites })))
+const Devices = lazy(() => import('../screens/Devices').then((m) => ({ default: m.Devices })))
+const Portfolio = lazy(() => import('../screens/Portfolio').then((m) => ({ default: m.Portfolio })))
+const Moments = lazy(() => import('../screens/Moments').then((m) => ({ default: m.Moments })))
+const Receive = lazy(() => import('../screens/Receive').then((m) => ({ default: m.Receive })))
+const Security = lazy(() => import('../screens/Security').then((m) => ({ default: m.Security })))
+const Send = lazy(() => import('../screens/Send').then((m) => ({ default: m.Send })))
+const Explore = lazy(() => import('../screens/Explore').then((m) => ({ default: m.Explore })))
+const Collection = lazy(() => import('../screens/Collection').then((m) => ({ default: m.Collection })))
+const Piece = lazy(() => import('../screens/Piece').then((m) => ({ default: m.Piece })))
+const Rack = lazy(() => import('../screens/Rack').then((m) => ({ default: m.Rack })))
+const Offers = lazy(() => import('../screens/Offers').then((m) => ({ default: m.Offers })))
+const Farm = lazy(() => import('../screens/Farm').then((m) => ({ default: m.Farm })))
+const Campaign = lazy(() => import('../screens/Campaign').then((m) => ({ default: m.Campaign })))
+const Legends = lazy(() => import('../screens/Legends').then((m) => ({ default: m.Legends })))
+const Alerts = lazy(() => import('../screens/Alerts').then((m) => ({ default: m.Alerts })))
+const Bridge = lazy(() => import('../screens/Bridge').then((m) => ({ default: m.Bridge })))
+const Networks = lazy(() => import('../screens/Networks').then((m) => ({ default: m.Networks })))
+const Browser = lazy(() => import('../screens/Browser').then((m) => ({ default: m.Browser })))
+const Feel = lazy(() => import('../screens/Feel').then((m) => ({ default: m.Feel })))
+const About = lazy(() => import('../screens/About').then((m) => ({ default: m.About })))
+const Spending = lazy(() => import('../screens/Spending').then((m) => ({ default: m.Spending })))
+const Swap = lazy(() => import('../screens/Swap').then((m) => ({ default: m.Swap })))
+const Token = lazy(() => import('../screens/Token').then((m) => ({ default: m.Token })))
+const SettingsShell = lazy(() => import('../screens/shells').then((m) => ({ default: m.SettingsShell })))
+
+/** Warm every on-demand screen once the first paint is done. */
+export function prefetchScreens(): void {
+  const load = (): void => {
+    void Promise.all([
+      import('../screens/Accounts'),
+      import('../screens/Activity'),
+      import('../screens/Allowances'),
+      import('../screens/Backup'),
+      import('../screens/ConnectedSites'),
+      import('../screens/Devices'),
+      import('../screens/Portfolio'),
+      import('../screens/Moments'),
+      import('../screens/Receive'),
+      import('../screens/Security'),
+      import('../screens/Send'),
+      import('../screens/Explore'),
+      import('../screens/Collection'),
+      import('../screens/Piece'),
+      import('../screens/Rack'),
+      import('../screens/Offers'),
+      import('../screens/Farm'),
+      import('../screens/Campaign'),
+      import('../screens/Legends'),
+      import('../screens/Alerts'),
+      import('../screens/Bridge'),
+      import('../screens/Networks'),
+      import('../screens/Browser'),
+      import('../screens/Feel'),
+      import('../screens/About'),
+      import('../screens/Spending'),
+      import('../screens/Swap'),
+      import('../screens/Token'),
+      import('../screens/shells'),
+    ]).catch(() => undefined)
+  }
+  const idle = (globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => void }).requestIdleCallback
+  if (idle) idle(load, { timeout: 2_000 })
+  else setTimeout(load, 300)
+}
+
+/** What a screen looks like while its chunk is still on the way. */
+function ScreenFallback({ inset }: { inset: number }) {
+  return (
+    <Column flex={1} padding={inset} gap={10} testID="screen-loading">
+      <Skeleton height={44} radius={radius.recessed} />
+      <Skeleton height={140} radius={radius.console} />
+      <Skeleton height={96} radius={radius.recessed} />
+    </Column>
+  )
+}
+
 const NO_ACCOUNT_SEED = '0x0000000000000000000000000000000000000e7n'
 
 export interface TabShellProps {
@@ -78,6 +141,12 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   useFlowNavigation()
   useFeelEvents()
   useLinks()
+  // Owner: split the routes, "but preload other CSS for the rest of the bundle
+  // after home is rendered so there's no additional load time for next
+  // tabs/pages." One effect after the first paint, on idle.
+  useEffect(() => {
+    prefetchScreens()
+  }, [])
   const items = TAB_ORDER.map((id) => ({ id, label: t({ id: TABS[id].labelId, message: TABS[id].labelMessage }), icon: TABS[id].icon, ...(id === 'activity' && unread > 0 ? { badge: unread } : {}) }))
   const meta = SCREENS[current.screen]
   const showTabs = meta.dock
@@ -257,7 +326,14 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
         */}
         <Column flex={1} zIndex={1} overflow="hidden">
           <ScreenEnter key={enterKey} direction={direction} reducedMotion={reducedMotion}>
-            {screen}
+            {/*
+              The fallback is a plate-shaped skeleton, not a spinner and not a
+              blank: a screen whose chunk is still arriving should look like
+              the screen, for the same reason a screen whose data is still
+              arriving does. In practice it is rarely seen — prefetchScreens
+              warms every chunk once Home has painted.
+            */}
+            <Suspense fallback={<ScreenFallback inset={body === 'extension-popup' ? metrics.inset : metrics.insetWide} />}>{screen}</Suspense>
           </ScreenEnter>
         </Column>
         {showTabs ? <TabBar items={items} activeId={state.tab} onSelect={(id) => router.setTab(id as TabId)} testID="tabs" /> : null}
