@@ -17,7 +17,7 @@ const OUT = join(process.cwd(), 'screenshots')
 const UPDATE = process.env['UPDATE_BASELINES'] === '1'
 
 const SIZES = {
-  popup: { body: 'extension-popup', width: 360, height: 600 },
+  popup: { body: 'extension-popup', width: 400, height: 600 },
   tab: { body: 'extension-tab', width: 1100, height: 760 },
   mobile: { body: 'mobile', width: 390, height: 844 },
 } as const

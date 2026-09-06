@@ -143,6 +143,7 @@ const CollectionNodeSchema = z.object({
   nftContracts: z.array(z.object({ address: z.string(), standard: z.string().nullable().optional(), name: z.string().nullable().optional(), symbol: z.string().nullable().optional(), totalSupply: z.number().nullable().optional() })).nullable().optional(),
   listingFees: z.array(FeeSchema.nullable()).nullable().optional(),
   markets: z.array(z.object({ floorPrice: amount, totalVolume: amount, volume: amount, owners: z.number().nullable().optional(), listings: amount, percentListed: amount })).nullable().optional(),
+  window: z.array(z.object({ volume: amount, volumePercentChange: amount, floorPricePercentChange: amount, sales: amount })).nullable().optional(),
   traits: z.array(z.object({ name: z.string().nullable().optional(), values: z.array(z.string()).nullable().optional() })).nullable().optional(),
 })
 
@@ -163,8 +164,15 @@ export interface CollectionView {
   readonly owners: number | null
   readonly listed: number | null
   readonly percentListed: number | null
+  /** The ranked window (DAY unless asked otherwise): volume, its change, the floor's change, sales. */
+  readonly volumeEtn: number | null
+  readonly volumeChangePct: number | null
+  readonly floorChangePct: number | null
+  readonly sales: number | null
   readonly traits: ReadonlyArray<{ name: string; values: readonly string[] }>
 }
+
+export type CollectionWindow = 'DAY' | 'WEEK' | 'MONTH' | 'MAX'
 
 function collectionView(n: z.infer<typeof CollectionNodeSchema>): CollectionView {
   const contract = n.nftContracts?.[0]
@@ -187,14 +195,18 @@ function collectionView(n: z.infer<typeof CollectionNodeSchema>): CollectionView
     owners: m?.owners ?? null,
     listed: num(m?.listings),
     percentListed: num(m?.percentListed),
+    volumeEtn: num(n.window?.[0]?.volume),
+    volumeChangePct: num(n.window?.[0]?.volumePercentChange),
+    floorChangePct: num(n.window?.[0]?.floorPricePercentChange),
+    sales: num(n.window?.[0]?.sales),
     traits: (n.traits ?? []).map((t) => ({ name: t.name ?? '', values: t.values ?? [] })).filter((t) => t.name),
   }
 }
 
 const edges = <T extends z.ZodTypeAny>(node: T) => z.object({ edges: z.array(z.object({ node })).nullable().optional(), pageInfo: z.object({ hasNextPage: z.boolean().nullable().optional(), endCursor: z.string().nullable().optional() }).nullable().optional(), totalCount: z.number().nullable().optional() }).nullable().optional()
 
-export async function fetchTopCollections(client: ElectroSwapClient, chainId: number, first = 50, listed = false): Promise<CollectionView[]> {
-  const data = await client.query<unknown>(TOP_COLLECTIONS, { chains: [chainEnum(chainId)], first, listed })
+export async function fetchTopCollections(client: ElectroSwapClient, chainId: number, first = 50, listed = false, window: CollectionWindow = 'DAY'): Promise<CollectionView[]> {
+  const data = await client.query<unknown>(TOP_COLLECTIONS, { chains: [chainEnum(chainId)], first, listed, duration: window })
   const parsed = z.object({ topCollections: edges(CollectionNodeSchema) }).parse(data)
   return (parsed.topCollections?.edges ?? []).map((e) => collectionView(e.node))
 }

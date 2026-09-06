@@ -5,10 +5,10 @@
  * technical details, reorders, hides or removes; the header's Add opens the
  * four ways in. Nothing technical is printed on a row — it lives in Details.
  */
-import { Body, Column, Icon, IconButton, Key, Pill, Plate, Pressable, Row, ScrollView, metrics, paint } from '@boltvault/ui'
+import { Body, Column, Dot, Icon, IconButton, Input, Key, Pill, Plate, Pressable, Row, ScrollView, Signature, metrics, paint, shortAddress } from '@boltvault/ui'
 import type { AccountView, SeedView } from '@boltvault/engine'
-import { useState } from 'react'
-import { AccountRow } from '../components/accounts/AccountRow'
+import { useEffect, useState } from 'react'
+import { AccountRow, kindLabel, useAccountTotal } from '../components/accounts/AccountRow'
 import { AccountDetailsSheet, ConfirmSheet, MenuSheet, RenameSheet, RevealSheet, type MenuItem } from '../components/accounts/AccountSheets'
 import { AddAccountSheet } from '../components/accounts/AddAccountSheet'
 import { PageHeader } from '../components/PageHeader'
@@ -31,9 +31,36 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
   const [sheet, setSheet] = useState<SheetState>(null)
   const [showHidden, setShowHidden] = useState<Record<string, boolean>>({})
   const [error, setError] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [ledger, setLedger] = useState<{ available: boolean; devices: ReadonlyArray<{ deviceId: string; model: string }> } | null>(null)
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const wide = body === 'extension-tab'
   const seeds = vault?.seeds ?? []
+  const activeTotal = useAccountTotal(active?.id ?? '')
+
+  // The Ledger's presence, for the hero's status line; only a full page can ask the browser for the device.
+  useEffect(() => {
+    if (active?.kind !== 'ledger') return
+    let alive = true
+    engine.hardware.ledgerStatus().then((s) => alive && setLedger(s), () => alive && setLedger(null))
+    return () => {
+      alive = false
+    }
+  }, [engine, active?.kind, active?.id])
+  const connectLedger = (): void => {
+    if (host.requestHid) void host.requestHid().then(() => engine.hardware.ledgerStatus()).then(setLedger, () => undefined)
+    else host.openInTab?.({ screen: 'accounts' })
+  }
+  const copy = (a: AccountView): void => {
+    if (!host.copy) return
+    void host.copy(a.address).then(() => {
+      setCopiedId(a.id)
+      setTimeout(() => setCopiedId((id) => (id === a.id ? null : id)), 1500)
+    }, () => undefined)
+  }
+  const q = query.trim().toLowerCase()
+  const matches = (a: AccountView): boolean => !q || a.label.toLowerCase().includes(q) || a.address.toLowerCase().includes(q)
 
   const run = async (fn: () => Promise<unknown>): Promise<void> => {
     setError(null)
@@ -109,9 +136,60 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
     <Column flex={1}>
       <ScrollView contentContainerStyle={{ padding: inset, gap: 12, ...(wide ? { maxWidth: 640, width: '100%', alignSelf: 'center' } : {}) }} testID="accounts">
         <PageHeader title={t({ id: 'accounts.title', message: 'Accounts' })} right={<Pill label={t({ id: 'acct.add', message: 'Add' })} icon={<Icon name="plus" size={14} color={paint.arc} />} tone="arc" onPress={() => setSheet({ kind: 'add' })} testID="add-account-open" />} />
+        {active ? (
+          <Plate role="raised" gap="$2" testID="current-account">
+            <Row gap="$3" alignItems="center">
+              <Signature address={active.address} size={40} />
+              <Column flex={1} minWidth={0} alignItems="flex-start">
+                <Row gap="$2" alignItems="center">
+                  <Body size="title" numberOfLines={1} flexShrink={1}>
+                    {active.label}
+                  </Body>
+                  <Row gap={4} alignItems="center">
+                    <Dot color={paint.arc} size={6} />
+                    <Body tone="arc" size="caption">
+                      {t({ id: 'acct.active', message: 'Active' })}
+                    </Body>
+                  </Row>
+                </Row>
+                <Pressable onPress={() => copy(active)} accessibilityRole="button" accessibilityLabel={t({ id: 'acct.copy', message: 'Copy address' })} style={{ minHeight: 44, marginVertical: -11, justifyContent: 'center', alignSelf: 'flex-start' }} testID="current-copy">
+                  <Row gap={4} alignItems="center">
+                    <Body tone={copiedId === active.id ? 'arc' : 'mute'} size="caption" fontVariant={['tabular-nums']}>
+                      {copiedId === active.id ? t({ id: 'copied', message: 'Copied' }) : shortAddress(active.address)}
+                    </Body>
+                    <Icon name={copiedId === active.id ? 'check' : 'copy'} size={12} color={copiedId === active.id ? paint.arc : paint.mute} />
+                  </Row>
+                </Pressable>
+              </Column>
+              <Column alignItems="flex-end" gap={2} flexShrink={0}>
+                {activeTotal ? (
+                  <Body fontWeight="600" fontVariant={['tabular-nums']} testID="current-total">
+                    {activeTotal}
+                  </Body>
+                ) : null}
+                <Body tone="mute" size="caption">
+                  {kindLabel(active)}
+                </Body>
+              </Column>
+            </Row>
+            {active.kind === 'ledger' ? (
+              <Row gap="$2" alignItems="center" justifyContent="space-between" borderTopWidth={1} borderTopColor="$edge" paddingTop={8} minHeight={36} testID="current-hardware">
+                <Row gap={6} alignItems="center" flexShrink={1}>
+                  <Dot color={ledger && ledger.devices.length > 0 ? paint.surge : paint.mute} size={6} />
+                  <Body tone="mute" size="caption" numberOfLines={1}>
+                    {ledger && ledger.devices.length > 0 ? t({ id: 'acct.ledger.on', message: 'Ledger connected' }) : t({ id: 'acct.ledger.off', message: 'Ledger is not connected' })}
+                  </Body>
+                </Row>
+                {!(ledger && ledger.devices.length > 0) ? <Pill label={t({ id: 'acct.ledger.connect', message: 'Connect' })} tone="arc" size="sm" onPress={connectLedger} testID="current-connect" /> : null}
+              </Row>
+            ) : null}
+          </Plate>
+        ) : null}
+        {accounts.length > 6 ? <Input value={query} onChange={setQuery} placeholder={t({ id: 'acct.search', message: 'Search accounts' })} testID="accounts-search" /> : null}
         {groups.map((g) => {
-          const visible = g.items.filter((a) => !a.hidden)
-          const hidden = g.items.filter((a) => a.hidden)
+          const visible = g.items.filter((a) => !a.hidden && a.id !== active?.id && matches(a))
+          const hidden = g.items.filter((a) => a.hidden && matches(a))
+          if (q && visible.length === 0 && hidden.length === 0) return null
           const open = showHidden[g.id] ?? false
           return (
             <Plate key={g.id} role="card" gap={4} paddingVertical="$2" paddingHorizontal="$3" testID={`group-${g.id}`}>
@@ -122,6 +200,16 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
                 <Body fontWeight="600" flex={1} numberOfLines={1}>
                   {g.title}
                 </Body>
+                {hidden.length ? (
+                  <Pressable onPress={() => setShowHidden((s) => ({ ...s, [g.id]: !open }))} accessibilityRole="button" accessibilityLabel={t({ id: 'acct.hidden.toggle', message: 'Hidden accounts' })} style={{ minHeight: 44, marginVertical: -4, justifyContent: 'center', paddingHorizontal: 4 }} testID={`hidden-${g.id}`}>
+                    <Row gap={4} alignItems="center">
+                      <Body tone="mute" size="caption">
+                        {hidden.length === 1 ? t({ id: 'acct.hidden.one', message: '1 hidden' }) : t({ id: 'acct.hidden.many', message: '{n} hidden', values: { n: hidden.length } })}
+                      </Body>
+                      <Icon name={open ? 'chevronUp' : 'chevronDown'} size={14} color={paint.mute} />
+                    </Row>
+                  </Pressable>
+                ) : null}
                 {g.seed ? (
                   g.seed.backedUp ? (
                     <Body tone="mute" size="caption">
@@ -134,21 +222,9 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
                 {g.seed ? <IconButton icon="more" label={t({ id: 'acct.seedMenu', message: 'Wallet options' })} onPress={() => setSheet({ kind: 'seedMenu', seed: g.seed as SeedView })} testID={`seed-menu-${g.seed.id}`} /> : null}
               </Row>
               {visible.map((a) => (
-                <AccountRow key={a.id} account={a} active={a.id === active?.id} onSelect={() => select(a)} onMenu={() => setSheet({ kind: 'menu', account: a })} />
+                <AccountRow key={a.id} account={a} active={a.id === active?.id} onSelect={() => select(a)} onMenu={() => setSheet({ kind: 'menu', account: a })} onCopy={host.copy ? () => copy(a) : undefined} copied={copiedId === a.id} />
               ))}
-              {hidden.length ? (
-                <>
-                  <Pressable onPress={() => setShowHidden((s) => ({ ...s, [g.id]: !open }))} accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }} testID={`hidden-${g.id}`}>
-                    <Row gap={6} alignItems="center">
-                      <Icon name={open ? 'chevronUp' : 'chevronDown'} size={14} color={paint.mute} />
-                      <Body tone="mute" size="caption">
-                        {hidden.length === 1 ? t({ id: 'acct.hidden.one', message: '1 hidden' }) : t({ id: 'acct.hidden.many', message: '{n} hidden', values: { n: hidden.length } })}
-                      </Body>
-                    </Row>
-                  </Pressable>
-                  {open ? hidden.map((a) => <AccountRow key={a.id} account={a} active={a.id === active?.id} onSelect={() => select(a)} onMenu={() => setSheet({ kind: 'menu', account: a })} />) : null}
-                </>
-              ) : null}
+              {hidden.length && open ? hidden.map((a) => <AccountRow key={a.id} account={a} active={a.id === active?.id} onSelect={() => select(a)} onMenu={() => setSheet({ kind: 'menu', account: a })} onCopy={host.copy ? () => copy(a) : undefined} copied={copiedId === a.id} />) : null}
             </Plate>
           )
         })}

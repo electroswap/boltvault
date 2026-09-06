@@ -103,7 +103,7 @@ msgctxt "accounts.title"
 msgid "Accounts"
 msgstr "Accounts"
 
-#: packages/wallet/src/components/accounts/AccountRow.tsx
+#: packages/wallet/src/screens/Accounts.tsx
 msgctxt "acct.active"
 msgid "Active"
 msgstr "Active"
@@ -199,6 +199,11 @@ msgid "Back up"
 msgstr "Back up"
 
 #: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.copy"
+msgid "Copy address"
+msgstr "Copy address"
+
+#: packages/wallet/src/screens/Accounts.tsx
 msgctxt "acct.derive"
 msgid "Add the next address"
 msgstr "Add the next address"
@@ -279,6 +284,11 @@ msgid "1 hidden"
 msgstr "1 hidden"
 
 #: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.hidden.toggle"
+msgid "Hidden accounts"
+msgstr "Hidden accounts"
+
+#: packages/wallet/src/screens/Accounts.tsx
 msgctxt "acct.hide"
 msgid "Hide"
 msgstr "Hide"
@@ -302,6 +312,21 @@ msgstr "Imported key"
 msgctxt "acct.kind.watch"
 msgid "Watch-only"
 msgstr "Watch-only"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.ledger.connect"
+msgid "Connect"
+msgstr "Connect"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.ledger.off"
+msgid "Ledger is not connected"
+msgstr "Ledger is not connected"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.ledger.on"
+msgid "Ledger connected"
+msgstr "Ledger connected"
 
 #: packages/wallet/src/components/accounts/AccountRow.tsx
 msgctxt "acct.menu"
@@ -357,6 +382,11 @@ msgstr "Rename this wallet"
 msgctxt "acct.reveal"
 msgid "Reveal recovery phrase"
 msgstr "Reveal recovery phrase"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.search"
+msgid "Search accounts"
+msgstr "Search accounts"
 
 #: packages/wallet/src/screens/Accounts.tsx
 msgctxt "acct.seedMenu"
@@ -849,11 +879,6 @@ msgid "Asset"
 msgstr "Asset"
 
 #: packages/wallet/src/screens/Bridge.tsx
-msgctxt "bridge.balance"
-msgid "Balance {b} {s}"
-msgstr "Balance {b} {s}"
-
-#: packages/wallet/src/screens/Bridge.tsx
 msgctxt "bridge.chain.networks"
 msgid "Networks"
 msgstr "Networks"
@@ -879,14 +904,14 @@ msgid "Look it up on explorer.hyperlane.xyz with message {id}"
 msgstr "Look it up on explorer.hyperlane.xyz with message {id}"
 
 #: packages/wallet/src/screens/Bridge.tsx
-msgctxt "bridge.fee.gas"
-msgid "Interchain gas"
-msgstr "Interchain gas"
+msgctxt "bridge.fees"
+msgid "Fees"
+msgstr "Fees"
 
 #: packages/wallet/src/screens/Bridge.tsx
-msgctxt "bridge.fee.tx"
-msgid "Network fee"
-msgstr "Network fee"
+msgctxt "bridge.fees.value"
+msgid "{g} {s} gas · ≈ {n} {s} network"
+msgstr "{g} {s} gas · ≈ {n} {s} network"
 
 #: packages/wallet/src/screens/Bridge.tsx
 msgctxt "bridge.flip"
@@ -1188,6 +1213,11 @@ msgctxt "cancel"
 msgid "Cancel"
 msgstr "Cancel"
 
+#: packages/wallet/src/components/ChainSelect.tsx
+msgctxt "chain.select.a11y"
+msgid "Chain: {c}"
+msgstr "Chain: {c}"
+
 #: packages/wallet/src/screens/FeeScheduleSheet.tsx
 msgctxt "close"
 msgid "Close"
@@ -1318,6 +1348,31 @@ msgctxt "collection.vol"
 msgid "24h volume"
 msgstr "24h volume"
 
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "collections.all"
+msgid "All"
+msgstr "All"
+
+#: packages/wallet/src/components/cards/CollectionRankRow.tsx
+msgctxt "collections.floor"
+msgid "Floor {f}"
+msgstr "Floor {f}"
+
+#: packages/wallet/src/components/cards/CollectionRankRow.tsx
+msgctxt "collections.owners"
+msgid "{n} owners"
+msgstr "{n} owners"
+
+#: packages/wallet/src/components/cards/CollectionRankRow.tsx
+msgctxt "collections.pieces"
+msgid "{n} pieces"
+msgstr "{n} pieces"
+
+#: packages/wallet/src/components/cards/CollectionRankRow.tsx
+msgctxt "collections.volume"
+msgid "volume"
+msgstr "volume"
+
 #: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "continue"
 msgid "Continue"
@@ -1332,6 +1387,56 @@ msgstr "Copied"
 msgctxt "copy"
 msgid "Copy"
 msgstr "Copy"
+
+#: packages/wallet/src/components/DappStatus.tsx
+msgctxt "dapp.account"
+msgid "Account"
+msgstr "Account"
+
+#: packages/wallet/src/components/DappStatus.tsx
+msgctxt "dapp.chain"
+msgid "Chain"
+msgstr "Chain"
+
+#: packages/wallet/src/components/DappStatus.tsx
+msgctxt "dapp.chain.title"
+msgid "Chain for {h}"
+msgstr "Chain for {h}"
+
+#: packages/wallet/src/components/DappStatus.tsx
+msgctxt "dapp.lastUsed"
+msgid "Last used"
+msgstr "Last used"
+
+#: packages/wallet/src/components/DappStatus.tsx
+msgctxt "dapp.none"
+msgid "No dApp on this tab"
+msgstr "No dApp on this tab"
+
+#: packages/wallet/src/components/DappStatus.tsx
+msgctxt "dapp.off"
+msgid "Not connected"
+msgstr "Not connected"
+
+#: packages/wallet/src/components/DappStatus.tsx
+msgctxt "dapp.off.body"
+msgid "{h} is not connected to BoltVault. Connect from the site itself: it will ask, and you choose the account."
+msgstr "{h} is not connected to BoltVault. Connect from the site itself: it will ask, and you choose the account."
+
+#: packages/wallet/src/components/DappStatus.tsx
+msgctxt "dapp.on"
+msgid "Connected"
+msgstr "Connected"
+
+#: packages/wallet/src/components/DappStatus.tsx
+msgctxt "dapp.on.body"
+msgid "Connected — this site sees the address below and can ask you to sign. It cannot move anything without a signature."
+msgstr "Connected — this site sees the address below and can ask you to sign. It cannot move anything without a signature."
+
+#: packages/wallet/src/components/DappStatus.tsx
+msgctxt "dapp.sites"
+msgid "All connected sites"
+msgstr "All connected sites"
 
 #: packages/wallet/src/screens/Approval.tsx
 msgctxt "device.amount"
@@ -1554,26 +1659,41 @@ msgid "Browser"
 msgstr "Browser"
 
 #: packages/wallet/src/screens/Explore.tsx
-msgctxt "explore.collectibles"
-msgid "Collectibles"
-msgstr "Collectibles"
-
-#: packages/wallet/src/screens/Explore.tsx
 msgctxt "explore.collections.all"
 msgid "Showing everything"
 msgstr "Showing everything"
 
 #: packages/wallet/src/screens/Explore.tsx
-msgctxt "explore.collections.listed"
-msgid "Listed collections"
-msgstr "Listed collections"
+msgctxt "explore.collections.empty"
+msgid "No collections to show."
+msgstr "No collections to show."
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.collections.everything"
+msgid "Show everything"
+msgstr "Show everything"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.collections.title"
+msgid "Collections"
+msgstr "Collections"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.collections.verified"
+msgid "Show verified only"
+msgstr "Show verified only"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.collections.verifiedOnly"
+msgid "Verified collections"
+msgstr "Verified collections"
 
 #: packages/wallet/src/screens/Collection.tsx
 msgctxt "explore.dividends"
 msgid "Pays dividends"
 msgstr "Pays dividends"
 
-#: packages/wallet/src/components/cards/CollectionCard.tsx
+#: packages/wallet/src/components/cards/CollectionRankRow.tsx
 msgctxt "explore.dividends.short"
 msgid "Dividends"
 msgstr "Dividends"
@@ -1594,14 +1714,9 @@ msgid "Floor {f} ETN"
 msgstr "Floor {f} ETN"
 
 #: packages/wallet/src/screens/Explore.tsx
-msgctxt "explore.launch"
-msgid "Launch"
-msgstr "Launch"
-
-#: packages/wallet/src/screens/Explore.tsx
-msgctxt "explore.launch.live"
-msgid "Launch · {n}"
-msgstr "Launch · {n}"
+msgctxt "explore.launchpad"
+msgid "Launchpad"
+msgstr "Launchpad"
 
 #: packages/wallet/src/components/cards/CollectionCard.tsx
 msgctxt "explore.listed"
@@ -1635,8 +1750,8 @@ msgstr "Your collection"
 
 #: packages/wallet/src/screens/Explore.tsx
 msgctxt "explore.search"
-msgid "Search tokens, collections, campaigns"
-msgstr "Search tokens, collections, campaigns"
+msgid "Search tokens and collections"
+msgstr "Search tokens and collections"
 
 #: packages/wallet/src/screens/Explore.tsx
 msgctxt "explore.tokens"
@@ -2173,6 +2288,11 @@ msgctxt "fresh.moment"
 msgid "As of a moment ago"
 msgstr "As of a moment ago"
 
+#: packages/wallet/src/screens/Send.tsx
+msgctxt "from.account"
+msgid "from {a}"
+msgstr "from {a}"
+
 #: packages/wallet/src/components/HardwarePickers.tsx
 msgctxt "hardware.more"
 msgid "{n} more"
@@ -2195,8 +2315,8 @@ msgstr "Hide"
 
 #: packages/wallet/src/screens/Home.tsx
 msgctxt "home.acc.bridge"
-msgid "Hyperlane {s} arriving on {c} · about {m} min"
-msgstr "Hyperlane {s} arriving on {c} · about {m} min"
+msgid "{s} arriving on {c} in about {m} min"
+msgstr "{s} arriving on {c} in about {m} min"
 
 #: packages/wallet/src/screens/Home.tsx
 msgctxt "home.acc.pending"
@@ -2210,8 +2330,8 @@ msgstr "{n} unlimited approvals"
 
 #: packages/wallet/src/screens/Home.tsx
 msgctxt "home.backup.body"
-msgid "Swapping and signing stay locked until you confirm three words. Watching and receiving work now."
-msgstr "Swapping and signing stay locked until you confirm three words. Watching and receiving work now."
+msgid "Swapping and signing stay locked until you do."
+msgstr "Swapping and signing stay locked until you do."
 
 #: packages/wallet/src/screens/Home.tsx
 msgctxt "home.backup.key"
@@ -2242,11 +2362,6 @@ msgstr "{n} live"
 msgctxt "home.badge.offers"
 msgid "{n} offers"
 msgstr "{n} offers"
-
-#: packages/wallet/src/screens/Home.tsx
-msgctxt "home.change.none"
-msgid "No change to report yet"
-msgstr "No change to report yet"
 
 #: packages/wallet/src/screens/Home.tsx
 msgctxt "home.create.body"
@@ -2313,15 +2428,15 @@ msgctxt "home.positions.empty"
 msgid "No farm positions, open orders or bridges in flight."
 msgstr "No farm positions, open orders or bridges in flight."
 
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.price.a11y"
+msgid "ETN price"
+msgstr "ETN price"
+
 #: packages/wallet/src/i18n.ts
 msgctxt "home.receive"
 msgid "Receive"
 msgstr "Receive"
-
-#: packages/wallet/src/components/ChainScope.tsx
-msgctxt "home.scope.a11y"
-msgid "Chains shown: {s}"
-msgstr "Chains shown: {s}"
 
 #: packages/wallet/src/components/ChainScope.tsx
 msgctxt "home.scope.all"
@@ -2338,12 +2453,12 @@ msgctxt "home.scope.etn"
 msgid "Electroneum"
 msgstr "Electroneum"
 
-#: packages/wallet/src/components/ChainScope.tsx
+#: packages/wallet/src/screens/Send.tsx
 msgctxt "home.scope.etn.caption"
 msgid "Your home chain"
 msgstr "Your home chain"
 
-#: packages/wallet/src/components/ChainScope.tsx
+#: packages/wallet/src/components/ChainSelect.tsx
 msgctxt "home.scope.manage"
 msgid "Manage networks"
 msgstr "Manage networks"
@@ -2798,15 +2913,10 @@ msgctxt "limit.working"
 msgid "Placing your order…"
 msgstr "Placing your order…"
 
-#: packages/wallet/src/screens/Explore.tsx
-msgctxt "market.title"
-msgid "Market"
-msgstr "Market"
-
-#: packages/wallet/src/screens/Bridge.tsx
-msgctxt "max"
-msgid "Max"
-msgstr "Max"
+#: packages/wallet/src/components/AmountWell.tsx
+msgctxt "max.caps"
+msgid "MAX"
+msgstr "MAX"
 
 #: packages/wallet/src/screens/Legends.tsx
 msgctxt "mint.fewer"
@@ -3534,6 +3644,11 @@ msgid "Read more"
 msgstr "Read more"
 
 #: packages/wallet/src/screens/Receive.tsx
+msgctxt "receive.chain.title"
+msgid "Receive on"
+msgstr "Receive on"
+
+#: packages/wallet/src/screens/Receive.tsx
 msgctxt "receive.copy"
 msgid "Copy address"
 msgstr "Copy address"
@@ -3547,6 +3662,11 @@ msgstr "Request an amount"
 msgctxt "receive.request.hint"
 msgid "The code above updates with the amount."
 msgstr "The code above updates with the amount."
+
+#: packages/wallet/src/screens/Receive.tsx
+msgctxt "receive.subtitle"
+msgid "Only send {c} assets to this address"
+msgstr "Only send {c} assets to this address"
 
 #: packages/wallet/src/screens/Receive.tsx
 msgctxt "receive.title"
@@ -3729,9 +3849,9 @@ msgid "Amount"
 msgstr "Amount"
 
 #: packages/wallet/src/screens/Send.tsx
-msgctxt "send.balance"
-msgid "{q} {s} available"
-msgstr "{q} {s} available"
+msgctxt "send.chain.title"
+msgid "Send on"
+msgstr "Send on"
 
 #: packages/wallet/src/screens/Send.tsx
 msgctxt "send.failed"
@@ -3743,15 +3863,15 @@ msgctxt "send.fee"
 msgid "Network fee about {fee} {s}"
 msgstr "Network fee about {fee} {s}"
 
-#: packages/wallet/src/screens/Swap.tsx
-msgctxt "send.max"
-msgid "Max"
-msgstr "Max"
-
 #: packages/wallet/src/screens/Send.tsx
 msgctxt "send.note"
 msgid "You will see exactly what moves before you sign. Sending to a contract or a new address asks for a second look."
 msgstr "You will see exactly what moves before you sign. Sending to a contract or a new address asks for a second look."
+
+#: packages/wallet/src/screens/Send.tsx
+msgctxt "send.pick"
+msgid "Token to send"
+msgstr "Token to send"
 
 #: packages/wallet/src/screens/Send.tsx
 msgctxt "send.review"
@@ -3790,8 +3910,8 @@ msgstr "To"
 
 #: packages/wallet/src/screens/Send.tsx
 msgctxt "send.to.ph"
-msgid "0x… or name.etn"
-msgstr "0x… or name.etn"
+msgid "Address or name.etn"
+msgstr "Address or name.etn"
 
 #: packages/wallet/src/screens/shells.tsx
 msgctxt "settings.about"
@@ -4057,11 +4177,6 @@ msgstr "A first-time recipient pauses for a second look; a send above a tenth of
 msgctxt "spending.tier"
 msgid "Your tier: {t} · {p} on swaps"
 msgstr "Your tier: {t} · {p} on swaps"
-
-#: packages/wallet/src/screens/Swap.tsx
-msgctxt "swap.balance"
-msgid "Balance: {q}"
-msgstr "Balance: {q}"
 
 #: packages/wallet/src/components/SwapCoachSheet.tsx
 msgctxt "swap.coach.1"
@@ -4334,9 +4449,24 @@ msgid "Nothing yet with this token."
 msgstr "Nothing yet with this token."
 
 #: packages/wallet/src/components/AddTokenSheet.tsx
+msgctxt "token.add.chain"
+msgid "On"
+msgstr "On"
+
+#: packages/wallet/src/components/AddTokenSheet.tsx
+msgctxt "token.add.chain.title"
+msgid "Add a token on"
+msgstr "Add a token on"
+
+#: packages/wallet/src/components/AddTokenSheet.tsx
 msgctxt "token.add.key"
 msgid "Add token"
 msgstr "Add token"
+
+#: packages/wallet/src/components/AddTokenSheet.tsx
+msgctxt "token.add.label"
+msgid "Contract address"
+msgstr "Contract address"
 
 #: packages/wallet/src/components/AddTokenSheet.tsx
 msgctxt "token.add.looking"
@@ -4353,7 +4483,7 @@ msgctxt "token.add.note"
 msgid "Anyone can deploy a token with any name. Check the address against the project’s own site before you trust it."
 msgstr "Anyone can deploy a token with any name. Check the address against the project’s own site before you trust it."
 
-#: packages/wallet/src/components/AddTokenSheet.tsx
+#: packages/wallet/src/components/AddCollectionSheet.tsx
 msgctxt "token.add.ph"
 msgid "Contract address 0x…"
 msgstr "Contract address 0x…"

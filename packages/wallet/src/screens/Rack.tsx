@@ -135,7 +135,7 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
           {t({ id: 'rack.none', message: 'Nothing matches these filters.' })}
         </Body>
       ) : null}
-      {shown.length > 0 ? <TileGrid target={wide ? 150 : 100} gap={8} minCols={2} maxCols={6} fallbackWidth={(wide ? 640 : 360) - inset * 2} testID="rack-grid">{shelves}</TileGrid> : null}
+      {shown.length > 0 ? <TileGrid target={wide ? 150 : 100} gap={8} minCols={2} maxCols={6} fallbackWidth={(wide ? 640 : 400) - inset * 2} testID="rack-grid">{shelves}</TileGrid> : null}
       {embedded && pieces.length > (limit ?? 0) ? <Key label={t({ id: 'rack.open', message: 'Open the Rack' })} kind="secondary" size="compact" onPress={() => router.navigate('rack')} testID="rack-open" /> : null}
       {!embedded && inventory && inventory.assets.length > 0 ? <Pill label={t({ id: 'collection.add.pill', message: 'Add a collection' })} icon={<Icon name="plus" size={14} color={paint.arc} />} tone="arc" size="sm" onPress={() => setSheet('add')} testID="rack-add-collection" /> : null}
     </>

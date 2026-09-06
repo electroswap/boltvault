@@ -93,7 +93,7 @@ export function Devices({ body }: { body: 'extension-popup' | 'extension-tab' | 
           <Body tone="mute" size="caption">
             {t({ id: 'devices.offer.then', message: 'Then scan (or paste) the answer it shows.' })}
           </Body>
-          {!host.scanQr ? <Input value={pasted} onChange={setPasted} multiline mono placeholder={t({ id: 'devices.answer.paste', message: 'Paste the answer code' })} /> : null}
+          {!host.scanQr ? <Input value={pasted} onChange={setPasted} multiline placeholder={t({ id: 'devices.answer.paste', message: 'Paste the answer code' })} /> : null}
           <Key label={host.scanQr ? t({ id: 'devices.scan', message: 'Scan answer' }) : t({ id: 'devices.use', message: 'Use answer' })} onPress={() => run(async () => { await engine.sync.completeOffer({ answer: await scanOrPaste() }); setPasted('') })} testID="complete-offer" />
           <Key label={t({ id: 'cancel', message: 'Cancel' })} kind="secondary" onPress={() => run(async () => { await engine.sync.cancelPairing(); setMode('idle'); setOffer(null) })} />
         </Plate>
@@ -102,7 +102,7 @@ export function Devices({ body }: { body: 'extension-popup' | 'extension-tab' | 
       {mode === 'answer' ? (
         <Plate gap="$3" testID="answer">
           <Body size="title">{t({ id: 'devices.answer.title', message: 'Scan the other device’s code' })}</Body>
-          {!host.scanQr ? <Input value={pasted} onChange={setPasted} multiline mono placeholder={t({ id: 'devices.offer.paste', message: 'Paste the pairing code' })} /> : null}
+          {!host.scanQr ? <Input value={pasted} onChange={setPasted} multiline placeholder={t({ id: 'devices.offer.paste', message: 'Paste the pairing code' })} /> : null}
           {!answer ? (
             <Key label={host.scanQr ? t({ id: 'devices.scan.code', message: 'Scan' }) : t({ id: 'devices.use.code', message: 'Use code' })} onPress={() => run(async () => { const r = await engine.sync.acceptOffer({ offer: await scanOrPaste() }); setAnswer(r.answer); setPasted('') })} testID="accept-offer" />
           ) : (

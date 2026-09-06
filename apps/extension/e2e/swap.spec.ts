@@ -81,7 +81,7 @@ test('quote with the fee stack, then approve → permit → swap through the she
     await tab.close()
 
     const popup = await ext.context.newPage()
-    await popup.setViewportSize({ width: 360, height: 600 })
+    await popup.setViewportSize({ width: 400, height: 600 })
     await popup.goto(ext.url('popup.html'))
     await expect(popup.getByTestId('home')).toBeVisible({ timeout: 15_000 })
     await popup.getByTestId('tabs').getByText('Swap').click()

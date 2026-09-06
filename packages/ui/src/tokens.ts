@@ -30,6 +30,9 @@ export const paint = {
   mute: '#8F99C4',
   /** The live mark: filament, selected, links, the active tab. */
   arc: '#4FC3FF',
+  /** A chosen chip's fill and edge (style bible › selected): a tint of the arc, never a lit rim. */
+  arcSoft: 'rgba(79, 195, 255, 0.14)',
+  arcEdge: 'rgba(79, 195, 255, 0.45)',
   /** The far mark: rims fade into it. Never a flat fill on its own. */
   plasma: '#8B5CF6',
   /** Gains, confirmed, "to collect". */
@@ -83,7 +86,8 @@ export const metrics = {
   header: 44,
   tabBar: 52,
   filament: 2,
-  popup: { width: 360, height: 600 },
+  /** Rabby-wide: 400 × 600 gives every row room to breathe. */
+  popup: { width: 400, height: 600 },
 } as const
 
 /** Radii by plate role — one radius on everything is the template tell. */
@@ -114,10 +118,8 @@ export const space = {
 export const fonts = {
   /** Readouts ≥ 24 px: Oxanium 600, tabular numerals, tracking −0.03em. */
   readout: 'Oxanium',
-  /** Everything a human reads: Sora 400/600, 13–17 px, sentence case. */
+  /** Everything a human reads — addresses and hashes included, tabular: Sora 400/600, 13–17 px, sentence case. */
   text: 'Sora',
-  /** Addresses ≥ 14 px, tabular. */
-  mono: 'IBM Plex Mono',
 } as const
 
 export const type = {
@@ -136,6 +138,12 @@ export const motion = {
   roll: 300,
   sheet: 220,
   press: 90,
+  /** A view arriving after navigation. */
+  screen: 180,
+  /** A fill, an indicator, a tint answering a press or a choice. */
+  micro: 160,
+  /** The highlight that sweeps a primary key once per press. */
+  charge: 260,
 } as const
 
 export type PaintToken = keyof typeof paint

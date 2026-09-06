@@ -27,7 +27,7 @@ export function WordGrid({ words, blanks = [], testID }: WordGridProps) {
                 <Body tone="mute" size="caption">
                   {n}
                 </Body>
-                <Body fontFamily="$mono" fontSize={15} tone={blank ? 'arc' : 'ink'} testID={`word-${n}`}>
+                <Body fontSize={15} tone={blank ? 'arc' : 'ink'} testID={`word-${n}`}>
                   {blank ? '·····' : w}
                 </Body>
               </Row>

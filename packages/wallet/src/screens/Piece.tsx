@@ -192,7 +192,7 @@ export function Piece({ body, chainId, address, tokenId, reducedMotion = false }
         <Column gap="$3">
           {sheet === 'transfer' ? (
             <>
-              <Input value={to} onChange={setTo} mono placeholder="0x…" label={t({ id: 'piece.transfer.to', message: 'To' })} testID="piece-transfer-to" />
+              <Input value={to} onChange={setTo} placeholder="0x…" label={t({ id: 'piece.transfer.to', message: 'To' })} testID="piece-transfer-to" />
               <Body tone="mute" size="caption">
                 {t({ id: 'piece.transfer.body', message: 'The recipient goes through the same address checks as a send. A collectible cannot be recalled.' })}
               </Body>

@@ -30,6 +30,7 @@ import type {
   ChainHead,
   ChainView,
   CollectionView,
+  CollectionWindow,
   ContactView,
   DappSession,
   EngineEvent,
@@ -254,8 +255,8 @@ export interface ExploreNamespace {
   liquidity(input: { chainId: number; address: string }): Promise<LiquidityView | null>
   cachedLiquidity(input: { chainId: number; address: string }): Promise<Cached<LiquidityView> | null>
   /** Listed collections by default (verified, traded, listed or owned) plus the user's own; `all` for the whole index (plan C3). */
-  collections(input: { chainId: number; accountId?: AccountId; all?: boolean }): Promise<CollectionView[]>
-  cachedCollections(input: { chainId: number; accountId?: AccountId; all?: boolean }): Promise<Cached<CollectionView[]> | null>
+  collections(input: { chainId: number; accountId?: AccountId; all?: boolean; window?: CollectionWindow }): Promise<CollectionView[]>
+  cachedCollections(input: { chainId: number; accountId?: AccountId; all?: boolean; window?: CollectionWindow }): Promise<Cached<CollectionView[]> | null>
   collection(input: { chainId: number; address: string; accountId?: AccountId }): Promise<CollectionView | null>
   search(input: { chainId: number; query: string }): Promise<{ tokens: ExploreToken[]; collections: CollectionView[] }>
 }

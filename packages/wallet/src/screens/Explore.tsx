@@ -5,13 +5,14 @@
  * (plan A2); a first visit shows skeletons, never a blank body. On a token
  * list the star is the pin (plan A5).
  */
-import { Body, Column, Icon, IconButton, Input, Pill, Plate, Pressable, Row, ScrollView, Segmented, SkeletonRows, TokenAvatar, metrics, paint } from '@boltvault/ui'
-import { cacheKey, type CampaignView, type CollectionView, type ExploreToken, type FarmView } from '@boltvault/engine'
+import { Body, Column, Icon, IconButton, Input, Pill, Plate, Row, ScrollView, Segmented, SkeletonRows, TokenAvatar, metrics, paint } from '@boltvault/ui'
+import { cacheKey, type CampaignView, type CollectionView, type CollectionWindow, type ExploreToken, type FarmView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { AddCollectionSheet } from '../components/AddCollectionSheet'
 import { AddTokenSheet } from '../components/AddTokenSheet'
 import { CampaignCard } from '../components/cards/CampaignCard'
 import { CollectionCard } from '../components/cards/CollectionCard'
+import { CollectionRankRow, type CollectionCurrency } from '../components/cards/CollectionRankRow'
 import { FarmCard } from '../components/cards/FarmCard'
 import { FreshnessLine } from '../components/FreshnessLine'
 import { PageHeader } from '../components/PageHeader'
@@ -40,7 +41,7 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
   const reducedMotion = useReducedMotion()
   const { unread } = useNotifications()
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
-  const [segment, setSegment] = useState<Segment>(initial)
+  const segment: Segment = initial
   const [query, setQuery] = useState('')
   const [available, setAvailable] = useState<boolean | null>(null)
   const [found, setFound] = useState<{ tokens: ExploreToken[]; collections: CollectionView[] } | null>(null)
@@ -48,6 +49,8 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
   const [addCollectionOpen, setAddCollectionOpen] = useState(false)
   const { prefs, set: setPrefs } = usePrefs()
   const showAll = prefs.collectionsShowAll
+  const [window, setWindow] = useState<CollectionWindow>('DAY')
+  const [ccy, setCcy] = useState<CollectionCurrency>('ETN')
   const accountId = active?.id
 
   const tokens = useCached<ExploreToken[]>({
@@ -57,9 +60,9 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
     maxAgeMs: 60_000,
   })
   const collections = useCached<CollectionView[]>({
-    key: cacheKey('explore', 'collections', ETN, accountId ?? '-', showAll ? 'all' : 'listed'),
-    cached: (e) => e.explore.cachedCollections({ chainId: ETN, ...(accountId ? { accountId } : {}), all: showAll }),
-    fresh: (e) => e.explore.collections({ chainId: ETN, ...(accountId ? { accountId } : {}), all: showAll }),
+    key: cacheKey('explore', 'collections', ETN, accountId ?? '-', showAll ? 'all' : 'verified', window),
+    cached: (e) => e.explore.cachedCollections({ chainId: ETN, ...(accountId ? { accountId } : {}), all: showAll, window }),
+    fresh: (e) => e.explore.collections({ chainId: ETN, ...(accountId ? { accountId } : {}), all: showAll, window }),
     maxAgeMs: 60_000,
   })
   const campaigns = useCached<CampaignView[]>({
@@ -115,20 +118,26 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
   }
 
   const current = segment === 'tokens' ? tokens : segment === 'collectibles' ? collections : segment === 'launch' ? campaigns : farms
-  const live = (campaigns.value ?? []).filter((c) => c.phase === 'live')
+  const etnUsd = (tokens.value ?? []).find((x) => x.address === 'native' || x.symbol === 'ETN')?.price ?? null
   return (
     <Column flex={1}>
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="explore">
       <PageHeader
-        title={t({ id: 'market.title', message: 'Market' })}
+        title={segment === 'tokens' ? t({ id: 'explore.tokens', message: 'Tokens' }) : segment === 'collectibles' ? t({ id: 'explore.collections.title', message: 'Collections' }) : segment === 'launch' ? t({ id: 'explore.launchpad', message: 'Launchpad' }) : t({ id: 'explore.farms', message: 'Farms' })}
         right={
           <>
-            {host.browser ? <IconButton icon="external" label={t({ id: 'explore.browser', message: 'Browser' })} onPress={() => router.navigate('browser')} testID="explore-browser" /> : null}
-            <IconButton icon="bell" label={t({ id: 'explore.alerts', message: 'Alerts' })} badge={unread} onPress={() => router.navigate('alerts')} testID="explore-alerts" />
+            {segment === 'collectibles' ? (
+              <>
+                <IconButton icon="filter" label={showAll ? t({ id: 'explore.collections.verified', message: 'Show verified only' }) : t({ id: 'explore.collections.everything', message: 'Show everything' })} active={showAll} onPress={() => setPrefs({ collectionsShowAll: !showAll })} testID="explore-collections-all" />
+                <IconButton icon="plus" label={t({ id: 'collection.add.pill', message: 'Add a collection' })} onPress={() => setAddCollectionOpen(true)} testID="explore-add-collection" />
+              </>
+            ) : null}
+            {segment === 'tokens' && host.browser ? <IconButton icon="external" label={t({ id: 'explore.browser', message: 'Browser' })} onPress={() => router.navigate('browser')} testID="explore-browser" /> : null}
+            {segment === 'tokens' || segment === 'launch' ? <IconButton icon="bell" label={t({ id: 'explore.alerts', message: 'Alerts' })} badge={unread} onPress={() => router.navigate('alerts')} testID="explore-alerts" /> : null}
           </>
         }
       />
-      <Input value={query} onChange={setQuery} placeholder={t({ id: 'explore.search', message: 'Search tokens, collections, campaigns' })} autoFocus={search} testID="explore-search" />
+      {segment === 'tokens' ? <Input value={query} onChange={setQuery} placeholder={t({ id: 'explore.search', message: 'Search tokens and collections' })} autoFocus={search} testID="explore-search" /> : null}
       {available === false ? (
         <Plate gap="$2" testID="explore-unavailable">
           <Body size="title">{t({ id: 'explore.off.title', message: 'Markets are on Electroneum' })}</Body>
@@ -156,18 +165,6 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
         </Column>
       ) : (
         <>
-          <Segmented
-            options={[
-              { id: 'tokens', label: t({ id: 'explore.tokens', message: 'Tokens' }) },
-              { id: 'collectibles', label: t({ id: 'explore.collectibles', message: 'Collectibles' }) },
-              { id: 'launch', label: live.length ? t({ id: 'explore.launch.live', message: 'Launch · {n}', values: { n: live.length } }) : t({ id: 'explore.launch', message: 'Launch' }) },
-              { id: 'farms', label: t({ id: 'explore.farms', message: 'Farms' }) },
-            ]}
-            value={segment}
-            onChange={(id) => setSegment(id as Segment)}
-            size="compact"
-            testID="explore-segments"
-          />
           <FreshnessLine freshness={current.freshness} observedAt={current.observedAt} refreshing={current.refreshing} reducedMotion={reducedMotion} testID="explore-freshness" />
           {current.freshness === 'loading' ? (
             <SkeletonRows rows={5} reducedMotion={reducedMotion} testID="explore-loading" />
@@ -183,20 +180,50 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
               ) : null}
             </Column>
           ) : segment === 'collectibles' ? (
-            <Column gap="$2" testID="explore-collections">
-              <Row gap="$2" alignItems="center" flexWrap="wrap">
-                <Pill label={showAll ? t({ id: 'explore.collections.all', message: 'Showing everything' }) : t({ id: 'explore.collections.listed', message: 'Listed collections' })} selected={showAll} size="sm" onPress={() => setPrefs({ collectionsShowAll: !showAll })} testID="explore-collections-all" />
-                <Pill label={t({ id: 'collection.add.pill', message: 'Add a collection' })} icon={<Icon name="plus" size={14} color={paint.arc} />} tone="arc" size="sm" onPress={() => setAddCollectionOpen(true)} testID="explore-add-collection" />
+            <Column gap="$3" testID="explore-collections">
+              <Row gap="$2" alignItems="center" justifyContent="space-between">
+                <Column width={196}>
+                  <Segmented
+                    options={[
+                      { id: 'DAY', label: '1D' },
+                      { id: 'WEEK', label: '1W' },
+                      { id: 'MONTH', label: '1M' },
+                      { id: 'MAX', label: t({ id: 'collections.all', message: 'All' }) },
+                    ]}
+                    value={window}
+                    onChange={(id) => setWindow(id as CollectionWindow)}
+                    size="compact"
+                    testID="collections-window"
+                  />
+                </Column>
+                <Column width={104}>
+                  <Segmented
+                    options={[
+                      { id: 'ETN', label: 'ETN' },
+                      { id: 'USD', label: 'USD' },
+                    ]}
+                    value={ccy}
+                    onChange={(id) => setCcy(id as CollectionCurrency)}
+                    size="compact"
+                    testID="collections-currency"
+                  />
+                </Column>
               </Row>
-              {(collections.value ?? []).map((c) => (
-                <CollectionCard key={c.address} collection={c} onPress={() => router.navigate('collection', { chainId: ETN, address: c.address })} onStar={() => void star('collection', c.address, c.name, c.starred)} />
-              ))}
-              {active ? (
-                <Pressable onPress={() => router.navigate('rack')} accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }} testID="explore-rack">
-                  <Body tone="arc" size="caption">
-                    {t({ id: 'explore.rack', message: 'Your collection' })}
-                  </Body>
-                </Pressable>
+              <Row gap="$2" alignItems="center" justifyContent="space-between">
+                {active ? <Pill label={t({ id: 'explore.rack', message: 'Your collection' })} icon={<Icon name="nft" size={14} color={paint.arc} />} size="sm" onPress={() => router.navigate('rack')} testID="explore-rack" /> : <Row />}
+                <Body tone="mute" size="caption">
+                  {showAll ? t({ id: 'explore.collections.all', message: 'Showing everything' }) : t({ id: 'explore.collections.verifiedOnly', message: 'Verified collections' })}
+                </Body>
+              </Row>
+              <Column testID="collections-list">
+                {(collections.value ?? []).map((c, i, arr) => (
+                  <CollectionRankRow key={c.address} rank={i + 1} collection={c} currency={ccy} etnUsd={etnUsd} onPress={() => router.navigate('collection', { chainId: ETN, address: c.address })} last={i === arr.length - 1} />
+                ))}
+              </Column>
+              {(collections.value ?? []).length === 0 ? (
+                <Body tone="mute" size="caption">
+                  {t({ id: 'explore.collections.empty', message: 'No collections to show.' })}
+                </Body>
               ) : null}
             </Column>
           ) : segment === 'launch' ? (

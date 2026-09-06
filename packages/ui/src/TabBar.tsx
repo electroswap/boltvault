@@ -4,11 +4,14 @@
  * with the current as a hairline on top; the active tab is lit and
  * underlined; a tab can carry a count (Activity: what needs attention).
  */
-import { Pressable, View } from 'react-native'
+import { useState } from 'react'
+import { Pressable, View, type LayoutChangeEvent } from 'react-native'
+import Animated, { cubicBezier } from 'react-native-reanimated'
 import { Icon, type IconName } from './Icon'
+import { useReducedMotionPref } from './motion/MotionContext'
 import { Body, Row } from './primitives'
 import { CurrentFill } from './Rim'
-import { glow, metrics, paint } from './tokens'
+import { glow, metrics, motion, paint } from './tokens'
 
 export interface TabItem {
   readonly id: string
@@ -25,8 +28,12 @@ export interface TabBarProps {
 }
 
 export function TabBar({ items, activeId, onSelect, testID }: TabBarProps) {
+  const reduced = useReducedMotionPref()
+  const [width, setWidth] = useState(0)
+  const index = Math.max(0, items.findIndex((i) => i.id === activeId))
+  const cell = items.length ? width / items.length : 0
   return (
-    <Row backgroundColor="rgba(9, 13, 38, 0.9)" height={metrics.tabBar} testID={testID}>
+    <Row backgroundColor="rgba(9, 13, 38, 0.9)" height={metrics.tabBar} testID={testID} onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}>
       <View style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 1, opacity: 0.55 }} pointerEvents="none">
         <CurrentFill />
       </View>
@@ -56,12 +63,16 @@ export function TabBar({ items, activeId, onSelect, testID }: TabBarProps) {
             <Body size="caption" tone={active ? 'arc' : 'mute'} fontSize={12} lineHeight={16}>
               {item.label}
             </Body>
-            <View style={{ width: 18, height: 2, borderRadius: 1, overflow: 'hidden', opacity: active ? 1 : 0, shadowColor: glow.tab, shadowRadius: 8, shadowOpacity: 1, shadowOffset: { width: 0, height: 0 } }}>
-              <CurrentFill radius={1} />
-            </View>
+            <View style={{ height: 2 }} />
           </Pressable>
         )
       })}
+      {/* The one indicator: it slides to the chosen tab instead of lighting up in place. */}
+      {width > 0 ? (
+        <Animated.View pointerEvents="none" style={{ position: 'absolute', bottom: 5, left: 0, width: 18, height: 2, borderRadius: 1, overflow: 'hidden', shadowColor: glow.tab, shadowRadius: 8, shadowOpacity: 1, shadowOffset: { width: 0, height: 0 }, transform: [{ translateX: cell * index + cell / 2 - 9 }], transitionProperty: 'transform', transitionDuration: reduced ? 0 : motion.screen, transitionTimingFunction: cubicBezier(0.2, 0.8, 0.2, 1) }}>
+          <CurrentFill radius={1} />
+        </Animated.View>
+      ) : null}
     </Row>
   )
 }

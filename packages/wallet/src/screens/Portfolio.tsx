@@ -67,8 +67,11 @@ export function Portfolio({ body }: { body: BodyKind }) {
   return (
     <Column flex={1} testID="portfolio">
       <ScrollView contentContainerStyle={{ padding: inset, gap: 16, ...(wide ? { maxWidth: 680, width: '100%', alignSelf: 'center' } : {}) }}>
-        <PageHeader title={t({ id: 'portfolio.title', message: 'Portfolio' })} right={<ScopePill scope={scope.scope} label={scope.label} onPress={() => setScopeOpen(true)} testID="home-scope" />} />
+        <PageHeader title={t({ id: 'portfolio.title', message: 'Portfolio' })} />
         <Column gap="$2">
+          <Row>
+            <ScopePill scope={scope.scope} label={scope.label} onPress={() => setScopeOpen(true)} testID="home-scope" />
+          </Row>
           <RollingReadout value={totalText} hero reducedMotion={reducedMotion} testID="total" />
           <Row gap="$3" flexWrap="wrap">
             {change ? (

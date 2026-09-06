@@ -7,7 +7,7 @@ test('popup renders the shared Home screen through the service-worker engine', a
   try {
     const page = await ext.context.newPage()
     const errors = collectErrors(page)
-    await page.setViewportSize({ width: 360, height: 600 })
+    await page.setViewportSize({ width: 400, height: 600 })
     await page.goto(ext.url('popup.html'))
 
     try {

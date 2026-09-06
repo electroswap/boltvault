@@ -101,7 +101,7 @@ export function HardwarePrompt({ body, reducedMotion: reducedMotionOverride }: {
             <Body tone="mute" size="caption">
               {t({ id: 'keystone.paste', message: 'No camera here? Paste the UR text of the answer.' })}
             </Body>
-            <Input value={pasted} onChange={setPasted} mono placeholder="UR:ETH-SIGNATURE/…" testID="keystone-paste" />
+            <Input value={pasted} onChange={setPasted} placeholder="UR:ETH-SIGNATURE/…" testID="keystone-paste" />
             <Key label={t({ id: 'keystone.use', message: 'Use answer' })} kind="secondary" disabled={busy || !pasted.trim()} onPress={() => void submit(pasted.split(/\s+/).filter(Boolean))} testID="keystone-use" />
           </Plate>
           {error ? (

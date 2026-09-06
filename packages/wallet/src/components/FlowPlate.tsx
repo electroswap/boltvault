@@ -123,7 +123,7 @@ export function FlowPlate({ flow, titles, summary = null, onDone, body, reducedM
         </Plate>
         {flow.error ? <Body tone="burn">{flow.error}</Body> : null}
         {flow.hash ? (
-          <Body tone="mute" size="caption" fontFamily="$mono" numberOfLines={1} testID={`${testID}-hash`}>
+          <Body tone="mute" size="caption" numberOfLines={1} testID={`${testID}-hash`}>
             {flow.hash}
           </Body>
         ) : null}

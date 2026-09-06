@@ -5,6 +5,15 @@ export function formatFiat(value: number, currency: 'USD' | 'ETN'): string {
   return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
+/** What `amount` of a token is worth, from the portfolio row's price (fiat ÷ quantity); null when unpriced or empty. */
+export function formatAmountFiat(amount: string, row: { fiat: number | null; quantity: string } | null | undefined, currency: 'USD' | 'ETN'): string | null {
+  const n = Number(amount)
+  if (!row || row.fiat === null || !Number.isFinite(n)) return null
+  const qty = Number(row.quantity)
+  if (!(qty > 0)) return null
+  return formatFiat((row.fiat / qty) * n, currency)
+}
+
 /** A compact fiat amount for stat cells: $6,100 · $12.4K · $1.2M. */
 export function formatCompactFiat(value: number, currency: 'USD' | 'ETN'): string {
   const abs = Math.abs(value)

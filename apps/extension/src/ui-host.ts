@@ -37,6 +37,17 @@ export function extensionUiHost(body: 'extension-popup' | 'extension-tab' | 'ext
       await browser.tabs.create({ url })
     },
     closeWindow: () => window.close(),
+    ...(body === 'extension-popup'
+      ? {
+          currentTab: async () => {
+            const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
+            const url = tab?.url ?? tab?.pendingUrl ?? ''
+            if (!/^https?:/.test(url)) return null
+            const u = new URL(url)
+            return { origin: u.origin, host: u.host, favicon: tab?.favIconUrl ?? null }
+          },
+        }
+      : {}),
     ...(body === 'extension-tab'
       ? {
           scanQr: async (onPart?: (text: string) => boolean) => {

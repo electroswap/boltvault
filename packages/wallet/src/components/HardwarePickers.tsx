@@ -42,7 +42,7 @@ export function HardwareAddressRow({ row, scheme, showPath, added, busy, onAdd, 
       <Signature address={row.address} size={28} />
       <Column flex={1} alignItems="flex-start">
         <Body fontWeight="600">{title}</Body>
-        <Body tone="mute" size="caption" numberOfLines={1} {...(showPath ? { fontFamily: '$mono' } : {})}>
+        <Body tone="mute" size="caption" numberOfLines={1} >
           {showPath ? row.path : shortAddress(row.address)}
         </Body>
       </Column>
@@ -340,7 +340,7 @@ export function KeystonePicker({ onAdded, reducedMotion = false }: { onAdded: ()
         {host.scanQr ? <Key label={t({ id: 'keystone.scan.account', message: 'Scan the Keystone' })} kind="secondary" size="compact" disabled={loading} onPress={() => void scan()} testID="keystone-scan-account" /> : null}
         {imported ? <Pill label={t({ id: 'hardware.paths', message: 'Show paths' })} selected={showPath} size="sm" onPress={() => setShowPath((v) => !v)} testID="keystone-paths" /> : null}
       </Row>
-      <Input value={pasted} onChange={setPasted} mono placeholder="UR:CRYPTO-HDKEY/…" testID="keystone-account-paste" />
+      <Input value={pasted} onChange={setPasted} placeholder="UR:CRYPTO-HDKEY/…" testID="keystone-account-paste" />
       <Key label={t({ id: 'keystone.use.account', message: 'Use this account QR' })} kind="secondary" size="compact" disabled={loading || !pasted.trim()} onPress={() => void load(pasted.split(/\s+/).filter(Boolean))} testID="keystone-account-use" />
       {loading ? <HardwareLoading what={t({ id: 'keystone.loading', message: 'Reading the account QR…' })} reducedMotion={reducedMotion} testID="keystone-loading" /> : null}
       {imported ? (

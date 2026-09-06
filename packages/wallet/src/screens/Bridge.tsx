@@ -12,9 +12,11 @@ import { Body, Cable, ChainMark, Chip, Column, Icon, Input, Key, Pill, Plate, Pr
 import type { BridgeQuote, BridgeRoute, BridgeStatus, ChainView } from '@boltvault/engine'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
+import { AmountWell } from '../components/AmountWell'
 import { PageHeader } from '../components/PageHeader'
+import { ScreenFooter } from '../components/ScreenFooter'
 import { useEngine, useEngineEvent } from '../engine/EngineProvider'
-import { formatRaw } from '../format'
+import { formatFiat, formatRaw } from '../format'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { swapFlowStore, useSwapFlow } from '../state/useSwapFlow'
@@ -196,36 +198,24 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
   return (
     <Column flex={1}>
       <ScrollView contentContainerStyle={{ paddingHorizontal: inset, paddingTop: inset, paddingBottom: 12, gap: 10, ...(wide ? { maxWidth: 560, width: '100%', alignSelf: 'center' } : {}) }} testID="bridge">
-        <PageHeader title={t({ id: 'bridge.title', message: 'Bridge' })} />
+        <PageHeader title={t({ id: 'bridge.title', message: 'Bridge' })} subtitle={active.label ? t({ id: 'from.account', message: 'from {a}', values: { a: `${active.label} · ${shortAddress(active.address)}` } }) : undefined} />
 
         {/* The console: From and To wells, the flip (or the cable, in flight) on the seam. */}
-        <Plate role="console" gap="$2" padding={12} testID="bridge-console">
-          <Plate role="well" gap={4} paddingVertical={8} paddingHorizontal={12} testID="bridge-from">
-            <Row justifyContent="space-between" alignItems="center">
-              <Body tone="mute" size="caption">
-                {t({ id: 'bridge.from', message: 'From' })}
-              </Body>
-              <ChainSelect chainId={fromChain} label={chainName(fromChain)} onPress={() => setSheet('from')} testID="bridge-from-select" />
-            </Row>
-            <Row gap="$2" alignItems="center">
-              <Column flex={1}>
-                <Input value={amount} onChange={setAmount} placeholder="0" bare big testID="bridge-amount-input" />
-              </Column>
-              {route ? <Pill label={route.symbol} icon={<TokenAvatar chainId={fromChain} address={route.token} logoUri={null} size={18} />} chevron={symbols.length > 1} tone="ink" size="md" onPress={symbols.length > 1 ? () => setSheet('asset') : undefined} testID="bridge-asset-select" /> : null}
-            </Row>
-            <Row justifyContent="space-between" alignItems="center" minHeight={20}>
-              <Body tone="mute" size="caption" testID="bridge-balance">
-                {quote ? t({ id: 'bridge.balance', message: 'Balance {b} {s}', values: { b: formatRaw(quote.balanceRaw, quote.decimals), s: quote.symbol } }) : ''}
-              </Body>
-              {quote ? (
-                <Pressable onPress={() => setAmount(formatRaw(quote.balanceRaw, quote.decimals).replace(/,/g, ''))} accessibilityRole="button" accessibilityLabel={t({ id: 'max', message: 'Max' })} style={{ minHeight: 44, minWidth: 44, marginVertical: -10, justifyContent: 'center', alignItems: 'flex-end' }} testID="bridge-max">
-                  <Body tone="arc" size="caption" fontWeight="600">
-                    {t({ id: 'max', message: 'Max' })}
-                  </Body>
-                </Pressable>
-              ) : null}
-            </Row>
-          </Plate>
+        <Plate role="console" gap="$2" padding={10} testID="bridge-console">
+          <AmountWell
+            label={t({ id: 'bridge.from', message: 'From' })}
+            right={<ChainSelect chainId={fromChain} label={chainName(fromChain)} onPress={() => setSheet('from')} testID="bridge-from-select" />}
+            value={amount}
+            onChange={setAmount}
+            tokenPill={route ? <Pill label={route.symbol} icon={<TokenAvatar chainId={fromChain} address={route.token} logoUri={null} size={18} />} chevron={symbols.length > 1} tone="ink" size="md" onPress={symbols.length > 1 ? () => setSheet('asset') : undefined} testID="bridge-asset-select" /> : undefined}
+            fiat={amount.trim() && Number(amount) > 0 ? formatFiat(Number(amount), 'USD') : null}
+            balance={quote ? `${formatRaw(quote.balanceRaw, quote.decimals)} ${quote.symbol}` : null}
+            onMax={quote ? () => setAmount(formatRaw(quote.balanceRaw, quote.decimals).replace(/,/g, '')) : undefined}
+            testID="bridge-from"
+            inputTestID="bridge-amount-input"
+            maxTestID="bridge-max"
+            balanceTestID="bridge-balance"
+          />
 
           <Row justifyContent="center" marginVertical={-18} zIndex={2}>
             <Pressable onPress={flip} accessibilityRole="button" accessibilityLabel={t({ id: 'bridge.flip', message: 'Swap direction' })} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }} testID="bridge-flip">
@@ -236,22 +226,17 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
             </Pressable>
           </Row>
 
-          <Plate role="well" gap={4} paddingVertical={8} paddingHorizontal={12} testID="bridge-to">
-            <Row justifyContent="space-between" alignItems="center">
-              <Body tone="mute" size="caption">
-                {t({ id: 'bridge.to', message: 'To' })}
-              </Body>
-              <ChainSelect chainId={toChain} label={toChain !== null ? chainName(toChain) : t({ id: 'bridge.pick', message: 'Pick a chain' })} onPress={() => setSheet('to')} testID="bridge-to-select" />
-            </Row>
-            <Row justifyContent="space-between" alignItems="center" minHeight={32} gap="$2">
-              <Body size="title" numberOfLines={1} flexShrink={1} testID="bridge-receive">
-                {receiveText}
-              </Body>
-              <Body tone="mute" size="caption" numberOfLines={1}>
-                {quote ? t({ id: 'bridge.eta.short', message: 'About {m} min via Hyperlane', values: { m: quote.etaMinutes } }) : ''}
-              </Body>
-            </Row>
-          </Plate>
+          <AmountWell
+            label={t({ id: 'bridge.to', message: 'To' })}
+            right={<ChainSelect chainId={toChain} label={toChain !== null ? chainName(toChain) : t({ id: 'bridge.pick', message: 'Pick a chain' })} onPress={() => setSheet('to')} testID="bridge-to-select" />}
+            value={receiveText}
+            readOnly
+            fiat={quote && quote.ok && amount.trim() ? formatFiat(Number(formatRaw(quote.amountRaw, quote.decimals).replace(/,/g, '')), 'USD') : null}
+            balance={quote ? t({ id: 'bridge.eta.short', message: 'About {m} min via Hyperlane', values: { m: quote.etaMinutes } }) : null}
+            balanceIcon="clock"
+            testID="bridge-to"
+            inputTestID="bridge-receive"
+          />
         </Plate>
 
         {routes.length === 0 ? (
@@ -275,26 +260,20 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
             </Body>
             {!editingRecipient ? <Pill label={t({ id: 'bridge.recipient.other', message: 'Someone else' })} size="sm" onPress={() => setEditingRecipient(true)} testID="bridge-recipient-edit" /> : null}
           </Row>
-          {editingRecipient ? <Input value={recipient} onChange={setRecipient} mono placeholder="0x…" autoFocus testID="bridge-recipient-input" /> : <Body size="caption" fontFamily="$mono">{active.label ? `${active.label} · ${shortAddress(active.address)}` : shortAddress(active.address)}</Body>}
+          {editingRecipient ? <Input value={recipient} onChange={setRecipient} placeholder="0x…" autoFocus testID="bridge-recipient-input" /> : <Body size="caption">{active.label ? `${active.label} · ${shortAddress(active.address)}` : shortAddress(active.address)}</Body>}
           {quote?.recipientCode.origin ? (
             <Body tone={quote.recipientCode.destination === false ? 'burn' : 'mute'} size="caption">
               {quote.recipientCode.destination === false ? t({ id: 'bridge.recipient.nocode', message: 'A contract here, nothing on the destination — the tokens would be stuck.' }) : t({ id: 'bridge.recipient.contract', message: 'This address is a contract on both chains.' })}
             </Body>
           ) : null}
           <Column height={1} backgroundColor="rgba(95,216,255,0.10)" marginVertical={2} />
-          <Row justifyContent="space-between" minHeight={22} alignItems="center">
+          <Row justifyContent="space-between" minHeight={22} alignItems="center" gap="$2">
             <Body tone="mute" size="caption">
-              {t({ id: 'bridge.fee.gas', message: 'Interchain gas' })}
+              {t({ id: 'bridge.fees', message: 'Fees' })}
             </Body>
-            <Body size="caption" testID="bridge-fee-gas">
-              {quote ? `${formatRaw(quote.gasQuoteWei, 18)} ${feeSymbol}` : '—'}
+            <Body size="caption" textAlign="right" flexShrink={1} numberOfLines={1} testID="bridge-fee-gas">
+              {quote ? t({ id: 'bridge.fees.value', message: '{g} {s} gas · ≈ {n} {s} network', values: { g: formatRaw(quote.gasQuoteWei, 18), n: formatRaw(quote.txFeeWei, 18), s: feeSymbol } }) : '—'}
             </Body>
-          </Row>
-          <Row justifyContent="space-between" minHeight={22} alignItems="center">
-            <Body tone="mute" size="caption">
-              {t({ id: 'bridge.fee.tx', message: 'Network fee' })}
-            </Body>
-            <Body size="caption">{quote ? `≈ ${formatRaw(quote.txFeeWei, 18)} ${feeSymbol}` : '—'}</Body>
           </Row>
           {quote?.steps.includes('approve') ? (
             <Body tone="mute" size="caption">
@@ -303,17 +282,6 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
           ) : null}
         </Plate>
 
-        {problem ? (
-          <Body tone="burn" size="caption" testID="bridge-problem">
-            {problem}
-          </Body>
-        ) : null}
-        {error ? (
-          <Body tone="burn" size="caption" testID="bridge-error">
-            {error}
-          </Body>
-        ) : null}
-        <Key label={t({ id: 'key.bridge', message: 'Bridge' })} disabled={busy || !quote?.ok || active.kind === 'watch'} onPress={() => void submit()} testID="bridge-key" />
         {active.kind === 'watch' ? (
           <Body tone="mute" size="caption">
             {t({ id: 'watch.only', message: 'Watch-only — import a key or pair a device.' })}
@@ -341,6 +309,20 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
           </Column>
         ) : null}
       </ScrollView>
+
+      <ScreenFooter inset={inset} maxWidth={wide ? 560 : undefined} testID="bridge-footer">
+          {problem ? (
+            <Body tone="burn" size="caption" testID="bridge-problem">
+              {problem}
+            </Body>
+          ) : null}
+          {error ? (
+            <Body tone="burn" size="caption" testID="bridge-error">
+              {error}
+            </Body>
+          ) : null}
+          <Key label={t({ id: 'key.bridge', message: 'Bridge' })} disabled={busy || !quote?.ok || active.kind === 'watch'} onPress={() => void submit()} testID="bridge-key" />
+      </ScreenFooter>
 
       <Sheet open={sheet === 'from'} onClose={() => setSheet(null)} title={t({ id: 'bridge.from.title', message: 'From' })} reducedMotion={reducedMotion} testID="bridge-from-sheet">
         <Column gap={2}>

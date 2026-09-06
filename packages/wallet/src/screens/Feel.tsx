@@ -3,7 +3,7 @@
  * the per-block tick, sound, and the display currency. Sound and the tick
  * are off until asked for; nothing here nags.
  */
-import { Body, Chip, Plate, Row, ScrollView, Toggle, metrics, paint } from '@boltvault/ui'
+import { Body, Chip, Pill, Plate, Row, ScrollView, Toggle, metrics } from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
 import type { Settings } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
@@ -56,11 +56,7 @@ export function Feel({ body }: { body: 'extension-popup' | 'extension-tab' | 'mo
         <Body size="title">{t({ id: 'feel.currency', message: 'Display currency' })}</Body>
         <Row gap="$2">
           {(['USD', 'ETN'] as const).map((c) => (
-            <Chip key={c} onPress={() => set({ displayCurrency: c })} cursor="pointer" minHeight={44} justifyContent="center" borderColor={settings?.displayCurrency === c ? paint.arc : undefined} testID={`feel-currency-${c}`}>
-              <Body tone={settings?.displayCurrency === c ? 'arc' : 'mute'} size="caption">
-                {c}
-              </Body>
-            </Chip>
+            <Pill key={c} label={c} selected={settings?.displayCurrency === c} onPress={() => set({ displayCurrency: c })} testID={`feel-currency-${c}`} />
           ))}
         </Row>
       </Plate>

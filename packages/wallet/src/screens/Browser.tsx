@@ -137,7 +137,7 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
       <Row gap="$2" padding={metrics.inset} paddingBottom={8} alignItems="center">
         <Key label="" kind="secondary" onPress={() => (nav.canGoBack ? handle.current?.goBack() : router.back())} icon={<Icon name="back" size={18} color={paint.ink} />} testID="browser-back" />
         <Column flex={1}>
-          <Input value={typed} onChange={setTyped} mono placeholder="https://" testID="browser-url" />
+          <Input value={typed} onChange={setTyped} placeholder="https://" testID="browser-url" />
         </Column>
         <Key label={t({ id: 'browser.go', message: 'Go' })} kind="secondary" onPress={go} testID="browser-go" />
       </Row>

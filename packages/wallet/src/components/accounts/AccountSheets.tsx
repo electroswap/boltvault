@@ -89,12 +89,12 @@ export function AccountDetailsSheet({ open, onClose, account, seed, reducedMotio
   const host = useHost()
   const [copied, setCopied] = useState(false)
   if (!account) return null
-  const rows: Array<{ label: string; value: string; mono?: boolean }> = [
+  const rows: Array<{ label: string; value: string }> = [
     { label: t({ id: 'acct.details.type', message: 'Type' }), value: kindLabel(account) },
     ...(seed ? [{ label: t({ id: 'acct.details.wallet', message: 'Wallet' }), value: seed.label }] : []),
     ...(derivationLabel(account) ? [{ label: t({ id: 'acct.details.derivation', message: 'Derivation' }), value: derivationLabel(account) ?? '' }] : []),
-    ...(account.hardware ? [{ label: t({ id: 'acct.details.path', message: 'Path' }), value: account.hardware.path, mono: true }] : []),
-    ...(account.hardware?.deviceId ? [{ label: t({ id: 'acct.details.device', message: 'Device' }), value: account.hardware.deviceId, mono: true }] : []),
+    ...(account.hardware ? [{ label: t({ id: 'acct.details.path', message: 'Path' }), value: account.hardware.path }] : []),
+    ...(account.hardware?.deviceId ? [{ label: t({ id: 'acct.details.device', message: 'Device' }), value: account.hardware.deviceId }] : []),
     { label: t({ id: 'acct.details.signs', message: 'Signs' }), value: account.hasKey ? t({ id: 'acct.details.signs.here', message: 'Here, with your password' }) : account.kind === 'watch' ? t({ id: 'acct.details.signs.no', message: 'Never — watch only' }) : t({ id: 'acct.details.signs.device', message: 'On the device' }) },
     { label: t({ id: 'acct.details.added', message: 'Added' }), value: new Date(account.createdAt).toLocaleDateString() },
   ]
@@ -108,7 +108,7 @@ export function AccountDetailsSheet({ open, onClose, account, seed, reducedMotio
     <Sheet open={open} onClose={onClose} title={account.label} reducedMotion={reducedMotion} footer={<Key label={t({ id: 'close', message: 'Close' })} kind="secondary" size="compact" onPress={onClose} />} testID="account-details">
       <Column gap="$3">
         <Row gap="$2" alignItems="center">
-          <Body size="caption" fontFamily="$mono" flexShrink={1} testID="account-details-address">
+          <Body size="caption" flexShrink={1} testID="account-details-address">
             {account.address}
           </Body>
           <IconButton icon={copied ? 'check' : 'copy'} label={t({ id: 'token.copyAddress', message: 'Copy address' })} active={copied} onPress={() => void copy()} testID="account-details-copy" />
@@ -119,7 +119,7 @@ export function AccountDetailsSheet({ open, onClose, account, seed, reducedMotio
               <Body tone="mute" size="caption">
                 {r.label}
               </Body>
-              <Body size="caption" textAlign="right" flexShrink={1} {...(r.mono ? { fontFamily: '$mono' } : {})}>
+              <Body size="caption" textAlign="right" flexShrink={1}>
                 {r.value}
               </Body>
             </Row>

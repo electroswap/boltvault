@@ -1,15 +1,17 @@
 /**
  * Pill — a choice or a mark (style bible › materials): a token, a duration,
  * a scope, a filter, "Show all". A 44 px pressable around a 28/36 px chip;
- * selected = the lit rim and an ink label. Without `onPress` it is a static
- * mark and gets no button role.
+ * selected = a filled tint of the arc with an ink label (never a lit rim —
+ * style bible › selected). Without `onPress` it is a static mark and gets
+ * no button role.
  */
 import type { ReactNode } from 'react'
 import { Pressable } from 'react-native'
+import Animated from 'react-native-reanimated'
 import { Icon } from './Icon'
-import { Body, Chip, Row } from './primitives'
-import { Rim } from './Rim'
-import { metrics, paint } from './tokens'
+import { useReducedMotionPref } from './motion/MotionContext'
+import { Body, Row } from './primitives'
+import { edge, metrics, motion, paint } from './tokens'
 
 export interface PillProps {
   readonly label: string
@@ -27,17 +29,32 @@ export interface PillProps {
 export function Pill({ label, icon, chevron = false, selected = false, tone, size = 'md', disabled = false, onPress, accessibilityLabel, testID }: PillProps) {
   const height = size === 'sm' ? 28 : 36
   const labelTone = selected ? 'ink' : (tone ?? 'mute')
+  const reduced = useReducedMotionPref()
   const chip = (
-    <Chip height={height} paddingHorizontal={size === 'sm' ? 10 : 12} paddingVertical={0} justifyContent="center" borderColor={selected ? 'transparent' : '$edge'} opacity={disabled ? 0.5 : 1}>
-      <Row gap={6} zIndex={1}>
+    <Animated.View
+      style={{
+        height,
+        paddingHorizontal: size === 'sm' ? 10 : 12,
+        borderRadius: 999,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: selected ? paint.arcSoft : paint.glassRaised,
+        borderColor: selected ? paint.arcEdge : edge,
+        opacity: disabled ? 0.5 : 1,
+        transitionProperty: ['backgroundColor', 'borderColor'],
+        transitionDuration: reduced ? 0 : motion.micro,
+        transitionTimingFunction: 'ease-out',
+      }}
+    >
+      <Row gap={6} alignItems="center">
         {icon}
         <Body size="caption" tone={labelTone} fontWeight={selected ? '600' : '400'} numberOfLines={1}>
           {label}
         </Body>
         {chevron ? <Icon name="chevronDown" size={14} color={selected ? paint.ink : paint.mute} /> : null}
       </Row>
-      {selected ? <Rim radius={999} opacity={0.6} /> : null}
-    </Chip>
+    </Animated.View>
   )
   if (!onPress) return <Row testID={testID}>{chip}</Row>
   return (

@@ -70,7 +70,7 @@ export function Legends({ body, reducedMotion = false }: { body: BodyKind; reduc
               <Key label={t({ id: 'legends.browse', message: 'See the collection' })} kind="secondary" size="compact" onPress={() => router.navigate('collection', { chainId: ETN, address: status.collection })} testID="legends-browse" />
             </Plate>
           ) : null}
-          {status.mint?.mintable ? (
+          {status.mint?.mintable && status.mint.mintableCount > 0 ? (
             <Plate gap="$2" testID="legends-mint">
               <Body size="title">{t({ id: 'collection.mint', message: 'Mint a Legend' })}</Body>
               <Body tone="mute" size="caption">

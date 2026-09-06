@@ -51,7 +51,7 @@ Glow: raised plates `rgba(60,100,255,0.22)` radius 24; the primary key `rgba(70,
 
 - **Readouts** (totals, quotes, amounts ≥ 24 px): Oxanium 600, tabular, tracking −0.03 em, `ink`, with a faint text glow (`rgba(79,195,255,0.35)`, radius 12) on the hero only. Hero 40 px in the popup, 48 px in the tab and on the phone.
 - **Text**: Sora 400/600, 13–17 px, sentence case, ≤ 70 characters a line. Labels above a number are Sora 400 13 px `mute`.
-- **Addresses**: Sora tabular 14 px `mute`, `0x1F90…7B63`, copy-on-plate.
+- **Addresses and hashes**: Sora tabular 13–14 px `mute`, `0x1F90…7B63`, with their own copy control beside them. There is no monospace face in the product (2026-09-06: the IBM Plex Mono declaration was never shipped as a file and fell back to a serif; it is gone from the tokens, the config and every call site).
 - No third family. Numerals never fall back to Sora.
 
 ## Materials and roles
@@ -96,9 +96,36 @@ One fragment shader, written twice (GLSL ES 3.0 for the extension, SkSL for Skia
 
 The seat avatar remains a 40 px crop of the account's Grid, so an account is still recognisable by its light.
 
+## Selected
+
+A chosen chip (a pill, a segment, a chain, a timeframe) is a **filled tint of the arc** — `arcSoft` fill, `arcEdge` hairline, ink label at 600 — never a lit rim, never a bare colour change of the label. Unchosen chips are raised glass with the edge hairline and a mute label. The fill eases in over 160 ms. This is the one selected treatment; a screen that invents another is wrong.
+
+## Chain selector
+
+One component, one place. The selector is a pill — the chain's mark, its name, a chevron — and it sits as the **first control under the header, at the left** (Send, Receive, Add token) or as the first row of the balance plate (Home, Portfolio). It opens the one chain sheet: left-aligned rows with the mark at 28 px, the name, a caption, the balance held there at the right, a check on the chosen one; a chain that is turned off says so and offers Networks. A screen that only *states* its chain (Token, Swap) uses the mark and name as a caption, never the pill shape. Bridge's From and To selects are the same pill inside the amount wells.
+
+## Amount well
+
+Every amount (Send, Swap, Bridge) is the same well: the label row with an optional control at its right, the amount big and bare beside the token pill, then what it is worth at the left and what you hold at the right with a MAX pill. A read-only well (what you receive) shows the amount as a readout in the same place. Fields never draw the browser's focus ring; focus is the `arcEdge` hairline.
+
+## The action grid
+
+Home's verbs are cells of one recessed surface divided by hairlines — a glyph in its disc, a label, a badge pinned to the corner — never nine plates with rims. The press tint lives on the cell.
+
+## Widths
+
+The popup is 400 × 600 (Rabby-wide): 360 px of content between 20 px insets. Every row is designed for that width first; the tab centres a 560–680 px column; nothing is designed at 360 any more.
+
 ## Motion
 
-Unchanged from the master plan §7.7: one ignition on unlock, everything else caused by the user or the chain. The Grid's waves move at ~0.08 cycles per second; nodes pulse per block; the primary key's glow brightens 120 ms on press.
+One ignition on unlock; everything else answers the person or the chain. The Grid's waves move at ~0.08 cycles per second; nodes pulse per block.
+
+- **A view arrives** (`ScreenEnter`): a push slides in 14 px from the right and fades up over 180 ms; a pop returns from the left; a tab change rises 6 px over 160 ms. The Grid behind never moves. The same route never re-animates.
+- **A press charges** (`Charge`): a soft highlight sweeps a primary key once, left to right, 260 ms — current finding its way through. The key also settles to 0.985 scale while held.
+- **A choice fills**: a pill's or a segment's fill eases in over 160 ms; the dock's one indicator slides to the chosen tab over 180 ms instead of lighting up in place.
+- **A confirmation pops**: the copied check scales in from 0.5 over 160 ms.
+- **A sheet rises** 28 px on `cubicBezier(0.2, 0.9, 0.25, 1)` over 220 ms while its scrim fades.
+- Every timing is ≤ 260 ms and eased. Under reduced motion transitions run at 0 ms and one-shot animations do not mount; the app is complete without them.
 
 ## Copy
 

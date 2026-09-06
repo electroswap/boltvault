@@ -67,7 +67,7 @@ export function About({ body }: { body: 'extension-popup' | 'extension-tab' | 'm
         <Body tone="mute" size="caption">
           {t({ id: 'about.fee.body', message: 'In-wallet swaps pay 0.5% of the output, less by BOLT/DYNO tier, to the fee sink on Electroneum. Fees fund the wallet; the sink’s sweeps are on the explorer.' })}
         </Body>
-        <Body tone="mute" size="caption" fontFamily="$mono">
+        <Body tone="mute" size="caption">
           {fee?.sink ? `${t({ id: 'about.sink', message: 'Sink' })} ${shortAddress(fee.sink)} · ${t({ id: 'about.schedule', message: 'Schedule' })} ${fee.schedule ? shortAddress(fee.schedule) : '—'}` : t({ id: 'about.fee.none', message: 'Not configured in this build — in-wallet swaps stay off until it is.' })}
         </Body>
       </Plate>

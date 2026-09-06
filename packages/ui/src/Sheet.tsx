@@ -13,7 +13,7 @@
  */
 import type { ReactNode } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
-import Animated from 'react-native-reanimated'
+import Animated, { cubicBezier } from 'react-native-reanimated'
 import { Icon } from './Icon'
 import { Body, Column, Row } from './primitives'
 import { CurrentFill } from './Rim'
@@ -60,9 +60,9 @@ export function Sheet({ open, onClose, title, children, header, footer, scroll =
           still
             ? null
             : {
-                animationName: { from: { transform: [{ translateY: 24 }] }, to: { transform: [{ translateY: 0 }] } },
+                animationName: { from: { transform: [{ translateY: 28 }] }, to: { transform: [{ translateY: 0 }] } },
                 animationDuration: `${motion.sheet}ms`,
-                animationTimingFunction: 'ease-out',
+                animationTimingFunction: cubicBezier(0.2, 0.9, 0.25, 1),
                 animationFillMode: 'forwards',
               },
         ]}

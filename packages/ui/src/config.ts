@@ -56,14 +56,6 @@ const oxanium = createFont({
   letterSpacing: { 1: -0.7, 2: -0.85, 3: -1.0, 4: -1.3, 5: -1.5, true: -0.85 },
 })
 
-const mono = createFont({
-  family: fontFamilies.mono,
-  size: { 1: 14, true: 14 },
-  lineHeight: { 1: 20, true: 20 },
-  weight: { 1: '400', true: '400' },
-  letterSpacing: { 1: 0, true: 0 },
-})
-
 /** v1 is forced dark; "daylight glass" is a later named instrument (§7.3). */
 const dark = {
   background: paint.void,
@@ -89,7 +81,7 @@ const dark = {
 export const tamaguiConfig = createTamagui({
   tokens,
   themes: { dark, light: dark },
-  fonts: { body: sora, heading: sora, readout: oxanium, mono },
+  fonts: { body: sora, heading: sora, readout: oxanium },
   defaultFont: 'body',
   shorthands: {
     p: 'padding',

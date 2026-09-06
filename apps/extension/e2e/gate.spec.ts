@@ -44,7 +44,7 @@ test('popup is interactive within 300 ms of navigation (cold open)', async () =>
     const samples: number[] = []
     for (let i = 0; i < 3; i++) {
       const page = await ext.context.newPage()
-      await page.setViewportSize({ width: 360, height: 600 })
+      await page.setViewportSize({ width: 400, height: 600 })
       const started = Date.now()
       await page.goto(ext.url('popup.html'))
       await page.getByTestId('home').waitFor({ state: 'visible', timeout: 10_000 })

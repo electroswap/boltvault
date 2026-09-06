@@ -28,7 +28,7 @@ export interface ActionTileProps {
 const BADGE_BG: Record<ActionTileBadge['tone'], string> = { arc: 'rgba(79, 195, 255, 0.18)', surge: 'rgba(62, 230, 165, 0.18)', ember: 'rgba(245, 198, 107, 0.2)', burn: 'rgba(255, 92, 122, 0.2)' }
 const DISC = 'rgba(95, 216, 255, 0.10)'
 
-function Badge({ badge, corner = false }: { badge: ActionTileBadge; corner?: boolean }) {
+export function Badge({ badge, corner = false }: { badge: ActionTileBadge; corner?: boolean }) {
   return (
     <View style={[{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: 999, backgroundColor: BADGE_BG[badge.tone], alignSelf: 'flex-start', maxWidth: '100%' }, corner ? { position: 'absolute', top: 6, right: 6, maxWidth: '70%', zIndex: 2 } : null]}>
       <Body size="caption" tone={badge.tone} fontWeight="600" fontSize={10.5} lineHeight={13} numberOfLines={1}>
@@ -39,7 +39,7 @@ function Badge({ badge, corner = false }: { badge: ActionTileBadge; corner?: boo
 }
 
 /** The glyph in its disc: a soft arc tint, a faint rim, the icon at 20 px with the stroke the style bible sets. */
-function Glyph({ icon, size = 34 }: { icon: IconName; size?: number }) {
+export function Glyph({ icon, size = 34 }: { icon: IconName; size?: number }) {
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: DISC, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative' }}>
       <Icon name={icon} size={20} color={paint.arc} strokeWidth={2} />

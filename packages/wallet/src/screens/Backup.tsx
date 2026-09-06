@@ -79,7 +79,7 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
         ) : (
           <Column gap="$3">
             {quiz.positions.map((p) => (
-              <Input key={p} label={t({ id: 'ob.quiz.word', message: 'Word {n}', values: { n: p } })} value={quiz.answers[p] ?? ''} onChange={(v) => setQuiz({ ...quiz, answers: { ...quiz.answers, [p]: v } })} mono testID={`quiz-${p}`} />
+              <Input key={p} label={t({ id: 'ob.quiz.word', message: 'Word {n}', values: { n: p } })} value={quiz.answers[p] ?? ''} onChange={(v) => setQuiz({ ...quiz, answers: { ...quiz.answers, [p]: v } })} testID={`quiz-${p}`} />
             ))}
             {error ? <Body tone="burn">{error}</Body> : null}
             <Key

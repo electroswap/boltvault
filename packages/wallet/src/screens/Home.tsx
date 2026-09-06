@@ -5,12 +5,13 @@
  * on the dock. Tapping the total opens the Portfolio. The Grid is drawn by
  * TabShell behind this screen; the holder tier warms it.
  */
-import { ActionTile, Body, Column, Icon, IconButton, Ignition, Key, LiveFilament, Plate, Pressable, Row, RollingReadout, Seat, ScrollView, metrics, paint, type ActionTileBadge, type IconName } from '@boltvault/ui'
-import { cacheKey, type BridgeStatus, type CampaignView, type Inventory } from '@boltvault/engine'
+import { ActionGrid, Body, ChainMark, Column, Icon, IconButton, Ignition, Key, LiveFilament, Pill, Plate, Pressable, Row, RollingReadout, Seat, ScrollView, metrics, paint, type ActionTileBadge, type IconName } from '@boltvault/ui'
+import { cacheKey, type BridgeStatus, type CampaignView, type ExploreToken, type Inventory } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { ChainScopeSheet, ScopePill, useHomeScope } from '../components/ChainScope'
+import { DappSheet, DappStrip, useDappStatus } from '../components/DappStatus'
 import { useEngine } from '../engine/EngineProvider'
-import { formatChange, formatFiat } from '../format'
+import { formatChange, formatFiat, formatPrice } from '../format'
 import { useHost } from '../host'
 import { useActivity } from '../hooks/useActivity'
 import { useCached } from '../hooks/useCached'
@@ -58,8 +59,17 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   const [bridges, setBridges] = useState<BridgeStatus[]>([])
   const [notice, setNotice] = useState<string | null>(null)
   const [unlimited, setUnlimited] = useState(0)
+  const [copied, setCopied] = useState(false)
+  const [dappOpen, setDappOpen] = useState(false)
   const accountId = active?.id ?? null
   const unlocked = !!vault?.unlocked
+  const dapp = useDappStatus(unlocked && (host.body === 'extension-popup' || host.body === 'harness'))
+  const market = useCached<ExploreToken[]>({
+    key: unlocked ? cacheKey('explore', 'tokens', ETN) : null,
+    cached: (e) => e.explore.cachedTokens({ chainId: ETN }),
+    fresh: (e) => e.explore.tokens({ chainId: ETN }),
+    maxAgeMs: 60_000,
+  })
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   // The tab lays tiles out as rows and centres the column; the popup and the phone stack them (plan B3).
   const wide = body === 'extension-tab'
@@ -129,18 +139,27 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     { id: 'search', icon: 'search', label: t({ id: 'key.search', message: 'Search' }), badge: null, onPress: () => router.navigate('explore', { search: true }) },
     { id: 'alerts', icon: 'bell', label: t({ id: 'key.alerts', message: 'Alerts' }), badge: unread > 0 ? { text: String(unread), tone: 'ember' } : null, onPress: () => router.navigate('alerts') },
   ]
-  const tileRows = [tiles.slice(0, 3), tiles.slice(3, 6), tiles.slice(6, 9)]
+  const etn = (market.value ?? []).find((x) => x.address === 'native' || x.symbol === 'ETN') ?? null
+  const etnChange = etn && etn.change24h !== null ? formatChange(etn.change24h / 100) : null
+  const copy = host.copy && active ? () => void host.copy?.(active.address).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }, () => undefined) : undefined
 
   // One slot (plan B3): the backup gate, else a signed notice, else the accessory that matters most.
   let slot: React.ReactNode = null
   if (vault?.unlocked && !vault.backupComplete && vault.seeds.length > 0) {
     slot = (
-      <Plate role="raised" gap="$2" testID="backup-gate">
-        <Body size="title">{t({ id: 'home.backup.title', message: 'Back up your recovery phrase' })}</Body>
-        <Body tone="mute" size="caption">
-          {t({ id: 'home.backup.body', message: 'Swapping and signing stay locked until you confirm three words. Watching and receiving work now.' })}
-        </Body>
-        <Key label={t({ id: 'home.backup.key', message: 'Back up' })} size="compact" onPress={() => router.navigate('backup')} testID="backup-key" />
+      <Plate role="raised" paddingVertical={6} paddingHorizontal={12} minHeight={44} justifyContent="center" testID="backup-gate">
+        <Row gap="$2" alignItems="center">
+          <Icon name="shield" size={16} color={paint.ember} />
+          <Column flex={1} minWidth={0} alignItems="flex-start">
+            <Body size="caption" fontWeight="600" numberOfLines={1}>
+              {t({ id: 'home.backup.title', message: 'Back up your recovery phrase' })}
+            </Body>
+            <Body tone="mute" size="caption" fontSize={11} lineHeight={13} numberOfLines={1}>
+              {t({ id: 'home.backup.body', message: 'Swapping and signing stay locked until you do.' })}
+            </Body>
+          </Column>
+          <Pill label={t({ id: 'home.backup.key', message: 'Back up' })} tone="ember" size="sm" onPress={() => router.navigate('backup')} testID="backup-key" />
+        </Row>
       </Plate>
     )
   } else if (notice) {
@@ -155,7 +174,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
       </Plate>
     )
   } else if (bridgeInFlight) {
-    slot = <Accessory icon="bridge" tone={paint.arc} text={t({ id: 'home.acc.bridge', message: 'Hyperlane {s} arriving on {c} · about {m} min', values: { s: bridgeInFlight.symbol, c: scope.chains.find((c) => c.chainId === bridgeInFlight.toChainId)?.name ?? `chain ${bridgeInFlight.toChainId}`, m: bridgeInFlight.toChainId === 1 || bridgeInFlight.fromChainId === 1 ? 20 : 5 } })} onPress={() => router.navigate('bridge')} testID="accessory-bridge" />
+    slot = <Accessory icon="bridge" tone={paint.arc} text={t({ id: 'home.acc.bridge', message: '{s} arriving on {c} in about {m} min', values: { s: bridgeInFlight.symbol, c: scope.chains.find((c) => c.chainId === bridgeInFlight.toChainId)?.name ?? `chain ${bridgeInFlight.toChainId}`, m: bridgeInFlight.toChainId === 1 || bridgeInFlight.fromChainId === 1 ? 20 : 5 } })} onPress={() => router.navigate('bridge')} testID="accessory-bridge" />
   } else if (pendingTx > 0) {
     slot = <Accessory icon="clock" tone={paint.arc} text={t({ id: 'home.acc.pending', message: '{n} transaction pending', values: { n: pendingTx } })} onPress={() => router.setTab('activity')} testID="accessory-pending" />
   } else if (positions?.accessory) {
@@ -167,15 +186,15 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
 
   return (
     <Column flex={1} testID="home">
-      <ScrollView contentContainerStyle={{ paddingHorizontal: inset, paddingTop: inset, paddingBottom: 12, gap: 10, ...(wide ? { maxWidth: 680, width: '100%', alignSelf: 'center' } : {}) }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: inset, paddingTop: 12, paddingBottom: 12, gap: 10, ...(wide ? { maxWidth: 680, width: '100%', alignSelf: 'center' } : {}) }}>
         <Ignition reducedMotion={reducedMotion} order={0}>
-          <Row justifyContent="space-between" alignItems="center" minHeight={metrics.header}>
+          <Row justifyContent="space-between" alignItems="center" minHeight={metrics.header} gap="$2">
             {active ? (
-              <Seat address={active.address} label={active.label} tierMark={tier && tier.tier > 0 ? t({ id: 'home.tier', message: 'Tier {t}', values: { t: tier.tier } }) : null} onPress={() => router.navigate('accounts')} testID="seat" />
+              <Seat address={active.address} label={active.label} tierMark={tier && tier.tier > 0 ? t({ id: 'home.tier', message: 'Tier {t}', values: { t: tier.tier } }) : null} onPress={() => router.navigate('accounts')} onCopy={copy} copied={copied} testID="seat" />
             ) : (
               <Body size="title">BoltVault</Body>
             )}
-            <Row gap="$1">
+            <Row gap="$1" flexShrink={0}>
               {openInTab ? <IconButton icon="expand" label={t({ id: 'header.expand', message: 'Open in a full tab' })} onPress={() => openInTab()} testID="open-tab" /> : null}
               <IconButton icon="settings" label={t({ id: 'home.settings', message: 'Settings' })} onPress={() => router.navigate('settings')} testID="settings-key" />
             </Row>
@@ -209,36 +228,35 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
 
         {unlocked ? (
           <>
+            {/* The balance console: the scope, the total with its day, the live filament. */}
             <Ignition reducedMotion={reducedMotion} order={1}>
-              <Plate role="console" gap="$2" padding={12} testID="home-console">
+              <Plate role="console" gap={6} padding={12} testID="home-console">
                 <Row justifyContent="space-between" alignItems="center">
                   <ScopePill scope={scope.scope} label={scope.label} onPress={() => setScopeOpen(true)} testID="home-scope" />
                   {portfolio.snapshot ? (
                     <Body tone="mute" size="caption" testID="home-token-count">
                       {tokenCount === 1 ? t({ id: 'home.tokens.one', message: '1 token' }) : t({ id: 'home.tokens.many', message: '{n} tokens', values: { n: tokenCount } })}
+                      {unpriced > 0 ? ` · ${t({ id: 'home.unpriced', message: '{n} without price', values: { n: unpriced } })}` : ''}
                     </Body>
                   ) : null}
                 </Row>
                 <Pressable onPress={() => router.navigate('portfolio')} accessibilityRole="button" accessibilityLabel={t({ id: 'home.portfolio.a11y', message: 'Open your portfolio' })} testID="home-portfolio" style={{ minHeight: 44, justifyContent: 'center' }}>
-                  <Row justifyContent="space-between" alignItems="center">
+                  <Row alignItems="flex-end" gap="$2">
                     <RollingReadout value={totalText} hero reducedMotion={reducedMotion} testID="total" />
-                    <Icon name="chevronRight" size={20} color={paint.mute} />
-                  </Row>
-                  <Row gap="$3" marginTop={2}>
-                    {change ? (
-                      <Body tone={change.startsWith('+') ? 'surge' : change.startsWith('−') ? 'burn' : 'mute'} size="caption">
-                        {change} {t({ id: 'home.today', message: 'today' })}
-                      </Body>
-                    ) : (
-                      <Body tone="mute" size="caption">
-                        {portfolio.snapshot ? t({ id: 'home.change.none', message: 'No change to report yet' }) : t({ id: 'home.scope.none', message: 'No balances yet' })}
-                      </Body>
-                    )}
-                    {unpriced > 0 ? (
-                      <Body tone="mute" size="caption">
-                        {t({ id: 'home.unpriced', message: '{n} without price', values: { n: unpriced } })}
-                      </Body>
-                    ) : null}
+                    <Column flex={1} minWidth={0} paddingBottom={8} alignItems="flex-start">
+                      {change ? (
+                        <Body tone={change.startsWith('+') ? 'surge' : change.startsWith('−') ? 'burn' : 'mute'} size="caption" fontWeight="600" numberOfLines={1}>
+                          {change} {t({ id: 'home.today', message: 'today' })}
+                        </Body>
+                      ) : (
+                        <Body tone="mute" size="caption" numberOfLines={1}>
+                          {portfolio.snapshot ? '' : t({ id: 'home.scope.none', message: 'No balances yet' })}
+                        </Body>
+                      )}
+                    </Column>
+                    <Column paddingBottom={10}>
+                      <Icon name="chevronRight" size={20} color={paint.mute} />
+                    </Column>
                   </Row>
                 </Pressable>
                 <LiveFilament tick={head?.blockNumber ?? null} live={head?.live ?? false} reducedMotion={reducedMotion} testID="filament" />
@@ -251,19 +269,36 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
               </Ignition>
             ) : null}
 
-            <Column gap={10} testID="keys">
-              {tileRows.map((row, ri) => (
-                <Row key={ri} gap={10}>
-                  {row.map((tile, i) => (
-                    <Column key={tile.id} flex={1}>
-                      <Ignition reducedMotion={reducedMotion} order={3 + (ri * 3 + i) * 0.3}>
-                        <ActionTile icon={tile.icon} label={tile.label} badge={tile.badge} onPress={tile.onPress} layout={wide ? 'row' : 'stacked'} testID={`key-${tile.id}`} />
-                      </Ignition>
-                    </Column>
-                  ))}
+            <Ignition reducedMotion={reducedMotion} order={3}>
+              <ActionGrid items={tiles} layout={wide ? 'row' : 'stacked'} testID="keys" />
+            </Ignition>
+
+            {/* The status strip: the site under the popup, and ETN's price. */}
+            <Ignition reducedMotion={reducedMotion} order={4}>
+              <Plate role="card" padding={0} overflow="hidden" testID="home-strip">
+                <Row minHeight={44} alignItems="stretch">
+                  {dapp !== null || host.body === 'extension-popup' || host.body === 'harness' ? (
+                    <>
+                      <DappStrip state={dapp} onPress={() => setDappOpen(true)} />
+                      <Column width={1} backgroundColor="$edge" marginVertical={8} />
+                    </>
+                  ) : null}
+                  <Pressable onPress={() => router.navigate('explore', { segment: 'tokens' })} accessibilityRole="button" accessibilityLabel={t({ id: 'home.price.a11y', message: 'ETN price' })} testID="home-price" style={{ flexShrink: 0, justifyContent: 'center', paddingHorizontal: 12 }}>
+                    <Row gap={6} alignItems="center" justifyContent="flex-end">
+                      <ChainMark chainId={ETN} size={14} />
+                      <Body size="caption" fontWeight="600" numberOfLines={1}>
+                        {etn ? formatPrice(etn.price, 'USD') : '—'}
+                      </Body>
+                      {etnChange ? (
+                        <Body size="caption" tone={etnChange.startsWith('+') ? 'surge' : etnChange.startsWith('−') ? 'burn' : 'mute'}>
+                          {etnChange}
+                        </Body>
+                      ) : null}
+                    </Row>
+                  </Pressable>
                 </Row>
-              ))}
-            </Column>
+              </Plate>
+            </Ignition>
           </>
         ) : null}
       </ScrollView>
@@ -273,6 +308,8 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
         scope={scope.scope}
         enabled={scope.enabled}
         chains={scope.chains}
+        accountId={accountId}
+        total={total === null ? null : totalText}
         onSelect={(s) => {
           scope.setScope(s)
           setScopeOpen(false)
@@ -283,6 +320,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
         }}
         reducedMotion={reducedMotion}
       />
+      <DappSheet open={dappOpen} onClose={() => setDappOpen(false)} state={dapp} reducedMotion={reducedMotion} />
     </Column>
   )
 }

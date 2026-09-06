@@ -168,7 +168,7 @@ test('injection, connect, sign, send, reject, per-origin chain, blocked drainers
     // Connected sites in Settings show the origin on the testnet; disconnecting tells the page.
     {
       const popup = await ext.context.newPage()
-      await popup.setViewportSize({ width: 360, height: 600 })
+      await popup.setViewportSize({ width: 400, height: 600 })
       await popup.goto(ext.url('popup.html'))
       await popup.getByTestId('settings-key').click()
       await popup.getByTestId('settings-sites').click()

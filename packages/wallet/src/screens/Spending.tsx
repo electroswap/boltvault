@@ -3,7 +3,7 @@
  * token approvals, and the wallet fee schedule — your tier, every tier and
  * the sink, read-only. Step-ups and the send allow-list keep their rows.
  */
-import { Body, Chip, Column, Icon, Plate, Row, ScrollView, Toggle, metrics, paint, shortAddress } from '@boltvault/ui'
+import { Body, Column, Icon, Pill, Plate, Row, ScrollView, Toggle, metrics, paint, shortAddress } from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
 import type { HolderTier, Settings } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
@@ -44,11 +44,7 @@ export function Spending({ body }: { body: 'extension-popup' | 'extension-tab' |
         </Body>
         <Row gap="$2" flexWrap="wrap">
           {SLIPPAGES.map((s) => (
-            <Chip key={s} onPress={() => set({ slippageBips: s })} cursor="pointer" minHeight={44} justifyContent="center" borderColor={settings?.slippageBips === s ? paint.arc : undefined} testID={`spending-slippage-${s}`}>
-              <Body tone={settings?.slippageBips === s ? 'arc' : 'mute'} size="caption">
-                {formatPct(s)}
-              </Body>
-            </Chip>
+            <Pill key={s} label={formatPct(s)} selected={settings?.slippageBips === s} onPress={() => set({ slippageBips: s })} testID={`spending-slippage-${s}`} />
           ))}
         </Row>
       </Plate>

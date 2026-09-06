@@ -197,7 +197,6 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
                 label={t({ id: 'ob.quiz.word', message: 'Word {n}', values: { n: p } })}
                 value={quiz.answers[p] ?? ''}
                 onChange={(v) => setQuiz({ ...quiz, answers: { ...quiz.answers, [p]: v } })}
-                mono
                 testID={`quiz-${p}`}
               />
             ))}
@@ -209,7 +208,7 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
         {step === 'import' ? (
           <Column gap="$4" testID="ob-import-words">
             <Body size="title">{t({ id: 'ob.import.title', message: 'Enter your recovery phrase' })}</Body>
-            <Input value={phrase} onChange={setPhrase} multiline mono placeholder={t({ id: 'ob.import.ph', message: '12 or 24 words, separated by spaces' })} autoFocus testID="ob-phrase" />
+            <Input value={phrase} onChange={setPhrase} multiline placeholder={t({ id: 'ob.import.ph', message: '12 or 24 words, separated by spaces' })} autoFocus testID="ob-phrase" />
             <Input label={t({ id: 'ob.passphrase', message: 'BIP-39 passphrase (optional, advanced)' })} value={passphrase} onChange={setPassphrase} secure testID="ob-passphrase" />
             {error ? <Body tone="burn">{error}</Body> : null}
             <Key
@@ -256,7 +255,7 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
           <Column gap="$4" testID="ob-watch-form">
             <Body size="title">{t({ id: 'ob.watch.title', message: 'Watch an address' })}</Body>
             <Body tone="mute">{t({ id: 'ob.watch.body', message: 'You will see balances and activity but cannot send or sign. Add a key or pair a device later.' })}</Body>
-            <Input value={watchAddress} onChange={setWatchAddress} mono placeholder="0x… or name.etn" autoFocus testID="ob-watch-address" />
+            <Input value={watchAddress} onChange={setWatchAddress} placeholder="0x… or name.etn" autoFocus testID="ob-watch-address" />
             {error ? <Body tone="burn">{error}</Body> : null}
             <Key label={t({ id: 'ob.watch.key', message: 'Watch' })} onPress={doWatch} disabled={busy || !/^0x[0-9a-fA-F]{40}$/.test(watchAddress.trim())} testID="ob-watch-confirm" />
           </Column>

@@ -26,8 +26,9 @@ export const TOKEN_DETAIL = `query TokenDetail($address: String, $chain: Chain) 
 
 const COLLECTION = `id collectionId name description isVerified numAssets image { url } bannerImage { url } nftContracts { address standard name symbol totalSupply } listingFees { payoutAddress basisPoints } markets(currencies: [ETN]) { floorPrice { value } totalVolume { value } volume(duration: DAY) { value } owners listings { value } percentListed { value } }`
 
-/** Explore › Collectibles. */
-export const TOP_COLLECTIONS = `query TopCollections($chains: [Chain!]!, $first: Int, $listed: Boolean) { topCollections(chains: $chains, listed: $listed, orderBy: VOLUME, duration: DAY, first: $first) { edges { node { ${COLLECTION} } } } }`
+/** Explore › Collections, ranked by the window's volume, with the window's change, floor change and sales beside the day figures. */
+const COLLECTION_RANKED = `${COLLECTION} window: markets(currencies: [ETN]) { volume(duration: $duration) { value } volumePercentChange(duration: $duration) { value } floorPricePercentChange(duration: $duration) { value } sales(duration: $duration) { value } }`
+export const TOP_COLLECTIONS = `query TopCollections($chains: [Chain!]!, $first: Int, $listed: Boolean, $duration: HistoryDuration!) { topCollections(chains: $chains, listed: $listed, orderBy: VOLUME, duration: $duration, first: $first) { edges { node { ${COLLECTION_RANKED} } } } }`
 
 export const NFT_COLLECTIONS = `query NftCollections($chain: Chain, $filter: NftCollectionsFilterInput, $first: Int) { nftCollections(chain: $chain, filter: $filter, first: $first) { edges { node { ${COLLECTION} traits { name values } } } } }`
 

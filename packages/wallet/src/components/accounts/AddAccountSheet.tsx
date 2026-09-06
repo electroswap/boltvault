@@ -89,14 +89,14 @@ export function AddAccountSheet({ open, onClose, onAdded, reducedMotion = false 
               ) : null}
               {on && !gated && w.id === 'seed' ? (
                 <Column gap="$2" paddingLeft={48}>
-                  <Input value={field} onChange={setField} multiline mono placeholder={t({ id: 'ob.import.ph', message: '12 or 24 words, separated by spaces' })} testID="add-seed-words" />
+                  <Input value={field} onChange={setField} multiline placeholder={t({ id: 'ob.import.ph', message: '12 or 24 words, separated by spaces' })} testID="add-seed-words" />
                   <Input value={passphrase} onChange={setPassphrase} secure label={t({ id: 'ob.passphrase', message: 'BIP-39 passphrase (optional, advanced)' })} />
                   <Key label={t({ id: 'acct.add.seed.key', message: 'Add recovery phrase' })} size="compact" disabled={busy || !field.trim()} onPress={() => void run(async () => { await engine.accounts.addSeed({ mnemonic: field, ...(passphrase ? { passphrase } : {}) }) })} testID="add-seed-submit" />
                 </Column>
               ) : null}
               {on && !gated && w.id === 'imported' ? (
                 <Column gap="$2" paddingLeft={48}>
-                  <Input value={field} onChange={setField} secure mono placeholder="0x…" testID="add-key-input" />
+                  <Input value={field} onChange={setField} secure placeholder="0x…" testID="add-key-input" />
                   <Body tone="mute" size="caption">
                     {t({ id: 'acct.add.key.note', message: 'This key is not part of any recovery phrase. Back it up separately.' })}
                   </Body>
@@ -105,7 +105,7 @@ export function AddAccountSheet({ open, onClose, onAdded, reducedMotion = false 
               ) : null}
               {on && w.id === 'watch' ? (
                 <Column gap="$2" paddingLeft={48}>
-                  <Input value={field} onChange={setField} mono placeholder="0x…" testID="add-watch-input" />
+                  <Input value={field} onChange={setField} placeholder="0x…" testID="add-watch-input" />
                   <Key label={t({ id: 'acct.add.watch.key', message: 'Watch this address' })} size="compact" disabled={busy || !/^0x[0-9a-fA-F]{40}$/.test(field.trim())} onPress={() => void run(async () => { await engine.accounts.addWatch({ address: field.trim() }) })} testID="add-watch-submit" />
                 </Column>
               ) : null}

@@ -127,12 +127,13 @@ export const Readout = styled(TText, {
   } as const,
 })
 
-/** An address — tabular, ≥ 14 px, never Oxanium. */
+/** An address — the body face with tabular numerals, never Oxanium, never a monospace. */
 export const Address = styled(TText, {
   name: 'Address',
-  fontFamily: '$mono',
-  fontSize: '$1',
-  lineHeight: '$1',
+  fontFamily: '$body',
+  fontSize: '$2',
+  lineHeight: '$2',
+  fontVariant: ['tabular-nums'],
   color: '$mute',
 })
 
@@ -169,7 +170,7 @@ export const KeyFrame = styled(TView, {
     },
   } as const,
   defaultVariants: { kind: 'primary', size: 'regular' },
-  pressStyle: { opacity: 0.85 },
+  pressStyle: { opacity: 0.88, scale: 0.985 },
 })
 
 export const KeyLabel = styled(TText, {

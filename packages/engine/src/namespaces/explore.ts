@@ -11,7 +11,7 @@ import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
 import { cacheKey, type Cached, type DocCache } from '../cache'
 import type { EventBus, NamespaceSpec } from '../host'
-import { AccountIdSchema, ChartDurationSchema, CollectionViewSchema, ExploreTokenSchema, LiquidityViewSchema, PriceHistoryViewSchema, TokenDetailViewSchema, type ChartDuration, type CollectionView, type ExploreToken, type LiquidityView, type PriceHistoryView, type TokenDetailView } from '../schema'
+import { CollectionWindowSchema, type CollectionWindow, AccountIdSchema, ChartDurationSchema, CollectionViewSchema, ExploreTokenSchema, LiquidityViewSchema, PriceHistoryViewSchema, TokenDetailViewSchema, type ChartDuration, type CollectionView, type ExploreToken, type LiquidityView, type PriceHistoryView, type TokenDetailView } from '../schema'
 import type { TokensService } from './tokens'
 import type { VaultManager } from './vault'
 import type { WatchlistService } from './watchlist'
@@ -33,7 +33,7 @@ export interface ExploreDeps {
 const TTL_MS = 60_000
 const DETAIL_TTL_MS = 60_000
 const TOKENS_SPEC = (chainId: number) => ({ key: cacheKey('explore', 'tokens', chainId), schema: z.array(ExploreTokenSchema) })
-const COLLECTIONS_SPEC = (chainId: number, accountId: string | undefined, all: boolean) => ({ key: cacheKey('explore', 'collections', chainId, accountId ?? '-', all ? 'all' : 'listed'), schema: z.array(CollectionViewSchema) })
+const COLLECTIONS_SPEC = (chainId: number, accountId: string | undefined, all: boolean, window: CollectionWindow) => ({ key: cacheKey('explore', 'collections', chainId, accountId ?? '-', all ? 'all' : 'verified', window), schema: z.array(CollectionViewSchema) })
 const DETAIL_SPEC = (chainId: number, address: string) => ({ key: cacheKey('explore', 'tokendetail', chainId, address), schema: TokenDetailViewSchema })
 const HISTORY_TTL_MS = 5 * 60_000
 const HISTORY_SPEC = (chainId: number, address: string, duration: ChartDuration) => ({ key: cacheKey('explore', 'history', chainId, address, duration), schema: PriceHistoryViewSchema })
@@ -154,14 +154,14 @@ export class ExploreService {
     return this.deps.cache.read(LIQUIDITY_SPEC(chainId, address))
   }
 
-  /** Explore › Collectibles (§8.10; plan C3, owner item N1): listed collections by default — verified, traded, listed, or owned — the whole index with `all`; the user's custom collections join either way. */
-  async collections(chainId: number, accountId?: string, all = false): Promise<CollectionView[]> {
+  /** Explore › Collections (§8.10; owner ask 2026-09-06): verified collections by default, ranked by the window's volume — the whole index with `all`; the user's custom collections join either way. */
+  async collections(chainId: number, accountId?: string, all = false, window: CollectionWindow = 'DAY'): Promise<CollectionView[]> {
     const d = this.deps
     if (!d.electroswap || !isEtn(chainId)) return []
     const client = d.electroswap
     try {
-      return (await d.cache.through(COLLECTIONS_SPEC(chainId, accountId, all), TTL_MS, async () => {
-        const rows = await fetchTopCollections(client, chainId, 50, !all)
+      return (await d.cache.through(COLLECTIONS_SPEC(chainId, accountId, all, window), TTL_MS, async () => {
+        const rows = await fetchTopCollections(client, chainId, 50, false, window)
         this.collectionRows.set(chainId, [...(this.collectionRows.get(chainId) ?? []).filter((r) => !rows.some((x) => x.address.toLowerCase() === r.address.toLowerCase())), ...rows])
         const owned = new Map<string, number>()
         if (accountId) {
@@ -174,7 +174,7 @@ export class ExploreService {
             }
           }
         }
-        const views = this.toViews(chainId, rows, owned).filter((v) => all || v.verified || (v.volume24hEtn ?? 0) > 0 || (v.listed ?? 0) > 0 || v.owned > 0)
+        const views = this.toViews(chainId, rows, owned).filter((v) => all || v.verified)
         const customs = await this.customViews(chainId)
         return [...views.filter((v) => !customs.some((c) => c.address.toLowerCase() === v.address.toLowerCase())), ...customs]
       })).value
@@ -183,14 +183,14 @@ export class ExploreService {
     }
   }
 
-  async cachedCollections(chainId: number, accountId?: string, all = false): Promise<Cached<CollectionView[]> | null> {
-    return this.deps.cache.read(COLLECTIONS_SPEC(chainId, accountId, all))
+  async cachedCollections(chainId: number, accountId?: string, all = false, window: CollectionWindow = 'DAY'): Promise<Cached<CollectionView[]> | null> {
+    return this.deps.cache.read(COLLECTIONS_SPEC(chainId, accountId, all, window))
   }
 
   /** The user's own collections as views (plan A3): what the chain told us, no market fields. */
   private async customViews(chainId: number): Promise<CollectionView[]> {
     const rows = this.deps.custom ? await this.deps.custom.list(chainId).catch(() => []) : []
-    return rows.map((c) => ({ chainId, address: c.address, name: c.name, description: null, verified: false, standard: c.standard, totalSupply: null, imageUrl: null, bannerUrl: null, creatorFee: null, floorEtn: null, volume24hEtn: null, totalVolumeEtn: null, owners: null, listed: null, percentListed: null, traits: [], paysDividends: false, starred: false, owned: 0, custom: true }))
+    return rows.map((c) => ({ chainId, address: c.address, name: c.name, description: null, verified: false, standard: c.standard, totalSupply: null, imageUrl: null, bannerUrl: null, creatorFee: null, floorEtn: null, volume24hEtn: null, totalVolumeEtn: null, owners: null, listed: null, percentListed: null, volumeEtn: null, volumeChangePct: null, floorChangePct: null, sales: null, traits: [], paysDividends: false, starred: false, owned: 0, custom: true }))
   }
 
   toViews(chainId: number, rows: readonly EsCollection[], owned: ReadonlyMap<string, number>): CollectionView[] {
@@ -213,6 +213,10 @@ export class ExploreService {
       owners: r.owners,
       listed: r.listed,
       percentListed: r.percentListed,
+      volumeEtn: r.volumeEtn,
+      volumeChangePct: r.volumeChangePct,
+      floorChangePct: r.floorChangePct,
+      sales: r.sales,
       traits: r.traits.map((t) => ({ name: t.name, values: [...t.values] })),
       paysDividends: r.address.toLowerCase() === legends,
       starred: starred.has(`${chainId}:${r.address.toLowerCase()}`),
@@ -286,8 +290,8 @@ export function exploreNamespace(explore: ExploreService): NamespaceSpec {
     cachedPriceHistory: { input: Chain.extend({ address: z.string(), duration: ChartDurationSchema }), handler: (arg) => explore.cachedPriceHistory((arg as { chainId: number }).chainId, (arg as { address: string }).address, (arg as { duration: ChartDuration }).duration) },
     liquidity: { input: Chain.extend({ address: z.string() }), handler: (arg) => explore.liquidity((arg as { chainId: number }).chainId, (arg as { address: string }).address) },
     cachedLiquidity: { input: Chain.extend({ address: z.string() }), handler: (arg) => explore.cachedLiquidity((arg as { chainId: number }).chainId, (arg as { address: string }).address) },
-    collections: { input: Chain.extend({ accountId: AccountIdSchema.optional(), all: z.boolean().optional() }), handler: (arg) => explore.collections((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId, (arg as { all?: boolean }).all ?? false) },
-    cachedCollections: { input: Chain.extend({ accountId: AccountIdSchema.optional(), all: z.boolean().optional() }), handler: (arg) => explore.cachedCollections((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId, (arg as { all?: boolean }).all ?? false) },
+    collections: { input: Chain.extend({ accountId: AccountIdSchema.optional(), all: z.boolean().optional(), window: CollectionWindowSchema.optional() }), handler: (arg) => explore.collections((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId, (arg as { all?: boolean }).all ?? false, (arg as { window?: CollectionWindow }).window ?? 'DAY') },
+    cachedCollections: { input: Chain.extend({ accountId: AccountIdSchema.optional(), all: z.boolean().optional(), window: CollectionWindowSchema.optional() }), handler: (arg) => explore.cachedCollections((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId, (arg as { all?: boolean }).all ?? false, (arg as { window?: CollectionWindow }).window ?? 'DAY') },
     collection: { input: Chain.extend({ address: z.string(), accountId: AccountIdSchema.optional() }), handler: (arg) => explore.collection((arg as { chainId: number }).chainId, (arg as { address: string }).address, (arg as { accountId?: string }).accountId) },
     search: { input: Chain.extend({ query: z.string().max(120) }), handler: (arg) => explore.search((arg as { chainId: number }).chainId, (arg as { query: string }).query) },
   }

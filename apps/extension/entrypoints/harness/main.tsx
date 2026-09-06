@@ -15,6 +15,11 @@ const scenario = (q.get('scenario') ?? 'funded') as FixtureScenario
 const screen = (q.get('screen') ?? 'home') as ScreenId
 const body = (q.get('body') ?? 'extension-popup') as 'extension-popup' | 'extension-tab' | 'mobile'
 const reducedMotion = q.get('motion') === 'reduced'
+const dapp = q.get('dapp') ?? 'on'
+const harnessHost = {
+  copy: async () => undefined,
+  currentTab: async () => (dapp === 'none' ? null : dapp === 'off' ? { origin: 'https://example.com', host: 'example.com', favicon: null } : { origin: 'https://app.electroswap.io', host: 'app.electroswap.io', favicon: null }),
+}
 
 const root = document.getElementById('root')
 if (!root) throw new Error('harness: no #root')
@@ -25,6 +30,6 @@ createFixtureEngine(scenario).then((engine) => {
   const LEGENDS = '0x31cbb613D14cc85Cf3A8889007562E4B5cE9518b'
   const segment = q.get('segment')
   const initialParams = screen === 'token' ? { chainId: 52014, address: '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1' } : screen === 'collection' ? { chainId: 52014, address: LEGENDS } : screen === 'nft' ? { chainId: 52014, address: LEGENDS, tokenId: '12' } : screen === 'farm' ? { chainId: 52014, farmId: 0 } : screen === 'campaign' ? { chainId: 52014, pool: '0x9999999999999999999999999999999999999999' } : screen === 'explore' && (segment === 'tokens' || segment === 'collectibles' || segment === 'launch' || segment === 'farms') ? { segment } : undefined
-  createRoot(root).render(<App engine={engine.engine} body={body} initialTab={initialTab} initialScreen={screen} {...(initialParams ? { initialParams } : {})} reducedMotion={reducedMotion} />)
+  createRoot(root).render(<App engine={engine.engine} body={body} initialTab={initialTab} initialScreen={screen} {...(initialParams ? { initialParams } : {})} reducedMotion={reducedMotion} host={harnessHost} />)
   document.documentElement.dataset['ready'] = '1'
 })

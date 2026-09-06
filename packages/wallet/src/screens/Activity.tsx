@@ -235,7 +235,7 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
               </Body>
             </Row>
             {open.hash ? (
-              <Body tone="mute" size="caption" fontFamily="$mono" numberOfLines={1}>
+              <Body tone="mute" size="caption" numberOfLines={1}>
                 {open.hash}
               </Body>
             ) : null}

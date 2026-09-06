@@ -6,9 +6,10 @@
  * come from the chain. Off Electroneum the chart is a still mute line and
  * the stats read "—" with an honest caption.
  */
-import { Body, ChainMark, Column, Icon, IconButton, Key, LineChart, Pill, Plate, Pressable, Readout, Row, ScrollView, Segmented, StatStrip, TokenAvatar, metrics, paint, shortAddress, useWindowDimensions, type IconName, type StatCell } from '@boltvault/ui'
+import { Body, Column, Icon, IconButton, Key, LineChart, Pill, Plate, Pressable, Readout, Row, ScrollView, Segmented, StatStrip, TokenAvatar, metrics, paint, shortAddress, useWindowDimensions, type IconName, type StatCell } from '@boltvault/ui'
 import { cacheKey, type AllowanceView, type ChainView, type ChartDuration, type LiquidityView, type PriceHistoryView, type TokenDetailView, type TokenView } from '@boltvault/engine'
 import { useEffect, useMemo, useState } from 'react'
+import { ChainCaption } from '../components/ChainSelect'
 import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
 import { formatChange, formatFiat, formatPrice, formatQuantity } from '../format'
@@ -148,22 +149,24 @@ export function Token({ chainId, address, body }: { chainId: number; address: st
           leading={
             <Row gap="$2" alignItems="center" flexShrink={1}>
               <TokenAvatar chainId={chainId} address={isNative ? '0x0000000000000000000000000000000000000000' : address} logoUri={token?.logoUri ?? row?.logoUri ?? d?.logoUrl ?? null} size={28} />
-              <Column flexShrink={1}>
+              <Column flexShrink={1} alignItems="flex-start">
                 <Body size="title" numberOfLines={1} testID="token-symbol">
                   {symbol}
                 </Body>
-                {name && name !== symbol ? (
-                  <Body tone="mute" size="caption" numberOfLines={1} marginTop={-2}>
-                    {name}
-                  </Body>
-                ) : null}
+                <Row gap={6} alignItems="center" marginTop={-2}>
+                  <ChainCaption chainId={chainId} name={chain?.name ?? `Chain ${chainId}`} testID="token-chain" />
+                  {name && name !== symbol ? (
+                    <Body tone="mute" size="caption" numberOfLines={1} flexShrink={1}>
+                      {`· ${name}`}
+                    </Body>
+                  ) : null}
+                </Row>
               </Column>
               {custom ? <Pill label={t({ id: 'token.custom', message: 'Custom' })} size="sm" /> : null}
             </Row>
           }
           right={
             <>
-              <Pill icon={<ChainMark chainId={chainId} size={14} />} label={chain?.name ?? `Chain ${chainId}`} size="sm" />
               {!isNative ? <IconButton icon="pin" label={token?.pinned ? t({ id: 'pin.off', message: 'Unpin from Home' }) : t({ id: 'pin.on', message: 'Pin to Home' })} active={!!token?.pinned} onPress={() => void engine.tokens.setPrefs({ chainId, address, pinned: !token?.pinned })} testID="token-pin" /> : null}
             </>
           }
@@ -291,7 +294,7 @@ export function Token({ chainId, address, body }: { chainId: number; address: st
           <Plate role="recessed" paddingVertical={4} paddingHorizontal="$3" testID="token-contract">
             <Row alignItems="center" gap="$2">
               <Column flex={1}>
-                <Body size="caption" fontFamily="$mono" numberOfLines={1}>
+                <Body size="caption" numberOfLines={1}>
                   {shortAddress(address)}
                 </Body>
                 <Body tone="mute" size="caption">

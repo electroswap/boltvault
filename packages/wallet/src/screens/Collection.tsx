@@ -185,7 +185,7 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
       {legends && active ? <DividendsCard status={legends} busy={busy} reducedMotion={reducedMotion} onActivate={() => void run(() => engine.legends.activate({ accountId: active.id, chainId }))} onClaim={() => void run(() => engine.legends.claim({ accountId: active.id, chainId }))} onPiece={(tokenId) => router.navigate('nft', { chainId, address, tokenId })} /> : null}
 
       {/* Mint only when the chain says so (owner item N5). */}
-      {mint?.mintable && active ? (
+      {mint?.mintable && mint.mintableCount > 0 && active ? (
         <Plate role="card" gap="$2" testID="collection-mint">
           <Row justifyContent="space-between" alignItems="center" gap="$3">
             <Column flex={1} alignItems="flex-start">

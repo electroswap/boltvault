@@ -1,5 +1,5 @@
 /** Settings › Connected sites (master plan §8.14): origins as plugs, per-site chain, disconnect. */
-import { Body, Chip, Column, Input, Key, Plate, Row, ScrollView, metrics, paint, shortAddress } from '@boltvault/ui'
+import { Body, ChainMark, Column, Input, Key, Pill, Plate, Row, ScrollView, metrics, shortAddress } from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
 import type { ChainView, SiteView, WcSessionView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
@@ -68,7 +68,7 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
             <Body tone="mute" size="caption">
               {t({ id: 'wc.body', message: 'Paste or scan a wc: link from a site. The site then asks to connect like any other, and its signatures come through the same sheet.' })}
             </Body>
-            <Input value={wcUri} onChange={setWcUri} mono placeholder="wc:…" testID="wc-uri" />
+            <Input value={wcUri} onChange={setWcUri} placeholder="wc:…" testID="wc-uri" />
             <Key label={t({ id: 'wc.pair', message: 'Pair' })} kind="secondary" disabled={!wcUri.startsWith('wc:')} onPress={() => void engine.connect.pair({ uri: wcUri.trim() }).then(() => setWcUri(''), (err: unknown) => setError(err instanceof Error ? err.message : String(err)))} testID="wc-pair" />
           </>
         )}
@@ -94,11 +94,7 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
               <Body size="title" numberOfLines={1}>
                 {hostOf(s.origin)}
               </Body>
-              <Chip onPress={() => setEditing(editing === s.origin ? null : s.origin)} cursor="pointer" borderColor={paint.arc} minHeight={32} justifyContent="center" testID={`site-chain-${hostOf(s.origin)}`}>
-                <Body tone="arc" size="caption">
-                  {chain?.name ?? String(s.chainId)}
-                </Body>
-              </Chip>
+              <Pill label={chain?.name ?? String(s.chainId)} icon={<ChainMark chainId={s.chainId} size={14} />} chevron size="sm" onPress={() => setEditing(editing === s.origin ? null : s.origin)} testID={`site-chain-${hostOf(s.origin)}`} />
             </Row>
             <Body tone="mute" size="caption">
               {account ? `${account.label} · ${shortAddress(account.address)}` : t({ id: 'sites.noaccount', message: 'No account' })}
@@ -107,22 +103,18 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
             {editing === s.origin ? (
               <Row gap="$2" flexWrap="wrap">
                 {chains.map((c) => (
-                  <Chip
+                  <Pill
                     key={c.chainId}
+                    label={c.name}
+                    icon={<ChainMark chainId={c.chainId} size={14} />}
+                    selected={c.chainId === s.chainId}
+                    size="sm"
                     onPress={() => {
                       setError(null)
                       engine.sites.setChain({ origin: s.origin, chainId: c.chainId }).then(() => setEditing(null), (err: unknown) => setError(err instanceof Error ? err.message : String(err)))
                     }}
-                    cursor="pointer"
-                    minHeight={44}
-                    justifyContent="center"
-                    borderColor={c.chainId === s.chainId ? paint.arc : undefined}
                     testID={`site-chain-${hostOf(s.origin)}-${c.chainId}`}
-                  >
-                    <Body tone={c.chainId === s.chainId ? 'arc' : 'mute'} size="caption">
-                      {c.name}
-                    </Body>
-                  </Chip>
+                  />
                 ))}
               </Row>
             ) : null}

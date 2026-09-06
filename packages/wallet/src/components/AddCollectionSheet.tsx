@@ -70,7 +70,7 @@ export function AddCollectionSheet({ open, onClose, onAdded, initialAddress, red
         <Body tone="mute" size="caption">
           {t({ id: 'collection.add.body', message: 'Paste the contract address of an NFT collection on Electroneum. BoltVault reads its pieces and their images from the contract itself.' })}
         </Body>
-        <Input value={address} onChange={setAddress} mono placeholder={t({ id: 'token.add.ph', message: 'Contract address 0x…' })} autoFocus={!initialAddress} testID="add-collection-address" />
+        <Input value={address} onChange={setAddress} placeholder={t({ id: 'token.add.ph', message: 'Contract address 0x…' })} autoFocus={!initialAddress} testID="add-collection-address" />
         {looking ? (
           <Body tone="mute" size="caption">
             {t({ id: 'token.add.looking', message: 'Reading the contract…' })}

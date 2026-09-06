@@ -10,7 +10,7 @@
  * Confirming runs a flow of sheets (approve → permit → swap) and the
  * Discharge lands the result here.
  */
-import { Body, Chip, Column, Discharge, Icon, Input, Key, Pill, Plate, Pressable, Readout, Rim, Row, ScrollView, Segmented, TokenAvatar, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
+import { Body, Chip, Column, Discharge, Icon, Key, Pill, Plate, Pressable, Rim, Row, ScrollView, Segmented, TokenAvatar, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
 import { cacheKey, type LimitOrderView, type LimitQuote, type LiquidityView, type SwapQuote, type TokenView } from '@boltvault/engine'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { SlippageSheet } from '../components/SlippageSheet'
@@ -22,10 +22,13 @@ import { useCached } from '../hooks/useCached'
 import { useChainHead } from '../hooks/useChainHead'
 import { usePortfolio } from '../hooks/usePortfolio'
 import { usePrefs } from '../hooks/usePrefs'
-import { formatPct, formatQuantity, formatRate, formatRaw } from '../format'
+import { formatAmountFiat, formatPct, formatQuantity, formatRate, formatRaw } from '../format'
 import { t } from '../i18n'
 import { swapFlowStore, useSwapFlow } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
+import { AmountWell } from '../components/AmountWell'
+import { ChainCaption } from '../components/ChainSelect'
+import { ScreenFooter } from '../components/ScreenFooter'
 import { FeeScheduleSheet } from './FeeScheduleSheet'
 import { statusLabel, stepLabel } from '../components/FlowPlate'
 
@@ -264,7 +267,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
           </Plate>
           {flow.error ? <Body tone="burn">{flow.error}</Body> : null}
           {flow.hash ? (
-            <Body tone="mute" size="caption" fontFamily="$mono" numberOfLines={1} testID="swap-hash">
+            <Body tone="mute" size="caption" numberOfLines={1} testID="swap-hash">
               {flow.hash}
             </Body>
           ) : null}
@@ -287,6 +290,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   const lockTone: 'surge' | 'ember' | 'mute' = liquidity.value ? (liquidity.value.lockedPct >= 50 ? 'surge' : liquidity.value.lockedPct > 0 ? 'ember' : 'mute') : 'mute'
   const problem = mode === 'swap' ? (quote?.problems[0] ?? null) : (limitQuote?.problems[0] ?? null)
   const canSwap = mode === 'swap' ? !!quote?.ok && fresh && !busy : !!limitQuote?.ok && !busy
+  const receiveText = quote && quote.amountOutRaw !== '0' ? formatRaw(quote.receiveRaw, quote.decimalsOut) : '—'
   const keyLabel = mode === 'swap' ? (quote && quote.priceImpactPct !== null && quote.priceImpactPct > 15 ? t({ id: 'swap.key.anyway', message: 'Swap anyway' }) : t({ id: 'swap.key', message: 'Swap' })) : t({ id: 'swap.limit.key', message: 'Place order' })
 
   return (
@@ -308,36 +312,29 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
               />
             </Column>
           ) : (
-            <Body size="title">{t({ id: 'swap.title', message: 'Swap' })}</Body>
+            <Column alignItems="flex-start">
+              <Body size="title">{t({ id: 'swap.title', message: 'Swap' })}</Body>
+              <ChainCaption chainId={ETN} name="Electroneum" testID="swap-chain" />
+            </Column>
           )}
           {mode === 'swap' ? <Pill icon={<Icon name="tune" size={14} color={paint.mute} />} label={formatPct(effectiveSlippage)} size="sm" onPress={() => setSlippageOpen(true)} accessibilityLabel={t({ id: 'swap.slippage', message: 'Slippage {p}', values: { p: formatPct(effectiveSlippage) } })} testID="swap-slippage" /> : null}
         </Row>
 
         {/* The console: two wells in one panel, the flip control on their seam (style bible › layout). */}
-        <Plate role="console" gap="$2" padding={12} testID="swap-console">
-          <Plate role="well" gap={2} paddingVertical={10} paddingHorizontal={12} testID="terminal-in">
-            <Body tone="mute" size="caption">
-              {t({ id: 'swap.pay', message: 'You pay' })}
-            </Body>
-            <Row gap="$2" alignItems="center">
-              <Column flex={1}>
-                <Input value={amount} onChange={setAmount} placeholder="0" bare big testID="swap-amount-in" />
-              </Column>
-              <TokenPill token={inView} onPress={() => setPicker('in')} testID="swap-token-in" />
-            </Row>
-            <Row justifyContent="space-between" alignItems="center" minHeight={20}>
-              <Body tone="mute" size="caption" testID="swap-balance-in">
-                {rowIn ? t({ id: 'swap.balance', message: 'Balance: {q}', values: { q: formatQuantity(rowIn.quantity) } }) : ''}
-              </Body>
-              {rowIn ? (
-                <Pressable onPress={() => setAmount(rowIn.quantity)} accessibilityRole="button" accessibilityLabel={t({ id: 'send.max', message: 'Max' })} style={{ minHeight: 44, minWidth: 44, marginVertical: -10, justifyContent: 'center', alignItems: 'flex-end' }} testID="swap-max">
-                  <Body tone="arc" size="caption" fontWeight="600">
-                    {t({ id: 'send.max', message: 'Max' })}
-                  </Body>
-                </Pressable>
-              ) : null}
-            </Row>
-          </Plate>
+        <Plate role="console" gap="$2" padding={10} testID="swap-console">
+          <AmountWell
+            label={t({ id: 'swap.pay', message: 'You pay' })}
+            value={amount}
+            onChange={setAmount}
+            tokenPill={<TokenPill token={inView} onPress={() => setPicker('in')} testID="swap-token-in" />}
+            fiat={formatAmountFiat(amount, rowIn, currency)}
+            balance={rowIn ? `${formatQuantity(rowIn.quantity)} ${rowIn.symbol}` : null}
+            onMax={rowIn ? () => setAmount(rowIn.quantity) : undefined}
+            testID="terminal-in"
+            inputTestID="swap-amount-in"
+            maxTestID="swap-max"
+            balanceTestID="swap-balance-in"
+          />
 
           <Row justifyContent="center" marginVertical={-18} zIndex={2}>
             <Pressable onPress={flip} accessibilityRole="button" accessibilityLabel={t({ id: 'swap.flip', message: 'Swap direction' })} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }} testID="swap-flip">
@@ -348,28 +345,31 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
             </Pressable>
           </Row>
 
-          <Plate role="well" gap={2} paddingVertical={10} paddingHorizontal={12} testID="terminal-out">
-            <Body tone="mute" size="caption">
-              {mode === 'swap' ? t({ id: 'swap.receive', message: 'You receive' }) : t({ id: 'limit.receive', message: 'You receive at least' })}
-            </Body>
-            <Row gap="$2" alignItems="center">
-              <Column flex={1}>
-                {mode === 'swap' ? (
-                  <Readout numberOfLines={1} testID="swap-amount-out">
-                    {quote && quote.amountOutRaw !== '0' ? formatRaw(quote.receiveRaw, quote.decimalsOut) : '—'}
-                  </Readout>
-                ) : (
-                  <Input value={minOut} onChange={setMinOut} placeholder="0" bare big testID="limit-min-out" />
-                )}
-              </Column>
-              <TokenPill token={outView} onPress={() => setPicker('out')} testID="swap-token-out" />
-            </Row>
-            <Row minHeight={20} alignItems="center">
-              <Body tone="mute" size="caption" testID="swap-balance-out">
-                {rowOut ? t({ id: 'swap.balance', message: 'Balance: {q}', values: { q: formatQuantity(rowOut.quantity) } }) : ''}
-              </Body>
-            </Row>
-          </Plate>
+          {mode === 'swap' ? (
+            <AmountWell
+              label={t({ id: 'swap.receive', message: 'You receive' })}
+              value={receiveText}
+              readOnly
+              tokenPill={<TokenPill token={outView} onPress={() => setPicker('out')} testID="swap-token-out" />}
+              fiat={quote && quote.amountOutRaw !== '0' ? formatAmountFiat(formatRaw(quote.receiveRaw, quote.decimalsOut).replace(/,/g, ''), rowOut, currency) : null}
+              balance={rowOut ? `${formatQuantity(rowOut.quantity)} ${rowOut.symbol}` : null}
+              testID="terminal-out"
+              inputTestID="swap-amount-out"
+              balanceTestID="swap-balance-out"
+            />
+          ) : (
+            <AmountWell
+              label={t({ id: 'limit.receive', message: 'You receive at least' })}
+              value={minOut}
+              onChange={setMinOut}
+              tokenPill={<TokenPill token={outView} onPress={() => setPicker('out')} testID="swap-token-out" />}
+              fiat={formatAmountFiat(minOut, rowOut, currency)}
+              balance={rowOut ? `${formatQuantity(rowOut.quantity)} ${rowOut.symbol}` : null}
+              testID="terminal-out"
+              inputTestID="limit-min-out"
+              balanceTestID="swap-balance-out"
+            />
+          )}
         </Plate>
 
         {/* Rate and route */}
@@ -449,18 +449,6 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
           </Body>
         )}
 
-        {problem && (amount.trim() || minOut.trim()) ? (
-          <Body tone="burn" size="caption" testID="swap-problem">
-            {problem}
-          </Body>
-        ) : null}
-        {error ? <Body tone="burn">{error}</Body> : null}
-        {mode === 'swap' && quote?.ok && !fresh ? (
-          <Body tone="mute" size="caption" testID="swap-stale">
-            {t({ id: 'swap.stale', message: 'Re-quoting…' })}
-          </Body>
-        ) : null}
-        <Key label={keyLabel} disabled={!canSwap} onPress={run} testID="swap-key" />
 
         {/* Open orders */}
         {mode === 'limit' ? (
@@ -492,6 +480,21 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
         ) : null}
       </ScrollView>
 
+      <ScreenFooter inset={inset} maxWidth={wide ? 560 : undefined} testID="swap-footer">
+        {problem && (amount.trim() || minOut.trim()) ? (
+          <Body tone="burn" size="caption" testID="swap-problem">
+            {problem}
+          </Body>
+        ) : null}
+        {error ? <Body tone="burn">{error}</Body> : null}
+        {mode === 'swap' && quote?.ok && !fresh ? (
+          <Body tone="mute" size="caption" testID="swap-stale">
+            {t({ id: 'swap.stale', message: 'Re-quoting…' })}
+          </Body>
+        ) : null}
+        <Key label={keyLabel} disabled={!canSwap} onPress={run} testID="swap-key" />
+      </ScreenFooter>
+
       {/* Sheets are siblings of the screen's ScrollView (plan B1). */}
       <FeeScheduleSheet
         open={feeSheet}
@@ -517,7 +520,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
 
 function FeeRow({ label, value, tone, testID }: { label: string; value: string; tone: 'mute' | 'ink' | 'ember' | 'burn' | 'surge'; testID: string }) {
   return (
-    <Row justifyContent="space-between" alignItems="center" minHeight={24} gap="$2">
+    <Row justifyContent="space-between" alignItems="center" minHeight={22} gap="$2">
       <Body tone="mute" size="caption">
         {label}
       </Body>

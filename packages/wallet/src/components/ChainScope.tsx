@@ -1,15 +1,16 @@
 /**
  * The Home chain scope (plan B3, owner item H1): one chain, or "All chains"
- * meaning every enabled chain. A pill shows the choice; a sheet changes it;
- * the choice is remembered in the prefs document. Electroneum is always in
+ * meaning every enabled chain. The pill is the one chain selector; the sheet
+ * is the one chain sheet, each row carrying what the account holds there.
+ * The choice is remembered in the prefs document. Electroneum is always in
  * scope and always the fallback when a chosen chain is turned off.
  */
-import { Body, ChainMark, Column, Icon, Key, Pill, Pressable, Row, Sheet, paint } from '@boltvault/ui'
 import type { ChainView, Settings } from '@boltvault/engine'
 import { useEffect, useMemo, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { usePrefs } from '../hooks/usePrefs'
 import { t } from '../i18n'
+import { ChainSelectPill, ChainSheet, ManageNetworksKey, useChainBalances, type ChainOption } from './ChainSelect'
 
 const ETN = 52014
 export type Scope = 'all' | number
@@ -48,48 +49,17 @@ export function useHomeScope(): HomeScope {
   return { scope, chainIds, label, enabled, chains, setScope: (s) => set({ homeScope: s }) }
 }
 
-export function ScopePill({ scope, label, onPress, testID }: { scope: Scope; label: string; onPress: () => void; testID?: string }) {
-  return <Pill label={label} icon={scope === 'all' ? <Icon name="globe" size={14} color={paint.arc} /> : <ChainMark chainId={scope} size={16} />} chevron selected={scope !== ETN} size="sm" onPress={onPress} accessibilityLabel={t({ id: 'home.scope.a11y', message: 'Chains shown: {s}', values: { s: label } })} testID={testID} />
+export function ScopePill({ scope, label, onPress, size = 'md', testID }: { scope: Scope; label: string; onPress: () => void; size?: 'sm' | 'md'; testID?: string }) {
+  return <ChainSelectPill chainId={scope} label={label} onPress={onPress} size={size} testID={testID} />
 }
 
-export function ChainScopeSheet({ open, onClose, scope, enabled, chains, onSelect, onManage, reducedMotion = false }: { open: boolean; onClose: () => void; scope: Scope; enabled: readonly number[]; chains: readonly ChainView[]; onSelect: (scope: Scope) => void; onManage: () => void; reducedMotion?: boolean }) {
+export function ChainScopeSheet({ open, onClose, scope, enabled, chains, accountId = null, total = null, onSelect, onManage, reducedMotion = false }: { open: boolean; onClose: () => void; scope: Scope; enabled: readonly number[]; chains: readonly ChainView[]; accountId?: string | null; total?: string | null; onSelect: (scope: Scope) => void; onManage: () => void; reducedMotion?: boolean }) {
+  const balances = useChainBalances(accountId)
   const others = enabled.filter((c) => c !== ETN)
-  const options: Array<{ id: Scope; name: string; caption: string | null }> = [
-    { id: 'all', name: t({ id: 'home.scope.all', message: 'All chains' }), caption: t({ id: 'home.scope.all.caption', message: 'Electroneum and {n} more', values: { n: others.length } }) },
-    { id: ETN, name: t({ id: 'home.scope.etn', message: 'Electroneum' }), caption: t({ id: 'home.scope.etn.caption', message: 'Your home chain' }) },
-    ...others.map((c) => ({ id: c as Scope, name: chains.find((x) => x.chainId === c)?.name ?? `Chain ${c}`, caption: null })),
+  const options: ChainOption[] = [
+    { id: 'all', name: t({ id: 'home.scope.all', message: 'All chains' }), caption: t({ id: 'home.scope.all.caption', message: 'Electroneum and {n} more', values: { n: others.length } }), value: total },
+    { id: ETN, name: t({ id: 'home.scope.etn', message: 'Electroneum' }), caption: t({ id: 'home.scope.etn.caption', message: 'Your home chain' }), value: balances.get(ETN) ?? null },
+    ...others.map((c): ChainOption => ({ id: c, name: chains.find((x) => x.chainId === c)?.name ?? `Chain ${c}`, value: balances.get(c) ?? null })),
   ]
-  return (
-    <Sheet open={open} onClose={onClose} title={t({ id: 'home.scope.title', message: 'Show balances for' })} reducedMotion={reducedMotion} footer={<Key label={t({ id: 'home.scope.manage', message: 'Manage networks' })} kind="secondary" size="compact" onPress={onManage} testID="scope-networks" />} testID="scope-sheet">
-      <Column gap={2}>
-        {options.map((o) => {
-          const selected = o.id === scope
-          return (
-            <Pressable key={String(o.id)} onPress={() => onSelect(o.id)} accessibilityRole="button" accessibilityState={{ selected }} accessibilityLabel={o.name} testID={`scope-${o.id}`} style={{ minHeight: 52, justifyContent: 'center' }}>
-              <Row gap="$3" alignItems="center" paddingVertical={6}>
-                {o.id === 'all' ? (
-                  <Row width={24} height={24} alignItems="center" justifyContent="center">
-                    <Icon name="globe" size={20} color={paint.arc} />
-                  </Row>
-                ) : (
-                  <ChainMark chainId={o.id} size={24} />
-                )}
-                <Column flex={1}>
-                  <Body tone={selected ? 'ink' : 'mute'} fontWeight={selected ? '600' : '400'}>
-                    {o.name}
-                  </Body>
-                  {o.caption ? (
-                    <Body tone="mute" size="caption">
-                      {o.caption}
-                    </Body>
-                  ) : null}
-                </Column>
-                {selected ? <Icon name="check" size={18} color={paint.arc} /> : null}
-              </Row>
-            </Pressable>
-          )
-        })}
-      </Column>
-    </Sheet>
-  )
+  return <ChainSheet open={open} onClose={onClose} title={t({ id: 'home.scope.title', message: 'Show balances for' })} options={options} selected={scope} onSelect={onSelect} footer={<ManageNetworksKey onPress={onManage} testID="scope-networks" />} reducedMotion={reducedMotion} testID="scope-sheet" rowTestID={(id) => `scope-${id}`} />
 }

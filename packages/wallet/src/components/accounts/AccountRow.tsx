@@ -3,7 +3,7 @@
  * address with the last-good balance beside it, an "Active" mark, and the
  * menu control. Tapping the row makes it the active account.
  */
-import { Body, Column, Dot, IconButton, Pressable, Row, Signature, paint, shortAddress } from '@boltvault/ui'
+import { Body, Column, Dot, Icon, IconButton, Pressable, Row, Signature, paint, shortAddress } from '@boltvault/ui'
 import type { AccountView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../../engine/EngineProvider'
@@ -61,15 +61,14 @@ export function derivationLabel(a: AccountView): string | null {
   return null
 }
 
-export function AccountRow({ account, active, onSelect, onMenu }: { account: AccountView; active: boolean; onSelect: () => void; onMenu: () => void }) {
+export function AccountRow({ account, active, onSelect, onMenu, onCopy, copied = false }: { account: AccountView; active: boolean; onSelect: () => void; onMenu: () => void; onCopy?: () => void; copied?: boolean }) {
   const total = useAccountTotal(account.id)
-  const meta = [shortAddress(account.address), total || null].filter(Boolean).join(' · ')
   return (
     <Row alignItems="center" gap="$2" opacity={account.hidden ? 0.55 : 1} testID={`account-${account.id}`}>
       <Pressable onPress={onSelect} accessibilityRole="button" accessibilityLabel={account.label} accessibilityState={{ selected: active }} style={{ flex: 1, minHeight: 52, justifyContent: 'center' }} testID={`use-${account.id}`}>
         <Row gap="$3" alignItems="center">
           <Signature address={account.address} size={32} />
-          <Column flex={1} alignItems="flex-start">
+          <Column flex={1} minWidth={0} alignItems="flex-start">
             <Row gap="$2" alignItems="center">
               <Body fontWeight="600" numberOfLines={1} flexShrink={1}>
                 {account.label}
@@ -88,10 +87,22 @@ export function AccountRow({ account, active, onSelect, onMenu }: { account: Acc
                 </Body>
               ) : null}
             </Row>
-            <Body tone="mute" size="caption" numberOfLines={1}>
-              {meta}
-            </Body>
+            <Row gap={2} alignItems="center">
+              <Body tone={copied ? 'arc' : 'mute'} size="caption" fontVariant={['tabular-nums']} numberOfLines={1}>
+                {copied ? t({ id: 'copied', message: 'Copied' }) : shortAddress(account.address)}
+              </Body>
+              {onCopy ? (
+                <Pressable onPress={onCopy} accessibilityRole="button" accessibilityLabel={t({ id: 'acct.copy', message: 'Copy address' })} style={{ minHeight: 44, minWidth: 44, marginVertical: -12, justifyContent: 'center', alignItems: 'flex-start', paddingLeft: 4 }} testID={`copy-${account.id}`}>
+                  <Icon name={copied ? 'check' : 'copy'} size={12} color={copied ? paint.arc : paint.mute} />
+                </Pressable>
+              ) : null}
+            </Row>
           </Column>
+          {total ? (
+            <Body size="caption" fontVariant={['tabular-nums']} flexShrink={0}>
+              {total}
+            </Body>
+          ) : null}
         </Row>
       </Pressable>
       <IconButton icon="more" label={t({ id: 'acct.menu', message: 'Account options' })} onPress={onMenu} testID={`menu-${account.id}`} />

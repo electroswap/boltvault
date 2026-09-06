@@ -589,6 +589,10 @@ export const ScanSummarySchema = z.object({
 })
 export type ScanSummary = z.infer<typeof ScanSummarySchema>
 
+/** The ranked collections window (owner ask 2026-09-06): a day, a week, a month, or all time. */
+export const CollectionWindowSchema = z.enum(['DAY', 'WEEK', 'MONTH', 'MAX'])
+export type CollectionWindow = z.infer<typeof CollectionWindowSchema>
+
 export const CollectionViewSchema = z.object({
   chainId: z.number().int().positive(),
   address: z.string(),
@@ -606,6 +610,11 @@ export const CollectionViewSchema = z.object({
   owners: z.number().nullable(),
   listed: z.number().nullable(),
   percentListed: Fiat,
+  /** The ranked window's volume, its change, the floor's change and sales; null off the ranked list. */
+  volumeEtn: Fiat,
+  volumeChangePct: Fiat,
+  floorChangePct: Fiat,
+  sales: z.number().nullable(),
   traits: z.array(z.object({ name: z.string(), values: z.array(z.string()) })),
   /** Electric Legends pay marketplace dividends (§8.10). */
   paysDividends: z.boolean(),

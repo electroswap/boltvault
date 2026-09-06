@@ -4,7 +4,8 @@
  * screens is replaced by Unlock. A pending dApp approval takes over the
  * popup and the mobile body (the sign window mounts it by route).
  */
-import { Column, Field, TabBar, useWindowDimensions } from '@boltvault/ui'
+import { Column, Field, MotionProvider, ScreenEnter, TabBar, useWindowDimensions, type EnterDirection } from '@boltvault/ui'
+import { useEffect, useRef } from 'react'
 import { t } from '../i18n'
 import { Accounts } from '../screens/Accounts'
 import { Activity } from '../screens/Activity'
@@ -80,6 +81,14 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   const items = TAB_ORDER.map((id) => ({ id, label: t({ id: TABS[id].labelId, message: TABS[id].labelMessage }), icon: TABS[id].icon, ...(id === 'activity' && unread > 0 ? { badge: unread } : {}) }))
   const meta = SCREENS[current.screen]
   const showTabs = meta.dock
+  // How the view arrives (style bible › motion): a push from the right, a pop from the left, a tab change rising in place; the same route never re-animates.
+  const depth = state.stack.length
+  const prev = useRef({ depth, tab: state.tab, screen: current.screen })
+  const direction: EnterDirection = state.tab !== prev.current.tab ? 'tab' : depth > prev.current.depth ? 'push' : depth < prev.current.depth ? 'pop' : current.screen !== prev.current.screen ? 'push' : 'none'
+  useEffect(() => {
+    prev.current = { depth, tab: state.tab, screen: current.screen }
+  })
+  const enterKey = `${state.tab}:${depth}:${current.screen}:${JSON.stringify(current.params ?? null)}`
 
   const locked = !loading && !!vault?.exists && !vault.unlocked
   if (locked && current.screen !== 'onboarding' && current.screen !== 'moments') {
@@ -230,13 +239,16 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   }
 
   return (
+    <MotionProvider reduced={reducedMotion}>
     <MotionContext.Provider value={reducedMotion}>
       <Column flex={1} backgroundColor="$void">
         {meta.grid ? (
           <Field address={active?.address ?? NO_ACCOUNT_SEED} pulse={head?.live ? 1 : 0} warmth={tier ? Math.min(1, tier.tier / 4) : 0} intensity={current.screen === 'home' ? (body === 'extension-popup' ? 0.75 : 1) : 0.5} quiet={!vault?.unlocked} reducedMotion={reducedMotion} fps={body === 'extension-popup' ? 30 : 60} width={width} height={height} testID="field" />
         ) : null}
         <Column flex={1} zIndex={1}>
-          {screen}
+          <ScreenEnter key={enterKey} direction={direction} reducedMotion={reducedMotion}>
+            {screen}
+          </ScreenEnter>
         </Column>
         {showTabs ? <TabBar items={items} activeId={state.tab} onSelect={(id) => router.setTab(id as TabId)} testID="tabs" /> : null}
         {/* Last child, so a device round trip sheet paints above the tab bar (§7.5). */}
@@ -244,5 +256,6 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
         <UpdateRequired />
       </Column>
     </MotionContext.Provider>
+    </MotionProvider>
   )
 }

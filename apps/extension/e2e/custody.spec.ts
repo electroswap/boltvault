@@ -21,7 +21,7 @@ test('create in the tab, lock and unlock from the popup, session survives a reop
     // The popup on a fresh install offers creation and hands secrets to tab.html.
     const popup = await ext.context.newPage()
     const popupErrors = collectErrors(popup)
-    await popup.setViewportSize({ width: 360, height: 600 })
+    await popup.setViewportSize({ width: 400, height: 600 })
     await popup.goto(ext.url('popup.html'))
     await popup.getByTestId('create-vault').click()
     await expect(popup.getByTestId('onboarding')).toBeVisible()
@@ -60,7 +60,7 @@ test('create in the tab, lock and unlock from the popup, session survives a reop
 
     // The popup (a fresh page, as after closing it) sees the unlocked vault.
     const popup2 = await ext.context.newPage()
-    await popup2.setViewportSize({ width: 360, height: 600 })
+    await popup2.setViewportSize({ width: 400, height: 600 })
     await popup2.goto(ext.url('popup.html'))
     await expect(popup2.getByTestId('home')).toBeVisible({ timeout: 15_000 })
     await expect(popup2.getByTestId('seat')).toBeVisible()
@@ -77,7 +77,7 @@ test('create in the tab, lock and unlock from the popup, session survives a reop
     await expect(popup2.getByTestId('home')).toBeVisible({ timeout: 30_000 })
 
     const popup3 = await ext.context.newPage()
-    await popup3.setViewportSize({ width: 360, height: 600 })
+    await popup3.setViewportSize({ width: 400, height: 600 })
     await popup3.goto(ext.url('popup.html'))
     await expect(popup3.getByTestId('home')).toBeVisible({ timeout: 15_000 })
     await expect(popup3.getByTestId('unlock')).toHaveCount(0)

@@ -48,7 +48,7 @@ test('home balances, send to a broadcast, receive, allowances revoke', async () 
 
     // Home paints the chain quantities.
     const popup = await ext.context.newPage()
-    await popup.setViewportSize({ width: 360, height: 600 })
+    await popup.setViewportSize({ width: 400, height: 600 })
     await popup.goto(ext.url('popup.html'))
     await expect(popup.getByTestId('home')).toBeVisible({ timeout: 15_000 })
     // The mini-portfolio opens the Portfolio, where the token cards live (plan B3).
@@ -62,13 +62,14 @@ test('home balances, send to a broadcast, receive, allowances revoke', async () 
     // Receive shows the address and the chain.
     await popup.getByTestId('key-receive').click()
     await expect(popup.getByTestId('receive-address')).toHaveText(address)
-    await expect(popup.getByTestId('receive-chain')).toContainText('52014')
+    await expect(popup.getByTestId('receive-chain')).toContainText('Electroneum')
     await popup.getByTestId('back').click()
 
     // Send 2.5 FIX: quote → review → the sheet says Send → broadcast → Activity.
     await popup.getByTestId('key-send').click()
     await expect(popup.getByTestId('send')).toBeVisible()
-    await popup.getByTestId('send-token-FIX').click()
+    await popup.getByTestId('send-token').click()
+    await popup.getByTestId('swap-pick-FIX').click()
     await popup.getByTestId('send-to-input').fill(FRIEND)
     await popup.getByTestId('send-amount-input').fill('2.5')
     await expect(popup.getByTestId('send-resolved')).toBeVisible({ timeout: 10_000 })

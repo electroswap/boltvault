@@ -37,6 +37,8 @@ export interface UiHost {
   copy?(text: string): Promise<void>
   /** Open an external page (explorer links) in the body's browser. */
   openUrl?(url: string): Promise<void>
+  /** The page the popup was opened over (`activeTab`): origin, host, favicon — the dApp status on Home. Null off http(s). */
+  currentTab?(): Promise<{ origin: string; host: string; favicon: string | null } | null>
   /** The approval window closes itself after a decision (§3.5). */
   closeWindow?(): void
   /** Fires on window focus/resize so the approval primary can go inert for 600 ms (§3.5). */

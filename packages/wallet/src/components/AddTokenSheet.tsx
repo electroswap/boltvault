@@ -4,7 +4,8 @@
  * The token joins the list with `source: 'user'` and the portfolio
  * refreshes at once.
  */
-import { Body, ChainMark, Column, Input, Key, Pill, Plate, Row, Sheet } from '@boltvault/ui'
+import { Body, Column, Input, Key, Plate, Row, Sheet } from '@boltvault/ui'
+import { ChainSelectPill, ChainSheet, useChainBalances } from './ChainSelect'
 import type { ChainView, Settings } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
@@ -25,6 +26,8 @@ export function AddTokenSheet({ open, onClose, onAdded, initialChainId, initialA
   const [looking, setLooking] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [chainOpen, setChainOpen] = useState(false)
+  const balances = useChainBalances(active?.id ?? null)
 
   useEffect(() => {
     if (!open) return
@@ -80,15 +83,18 @@ export function AddTokenSheet({ open, onClose, onAdded, initialChainId, initialA
   }
 
   const options = [ETN, ...(settings?.enabledChains ?? []).filter((c) => c !== ETN)]
+  const chainName = (c: number): string => (c === ETN ? 'Electroneum' : (chains.find((x) => x.chainId === c)?.name ?? `Chain ${c}`))
   return (
+    <>
     <Sheet open={open} onClose={onClose} title={t({ id: 'token.add.title', message: 'Add a token' })} reducedMotion={reducedMotion} footer={<Key label={t({ id: 'token.add.key', message: 'Add token' })} size="compact" disabled={busy || looking || !meta?.hasCode} onPress={() => void add()} testID="add-token-submit" />} testID="add-token">
       <Column gap="$3">
-        <Row gap="$2" flexWrap="wrap" testID="add-token-chains">
-          {options.map((c) => (
-            <Pill key={c} label={c === ETN ? 'Electroneum' : (chains.find((x) => x.chainId === c)?.name ?? `Chain ${c}`)} icon={<ChainMark chainId={c} size={14} />} selected={chainId === c} size="sm" onPress={() => setChainId(c)} testID={`add-token-chain-${c}`} />
-          ))}
+        <Row justifyContent="space-between" alignItems="center" testID="add-token-chains">
+          <Body tone="mute" size="caption">
+            {t({ id: 'token.add.chain', message: 'On' })}
+          </Body>
+          <ChainSelectPill chainId={chainId} label={chainName(chainId)} onPress={() => setChainOpen(true)} testID="add-token-chain" />
         </Row>
-        <Input value={address} onChange={setAddress} mono placeholder={t({ id: 'token.add.ph', message: 'Contract address 0x…' })} autoFocus={!initialAddress} testID="add-token-address" />
+        <Input value={address} onChange={setAddress} label={t({ id: 'token.add.label', message: 'Contract address' })} placeholder="0x…" autoFocus={!initialAddress} testID="add-token-address" />
         {looking ? (
           <Body tone="mute" size="caption">
             {t({ id: 'token.add.looking', message: 'Reading the contract…' })}
@@ -108,5 +114,20 @@ export function AddTokenSheet({ open, onClose, onAdded, initialChainId, initialA
         {error ? <Body tone="burn">{error}</Body> : null}
       </Column>
     </Sheet>
+    <ChainSheet
+      open={chainOpen}
+      onClose={() => setChainOpen(false)}
+      title={t({ id: 'token.add.chain.title', message: 'Add a token on' })}
+      options={options.map((c) => ({ id: c, name: chainName(c), ...(c === ETN ? { caption: t({ id: 'home.scope.etn.caption', message: 'Your home chain' }) } : {}), value: balances.get(c) ?? null }))}
+      selected={chainId}
+      onSelect={(id) => {
+        if (id !== 'all') setChainId(id)
+        setChainOpen(false)
+      }}
+      reducedMotion={reducedMotion}
+      testID="add-token-chain-sheet"
+      rowTestID={(id) => `add-token-chain-${id}`}
+    />
+    </>
   )
 }

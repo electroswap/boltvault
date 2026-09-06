@@ -4,7 +4,8 @@
  * Ethereum scanner cannot mistake it, and "Request amount" builds a transfer
  * URI for a token.
  */
-import { Body, Chip, Column, Input, Key, Plate, QR, Row, ScrollView, Signature, metrics, paint } from '@boltvault/ui'
+import { Body, Column, Input, Key, Pill, Plate, QR, Row, ScrollView, Signature, metrics } from '@boltvault/ui'
+import { ChainSelectPill, ChainSheet, ManageNetworksKey, useChainBalances } from '../components/ChainSelect'
 import { PageHeader } from '../components/PageHeader'
 import type { ChainView, TokenView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
@@ -12,6 +13,7 @@ import { parseUnits } from 'viem'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
+import { useRouter } from '../navigation/router'
 import { useWalletState } from '../state/useWalletState'
 
 const ETN = 52014
@@ -20,9 +22,12 @@ export function Receive({ body, token: initialToken, chainId: initialChainId }: 
   const engine = useEngine()
   const host = useHost()
   const { active } = useWalletState()
+  const router = useRouter()
   const [chain, setChain] = useState<ChainView | null>(null)
   const [tokens, setTokens] = useState<TokenView[]>([])
   const [chainId, setChainId] = useState(initialChainId ?? ETN)
+  const [chainOpen, setChainOpen] = useState(false)
+  const balances = useChainBalances(active?.id ?? null)
   const [chains, setChains] = useState<ChainView[]>([])
   const [enabled, setEnabled] = useState<number[]>([ETN])
   const [token, setToken] = useState(initialToken ?? 'native')
@@ -61,34 +66,20 @@ export function Receive({ body, token: initialToken, chainId: initialChainId }: 
   }
 
   return (
+    <Column flex={1}>
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14, alignItems: 'stretch' }} testID="receive">
-      <PageHeader title={t({ id: 'receive.title', message: 'Receive' })} />
+      <PageHeader title={t({ id: 'receive.title', message: 'Receive' })} subtitle={t({ id: 'receive.subtitle', message: 'Only send {c} assets to this address', values: { c: chain?.name ?? 'Electroneum' } })} />
+      <Row testID="receive-chain">
+        <ChainSelectPill chainId={chainId} label={chain?.name ?? 'Electroneum'} onPress={() => setChainOpen(true)} testID="receive-chain-select" />
+      </Row>
 
       <Plate role="raised" gap="$3" alignItems="center" testID="receive-plate">
         <QR value={uri} size={body === 'extension-popup' ? 200 : 240} testID="receive-qr" />
-        <Chip>
-          <Body tone="arc" size="caption" testID="receive-chain">
-            {chain ? `${chain.name} · ${chain.chainId}` : `Electroneum · ${ETN}`}
-          </Body>
-        </Chip>
-        {enabled.length > 1 ? (
-          <Row gap="$1" flexWrap="wrap" justifyContent="center" testID="receive-chains">
-            {enabled
-              .filter((id) => id !== chainId)
-              .map((id) => (
-                <Chip key={id} onPress={() => (setChainId(id), setToken('native'))} cursor="pointer" minHeight={28} justifyContent="center" testID={`receive-chain-${id}`}>
-                  <Body tone="mute" size="caption">
-                    {chains.find((c) => c.chainId === id)?.name ?? `Chain ${id}`}
-                  </Body>
-                </Chip>
-              ))}
-          </Row>
-        ) : null}
         <Row gap="$2" alignItems="center">
           <Signature address={address} size={24} />
           <Body size="caption">{active.label}</Body>
         </Row>
-        <Body tone="mute" size="caption" fontFamily="$mono" textAlign="center" testID="receive-address">
+        <Body tone="mute" size="caption" textAlign="center" testID="receive-address">
           {address}
         </Body>
         <Key label={copied ? t({ id: 'copied', message: 'Copied' }) : t({ id: 'receive.copy', message: 'Copy address' })} onPress={copy} testID="receive-copy" />
@@ -105,11 +96,7 @@ export function Receive({ body, token: initialToken, chainId: initialChainId }: 
           <Column gap="$2">
             <Row gap="$2" flexWrap="wrap">
               {tokens.slice(0, 6).map((x) => (
-                <Chip key={x.address} onPress={() => setToken(x.address)} cursor="pointer" minHeight={44} justifyContent="center" borderColor={x.address === token ? paint.arc : undefined}>
-                  <Body tone={x.address === token ? 'arc' : 'mute'} size="caption">
-                    {x.symbol}
-                  </Body>
-                </Chip>
+                <Pill key={x.address} label={x.symbol} selected={x.address === token} size="sm" onPress={() => setToken(x.address)} />
               ))}
             </Row>
             <Input value={amount} onChange={setAmount} placeholder="0" hint={t({ id: 'receive.request.hint', message: 'The code above updates with the amount.' })} testID="receive-amount" />
@@ -121,5 +108,23 @@ export function Receive({ body, token: initialToken, chainId: initialChainId }: 
         {t({ id: 'receive.warning', message: 'This is Electroneum Smart Chain (52014). Send ETN here from an exchange that supports the smart chain. Do not send from the old Electroneum app.' })}
       </Body>
     </ScrollView>
+    <ChainSheet
+      open={chainOpen}
+      onClose={() => setChainOpen(false)}
+      title={t({ id: 'receive.chain.title', message: 'Receive on' })}
+      options={enabled.map((id) => ({ id, name: chains.find((c) => c.chainId === id)?.name ?? `Chain ${id}`, ...(id === ETN ? { caption: t({ id: 'home.scope.etn.caption', message: 'Your home chain' }) } : {}), value: balances.get(id) ?? null }))}
+      selected={chainId}
+      onSelect={(id) => {
+        if (id !== 'all') {
+          setChainId(id)
+          setToken('native')
+        }
+        setChainOpen(false)
+      }}
+      footer={<ManageNetworksKey onPress={() => { setChainOpen(false); router.navigate('networks') }} testID="receive-networks" />}
+      testID="receive-chain-sheet"
+      rowTestID={(id) => `receive-chain-${id}`}
+    />
+    </Column>
   )
 }

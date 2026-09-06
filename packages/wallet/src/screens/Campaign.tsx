@@ -211,7 +211,7 @@ export function Campaign({ body, chainId, pool, reducedMotion = false }: { body:
               <Plate role="card" gap="$2" testID="campaign-referral">
                 <Body size="caption">{t({ id: 'campaign.ref', message: 'Share your link — you earn {p}% of contributions', values: { p: c.affiliatePercent } })}</Body>
                 <Row gap="$2" alignItems="center">
-                  <Body tone="mute" size="caption" numberOfLines={1} flexShrink={1} fontFamily="$mono">
+                  <Body tone="mute" size="caption" numberOfLines={1} flexShrink={1}>
                     {`https://electroswap.io/share/${c.shareLink}`}
                   </Body>
                   <Pill label={copied ? t({ id: 'copied', message: 'Copied' }) : t({ id: 'copy', message: 'Copy' })} icon={<Icon name={copied ? 'check' : 'copy'} size={14} color={paint.mute} />} size="sm" onPress={() => void host.copy?.(`https://electroswap.io/share/${c.shareLink}`).then(() => setCopied(true))} testID="campaign-copy-link" />

@@ -1,4 +1,7 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
+import type { LayoutChangeEvent } from 'react-native'
+import { Charge } from './motion/Charge'
+import { useReducedMotionPref } from './motion/MotionContext'
 import { KeyFrame, KeyLabel, Row } from './primitives'
 import { CurrentFill, Rim } from './Rim'
 import { radius } from './tokens'
@@ -12,7 +15,7 @@ export interface KeyProps {
   readonly disabled?: boolean
   readonly testID?: string
   readonly icon?: ReactNode
-  /** Icon above the label — the four Home keys in a 360 px popup. */
+  /** Icon above the label — the stacked keys of a narrow body. */
   readonly stacked?: boolean
 }
 
@@ -24,12 +27,17 @@ export interface KeyProps {
 export function Key({ label, onPress, kind = 'primary', size = 'regular', disabled = false, testID, icon, stacked = false }: KeyProps) {
   const compact = size === 'compact'
   const r = compact ? 12 : radius.key
+  const reduced = useReducedMotionPref()
+  const [charge, setCharge] = useState(0)
+  const [width, setWidth] = useState(0)
   return (
     <KeyFrame
       kind={kind}
       size={size}
       disabled={disabled}
       onPress={disabled ? undefined : onPress}
+      onPressIn={disabled || reduced || kind !== 'primary' ? undefined : () => setCharge((c) => c + 1)}
+      onLayout={(e: LayoutChangeEvent) => setWidth(Math.round(e.nativeEvent.layout.width))}
       testID={testID}
       role="button"
       aria-label={label}
@@ -41,6 +49,7 @@ export function Key({ label, onPress, kind = 'primary', size = 'regular', disabl
       flex={stacked ? 1 : undefined}
     >
       {kind === 'primary' ? <CurrentFill radius={r} /> : null}
+      {charge > 0 && width > 0 ? <Charge key={charge} width={width} radius={r} /> : null}
       {kind === 'secondary' ? <Rim radius={r} opacity={0.35} /> : null}
       {/* A positioned layer: on the web an absolute SVG paints above in-flow text whatever the order. */}
       <Row flexDirection={stacked ? 'column' : 'row'} alignItems="center" justifyContent="center" gap={stacked ? 2 : compact ? 6 : 8} zIndex={1}>

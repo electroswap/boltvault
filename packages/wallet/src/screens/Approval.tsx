@@ -270,7 +270,7 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
           <Column gap="$2" testID="approval-watch">
             <Plate role="raised" gap={2}>
               <Body size="title">{payload.onChain ? t({ id: 'approval.watch.title', message: 'Add {s} to your tokens', values: { s: payload.onChain.symbol } }) : t({ id: 'approval.watch.title.unknown', message: 'Add a token to your list' })}</Body>
-              <Body tone="mute" size="caption" fontFamily="$mono">
+              <Body tone="mute" size="caption">
                 {payload.address ? shortAddress(payload.address) : '—'}
               </Body>
               {payload.onChain ? (
@@ -314,7 +314,7 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
             </Body>
             {showRaw ? (
               <Plate>
-                <Body fontFamily="$mono" size="caption" testID="approval-raw">
+                <Body size="caption" testID="approval-raw">
                   {JSON.stringify(payload.typedData, null, 1).slice(0, 4000)}
                 </Body>
               </Plate>
@@ -399,7 +399,7 @@ function DeviceRow({ label, value }: { label: string; value: string }) {
       <Body tone="mute" size="caption">
         {label}
       </Body>
-      <Body size="caption" fontFamily="$mono" numberOfLines={1} flexShrink={1}>
+      <Body size="caption" numberOfLines={1} flexShrink={1}>
         {value}
       </Body>
     </Row>
