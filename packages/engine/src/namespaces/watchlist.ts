@@ -9,6 +9,7 @@
  */
 import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
+import type { SealedMap } from '../sealed'
 import type { EventBus, NamespaceSpec } from '../host'
 import { WatchItemSchema, type WatchItem } from '../schema'
 import { readDoc, writeDoc, type DocSpec } from '../storage'
@@ -26,6 +27,8 @@ export interface WatchlistDeps {
   readonly platform: Platform
   readonly bus: EventBus
   readonly vault: VaultManager
+  /** Watch items and nudge state, sealed under the DEK (one entry, id `all`). */
+  readonly watchlist: SealedMap<{ items: WatchItem[]; nudgedAt: Record<string, number> }>
 }
 
 const DOC: DocSpec<{ items: WatchItem[]; nudgedAt: Record<string, number> }> = {
@@ -60,16 +63,27 @@ export class WatchlistService {
     void this.deps.platform.alarms.schedule(WATCH_ALARM, this.deps.platform.now() + CHECK_EVERY_MS).catch(() => undefined)
   }
 
+  /**
+   * Drop the decrypted list. Needed on *both* transitions: hydrating while
+   * locked caches an empty list and sets `hydrated`, so without this the
+   * service would keep serving "nothing watched" for the rest of the session.
+   */
+  forget(): void {
+    this.hydrated = false
+    this.items = []
+    this.nudgedAt = {}
+  }
+
   async hydrate(): Promise<void> {
     if (this.hydrated) return
-    const { value } = await readDoc(this.deps.platform.storage.local, DOC, () => this.deps.platform.now())
+    const value = (await this.deps.watchlist.get('all')) ?? { items: [], nudgedAt: {} }
     this.items = value.items
     this.nudgedAt = value.nudgedAt
     this.hydrated = true
   }
 
   private async persist(): Promise<void> {
-    await writeDoc(this.deps.platform.storage.local, DOC, { items: this.items, nudgedAt: this.nudgedAt })
+    await this.deps.watchlist.set('all', { items: this.items, nudgedAt: this.nudgedAt })
     this.deps.bus.emit({ type: 'watchlist.changed', items: this.items })
   }
 
@@ -115,6 +129,12 @@ export class WatchlistService {
 
   /** One pass: thresholds crossed, campaigns gone live, positions worth a nudge. Returns what was sent. */
   async check(): Promise<string[]> {
+    // The watch list is sealed under the DEK, so a locked wallet cannot read
+    // what to watch or record what it nudged. The alarm used to run regardless,
+    // which also meant it wrote account-scoped cache entries while locked.
+    // Alerts now surface at the next unlock instead of on a locked device —
+    // which is also the more private behaviour for a lock-screen notification.
+    if (!(await this.deps.vault.isUnlocked())) return []
     await this.hydrate()
     const s = this.sources
     if (!s) return []

@@ -10,6 +10,7 @@ import { fetchTokenList, type CustomToken, type TokenEntry } from '@boltvault/to
 import { getAddress, isAddress, parseAbi, type Hex } from 'viem'
 import { z } from 'zod'
 import { EngineError } from '../errors'
+import type { SealedMap } from '../sealed'
 import type { EventBus, NamespaceSpec } from '../host'
 import { readMany } from '../multicall'
 import type { TokenView } from '../schema'
@@ -26,7 +27,7 @@ const TokenEntrySchema = z.object({
   tags: z.array(z.string()).optional(),
 })
 
-const CustomTokenSchema = z.object({
+export const CustomTokenSchema = z.object({
   chainId: z.number().int().positive(),
   address: z.string(),
   name: z.string(),
@@ -44,13 +45,9 @@ const listDoc = (chainId: number): DocSpec<{ tokens: TokenEntry[]; at: number }>
   defaultValue: () => ({ tokens: [], at: 0 }),
 })
 
-const CUSTOM_DOC: DocSpec<CustomToken[]> = { key: 'tokens.custom', version: 1, schema: z.array(CustomTokenSchema), defaultValue: () => [] }
-const PREFS_DOC: DocSpec<{ pinned: string[]; hidden: string[] }> = {
-  key: 'tokens.prefs',
-  version: 1,
-  schema: z.object({ pinned: z.array(z.string()), hidden: z.array(z.string()) }),
-  defaultValue: () => ({ pinned: [], hidden: [] }),
-}
+/** Sealed under the DEK: user-added tokens name what this wallet cares about. */
+const CUSTOM_ID = 'custom'
+const PREFS_ID = 'prefs'
 
 const LIST_TTL_MS = 6 * 60 * 60 * 1000
 const ERC20_META = parseAbi(['function name() view returns (string)', 'function symbol() view returns (string)', 'function decimals() view returns (uint8)'])
@@ -75,6 +72,9 @@ export class TokensService {
     private readonly bus: EventBus,
     private readonly chains: ChainsService,
     private readonly fetchImpl: typeof fetch = fetch,
+    /** User-added tokens and pin/hide preferences, sealed under the DEK. */
+    private readonly customTokens: SealedMap<CustomToken[]>,
+    private readonly tokenPrefs: SealedMap<{ pinned: string[]; hidden: string[] }>,
   ) {}
 
   /** The pinned public list for a chain, refreshed at most every 6 h; last-good on failure. */
@@ -104,12 +104,12 @@ export class TokensService {
   }
 
   private async custom(): Promise<CustomToken[]> {
-    return (await readDoc(this.platform.storage.local, CUSTOM_DOC, () => this.platform.now())).value
+    return (await this.customTokens.get(CUSTOM_ID)) ?? []
   }
 
   /** Pinned / hidden token keys (`chainId:address`), read by Explore to mark pins at serve time. */
   async prefs(): Promise<{ pinned: string[]; hidden: string[] }> {
-    return (await readDoc(this.platform.storage.local, PREFS_DOC, () => this.platform.now())).value
+    return (await this.tokenPrefs.get(PREFS_ID)) ?? { pinned: [], hidden: [] }
   }
 
   logoFor(chainId: number, address: string, listUri?: string | undefined): string | null {
@@ -192,7 +192,7 @@ export class TokensService {
     const k = key(input.chainId, meta.address)
     const next = custom.filter((c) => key(c.chainId, c.address) !== k)
     next.push({ chainId: input.chainId, address: meta.address, name: meta.name, symbol: meta.symbol, decimals: meta.decimals, source: input.source, ...(input.origin ? { origin: input.origin } : {}) })
-    await writeDoc(this.platform.storage.local, CUSTOM_DOC, next)
+    await this.customTokens.set(CUSTOM_ID, next)
     this.lists.delete(input.chainId)
     this.bus.emit({ type: 'tokens.changed', chainId: input.chainId })
     const view = await this.get(input.chainId, meta.address)
@@ -203,7 +203,7 @@ export class TokensService {
   async removeCustom(chainId: number, address: string): Promise<void> {
     const custom = await this.custom()
     const k = key(chainId, address)
-    await writeDoc(this.platform.storage.local, CUSTOM_DOC, custom.filter((c) => key(c.chainId, c.address) !== k))
+    await this.customTokens.set(CUSTOM_ID, custom.filter((c) => key(c.chainId, c.address) !== k))
     this.bus.emit({ type: 'tokens.changed', chainId })
   }
 
@@ -211,7 +211,7 @@ export class TokensService {
     const prefs = await this.prefs()
     const k = key(chainId, address)
     const toggle = (list: string[], on: boolean | undefined): string[] => (on === undefined ? list : on ? [...new Set([...list, k])] : list.filter((x) => x !== k))
-    await writeDoc(this.platform.storage.local, PREFS_DOC, { pinned: toggle(prefs.pinned, patch.pinned), hidden: toggle(prefs.hidden, patch.hidden) })
+    await this.tokenPrefs.set(PREFS_ID, { pinned: toggle(prefs.pinned, patch.pinned), hidden: toggle(prefs.hidden, patch.hidden) })
     this.bus.emit({ type: 'tokens.changed', chainId })
   }
 }

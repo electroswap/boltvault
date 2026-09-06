@@ -15,6 +15,8 @@
  */
 import type { Platform } from '@boltvault/platform'
 import type { ConnectedSite } from '@boltvault/protocol'
+import type { DeviceIdentity } from '@boltvault/core'
+import type { CustomToken } from '@boltvault/token-catalog'
 import { z } from 'zod'
 import {
   AllowanceViewSchema,
@@ -23,14 +25,19 @@ import {
   PortfolioSnapshotSchema,
   PositionsSchema,
   ScanSummarySchema,
+  WatchItemSchema,
   type AllowanceView,
   type BridgeStatus,
   type NotificationView,
   type PortfolioSnapshot,
   type Positions,
   type ScanSummary,
+  type WatchItem,
 } from './schema'
+import { PairedDeviceRowSchema, type PairedDeviceRow } from './namespaces/sync'
+import { CustomTokenSchema } from './namespaces/tokens'
 import { SiteSchema } from './namespaces/sites'
+import { CustomCollectionSchema, NftMetadataSchema, type CustomCollection, type NftMetadata } from './namespaces/nftCustom'
 import { SealedMap } from './sealed'
 
 /** "Since you last looked" — the total at the previous first open. */
@@ -74,13 +81,29 @@ export interface SealedStores {
   /** Launchpad referrer per `<chainId>.<pool>` — a referrer address and a timestamp. */
   readonly launchpadRef: SealedMap<{ referrer: string; at: number }>
   /** Watchlist items and nudge state (one entry, id `all`); nudge keys name accounts. */
-  readonly watchlist: SealedMap<{ items: unknown[]; nudgedAt: Record<string, number> }>
+  readonly watchlist: SealedMap<{ items: WatchItem[]; nudgedAt: Record<string, number> }>
   /** Pinned/hidden tokens and user-added tokens — what the user is interested in. */
   readonly tokenPrefs: SealedMap<{ pinned: string[]; hidden: string[] }>
-  readonly tokensCustom: SealedMap<unknown[]>
+  readonly tokensCustom: SealedMap<CustomToken[]>
   /** Custom collections per chain, and NFT metadata per `<chain>.<address>.<tokenId>`. */
-  readonly nftCustom: SealedMap<unknown[]>
-  readonly nftMeta: SealedMap<unknown>
+  readonly nftCustom: SealedMap<CustomCollection[]>
+  readonly nftMeta: SealedMap<NftMetadata | null>
+  /** This device's ed25519 sync identity — a private key (one entry, id `me`). */
+  readonly syncIdentity: SealedMap<DeviceIdentity>
+  /** Paired devices, each carrying an E2E channel key (one entry, id `all`). */
+  readonly syncDevices: SealedMap<PairedDeviceRow[]>
+  /**
+   * This device's label, and the last applied sequence per pairing. The
+   * pairing id is the relay's only credential (§9.5 — "no auth beyond
+   * possession of a random 256-bit id"), so the map's *keys* are secrets.
+   */
+  readonly syncMeta: SealedMap<{ label: string | null; applied: Record<string, number> }>
+  /**
+   * Drop every entry belonging to one account. Removing an account used to
+   * leave its portfolio, positions, allowances, scan cursors and site rows
+   * behind forever — orphaned, unreachable from the UI, and still on disk.
+   */
+  purgeAccount(accountId: string): Promise<void>
   /** Forget every decrypted blob on lock. */
   forget(): void
 }
@@ -171,12 +194,12 @@ export function createSealedStores(platform: Platform, dek: () => Promise<Uint8A
     aad: 'boltvault.launchpad.ref.v1',
     schema: z.object({ referrer: z.string(), at: z.number() }) as unknown as z.ZodType<{ referrer: string; at: number }>,
   })
-  const watchlist = new SealedMap<{ items: unknown[]; nudgedAt: Record<string, number> }>(platform, dek, {
+  const watchlist = new SealedMap<{ items: WatchItem[]; nudgedAt: Record<string, number> }>(platform, dek, {
     key: 'watchlist.blob',
     info: 'bv/watchlist',
     aad: 'boltvault.watchlist.v1',
-    schema: z.object({ items: z.array(z.unknown()), nudgedAt: z.record(z.string(), z.number()) }) as unknown as z.ZodType<{
-      items: unknown[]
+    schema: z.object({ items: z.array(WatchItemSchema), nudgedAt: z.record(z.string(), z.number()) }) as unknown as z.ZodType<{
+      items: WatchItem[]
       nudgedAt: Record<string, number>
     }>,
   })
@@ -186,26 +209,47 @@ export function createSealedStores(platform: Platform, dek: () => Promise<Uint8A
     aad: 'boltvault.tokens.prefs.v1',
     schema: z.object({ pinned: z.array(z.string()), hidden: z.array(z.string()) }) as unknown as z.ZodType<{ pinned: string[]; hidden: string[] }>,
   })
-  const tokensCustom = new SealedMap<unknown[]>(platform, dek, {
+  const tokensCustom = new SealedMap<CustomToken[]>(platform, dek, {
     key: 'tokens.custom.blob',
     info: 'bv/tokens/custom',
     aad: 'boltvault.tokens.custom.v1',
-    schema: z.array(z.unknown()),
+    schema: z.array(CustomTokenSchema) as unknown as z.ZodType<CustomToken[]>,
   })
-  const nftCustom = new SealedMap<unknown[]>(platform, dek, {
+  const nftCustom = new SealedMap<CustomCollection[]>(platform, dek, {
     key: 'nft.custom.blob',
     info: 'bv/nft/custom',
     aad: 'boltvault.nft.custom.v1',
-    schema: z.array(z.unknown()),
+    schema: z.array(CustomCollectionSchema),
   })
-  const nftMeta = new SealedMap<unknown>(platform, dek, {
+  const nftMeta = new SealedMap<NftMetadata | null>(platform, dek, {
     key: 'nft.meta.blob',
     info: 'bv/nft/meta',
     aad: 'boltvault.nft.meta.v1',
-    schema: z.unknown(),
+    schema: NftMetadataSchema.nullable(),
     cap: 512,
   })
-  const all = [portfolio, looks, allowances, positions, scan, scanSummary, bridge, notifications, sites, active, legends, launchpadRef, watchlist, tokenPrefs, tokensCustom, nftCustom, nftMeta]
+  const syncIdentity = new SealedMap<DeviceIdentity>(platform, dek, {
+    key: 'sync.identity.blob',
+    info: 'bv/sync/identity',
+    aad: 'boltvault.sync.identity.v1',
+    schema: z.object({ deviceId: z.string(), signingPrivateKey: z.string(), signingPublicKey: z.string() }) as unknown as z.ZodType<DeviceIdentity>,
+  })
+  const syncDevices = new SealedMap<PairedDeviceRow[]>(platform, dek, {
+    key: 'sync.devices.blob',
+    info: 'bv/sync/devices',
+    aad: 'boltvault.sync.devices.v1',
+    schema: z.array(PairedDeviceRowSchema) as unknown as z.ZodType<PairedDeviceRow[]>,
+  })
+  const syncMeta = new SealedMap<{ label: string | null; applied: Record<string, number> }>(platform, dek, {
+    key: 'sync.meta.blob',
+    info: 'bv/sync/meta',
+    aad: 'boltvault.sync.meta.v1',
+    schema: z.object({ label: z.string().nullable(), applied: z.record(z.string(), z.number()) }) as unknown as z.ZodType<{
+      label: string | null
+      applied: Record<string, number>
+    }>,
+  })
+  const all = [portfolio, looks, allowances, positions, scan, scanSummary, bridge, notifications, sites, active, legends, launchpadRef, watchlist, tokenPrefs, tokensCustom, nftCustom, nftMeta, syncIdentity, syncDevices, syncMeta]
   return {
     portfolio,
     looks,
@@ -224,6 +268,28 @@ export function createSealedStores(platform: Platform, dek: () => Promise<Uint8A
     tokensCustom,
     nftCustom,
     nftMeta,
+    syncIdentity,
+    syncMeta,
+    syncDevices,
+    purgeAccount: async (accountId: string) => {
+      const needle = accountId.toLowerCase()
+      const names = (id: string): boolean => id.toLowerCase().includes(needle)
+      await portfolio.delete(accountId)
+      await looks.delete(accountId)
+      await allowances.deleteWhere(names)
+      await positions.deleteWhere(names)
+      await scan.deleteWhere(names)
+      await scanSummary.deleteWhere(names)
+      // A site row is keyed by origin, so it must be matched on its value.
+      for (const [origin, row] of Object.entries(await sites.entries())) {
+        if (row.accountId === accountId) await sites.delete(origin)
+      }
+      const wl = await watchlist.get('all')
+      if (wl) {
+        const nudgedAt = Object.fromEntries(Object.entries(wl.nudgedAt).filter(([k]) => !names(k)))
+        await watchlist.set('all', { items: wl.items, nudgedAt })
+      }
+    },
     forget: () => {
       for (const s of all) s.forget()
     },

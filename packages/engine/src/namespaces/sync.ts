@@ -27,6 +27,7 @@ import {
 } from '@boltvault/core'
 import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
+import type { SealedMap } from '../sealed'
 import { EngineError } from '../errors'
 import type { EventBus, NamespaceSpec } from '../host'
 import type { PairedDevice, Settings, SyncStatus } from '../schema'
@@ -74,7 +75,7 @@ export class HttpRelay implements Relay {
   }
 }
 
-const PairedDeviceRowSchema = z.object({
+export const PairedDeviceRowSchema = z.object({
   deviceId: z.string(),
   label: z.string(),
   signingPublicKey: z.string(),
@@ -86,17 +87,19 @@ const PairedDeviceRowSchema = z.object({
   seqOut: z.number().int().nonnegative(),
   seqIn: z.number().int().nonnegative(),
 })
-type PairedDeviceRow = z.infer<typeof PairedDeviceRowSchema>
+export type PairedDeviceRow = z.infer<typeof PairedDeviceRowSchema>
 
-const DEVICES_DOC: DocSpec<PairedDeviceRow[]> = { key: 'sync.devices', version: 1, schema: z.array(PairedDeviceRowSchema), defaultValue: () => [] }
-const IDENTITY_DOC: DocSpec<DeviceIdentity | null> = {
-  key: 'sync.identity',
-  version: 1,
-  schema: z.object({ deviceId: z.string(), signingPrivateKey: z.string(), signingPublicKey: z.string() }).nullable(),
-  defaultValue: () => null,
-}
-const LABEL_DOC: DocSpec<{ label: string | null }> = { key: 'sync.label', version: 1, schema: z.object({ label: z.string().nullable() }), defaultValue: () => ({ label: null }) }
-const APPLIED_DOC: DocSpec<Record<string, number>> = { key: 'sync.applied', version: 1, schema: z.record(z.string(), z.number()), defaultValue: () => ({}) }
+/**
+ * These two used to be written with `writeDoc` to `storage.secret`. On the
+ * extension that area is `chrome.storage.local` under a different key prefix
+ * with **no encryption** — the "ciphertext only" contract is a convention that
+ * `writeDoc` does not enforce. So the device's ed25519 `signingPrivateKey` and
+ * every paired device's `channelKey` sat on disk in the clear. The 2026-09
+ * at-rest audit did not catch this only because that profile had never paired a
+ * device, so no `sync.*` key existed in the dump. Both are now sealed under the
+ * DEK. (Mobile was unaffected: its `secret` MMKV is encrypted under a
+ * Keychain-held key.)
+ */
 
 const AnswerSchema = z.object({ v: z.literal(1), kind: z.literal('boltvault-pair-answer'), pairingId: z.string(), deviceId: z.string(), label: z.string(), x25519PublicKey: z.string(), signingPublicKey: z.string() })
 type Answer = z.infer<typeof AnswerSchema>
@@ -115,6 +118,10 @@ export interface SyncDeps {
   readonly sites: SitesService
   readonly vault: VaultManager
   readonly relayFor: (relayUrl: string) => Relay
+  /** This device's sync identity (a private key) and its paired devices, sealed under the DEK. */
+  readonly identity: SealedMap<DeviceIdentity>
+  readonly devices: SealedMap<PairedDeviceRow[]>
+  readonly meta: SealedMap<{ label: string | null; applied: Record<string, number> }>
 }
 
 export class SyncService {
@@ -133,24 +140,24 @@ export class SyncService {
   ) {}
 
   private async identity(): Promise<DeviceIdentity> {
-    const stored = (await readDoc(this.platform.storage.secret, IDENTITY_DOC, () => this.platform.now())).value
+    const stored = await this.deps.identity.get('me')
     if (stored) return stored
     const id = createDeviceIdentity((n) => this.platform.random(n))
-    await writeDoc(this.platform.storage.secret, IDENTITY_DOC, id)
+    await this.deps.identity.set('me', id)
     return id
   }
 
   private async label(): Promise<string> {
-    const { label } = (await readDoc(this.platform.storage.local, LABEL_DOC, () => this.platform.now())).value
+    const { label } = (await this.deps.meta.get('me')) ?? { label: null, applied: {} }
     return label ?? (this.platform.kind === 'mobile' ? 'Phone' : this.platform.kind === 'extension' ? 'Browser' : 'Device')
   }
 
   private async devices(): Promise<PairedDeviceRow[]> {
-    return (await readDoc(this.platform.storage.secret, DEVICES_DOC, () => this.platform.now())).value
+    return (await this.deps.devices.get('all')) ?? []
   }
 
   private async saveDevices(rows: PairedDeviceRow[]): Promise<void> {
-    await writeDoc(this.platform.storage.secret, DEVICES_DOC, rows)
+    await this.deps.devices.set('all', rows)
   }
 
   async status(): Promise<SyncStatus> {
@@ -172,7 +179,7 @@ export class SyncService {
   }
 
   async setDeviceLabel(label: string): Promise<SyncStatus> {
-    await writeDoc(this.platform.storage.local, LABEL_DOC, { label })
+    await this.deps.meta.set('me', { ...((await this.deps.meta.get('me')) ?? { label: null, applied: {} }), label })
     return this.emit()
   }
 
@@ -299,7 +306,7 @@ export class SyncService {
   async pull(): Promise<{ applied: number }> {
     const me = await this.identity()
     const rows = await this.devices()
-    const applied = (await readDoc(this.platform.storage.local, APPLIED_DOC, () => this.platform.now())).value
+    const applied = ((await this.deps.meta.get('me')) ?? { label: null, applied: {} }).applied
     let count = 0
     for (const row of rows) {
       const relay = this.deps.relayFor(row.relayUrl)
@@ -323,7 +330,7 @@ export class SyncService {
       row.lastSeenAt = this.platform.now()
     }
     await this.saveDevices(rows)
-    await writeDoc(this.platform.storage.local, APPLIED_DOC, applied)
+    await this.deps.meta.set('me', { ...((await this.deps.meta.get('me')) ?? { label: null, applied: {} }), applied })
     if (count > 0) await this.emit()
     return { applied: count }
   }

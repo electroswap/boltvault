@@ -82,6 +82,36 @@ describe('migrateSealed', () => {
     expect(left.filter((k) => !k.endsWith('.blob'))).toEqual([])
   })
 
+  it('purges every trace of a removed account', async () => {
+    const { sealed } = boot()
+    const other = 'acct_keepme'
+    for (const id of [ACCT, other]) {
+      await sealed.portfolio.set(id, { accountId: id, total: 1, rows: [], chainIds: [52014], currency: 'USD', change24h: null, unpricedCount: 0, observedAt: 1, stale: false } as never)
+      await sealed.looks.set(id, { at: 1, total: 1 })
+      await sealed.allowances.set(`${id}.52014`, { rows: [], at: 1 })
+      await sealed.positions.set(`52014.${id}`, { accountId: id, chainId: 52014, farms: [], legends: null, orders: [], campaigns: [], accessory: null, observedAt: 1 } as never)
+      await sealed.scan.set(`${id}.52014`, { block: 1 })
+    }
+    await sealed.sites.set('https://a.example', { origin: 'https://a.example', chainId: 52014, accountId: ACCT, connected: true, lastAccounts: [ADDR] })
+    await sealed.watchlist.set('all', { items: [], nudgedAt: { [`collect:${ACCT}`]: 1, [`collect:${other}`]: 2 } })
+
+    await sealed.purgeAccount(ACCT)
+
+    // Removing an account used to orphan all of this, unreachable but present.
+    expect(await sealed.portfolio.get(ACCT)).toBeNull()
+    expect(await sealed.looks.get(ACCT)).toBeNull()
+    expect(await sealed.allowances.get(`${ACCT}.52014`)).toBeNull()
+    expect(await sealed.positions.get(`52014.${ACCT}`)).toBeNull()
+    expect(await sealed.scan.get(`${ACCT}.52014`)).toBeNull()
+    expect(await sealed.sites.get('https://a.example')).toBeNull()
+    expect((await sealed.watchlist.get('all'))?.nudgedAt).toEqual({ [`collect:${other}`]: 2 })
+
+    // ...and the account the user kept is untouched.
+    expect(await sealed.portfolio.get(other)).not.toBeNull()
+    expect(await sealed.allowances.get(`${other}.52014`)).not.toBeNull()
+    expect(await sealed.scan.get(`${other}.52014`)).not.toBeNull()
+  })
+
   it('is idempotent — a second run finds nothing and changes nothing', async () => {
     const { platform, sealed } = boot()
     await platform.storage.local.set('accounts.active', env({ id: ACCT }))

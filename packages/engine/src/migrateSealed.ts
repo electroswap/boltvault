@@ -54,6 +54,32 @@ export async function migrateSealed(platform: Platform, sealed: SealedStores): P
   const removed: string[] = []
   let moved = 0
 
+  // `storage.secret` is "ciphertext only" by convention, but `writeDoc` never
+  // enforced it: on the extension that area is the same chrome.storage.local
+  // with a different key prefix, so the device's ed25519 signing key and every
+  // paired device's channel key were written there as plain JSON.
+  const secret = platform.storage.secret
+  for (const key of await secret.keys()) {
+    if (key === 'sync.identity') {
+      const data = envelope((await secret.get(key)) ?? '')
+      const id = data as { signingPrivateKey?: unknown } | undefined
+      if (id && typeof id.signingPrivateKey === 'string') {
+        await sealed.syncIdentity.set('me', id as never)
+        moved++
+      }
+      await secret.remove(key)
+      removed.push(`secret:${key}`)
+    } else if (key === 'sync.devices') {
+      const data = envelope((await secret.get(key)) ?? '')
+      if (Array.isArray(data)) {
+        await sealed.syncDevices.set('all', data as never)
+        moved++
+      }
+      await secret.remove(key)
+      removed.push(`secret:${key}`)
+    }
+  }
+
   const take = async (key: string): Promise<string | null> => {
     const raw = await local.get(key)
     return raw
@@ -165,6 +191,101 @@ export async function migrateSealed(platform: Platform, sealed: SealedStores): P
       const data = bare((await take(key)) ?? '')
       if (data && typeof data === 'object') {
         await sealed.positions.set(`${pos[1]}.${pos[2]}`, data as never)
+        moved++
+      }
+      await drop(key)
+      continue
+    }
+
+    if (key === 'sync.label' || key === 'sync.applied') {
+      const data = envelope((await take(key)) ?? '')
+      const cur = (await sealed.syncMeta.get('me')) ?? { label: null, applied: {} }
+      if (key === 'sync.label') {
+        const label = (data as { label?: unknown } | undefined)?.label
+        if (typeof label === 'string' || label === null) {
+          await sealed.syncMeta.set('me', { ...cur, label: label ?? null })
+          moved++
+        }
+      } else if (data && typeof data === 'object') {
+        await sealed.syncMeta.set('me', { ...cur, applied: data as Record<string, number> })
+        moved++
+      }
+      await drop(key)
+      continue
+    }
+
+    if (key === 'watchlist') {
+      const data = envelope((await take(key)) ?? '')
+      if (data && typeof data === 'object') {
+        await sealed.watchlist.set('all', data as never)
+        moved++
+      }
+      await drop(key)
+      continue
+    }
+
+    if (key === 'tokens.custom') {
+      const data = envelope((await take(key)) ?? '')
+      if (Array.isArray(data)) {
+        await sealed.tokensCustom.set('custom', data as never)
+        moved++
+      }
+      await drop(key)
+      continue
+    }
+
+    if (key === 'tokens.prefs') {
+      const data = envelope((await take(key)) ?? '')
+      if (data && typeof data === 'object') {
+        await sealed.tokenPrefs.set('prefs', data as never)
+        moved++
+      }
+      await drop(key)
+      continue
+    }
+
+    const nftList = /^nft\.custom\.(\d+)$/.exec(key)
+    if (nftList?.[1]) {
+      const data = envelope((await take(key)) ?? '')
+      if (Array.isArray(data)) {
+        await sealed.nftCustom.set(nftList[1], data as never)
+        moved++
+      }
+      await drop(key)
+      continue
+    }
+
+    const nftMeta = /^nft\.meta\.(.+)$/.exec(key)
+    if (nftMeta?.[1]) {
+      const data = envelope((await take(key)) ?? '')
+      if (data && typeof data === 'object') {
+        await sealed.nftMeta.set(nftMeta[1], data as never)
+        moved++
+      }
+      await drop(key)
+      continue
+    }
+
+    // Stored as a bare decimal string, and the key itself carried the address.
+    const legends = /^legends\.bestClaim\.(\d+)\.(0x[0-9a-fA-F]{40})$/.exec(key)
+    if (legends?.[1] && legends[2]) {
+      const wei = (await take(key)) ?? ''
+      if (/^\d+$/.test(wei)) {
+        await sealed.legends.set(`${legends[1]}.${legends[2].toLowerCase()}`, { wei })
+        moved++
+      }
+      await drop(key)
+      continue
+    }
+
+    // Stored without an envelope.
+    const ref = /^launchpad\.ref\.(\d+)\.(.+)$/.exec(key)
+    if (ref?.[1] && ref[2]) {
+      const data = bare((await take(key)) ?? '')
+      const referrer = (data as { referrer?: unknown } | undefined)?.referrer
+      const at = (data as { at?: unknown } | undefined)?.at
+      if (typeof referrer === 'string' && typeof at === 'number') {
+        await sealed.launchpadRef.set(`${ref[1]}.${ref[2]}`, { referrer, at })
         moved++
       }
       await drop(key)

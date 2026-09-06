@@ -30,9 +30,16 @@ const ORIGIN = 'https://app.electroswap.io'
 async function connectDapp(eng: Engine, origin: string, accountId: string): Promise<void> {
   const [a, b] = createChannelPair()
   eng.provider.serve(b, origin)
-  a.onMessage((raw) => {
-    const m = raw as ProviderPortMessage
-    if (m.kind === 'request') return
+  // Await the dApp's *response*, not just the approval decision: rpcFlow calls
+  // sites.connect() after deciding, so returning early raced the write that
+  // persists the session — and every assertion downstream would then pass
+  // because nothing had been stored at all.
+  const answered = new Promise<void>((resolve, reject) => {
+    a.onMessage((raw) => {
+      const m = raw as ProviderPortMessage
+      if (m.kind !== 'response' || m.id !== 1) return
+      m.error ? reject(m.error) : resolve()
+    })
   })
   a.post({ kind: 'request', id: 1, method: 'eth_requestAccounts', params: undefined, session: 'sess' })
   const req = await new Promise<{ id: string }>((resolve) => {
@@ -46,6 +53,7 @@ async function connectDapp(eng: Engine, origin: string, accountId: string): Prom
     })
   })
   await eng.engine.approvals.decide({ id: req.id, approve: true, data: { accountId, chainId: 52014 } })
+  await answered
 }
 
 /**
@@ -59,6 +67,8 @@ async function connectDapp(eng: Engine, origin: string, accountId: string): Prom
  * - `statics.*`  — ed25519-signed public lists, read on the boot path.
  * - `chains.rpc` — endpoint config, global.
  * - `tokens.list.<chainId>` — public token metadata, global.
+ * - `ui.prefs`   — last tab, chart range and similar. No account, address or
+ *                  amount appears in it.
  * - `sites.chains` — origin→chain, read on every RPC while locked. The dApp
  *                    origins stay readable (a documented residual: they are a
  *                    small, well-known space, so hashing them buys little);
@@ -95,6 +105,13 @@ async function useTheWallet(): Promise<{ dump: Record<string, string>; accountId
   // Caches (F2): prices, history, inventories, positions.
   await eng.cache.write({ key: 'explore.tokens.52014', schema: z.array(z.string()) }, ['BOLT', 'DYNO'])
   await eng.cache.write({ key: `nft.inventory.52014.${accountId}`, schema: z.array(z.string()) }, ['collection-a'])
+  // The families the audit never saw, because that profile had not used them.
+  // Not swallowed: a silent failure here would make the leak assertions below
+  // pass because nothing was ever written.
+  await eng.engine.tokens.setPrefs({ chainId: 52014, address: '0xfeedfacefeedfacefeedfacefeedfacefeedface', pinned: true })
+  await eng.engine.launchpad.rememberFromLink({ url: 'boltvault://launchpad/0x2222222222222222222222222222222222222222?ref=0x1111111111111111111111111111111111111111' })
+  await eng.watchlist.star({ kind: 'token', chainId: 52014, address: '0xfeedfacefeedfacefeedfacefeedfacefeedface', label: 'WATCHED' })
+
   // Connected sites (F3): actually connect, so the address really is handed to
   // a dApp and really is persisted. `setChain` alone throws `not_found` on an
   // unconnected origin, which would make this test pass without exercising it.
@@ -121,6 +138,19 @@ describe('at rest, with the vault locked', () => {
     // `tokens.list.*` legitimately names BOLT and friends whether or not this
     // user ever looked at them, so a symbol is not on its own a leak.)
     expect(all).not.toContain('collection-a')
+    // Families the audit's dump never contained, so its key list never named them.
+    expect(all).not.toContain('0xfeedface')
+    expect(all).not.toContain('WATCHED')
+    expect(all).not.toContain('0x1111111111111111111111111111111111111111')
+  })
+
+  it('actually exercised each family — the blobs exist, so the assertions are not vacuous', async () => {
+    const { dump } = await useTheWallet()
+    // Without this, a swallowed error upstream would make the leak assertions
+    // pass because the code path never ran (as `setChain` once did).
+    for (const blob of ['portfolio.blob', 'sites.blob', 'watchlist.blob', 'tokens.prefs.blob', 'launchpad.ref.blob', 'cache.explore.tokens.blob', 'cache.nft.inventory.blob']) {
+      expect(Object.keys(dump)).toContain(blob)
+    }
   })
 
   it('keeps the connected address and account out of the public sites half', async () => {
@@ -141,6 +171,28 @@ describe('at rest, with the vault locked', () => {
       .filter((k) => !isAllowed(k))
     // A new plaintext key must be justified in ALLOWED_PLAINTEXT or sealed.
     expect(offenders).toEqual([])
+  })
+
+  it('comes back after unlocking — sealing must not lose data across a lock', async () => {
+    const platform = createMemoryPlatform({ now: 1_700_000_000_000 })
+    const eng = createEngine({ platform, heads, kdf: FAST, electroswapUrl: null, pricesUrl: null, staticsUrl: null })
+    await eng.ready
+    await eng.engine.vault.import({ mnemonic: PHRASE, password: 'pw' })
+    const accountId = (await eng.engine.accounts.active())?.id ?? ''
+    await eng.watchlist.star({ kind: 'token', chainId: 52014, address: '0xfeedfacefeedfacefeedfacefeedfacefeedface', label: 'WATCHED' })
+    await eng.engine.tokens.setPrefs({ chainId: 52014, address: '0xfeedfacefeedfacefeedfacefeedfacefeedface', pinned: true })
+
+    await eng.engine.vault.lock()
+    // Locked: empty, never a throw.
+    expect(await eng.watchlist.list()).toEqual([])
+    expect(await eng.engine.accounts.active()).toBeNull()
+
+    await eng.engine.vault.unlock({ password: 'pw' })
+    // A service that hydrated while locked cached an empty result; if it is not
+    // dropped on unlock it serves "nothing watched" for the rest of the session.
+    expect((await eng.watchlist.list()).map((i) => i.label)).toEqual(['WATCHED'])
+    expect((await eng.tokens.prefs()).pinned).toHaveLength(1)
+    expect((await eng.engine.accounts.active())?.id).toBe(accountId)
   })
 
   it('never leaves a quarantine copy, which would re-create plaintext', async () => {

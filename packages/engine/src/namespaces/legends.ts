@@ -10,6 +10,7 @@ import { DIVIDENDS_ABI, LEGENDS_ABI, MINTER_ABI, claimableIds, encodeClaimDivide
 import type { Platform } from '@boltvault/platform'
 import type { Hex } from 'viem'
 import { z } from 'zod'
+import type { SealedMap } from '../sealed'
 import { EngineError } from '../errors'
 import type { NamespaceSpec } from '../host'
 import { readMany, type ReadCall } from '../multicall'
@@ -25,6 +26,8 @@ export interface LegendsDeps {
   readonly vault: VaultManager
   readonly provider: ProviderService
   readonly flows: FlowStore
+  /** Best-seen claim per `<chainId>.<address>`, sealed under the DEK. */
+  readonly legendsBest: SealedMap<{ wei: string }>
 }
 
 const isEtn = (chainId: number): chainId is 52014 | 5201420 => chainId === 52014 || chainId === 5201420
@@ -35,8 +38,13 @@ const flag = (r: { ok: boolean; value?: unknown } | undefined): boolean => r?.ok
 export class LegendsService {
   constructor(private readonly deps: LegendsDeps) {}
 
+  /**
+   * The id lives inside the sealed blob now. It used to be the storage key
+   * `legends.bestClaim.<chainId>.<address>`, which published the account's
+   * address to anyone reading storage — sealing a value cannot fix a key name.
+   */
   private key(chainId: number, address: string): string {
-    return `legends.bestClaim.${chainId}.${address.toLowerCase()}`
+    return `${chainId}.${address.toLowerCase()}`
   }
 
   private async account(accountId: string): Promise<{ id: string; address: Hex; kind: string }> {
@@ -82,7 +90,7 @@ export class LegendsService {
     })
     const unique = claimableIds(registered)
     const claimable = unique.length ? big((await readMany(d.chains, chainId, [{ address: distributor, abi: DIVIDENDS_ABI, functionName: 'getClaimableDividends', args: [unique] }]))[0]) : 0n
-    const bestRaw = await d.platform.storage.local.get(this.key(chainId, owner))
+    const bestRaw = (await d.legendsBest.get(this.key(chainId, owner)))?.wei ?? null
     const best = bestRaw && /^\d+$/.test(bestRaw) ? BigInt(bestRaw) : 0n
     const activeTokenCount = Number(big(head[2]))
     const mintable = flag(head[4])
@@ -170,7 +178,7 @@ export class LegendsService {
             const settled = r.result.then(async (v) => {
               // The vessel's ceiling is the best claim so far (§8.10).
               const best = BigInt(st.bestClaimWei)
-              if (claimable > best) await this.deps.platform.storage.local.set(this.key(chainId, account.address), claimable.toString())
+              if (claimable > best) await this.deps.legendsBest.set(this.key(chainId, account.address), { wei: claimable.toString() })
               return v
             })
             settled.catch(() => undefined)

@@ -14,6 +14,7 @@ import { EngineError } from '../errors'
 import type { NamespaceSpec } from '../host'
 import { readMany, type ReadCall } from '../multicall'
 import { readDoc, writeDoc, type DocSpec } from '../storage'
+import type { SealedMap } from '../sealed'
 import type { ChainsService } from './chains'
 
 export const CustomCollectionSchema = z.object({
@@ -67,8 +68,9 @@ const MAX_PIECES = 200
 const FETCH_BUDGET_MS = 4_000
 const IPFS_GATEWAY = 'https://ipfs.io/ipfs/'
 
-const listDoc = (chainId: number): DocSpec<CustomCollection[]> => ({ key: `nft.custom.${chainId}`, version: 1, schema: z.array(CustomCollectionSchema), defaultValue: () => [] })
-const metaDoc = (chainId: number, address: string, tokenId: string): DocSpec<NftMetadata | null> => ({ key: `nft.meta.${chainId}.${address.toLowerCase()}.${tokenId}`, version: 1, schema: NftMetadataSchema.nullable(), defaultValue: () => null })
+/** Sealed under the DEK; the ids used to be storage keys naming chain, contract and token. */
+const listId = (chainId: number): string => String(chainId)
+const metaId = (chainId: number, address: string, tokenId: string): string => `${chainId}.${address.toLowerCase()}.${tokenId}`
 
 /** `ipfs://…` and `ar://`-less gateways become https; data: and https pass through; anything else is not an image we load. */
 export function resolveMediaUrl(uri: string | null | undefined): string | null {
@@ -106,13 +108,16 @@ export interface CustomCollectionsDeps {
   readonly platform: Platform
   readonly chains: ChainsService
   readonly fetch: typeof fetch
+  /** Custom collections per chain and NFT metadata per token, sealed under the DEK. */
+  readonly collections: SealedMap<CustomCollection[]>
+  readonly meta: SealedMap<NftMetadata | null>
 }
 
 export class CustomCollectionsService {
   constructor(private readonly deps: CustomCollectionsDeps) {}
 
   async list(chainId: number): Promise<CustomCollection[]> {
-    return (await readDoc(this.deps.platform.storage.local, listDoc(chainId), () => this.deps.platform.now())).value
+    return (await this.deps.collections.get(listId(chainId))) ?? []
   }
 
   /** What the chain says about a contract before it is added. */
@@ -146,13 +151,13 @@ export class CustomCollectionsService {
     const row: CustomCollection = { ...p, addedAt: this.deps.platform.now() }
     const cur = await this.list(chainId)
     const next = [...cur.filter((c) => c.address.toLowerCase() !== row.address.toLowerCase()), row]
-    await writeDoc(this.deps.platform.storage.local, listDoc(chainId), next)
+    await this.deps.collections.set(listId(chainId), next)
     return row
   }
 
   async remove(chainId: number, address: string): Promise<void> {
     const cur = await this.list(chainId)
-    await writeDoc(this.deps.platform.storage.local, listDoc(chainId), cur.filter((c) => c.address.toLowerCase() !== address.toLowerCase()))
+    await this.deps.collections.set(listId(chainId), cur.filter((c) => c.address.toLowerCase() !== address.toLowerCase()))
   }
 
   /** Token ids the owner holds in a custom collection. Enumerable contracts answer directly; the rest come from a bounded Transfer scan, confirmed on chain. */
@@ -200,9 +205,8 @@ export class CustomCollectionsService {
 
   /** A piece's metadata, from the persisted copy or the token's URI (four-second budget, never blocking the inventory on a slow host). */
   async metadata(chainId: number, c: CustomCollection, tokenId: string): Promise<NftMetadata | null> {
-    const store = this.deps.platform.storage.local
-    const stored = await readDoc(store, metaDoc(chainId, c.address, tokenId), () => this.deps.platform.now())
-    if (stored.value) return stored.value
+    const stored = await this.deps.meta.get(metaId(chainId, c.address, tokenId))
+    if (stored) return stored
     const address = c.address as Hex
     const [uriRes] = await readMany(this.deps.chains, chainId, [c.standard === 'ERC721' ? { address, abi: ERC721, functionName: 'tokenURI', args: [BigInt(tokenId)] } : { address, abi: ERC1155, functionName: 'uri', args: [BigInt(tokenId)] }])
     let uri = uriRes?.ok && typeof uriRes.value === 'string' ? uriRes.value : ''
@@ -231,7 +235,7 @@ export class CustomCollectionsService {
       }
     }
     const meta = text ? parseMetadata(text) : null
-    if (meta) await writeDoc(store, metaDoc(chainId, c.address, tokenId), meta)
+    if (meta) await this.deps.meta.set(metaId(chainId, c.address, tokenId), meta)
     return meta
   }
 

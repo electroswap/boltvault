@@ -179,14 +179,14 @@ export function createEngine(deps: EngineDeps): Engine {
       await deps.platform.notify(n)
     },
   }
-  const vault = new VaultManager(deps.platform, host.events, settings, { active: sealed.active, ...(deps.kdf ? { kdf: deps.kdf } : {}) })
+  const vault = new VaultManager(deps.platform, host.events, settings, { active: sealed.active, purgeAccount: async (id) => { await sealed.purgeAccount(id); await cache.forgetAccount(id) }, ...(deps.kdf ? { kdf: deps.kdf } : {}) })
   const approvals = new ApprovalStore(deps.platform, host.events)
   const sites = new SitesService(deps.platform, host.events, sealed.sites)
   const chains = new ChainsService(deps.platform, host.events, deps.heads)
   const activity = new ActivityStore(deps.platform, host.events, dek)
   const contacts = new ContactsStore(deps.platform, host.events, dek)
   const relayFor = deps.relayFor ?? ((url: string): Relay => (/^https?:\/\//.test(url) ? new HttpRelay(url, fetchImpl, deps.clientKey) : sharedMemoryRelay))
-  const sync = new SyncService(deps.platform, host.events, { settings, sites, vault, relayFor })
+  const sync = new SyncService(deps.platform, host.events, { settings, sites, vault, relayFor, identity: sealed.syncIdentity, devices: sealed.syncDevices, meta: sealed.syncMeta })
   staticsRef = new StaticsService({ platform: deps.platform, bus: host.events, fetch: fetchImpl, clientVersion: deps.clientVersion ?? 'BoltVault/0.1.0', body: deps.body ?? 'extension', ...(deps.staticsUrl ? { baseUrl: deps.staticsUrl } : {}), ...(deps.staticsPublicKey ? { publicKeyHex: deps.staticsPublicKey } : {}) })
   const statics = staticsRef
   const hardware = new HardwareService({ hid: deps.hid ?? null, ledger: deps.ledger ?? null, trezor: deps.trezor ?? null, vault, bus: host.events, platform: deps.platform })
@@ -214,7 +214,7 @@ export function createEngine(deps: EngineDeps): Engine {
     ...(deps.openApproval ? { openApproval: deps.openApproval } : {}),
     ...(deps.receiptPollMs !== undefined ? { receiptPollMs: deps.receiptPollMs } : {}),
   })
-  const tokens = new TokensService(deps.platform, host.events, chains, fetchImpl)
+  const tokens = new TokensService(deps.platform, host.events, chains, fetchImpl, sealed.tokensCustom, sealed.tokenPrefs)
   const apiOrigin = (deps.apiOrigin ?? DEFAULT_API_ORIGIN).replace(/\/+$/, '')
   const features = { limitOrders: deps.features?.limitOrders ?? false }
   const electroswap = deps.electroswapUrl === null ? null : new ElectroSwapClient({ url: deps.electroswapUrl ?? `${apiOrigin}/graphql`, ...(deps.clientKey ? { apiKey: deps.clientKey } : {}), fetchImpl })
@@ -228,13 +228,13 @@ export function createEngine(deps: EngineDeps): Engine {
   const flows = new FlowStore({ platform: deps.platform, bus: host.events, activity })
   const swap = new SwapService({ statics,  platform: deps.platform, chains, tokens, vault, provider, settings, holder, flows })
   const limit = new LimitService({ platform: deps.platform, bus: host.events, chains, tokens, vault, provider, settings, flows, enabled: features.limitOrders })
-  const watchlist = new WatchlistService({ platform: notifyingPlatform, bus: host.events, vault })
-  const legends = new LegendsService({ platform: deps.platform, chains, vault, provider, flows })
-  const customCollections = new CustomCollectionsService({ platform: deps.platform, chains, fetch: fetchImpl })
+  const watchlist = new WatchlistService({ platform: notifyingPlatform, bus: host.events, vault, watchlist: sealed.watchlist })
+  const legends = new LegendsService({ platform: deps.platform, chains, vault, provider, flows, legendsBest: sealed.legends })
+  const customCollections = new CustomCollectionsService({ platform: deps.platform, chains, fetch: fetchImpl, collections: sealed.nftCustom, meta: sealed.nftMeta })
   const explore = new ExploreService({ platform: deps.platform, electroswap, tokens, vault, watchlist, cache, bus: host.events, custom: customCollections, legends })
   const nft = new NftService({ platform: deps.platform, chains, vault, provider, flows, electroswap, explore, legends, cache, notifications, custom: customCollections })
   const farm = new FarmService({ platform: deps.platform, chains, tokens, vault, provider, flows, settings, electroswap, cache })
-  const launchpad = new LaunchpadService({ platform: deps.platform, chains, vault, provider, flows, electroswap, names, watchlist, cache })
+  const launchpad = new LaunchpadService({ platform: deps.platform, chains, vault, provider, flows, electroswap, names, watchlist, cache, referrals: sealed.launchpadRef })
   const positions = new PositionsService({ platform: deps.platform, bus: host.events, farm, legends, limit, launchpad, tokens, positions: sealed.positions })
   const remote = new RemoteSignService({ platform: deps.platform, bus: host.events, sync, vault, provider, canSignHere: async (a) => (await vault.privateKeyFor(a.id).catch(() => null)) !== null || (a.kind !== 'hd' && a.kind !== 'imported' && hardware.canSign(a)), ...(deps.receiptPollMs !== undefined ? { pollMs: deps.receiptPollMs * 5 } : {}) })
   provider.setRemote(remote)
@@ -265,12 +265,20 @@ export function createEngine(deps: EngineDeps): Engine {
       contacts.forget()
       notifications.forget()
       bridge.forget()
+      watchlist.forget()
       sealed.forget()
       cacheShards.forget()
     } else {
       // The DEK is what the blobs are sealed under, so the one-shot move of the
       // old plaintext documents happens here. Sites re-hydrates afterwards: it
       // was hydrated at boot from the public half alone.
+      // Anything that hydrated while locked cached an empty result — it has to
+      // re-read now that the DEK is available. The watchlist alarm (every 5 min)
+      // picks the list up on its next tick; no eager pass here, which would fire
+      // a burst of network the moment the user unlocks.
+      notifications.forget()
+      bridge.forget()
+      watchlist.forget()
       void runMigration().then(() => sites.hydrate().catch(() => undefined))
       void provider.resumeWatchers()
       void bridge.resume()

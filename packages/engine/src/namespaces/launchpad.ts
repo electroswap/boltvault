@@ -11,6 +11,7 @@ import { AFFILIATE_ABI, LAUNCHPAD_MANAGER_ABI, LAUNCHPAD_POOL_ABI, campaignKeys,
 import type { Platform } from '@boltvault/platform'
 import { parseUnits, type Hex } from 'viem'
 import { z } from 'zod'
+import type { SealedMap } from '../sealed'
 import { EngineError } from '../errors'
 import { cacheKey, type Cached, type DocCache } from '../cache'
 import type { NamespaceSpec } from '../host'
@@ -33,6 +34,8 @@ export interface LaunchpadDeps {
   readonly names: NamesService
   readonly watchlist: WatchlistService
   readonly cache?: DocCache
+  /** Launchpad referrer per `<chainId>.<pool>`, sealed under the DEK. */
+  readonly referrals: SealedMap<{ referrer: string; at: number }>
 }
 
 const listSpec = (chainId: number, accountId: string | undefined) => ({ key: cacheKey('launchpad', 'list', chainId, accountId ?? '-'), schema: z.array(CampaignViewSchema) })
@@ -156,14 +159,15 @@ export class LaunchpadService {
     return (await this.enrich(chainId, [row], owner))[0] ?? null
   }
 
+  /** Sealed under the DEK; the id used to be the storage key. */
   private referralKey(chainId: number, pool: string): string {
-    return `launchpad.ref.${chainId}.${pool.toLowerCase()}`
+    return `${chainId}.${pool.toLowerCase()}`
   }
 
   /** A referral from a deep link is kept a day per pool (§8.9). */
   async rememberReferral(input: { chainId: number; pool: string; referrer: string }): Promise<void> {
     if (!/^0x[0-9a-fA-F]{40}$/.test(input.referrer)) return
-    await this.deps.platform.storage.local.set(this.referralKey(input.chainId, input.pool), JSON.stringify({ referrer: input.referrer, at: this.deps.platform.now() }))
+    await this.deps.referrals.set(this.referralKey(input.chainId, input.pool), { referrer: input.referrer, at: this.deps.platform.now() })
   }
 
   async rememberFromLink(url: string): Promise<{ pool: string; referrer: string | null } | null> {
@@ -174,15 +178,10 @@ export class LaunchpadService {
   }
 
   async referralFor(chainId: number, pool: string): Promise<Hex | null> {
-    const raw = await this.deps.platform.storage.local.get(this.referralKey(chainId, pool))
-    if (!raw) return null
-    try {
-      const v = JSON.parse(raw) as { referrer?: string; at?: number }
-      if (typeof v.referrer !== 'string' || typeof v.at !== 'number' || this.deps.platform.now() - v.at > REFERRAL_TTL_MS) return null
-      return v.referrer as Hex
-    } catch {
-      return null
-    }
+    const v = await this.deps.referrals.get(this.referralKey(chainId, pool))
+    if (!v) return null
+    if (this.deps.platform.now() - v.at > REFERRAL_TTL_MS) return null
+    return v.referrer as Hex
   }
 
   /** Contribute native ETN within the pool's min/max while it is live; the referrer rides along. */

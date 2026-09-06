@@ -124,6 +124,8 @@ export interface VaultManagerOptions {
    * already treats as "no account seated".
    */
   readonly active: SealedMap<{ id: string | null }>
+  /** Drop every sealed entry belonging to a removed account. */
+  readonly purgeAccount?: (accountId: string) => Promise<void>
 }
 
 export class VaultManager {
@@ -672,6 +674,9 @@ export class VaultManager {
       const next = (await this.accounts()).find((a) => !a.hidden)
       await this.opts.active.set('active', { id: next?.id ?? null })
     }
+    // Everything that was keyed to this account goes with it; leaving it behind
+    // is data the user believes they deleted.
+    await this.opts.purgeAccount?.(id)
   }
 
   previewDerivations(input: { mnemonic: string; passphrase?: string; count?: number }): { bip44: string[]; ledgerLive: string[] } {

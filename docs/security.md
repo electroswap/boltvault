@@ -32,8 +32,9 @@ found the previous answer was "most of your financial life in plaintext JSON".
 needs your password): the recovery phrase and private keys, transaction history,
 address book, portfolio totals and per-token quantities, token approvals, farm,
 launchpad and NFT positions, the price and chart data you looked at, your
-watchlist and notification inbox, the seated account, and the account id and
-addresses shown to each connected dApp.
+watchlist and notification inbox, the seated account, the account id and
+addresses shown to each connected dApp, and this device's sync signing key with
+the channel key of every device paired to it.
 
 **Readable, and why it has to be:**
 
@@ -43,6 +44,7 @@ addresses shown to each connected dApp.
 | Vault KDF parameters | needed to turn your password into the key that unlocks everything else |
 | Signed flag and scam-origin lists | public, ed25519-signed, and read at startup |
 | Network endpoints and the public token catalogue | public reference data, identical for every user |
+| A few display preferences (last tab, chart range) | no account, address or amount in them |
 | The list of dApp origins you connected, and which chain each uses | answered on every request from a page, including while locked. The **addresses and account** behind each one are sealed. Origins are not hashed: dApp origins are a small, well-known set, so hashing them would be undone by hashing the same public list, while putting cryptography in the request path |
 
 **Unlocked is a different question.** While the wallet is unlocked its key is in
