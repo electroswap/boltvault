@@ -43,6 +43,11 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
     if (scenario === 'funded' && account) {
       await engine.sites.registry.connect(SITE, { accountId: account.id, chainId: 52014, accounts: [account.address], now: FIXED_NOW - 86_400_000 })
       engine.sites.emit()
+      // Plan C2: a second address kept hidden, a watch-only address and a Ledger account, so Accounts shows every group.
+      const savings = await engine.engine.accounts.derive({ seedId, label: 'Savings' })
+      await engine.engine.accounts.setHidden({ id: savings.id, hidden: true })
+      await engine.engine.accounts.addWatch({ address: '0x9a2c4f1e8b7d3c6a5e4f2d1c0b9a8e7d6c5b41e0', label: 'Cold storage' })
+      await engine.engine.accounts.addHardware({ kind: 'ledger', address: '0x7b63c5e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7', path: "m/44'/60'/0'/0/3", deviceId: 'fx-ledger', label: 'Ledger #3' })
     }
     if (scenario === 'connect') {
       await engine.approvals.create({ kind: 'connect', origin: SITE, accountId: null, chainId: 52014, payload: { kind: 'connect', requestedChainId: 52014, reconnect: false, firstTime: true, clientRequestId: 'fixture-connect' } })

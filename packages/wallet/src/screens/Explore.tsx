@@ -5,9 +5,10 @@
  * (plan A2); a first visit shows skeletons, never a blank body. On a token
  * list the star is the pin (plan A5).
  */
-import { Artwork, Body, Column, IconButton, Input, Plate, Pressable, Row, ScrollView, Segmented, SkeletonRows, TokenAvatar, metrics, paint } from '@boltvault/ui'
+import { Artwork, Body, Column, IconButton, Input, Pill, Plate, Pressable, Row, ScrollView, Segmented, SkeletonRows, TokenAvatar, metrics, paint } from '@boltvault/ui'
 import { cacheKey, type CampaignView, type CollectionView, type ExploreToken, type FarmView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
+import { AddTokenSheet } from '../components/AddTokenSheet'
 import { FreshnessLine } from '../components/FreshnessLine'
 import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
@@ -36,6 +37,7 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
   const [query, setQuery] = useState('')
   const [available, setAvailable] = useState<boolean | null>(null)
   const [found, setFound] = useState<{ tokens: ExploreToken[]; collections: CollectionView[] } | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
   const accountId = active?.id
 
   const tokens = useCached<ExploreToken[]>({
@@ -92,6 +94,7 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
   const current = segment === 'tokens' ? tokens : segment === 'collectibles' ? collections : segment === 'launch' ? campaigns : farms
   const live = (campaigns.value ?? []).filter((c) => c.phase === 'live')
   return (
+    <Column flex={1}>
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="explore">
       <PageHeader
         title={t({ id: 'market.title', message: 'Market' })}
@@ -120,9 +123,12 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
             <CollectionCard key={c.address} collection={c} onPress={() => router.navigate('collection', { chainId: ETN, address: c.address })} onStar={() => void star('collection', c.address, c.name, c.starred)} />
           ))}
           {found.tokens.length === 0 && found.collections.length === 0 ? (
-            <Body tone="mute" size="caption">
-              {t({ id: 'explore.none', message: 'Nothing matches.' })}
-            </Body>
+            <Column gap="$2">
+              <Body tone="mute" size="caption">
+                {t({ id: 'explore.none', message: 'Nothing matches.' })}
+              </Body>
+              {/^0x[0-9a-fA-F]{40}$/.test(query.trim()) ? <Pill label={t({ id: 'token.add.pill', message: 'Add token' })} tone="arc" onPress={() => setAddOpen(true)} testID="explore-add-token" /> : null}
+            </Column>
           ) : null}
         </Column>
       ) : (
@@ -183,6 +189,8 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
         </>
       )}
     </ScrollView>
+    <AddTokenSheet open={addOpen} onClose={() => setAddOpen(false)} initialAddress={query.trim()} reducedMotion={reducedMotion} />
+    </Column>
   )
 }
 

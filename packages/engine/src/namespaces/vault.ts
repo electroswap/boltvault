@@ -87,7 +87,17 @@ function isV2(f: StoredFile): f is VaultFileV2 {
   return (f as VaultFileV2).v === 2
 }
 
+/** Which derivation tree a hardware path belongs to, and its index (plan C1): BIP-44 `m/44'/60'/0'/0/i`, Ledger Live `m/44'/60'/i'/0/0`. */
+export function schemeOf(path: string): { scheme: 'bip44' | 'live' | 'custom'; index: number | null } {
+  const bip44 = /^m\/44'\/60'\/0'\/0\/(\d+)$/.exec(path)
+  if (bip44) return { scheme: 'bip44', index: Number(bip44[1]) }
+  const live = /^m\/44'\/60'\/(\d+)'\/0\/0$/.exec(path)
+  if (live) return { scheme: 'live', index: Number(live[1]) }
+  return { scheme: 'custom', index: null }
+}
+
 export function toView(a: VaultAccountV2): AccountView {
+  const hw = a.hardware ? schemeOf(a.hardware.path) : null
   return {
     id: a.id,
     kind: a.kind,
@@ -95,7 +105,7 @@ export function toView(a: VaultAccountV2): AccountView {
     address: a.address,
     ...(a.index !== undefined ? { index: a.index } : {}),
     ...(a.seedId !== undefined ? { seedId: a.seedId } : {}),
-    ...(a.hardware ? { hardware: a.hardware } : {}),
+    ...(a.hardware && hw ? { hardware: { ...a.hardware, scheme: hw.scheme, ...(hw.index !== null ? { index: hw.index } : {}) } } : {}),
     hasKey: a.kind === 'hd' || a.kind === 'imported',
     hidden: a.hidden,
     order: a.order,
@@ -546,6 +556,18 @@ export class VaultManager {
     return this.updateAccount(id, (a) => ({ ...a, label }))
   }
 
+  /** Rename a recovery phrase (plan C2): the label on its wallet card. */
+  async renameSeed(seedId: string, label: string): Promise<SeedView> {
+    const pt = await this.mutate((p) => {
+      if (!p.seeds.some((s) => s.id === seedId)) throw new EngineError('not_found', 'no such seed')
+      return { ...p, seeds: p.seeds.map((s) => (s.id === seedId ? { ...s, label } : s)) }
+    })
+    const seed = pt.seeds.find((s) => s.id === seedId)
+    if (!seed) throw new EngineError('internal', 'seed vanished')
+    this.bus.emit({ type: 'vault.status', status: await this.status() })
+    return this.seedView(seed, pt)
+  }
+
   setHidden(id: string, hidden: boolean): Promise<AccountView> {
     return this.updateAccount(id, (a) => ({ ...a, hidden }))
   }
@@ -781,6 +803,13 @@ export function accountsNamespace(vault: VaultManager): NamespaceSpec {
       },
     },
     reorder: { input: z.object({ ids: z.array(AccountIdSchema) }), handler: (arg) => vault.reorder((arg as { ids: string[] }).ids) },
+    renameSeed: {
+      input: z.object({ seedId: z.string(), label: z.string().trim().min(1).max(64) }),
+      handler: (arg) => {
+        const { seedId, label } = arg as { seedId: string; label: string }
+        return vault.renameSeed(seedId, label)
+      },
+    },
     derive: {
       input: z.object({ seedId: z.string(), label: z.string().max(64).optional() }),
       handler: (arg) => {

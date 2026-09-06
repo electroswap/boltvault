@@ -92,8 +92,23 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('switch_chain'), chainId: z.number().int().positive(), clientRequestId: z.string() }),
   z.object({ kind: z.literal('add_chain'), chainId: z.number().int().positive(), clientRequestId: z.string() }),
-  z.object({ kind: z.literal('watch_asset'), type: z.string(), options: z.unknown(), clientRequestId: z.string() }),
+  z.object({
+    kind: z.literal('watch_asset'),
+    type: z.string(),
+    options: z.unknown(),
+    /** What the site claims (EIP-747) and what the chain says; `mismatch` when they disagree (plan A3). */
+    address: z.string().nullable(),
+    symbol: z.string().nullable(),
+    decimals: z.number().int().nonnegative().nullable(),
+    onChain: z.object({ name: z.string(), symbol: z.string(), decimals: z.number().int().nonnegative() }).nullable(),
+    mismatch: z.boolean(),
+    clientRequestId: z.string(),
+  }),
 ])
+
+/** EIP-747 `wallet_watchAsset` options for an ERC-20. */
+export const WatchAssetOptionsSchema = z.object({ address: z.string().regex(/^0x[0-9a-fA-F]{40}$/), symbol: z.string().max(16).optional(), decimals: z.number().int().min(0).max(36).optional(), image: z.string().optional() })
+export type WatchAssetOptions = z.infer<typeof WatchAssetOptionsSchema>
 export type ApprovalPayload = z.infer<typeof ApprovalPayloadSchema>
 
 /** What the Connect sheet sends back with its decision. */

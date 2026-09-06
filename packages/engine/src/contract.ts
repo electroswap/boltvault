@@ -15,6 +15,7 @@ import type {
   AboutView,
   AccountId,
   AccountView,
+  SeedView,
   ActivityEntry,
   AllowanceView,
   ApprovalDecision,
@@ -111,6 +112,8 @@ export interface AccountsNamespace {
   rename(input: { id: AccountId; label: string }): Promise<AccountView>
   setHidden(input: { id: AccountId; hidden: boolean }): Promise<AccountView>
   reorder(input: { ids: AccountId[] }): Promise<AccountView[]>
+  /** Rename a recovery phrase (plan C2). */
+  renameSeed(input: { seedId: string; label: string }): Promise<SeedView>
   /** Next BIP-44 index of a seed. */
   derive(input: { seedId: string; label?: string }): Promise<AccountView>
   addSeed(input: { mnemonic: string; label?: string; passphrase?: string }): Promise<{ seedId: string; account: AccountView }>

@@ -4,8 +4,9 @@
  * Positions, and "since you last looked". Reached from the Home console; the
  * dock stays underneath.
  */
-import { Body, BusBar, Column, LiveFilament, Plate, Row, RollingReadout, ScrollView, Segmented, metrics } from '@boltvault/ui'
+import { Body, BusBar, Column, Icon, LiveFilament, Pill, Plate, Row, RollingReadout, ScrollView, Segmented, metrics, paint } from '@boltvault/ui'
 import { useEffect, useState } from 'react'
+import { AddTokenSheet } from '../components/AddTokenSheet'
 import { ChainScopeSheet, ScopePill, useHomeScope } from '../components/ChainScope'
 import { LegendsVault } from '../components/LegendsVault'
 import { PageHeader } from '../components/PageHeader'
@@ -33,6 +34,7 @@ export function Portfolio({ body }: { body: BodyKind }) {
   const head = useChainHead(ETN)
   const scope = useHomeScope()
   const [scopeOpen, setScopeOpen] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
   const accountId = active?.id ?? null
   const portfolio = usePortfolio(accountId, 5_000, scope.chainIds)
   const { positions } = usePositions(accountId, !!vault?.unlocked)
@@ -122,11 +124,12 @@ export function Portfolio({ body }: { body: BodyKind }) {
                   onPress={() => router.navigate('token', { chainId: r.chainId, address: r.address })}
                 />
               ))}
-              {hidden > 0 ? (
+              <Row justifyContent="space-between" alignItems="center" gap="$2">
                 <Body tone="mute" size="caption" testID="portfolio-hidden">
-                  {hidden === 1 ? t({ id: 'portfolio.hidden.one', message: '1 hidden token' }) : t({ id: 'portfolio.hidden.many', message: '{n} hidden tokens', values: { n: hidden } })}
+                  {hidden === 0 ? '' : hidden === 1 ? t({ id: 'portfolio.hidden.one', message: '1 hidden token' }) : t({ id: 'portfolio.hidden.many', message: '{n} hidden tokens', values: { n: hidden } })}
                 </Body>
-              ) : null}
+                <Pill label={t({ id: 'token.add.pill', message: 'Add token' })} icon={<Icon name="plus" size={14} color={paint.arc} />} tone="arc" size="sm" onPress={() => setAddOpen(true)} testID="portfolio-add-token" />
+              </Row>
             </Column>
           ) : (
             <Plate gap="$2" testID="funding-plate">
@@ -137,6 +140,7 @@ export function Portfolio({ body }: { body: BodyKind }) {
                   message: 'This is Electroneum Smart Chain (52014). Send ETN here from an exchange that supports the smart chain, or bridge USDC from Ethereum — you will need a little ETN for fees.',
                 })}
               </Body>
+              <Pill label={t({ id: 'token.add.pill', message: 'Add token' })} icon={<Icon name="plus" size={14} color={paint.arc} />} tone="arc" size="sm" onPress={() => setAddOpen(true)} testID="portfolio-add-token" />
             </Plate>
           )
         ) : segment === 'collectibles' ? (
@@ -193,6 +197,7 @@ export function Portfolio({ body }: { body: BodyKind }) {
         }}
         reducedMotion={reducedMotion}
       />
+      <AddTokenSheet open={addOpen} onClose={() => setAddOpen(false)} initialChainId={scope.scope === 'all' ? ETN : scope.scope} reducedMotion={reducedMotion} />
     </Column>
   )
 }

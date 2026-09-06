@@ -30,8 +30,8 @@ export const AccountViewSchema = z.object({
   index: z.number().int().nonnegative().optional(),
   /** Which seed an HD account belongs to. */
   seedId: z.string().optional(),
-  /** Hardware accounts: derivation path and paired device. */
-  hardware: z.object({ path: z.string(), deviceId: z.string().optional() }).optional(),
+  /** Hardware accounts: derivation path and paired device; the scheme and index read off the path (plan C1). */
+  hardware: z.object({ path: z.string(), deviceId: z.string().optional(), scheme: z.enum(['bip44', 'live', 'custom']).optional(), index: z.number().int().nonnegative().optional() }).optional(),
   /** True when the engine can sign for this account without a device. */
   hasKey: z.boolean(),
   hidden: z.boolean(),

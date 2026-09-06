@@ -6,9 +6,9 @@
 import { createMemoryPlatform } from '@boltvault/platform/memory'
 import { PROVIDER_PORT_NAME, type ProviderPortMessage } from '@boltvault/protocol'
 import { startMockRpc, type MockRpc } from '@boltvault/testing'
-import { verifyMessage, verifyTypedData, type Hex } from 'viem'
+import { encodeAbiParameters, parseAbiParameters, verifyMessage, verifyTypedData, type Hex } from 'viem'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createEngine, createChannelPair, parseApprovalPayload, type ApprovalRequest, type Engine, type MemoryChannel } from '../src'
+import { createEngine, createChannelPair, parseApprovalPayload, resetMulticallCache, CANONICAL_MULTICALL3, type ApprovalRequest, type Engine, type MemoryChannel } from '../src'
 
 const PASSWORD = 'correct horse battery staple 42'
 const KDF = { m: 8 * 1024, t: 1, p: 1 }
@@ -16,6 +16,9 @@ const ORIGIN_A = 'https://a.example'
 const ORIGIN_B = 'https://b.example'
 const TESTNET = 5201420
 const UNKNOWN = '0x2222222222222222222222222222222222222222'
+const TOKEN = '0x1111111111111111111111111111111111111111' as Hex
+const str = (v: string): Hex => encodeAbiParameters(parseAbiParameters('string'), [v])
+const u = (v: bigint): Hex => encodeAbiParameters(parseAbiParameters('uint256'), [v])
 
 interface DappClient {
   request(method: string, params?: unknown, id?: number): Promise<unknown>
@@ -117,6 +120,33 @@ describe('provider service', () => {
     expect(engine.approvals.list()).toEqual([])
     const sites = await engine.engine.sites.list()
     expect(sites.find((s) => s.origin === ORIGIN_A)).toMatchObject({ connected: true, chainId: TESTNET, accountId })
+  })
+
+  it('wallet_watchAsset reads the token from the chain, flags a mismatch, and adds it on approve (plan A3)', async () => {
+    resetMulticallCache()
+    rpc.state.code.set(CANONICAL_MULTICALL3.toLowerCase(), 'multicall3')
+    rpc.state.code.set(TOKEN.toLowerCase(), '0x6080')
+    rpc.state.calls.set(TOKEN.toLowerCase(), ({ data }) => {
+      const sel = data.slice(0, 10)
+      if (sel === '0x06fdde03') return str('Fixture Token')
+      if (sel === '0x95d89b41') return str('FIX')
+      if (sel === '0x313ce567') return u(6n)
+      if (sel === '0x70a08231') return u(0n)
+      return '0x'
+    })
+    const a = dapp(engine, ORIGIN_A)
+    const p = a.request('wallet_watchAsset', { type: 'ERC20', options: { address: TOKEN, symbol: 'FAKE', decimals: 18 } })
+    const req = await nextApproval(engine)
+    const payload = parseApprovalPayload(req.payload)
+    expect(payload?.kind).toBe('watch_asset')
+    if (payload?.kind !== 'watch_asset') throw new Error('not a watch_asset payload')
+    expect(payload.onChain).toEqual({ name: 'Fixture Token', symbol: 'FIX', decimals: 6 })
+    expect(payload.mismatch).toBe(true)
+    await engine.engine.approvals.decide({ id: req.id, approve: true })
+    expect(await p).toBe(true)
+    // The chain's word wins: the token is listed as FIX with 6 decimals, from the site.
+    const tok = await engine.engine.tokens.get({ chainId: TESTNET, address: TOKEN })
+    expect(tok).toMatchObject({ symbol: 'FIX', decimals: 6, source: 'dapp' })
   })
 
   it('signs a message after approval and rejects with 4001 otherwise', async () => {

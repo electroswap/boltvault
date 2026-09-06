@@ -267,9 +267,31 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
         ) : null}
 
         {payload.kind === 'watch_asset' ? (
-          <Plate role="raised" gap="$1">
-            <Body>{t({ id: 'approval.watch.body', message: 'Add a token this site suggests to your list. Its details are checked against the chain before it shows.' })}</Body>
-          </Plate>
+          <Column gap="$2" testID="approval-watch">
+            <Plate role="raised" gap={2}>
+              <Body size="title">{payload.onChain ? t({ id: 'approval.watch.title', message: 'Add {s} to your tokens', values: { s: payload.onChain.symbol } }) : t({ id: 'approval.watch.title.unknown', message: 'Add a token to your list' })}</Body>
+              <Body tone="mute" size="caption" fontFamily="$mono">
+                {payload.address ? shortAddress(payload.address) : '—'}
+              </Body>
+              {payload.onChain ? (
+                <Body tone="mute" size="caption">
+                  {t({ id: 'approval.watch.onchain', message: 'On chain: {n} · {d} decimals', values: { n: payload.onChain.name, d: payload.onChain.decimals } })}
+                </Body>
+              ) : (
+                <Body tone="ember" size="caption">
+                  {t({ id: 'approval.watch.nocode', message: 'No contract answered at that address on this chain.' })}
+                </Body>
+              )}
+            </Plate>
+            {payload.mismatch && payload.onChain ? (
+              <Plate gap={2} borderColor={paint.burn} testID="approval-watch-mismatch">
+                <Body tone="burn">{t({ id: 'approval.watch.mismatch', message: 'The site calls it {s} with {d} decimals; the contract says {cs} with {cd}.', values: { s: payload.symbol ?? '?', d: payload.decimals ?? '?', cs: payload.onChain.symbol, cd: payload.onChain.decimals } })}</Body>
+                <Body tone="mute" size="caption">
+                  {t({ id: 'approval.watch.mismatch.body', message: 'BoltVault shows the contract’s own name and decimals, never the site’s.' })}
+                </Body>
+              </Plate>
+            ) : null}
+          </Column>
         ) : null}
 
         {/* Risk plates */}

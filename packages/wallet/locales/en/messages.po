@@ -103,7 +103,7 @@ msgctxt "accounts.title"
 msgid "Accounts"
 msgstr "Accounts"
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/accounts/AccountRow.tsx
 msgctxt "acct.active"
 msgid "Active"
 msgstr "Active"
@@ -113,45 +113,75 @@ msgctxt "acct.add"
 msgid "Add"
 msgstr "Add"
 
-#: packages/wallet/src/screens/Accounts.tsx
-msgctxt "acct.add.hardware"
-msgid "Hardware"
-msgstr "Hardware"
+#: packages/wallet/src/components/accounts/AddAccountSheet.tsx
+msgctxt "acct.add.gated"
+msgid "Secrets are typed in a full tab, never in this window."
+msgstr "Secrets are typed in a full tab, never in this window."
 
-#: packages/wallet/src/screens/Accounts.tsx
-msgctxt "acct.add.key"
-msgid "Private key"
-msgstr "Private key"
+#: packages/wallet/src/components/accounts/AddAccountSheet.tsx
+msgctxt "acct.add.hardware.body"
+msgid "Ledger, Trezor or Keystone"
+msgstr "Ledger, Trezor or Keystone"
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/accounts/AddAccountSheet.tsx
+msgctxt "acct.add.hardware.title"
+msgid "Hardware wallet"
+msgstr "Hardware wallet"
+
+#: packages/wallet/src/components/accounts/AddAccountSheet.tsx
+msgctxt "acct.add.key.body"
+msgid "One address, backed up on its own"
+msgstr "One address, backed up on its own"
+
+#: packages/wallet/src/components/accounts/AddAccountSheet.tsx
 msgctxt "acct.add.key.key"
 msgid "Import key"
 msgstr "Import key"
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/accounts/AddAccountSheet.tsx
 msgctxt "acct.add.key.note"
 msgid "This key is not part of any recovery phrase. Back it up separately."
 msgstr "This key is not part of any recovery phrase. Back it up separately."
 
-#: packages/wallet/src/screens/Accounts.tsx
-msgctxt "acct.add.seed"
-msgid "Seed"
-msgstr "Seed"
+#: packages/wallet/src/components/accounts/AddAccountSheet.tsx
+msgctxt "acct.add.key.title"
+msgid "Private key"
+msgstr "Private key"
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/accounts/AddAccountSheet.tsx
+msgctxt "acct.add.seed.body"
+msgid "12 or 24 words from another wallet"
+msgstr "12 or 24 words from another wallet"
+
+#: packages/wallet/src/components/accounts/AddAccountSheet.tsx
 msgctxt "acct.add.seed.key"
-msgid "Add seed"
-msgstr "Add seed"
+msgid "Add recovery phrase"
+msgstr "Add recovery phrase"
 
-#: packages/wallet/src/screens/Accounts.tsx
-msgctxt "acct.add.watch"
-msgid "Watch"
-msgstr "Watch"
+#: packages/wallet/src/components/accounts/AddAccountSheet.tsx
+msgctxt "acct.add.seed.title"
+msgid "Recovery phrase"
+msgstr "Recovery phrase"
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/accounts/AddAccountSheet.tsx
+msgctxt "acct.add.title"
+msgid "Add an account"
+msgstr "Add an account"
+
+#: packages/wallet/src/components/accounts/AddAccountSheet.tsx
+msgctxt "acct.add.watch.body"
+msgid "Balances and activity, no signing"
+msgstr "Balances and activity, no signing"
+
+#: packages/wallet/src/components/accounts/AddAccountSheet.tsx
 msgctxt "acct.add.watch.key"
-msgid "Watch address"
-msgstr "Watch address"
+msgid "Watch this address"
+msgstr "Watch this address"
+
+#: packages/wallet/src/components/accounts/AddAccountSheet.tsx
+msgctxt "acct.add.watch.title"
+msgid "Watch an address"
+msgstr "Watch an address"
 
 #: packages/wallet/src/screens/Accounts.tsx
 msgctxt "acct.backedUp"
@@ -164,19 +194,89 @@ msgid "Back up now"
 msgstr "Back up now"
 
 #: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.backup.short"
+msgid "Back up"
+msgstr "Back up"
+
+#: packages/wallet/src/screens/Accounts.tsx
 msgctxt "acct.derive"
-msgid "+ Next account from this seed"
-msgstr "+ Next account from this seed"
+msgid "Add the next address"
+msgstr "Add the next address"
 
 #: packages/wallet/src/screens/Accounts.tsx
-msgctxt "acct.hardware"
-msgid "Hardware"
-msgstr "Hardware"
+msgctxt "acct.details"
+msgid "Details"
+msgstr "Details"
+
+#: packages/wallet/src/components/accounts/AccountSheets.tsx
+msgctxt "acct.details.added"
+msgid "Added"
+msgstr "Added"
+
+#: packages/wallet/src/components/accounts/AccountSheets.tsx
+msgctxt "acct.details.derivation"
+msgid "Derivation"
+msgstr "Derivation"
+
+#: packages/wallet/src/components/accounts/AccountSheets.tsx
+msgctxt "acct.details.device"
+msgid "Device"
+msgstr "Device"
+
+#: packages/wallet/src/components/accounts/AccountSheets.tsx
+msgctxt "acct.details.path"
+msgid "Path"
+msgstr "Path"
+
+#: packages/wallet/src/components/accounts/AccountSheets.tsx
+msgctxt "acct.details.signs"
+msgid "Signs"
+msgstr "Signs"
+
+#: packages/wallet/src/components/accounts/AccountSheets.tsx
+msgctxt "acct.details.signs.device"
+msgid "On the device"
+msgstr "On the device"
+
+#: packages/wallet/src/components/accounts/AccountSheets.tsx
+msgctxt "acct.details.signs.here"
+msgid "Here, with your password"
+msgstr "Here, with your password"
+
+#: packages/wallet/src/components/accounts/AccountSheets.tsx
+msgctxt "acct.details.signs.no"
+msgid "Never — watch only"
+msgstr "Never — watch only"
+
+#: packages/wallet/src/components/accounts/AccountSheets.tsx
+msgctxt "acct.details.type"
+msgid "Type"
+msgstr "Type"
+
+#: packages/wallet/src/components/accounts/AccountSheets.tsx
+msgctxt "acct.details.wallet"
+msgid "Wallet"
+msgstr "Wallet"
 
 #: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.empty"
+msgid "No accounts yet. Add a recovery phrase, a key, an address to watch or a hardware wallet."
+msgstr "No accounts yet. Add a recovery phrase, a key, an address to watch or a hardware wallet."
+
+#: packages/wallet/src/components/accounts/AccountRow.tsx
 msgctxt "acct.hidden"
 msgid "hidden"
 msgstr "hidden"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.hidden.many"
+msgid "{n} hidden"
+msgstr "{n} hidden"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.hidden.one"
+msgid "1 hidden"
+msgstr "1 hidden"
 
 #: packages/wallet/src/screens/Accounts.tsx
 msgctxt "acct.hide"
@@ -188,7 +288,37 @@ msgctxt "acct.imported"
 msgid "Imported keys"
 msgstr "Imported keys"
 
+#: packages/wallet/src/components/accounts/AccountRow.tsx
+msgctxt "acct.kind.hd"
+msgid "Recovery phrase"
+msgstr "Recovery phrase"
+
+#: packages/wallet/src/components/accounts/AccountRow.tsx
+msgctxt "acct.kind.imported"
+msgid "Imported key"
+msgstr "Imported key"
+
+#: packages/wallet/src/components/accounts/AccountRow.tsx
+msgctxt "acct.kind.watch"
+msgid "Watch-only"
+msgstr "Watch-only"
+
+#: packages/wallet/src/components/accounts/AccountRow.tsx
+msgctxt "acct.menu"
+msgid "Account options"
+msgstr "Account options"
+
 #: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.moveDown"
+msgid "Move down"
+msgstr "Move down"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.moveUp"
+msgid "Move up"
+msgstr "Move up"
+
+#: packages/wallet/src/components/accounts/AddAccountSheet.tsx
 msgctxt "acct.openTab"
 msgid "Continue in a full tab"
 msgstr "Continue in a full tab"
@@ -199,19 +329,44 @@ msgid "Remove"
 msgstr "Remove"
 
 #: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.remove.body"
+msgid "BoltVault stops showing this address. Nothing on the chain changes; you can add it again any time."
+msgstr "BoltVault stops showing this address. Nothing on the chain changes; you can add it again any time."
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.remove.key"
+msgid "This key is not part of a recovery phrase. Without its own backup, anything at this address is gone for good."
+msgstr "This key is not part of a recovery phrase. Without its own backup, anything at this address is gone for good."
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.remove.title"
+msgid "Remove {label}?"
+msgstr "Remove {label}?"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.rename"
+msgid "Rename"
+msgstr "Rename"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.renameSeed"
+msgid "Rename this wallet"
+msgstr "Rename this wallet"
+
+#: packages/wallet/src/screens/Accounts.tsx
 msgctxt "acct.reveal"
-msgid "Reveal"
-msgstr "Reveal"
+msgid "Reveal recovery phrase"
+msgstr "Reveal recovery phrase"
+
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "acct.seedMenu"
+msgid "Wallet options"
+msgstr "Wallet options"
 
 #: packages/wallet/src/screens/Accounts.tsx
 msgctxt "acct.show"
 msgid "Show"
 msgstr "Show"
-
-#: packages/wallet/src/screens/Accounts.tsx
-msgctxt "acct.use"
-msgid "Use"
-msgstr "Use"
 
 #: packages/wallet/src/screens/Accounts.tsx
 msgctxt "acct.watch"
@@ -614,9 +769,34 @@ msgid "Type {word} to continue"
 msgstr "Type {word} to continue"
 
 #: packages/wallet/src/screens/Approval.tsx
-msgctxt "approval.watch.body"
-msgid "Add a token this site suggests to your list. Its details are checked against the chain before it shows."
-msgstr "Add a token this site suggests to your list. Its details are checked against the chain before it shows."
+msgctxt "approval.watch.mismatch"
+msgid "The site calls it {s} with {d} decimals; the contract says {cs} with {cd}."
+msgstr "The site calls it {s} with {d} decimals; the contract says {cs} with {cd}."
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.watch.mismatch.body"
+msgid "BoltVault shows the contract’s own name and decimals, never the site’s."
+msgstr "BoltVault shows the contract’s own name and decimals, never the site’s."
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.watch.nocode"
+msgid "No contract answered at that address on this chain."
+msgstr "No contract answered at that address on this chain."
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.watch.onchain"
+msgid "On chain: {n} · {d} decimals"
+msgstr "On chain: {n} · {d} decimals"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.watch.title"
+msgid "Add {s} to your tokens"
+msgstr "Add {s} to your tokens"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.watch.title.unknown"
+msgid "Add a token to your list"
+msgstr "Add a token to your list"
 
 #: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "back"
@@ -1863,6 +2043,16 @@ msgctxt "fresh.moment"
 msgid "As of a moment ago"
 msgstr "As of a moment ago"
 
+#: packages/wallet/src/components/HardwarePickers.tsx
+msgctxt "hardware.more"
+msgid "{n} more"
+msgstr "{n} more"
+
+#: packages/wallet/src/components/HardwarePickers.tsx
+msgctxt "hardware.paths"
+msgid "Show paths"
+msgstr "Show paths"
+
 #: packages/wallet/src/screens/Home.tsx
 msgctxt "header.expand"
 msgid "Open in a full tab"
@@ -2173,6 +2363,11 @@ msgctxt "keystone.kind.typed"
 msgid "typed data"
 msgstr "typed data"
 
+#: packages/wallet/src/components/HardwarePickers.tsx
+msgctxt "keystone.loading"
+msgid "Reading the account QR…"
+msgstr "Reading the account QR…"
+
 #: packages/wallet/src/components/HardwarePrompt.tsx
 msgctxt "keystone.paste"
 msgid "No camera here? Paste the UR text of the answer."
@@ -2208,72 +2403,77 @@ msgctxt "keystone.use.account"
 msgid "Use this account QR"
 msgstr "Use this account QR"
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/HardwarePickers.tsx
 msgctxt "ledger.add"
 msgid "Add"
 msgstr "Add"
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/HardwarePickers.tsx
 msgctxt "ledger.added"
 msgid "Added"
 msgstr "Added"
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/HardwarePickers.tsx
 msgctxt "ledger.bip44"
 msgid "BIP-44 (MetaMask, most wallets)"
 msgstr "BIP-44 (MetaMask, most wallets)"
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/HardwarePickers.tsx
 msgctxt "ledger.blind"
 msgid "Swaps and contract calls need blind signing: Ethereum app › Settings › Blind signing on the device. Plain sends work without it."
 msgstr "Swaps and contract calls need blind signing: Ethereum app › Settings › Blind signing on the device. Plain sends work without it."
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/HardwarePickers.tsx
 msgctxt "ledger.body"
 msgid "Plug in your Ledger, unlock it and open the Ethereum app. Your keys never leave the device; BoltVault only shows you what it will sign."
 msgstr "Plug in your Ledger, unlock it and open the Ethereum app. Your keys never leave the device; BoltVault only shows you what it will sign."
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/HardwarePickers.tsx
 msgctxt "ledger.live"
 msgid "Ledger Live"
 msgstr "Ledger Live"
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/HardwarePickers.tsx
+msgctxt "ledger.loading"
+msgid "Reading addresses from your Ledger…"
+msgstr "Reading addresses from your Ledger…"
+
+#: packages/wallet/src/components/HardwarePickers.tsx
 msgctxt "ledger.none"
 msgid "No Ledger paired yet. Press Pair Ledger, then pick your Ledger in the browser’s device list."
 msgstr "No Ledger paired yet. Press Pair Ledger, then pick your Ledger in the browser’s device list."
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/HardwarePickers.tsx
 msgctxt "ledger.nopick"
 msgid "No device was chosen."
 msgstr "No device was chosen."
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/HardwarePickers.tsx
 msgctxt "ledger.openapp"
 msgid "Open the Ethereum app on the device."
 msgstr "Open the Ethereum app on the device."
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/HardwarePickers.tsx
 msgctxt "ledger.pair"
 msgid "Pair Ledger"
 msgstr "Pair Ledger"
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/HardwarePickers.tsx
 msgctxt "ledger.ready"
 msgid "{m} · Ethereum app {v}{b}"
 msgstr "{m} · Ethereum app {v}{b}"
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/HardwarePickers.tsx
 msgctxt "ledger.refresh"
 msgid "Refresh"
 msgstr "Refresh"
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/HardwarePickers.tsx
 msgctxt "ledger.tabonly"
 msgid "Pairing a Ledger over USB happens in a full tab: the browser’s device chooser cannot open from this window. Once paired, it works from here too."
 msgstr "Pairing a Ledger over USB happens in a full tab: the browser’s device chooser cannot open from this window. Once paired, it works from here too."
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/HardwarePickers.tsx
 msgctxt "ledger.unavailable"
 msgid "Ledger over USB works from the full tab in Chrome, and over Bluetooth on the phone. In this window you can watch its address, or sign on a paired device."
 msgstr "Ledger over USB works from the full tab in Chrome, and over Bluetooth on the phone. In this window you can watch its address, or sign on a paired device."
@@ -3143,22 +3343,22 @@ msgctxt "remove"
 msgid "Remove"
 msgstr "Remove"
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/accounts/AccountSheets.tsx
 msgctxt "reveal.body"
 msgid "Enter your password. Make sure nobody can see your screen."
 msgstr "Enter your password. Make sure nobody can see your screen."
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/accounts/AccountSheets.tsx
 msgctxt "reveal.hide"
 msgid "Hide"
 msgstr "Hide"
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/accounts/AccountSheets.tsx
 msgctxt "reveal.key"
 msgid "Reveal"
 msgstr "Reveal"
 
-#: packages/wallet/src/screens/Accounts.tsx
+#: packages/wallet/src/components/accounts/AccountSheets.tsx
 msgctxt "reveal.title"
 msgid "Recovery phrase · {label}"
 msgstr "Recovery phrase · {label}"
@@ -3873,6 +4073,46 @@ msgctxt "token.activity.none"
 msgid "Nothing yet with this token."
 msgstr "Nothing yet with this token."
 
+#: packages/wallet/src/components/AddTokenSheet.tsx
+msgctxt "token.add.key"
+msgid "Add token"
+msgstr "Add token"
+
+#: packages/wallet/src/components/AddTokenSheet.tsx
+msgctxt "token.add.looking"
+msgid "Reading the contract…"
+msgstr "Reading the contract…"
+
+#: packages/wallet/src/components/AddTokenSheet.tsx
+msgctxt "token.add.nocode"
+msgid "There is no contract at that address on this chain."
+msgstr "There is no contract at that address on this chain."
+
+#: packages/wallet/src/components/AddTokenSheet.tsx
+msgctxt "token.add.note"
+msgid "Anyone can deploy a token with any name. Check the address against the project’s own site before you trust it."
+msgstr "Anyone can deploy a token with any name. Check the address against the project’s own site before you trust it."
+
+#: packages/wallet/src/components/AddTokenSheet.tsx
+msgctxt "token.add.ph"
+msgid "Contract address 0x…"
+msgstr "Contract address 0x…"
+
+#: packages/wallet/src/screens/Portfolio.tsx
+msgctxt "token.add.pill"
+msgid "Add token"
+msgstr "Add token"
+
+#: packages/wallet/src/components/AddTokenSheet.tsx
+msgctxt "token.add.preview"
+msgid "{name} · {d} decimals"
+msgstr "{name} · {d} decimals"
+
+#: packages/wallet/src/components/AddTokenSheet.tsx
+msgctxt "token.add.title"
+msgid "Add a token"
+msgstr "Add a token"
+
 #: packages/wallet/src/screens/Token.tsx
 msgctxt "token.allowances"
 msgid "Allowances"
@@ -4037,6 +4277,11 @@ msgstr "Yours"
 msgctxt "trezor.connect"
 msgid "Connect Trezor"
 msgstr "Connect Trezor"
+
+#: packages/wallet/src/components/HardwarePickers.tsx
+msgctxt "trezor.loading"
+msgid "Reading addresses from your Trezor…"
+msgstr "Reading addresses from your Trezor…"
 
 #: packages/wallet/src/components/HardwarePickers.tsx
 msgctxt "trezor.ready"

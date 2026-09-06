@@ -1,333 +1,186 @@
 /**
- * Accounts (master plan §8.1): the rail of seats grouped by origin, add,
- * rename, hide, reveal (quiet, password), backup state per seed.
+ * Accounts (master plan §8.1; plan C2, owner items A1–A3): one wallet card
+ * per recovery phrase with its addresses as rows, then imported keys, each
+ * hardware device and watched addresses. A row's menu renames, shows the
+ * technical details, reorders, hides or removes; the header's Add opens the
+ * four ways in. Nothing technical is printed on a row — it lives in Details.
  */
-import { Body, Column, Icon, Input, Key, Plate, Row, ScrollView, Signature, WordGrid, metrics, paint, shortAddress, Chip } from '@boltvault/ui'
-import { PageHeader } from '../components/PageHeader'
+import { Body, Column, Icon, IconButton, Key, Pill, Plate, Pressable, Row, ScrollView, metrics, paint } from '@boltvault/ui'
 import type { AccountView, SeedView } from '@boltvault/engine'
-import { useEffect, useState } from 'react'
-import { KeystonePicker, TrezorPicker } from '../components/HardwarePickers'
+import { useState } from 'react'
+import { AccountRow } from '../components/accounts/AccountRow'
+import { AccountDetailsSheet, ConfirmSheet, MenuSheet, RenameSheet, RevealSheet, type MenuItem } from '../components/accounts/AccountSheets'
+import { AddAccountSheet } from '../components/accounts/AddAccountSheet'
+import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
+import { useReducedMotion } from '../state/useReducedMotion'
 import { useWalletState } from '../state/useWalletState'
 
-type Adding = null | 'derive' | 'seed' | 'imported' | 'watch' | 'hardware'
+type Group = { id: string; title: string; icon: 'key' | 'lock' | 'hardware' | 'eye'; items: AccountView[]; seed?: SeedView }
+type SheetState = { kind: 'menu' | 'details' | 'rename' | 'confirm'; account: AccountView } | { kind: 'seedMenu' | 'renameSeed' | 'reveal'; seed: SeedView } | { kind: 'add' } | null
 
 export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' | 'mobile' }) {
   const engine = useEngine()
   const host = useHost()
   const router = useRouter()
+  const reducedMotion = useReducedMotion()
   const { vault, accounts, active, refresh } = useWalletState()
-  const [adding, setAdding] = useState<Adding>(null)
-  const [hwKind, setHwKind] = useState<'ledger' | 'trezor' | 'keystone'>('ledger')
-  const [editing, setEditing] = useState<string | null>(null)
-  const [label, setLabel] = useState('')
-  const [field, setField] = useState('')
-  const [passphrase, setPassphrase] = useState('')
-  const [revealFor, setRevealFor] = useState<SeedView | null>(null)
-  const [revealPassword, setRevealPassword] = useState('')
-  const [revealed, setRevealed] = useState<string[] | null>(null)
+  const [sheet, setSheet] = useState<SheetState>(null)
+  const [showHidden, setShowHidden] = useState<Record<string, boolean>>({})
   const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
+  const wide = body === 'extension-tab'
   const seeds = vault?.seeds ?? []
 
-  const run = async (fn: () => Promise<void>): Promise<void> => {
-    setBusy(true)
+  const run = async (fn: () => Promise<unknown>): Promise<void> => {
     setError(null)
     try {
       await fn()
       refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setBusy(false)
     }
   }
 
-  const groups: Array<{ title: string; items: AccountView[]; seed?: SeedView }> = []
-  for (const s of seeds) groups.push({ title: s.label, items: accounts.filter((a) => a.seedId === s.id), seed: s })
+  const groups: Group[] = []
+  for (const s of seeds) groups.push({ id: `seed-${s.id}`, title: s.label, icon: 'key', items: accounts.filter((a) => a.seedId === s.id), seed: s })
   const others = accounts.filter((a) => !a.seedId)
-  if (others.some((a) => a.kind === 'imported')) groups.push({ title: t({ id: 'acct.imported', message: 'Imported keys' }), items: others.filter((a) => a.kind === 'imported') })
-  if (others.some((a) => a.kind === 'ledger' || a.kind === 'trezor' || a.kind === 'keystone')) groups.push({ title: t({ id: 'acct.hardware', message: 'Hardware' }), items: others.filter((a) => a.kind === 'ledger' || a.kind === 'trezor' || a.kind === 'keystone') })
-  if (others.some((a) => a.kind === 'watch')) groups.push({ title: t({ id: 'acct.watch', message: 'Watching' }), items: others.filter((a) => a.kind === 'watch') })
+  const imported = others.filter((a) => a.kind === 'imported')
+  if (imported.length) groups.push({ id: 'imported', title: t({ id: 'acct.imported', message: 'Imported keys' }), icon: 'lock', items: imported })
+  const hardware = others.filter((a) => a.kind === 'ledger' || a.kind === 'trezor' || a.kind === 'keystone')
+  const devices = new Map<string, AccountView[]>()
+  for (const a of hardware) {
+    const key = `${a.kind}:${a.hardware?.deviceId ?? ''}`
+    devices.set(key, [...(devices.get(key) ?? []), a])
+  }
+  for (const [key, items] of devices) {
+    const kind = items[0]?.kind
+    groups.push({ id: `hw-${key}`, title: kind === 'ledger' ? 'Ledger' : kind === 'trezor' ? 'Trezor' : 'Keystone', icon: 'hardware', items })
+  }
+  const watching = others.filter((a) => a.kind === 'watch')
+  if (watching.length) groups.push({ id: 'watch', title: t({ id: 'acct.watch', message: 'Watching' }), icon: 'eye', items: watching })
+
+  const select = (a: AccountView): void => {
+    if (a.id === active?.id) return
+    void run(async () => {
+      await engine.accounts.setActive({ id: a.id })
+      router.back()
+    })
+  }
+  const move = (a: AccountView, dir: -1 | 1): void => {
+    const ids = [...accounts].sort((x, y) => x.order - y.order).map((x) => x.id)
+    const i = ids.indexOf(a.id)
+    const j = i + dir
+    if (i < 0 || j < 0 || j >= ids.length) return
+    const next = [...ids]
+    next[i] = ids[j] ?? a.id
+    next[j] = a.id
+    void run(() => engine.accounts.reorder({ ids: next }))
+    setSheet(null)
+  }
+  const menuFor = (a: AccountView): MenuItem[] => [
+    { id: 'rename', icon: 'edit', label: t({ id: 'acct.rename', message: 'Rename' }), onPress: () => setSheet({ kind: 'rename', account: a }), testID: 'menu-rename' },
+    { id: 'details', icon: 'info', label: t({ id: 'acct.details', message: 'Details' }), onPress: () => setSheet({ kind: 'details', account: a }), testID: 'menu-details' },
+    { id: 'up', icon: 'chevronUp', label: t({ id: 'acct.moveUp', message: 'Move up' }), onPress: () => move(a, -1), testID: 'menu-up' },
+    { id: 'down', icon: 'chevronDown', label: t({ id: 'acct.moveDown', message: 'Move down' }), onPress: () => move(a, 1), testID: 'menu-down' },
+    {
+      id: 'hide',
+      icon: a.hidden ? 'eye' : 'eyeOff',
+      label: a.hidden ? t({ id: 'acct.show', message: 'Show' }) : t({ id: 'acct.hide', message: 'Hide' }),
+      onPress: () => {
+        void run(() => engine.accounts.setHidden({ id: a.id, hidden: !a.hidden }))
+        setSheet(null)
+      },
+      testID: 'menu-hide',
+    },
+    ...(a.kind !== 'hd' ? [{ id: 'remove', icon: 'trash' as const, label: t({ id: 'acct.remove', message: 'Remove' }), tone: 'burn' as const, onPress: () => setSheet({ kind: 'confirm', account: a }), testID: 'menu-remove' }] : []),
+  ]
+  const seedMenu = (s: SeedView): MenuItem[] => [
+    { id: 'next', icon: 'plus', label: t({ id: 'acct.derive', message: 'Add the next address' }), onPress: () => { void run(() => engine.accounts.derive({ seedId: s.id })); setSheet(null) }, testID: 'seed-derive' },
+    { id: 'rename', icon: 'edit', label: t({ id: 'acct.renameSeed', message: 'Rename this wallet' }), onPress: () => setSheet({ kind: 'renameSeed', seed: s }), testID: 'seed-rename' },
+    ...(!s.backedUp ? [{ id: 'backup', icon: 'shield' as const, label: t({ id: 'acct.backup', message: 'Back up now' }), onPress: () => { setSheet(null); router.navigate('backup') }, testID: 'seed-backup' }] : []),
+    ...(host.secretsAllowed ? [{ id: 'reveal', icon: 'eye' as const, label: t({ id: 'acct.reveal', message: 'Reveal recovery phrase' }), onPress: () => setSheet({ kind: 'reveal', seed: s }), testID: 'seed-reveal' }] : []),
+  ]
 
   return (
-    <ScrollView contentContainerStyle={{ padding: inset, gap: 16 }} testID="accounts">
-      <PageHeader title={t({ id: 'accounts.title', message: 'Accounts' })} />
-
-      {groups.map((g) => (
-        <Column key={g.title} gap="$2">
-          <Row justifyContent="space-between">
-            <Body tone="mute" size="caption">
-              {g.title}
-            </Body>
-            {g.seed ? (
-              <Row gap="$3">
-                {g.seed.backedUp ? (
-                  <Body tone="mute" size="caption">
-                    {t({ id: 'acct.backedUp', message: 'Backed up' })}
-                  </Body>
-                ) : (
-                  <Body tone="ember" size="caption" onPress={() => router.navigate('backup')} testID={`backup-${g.seed.id}`}>
-                    {t({ id: 'acct.backup', message: 'Back up now' })}
-                  </Body>
-                )}
-                {host.secretsAllowed ? (
-                  <Body tone="mute" size="caption" onPress={() => { setRevealFor(g.seed ?? null); setRevealed(null); setRevealPassword('') }} testID={`reveal-${g.seed.id}`}>
-                    {t({ id: 'acct.reveal', message: 'Reveal' })}
-                  </Body>
-                ) : null}
-              </Row>
-            ) : null}
-          </Row>
-          {g.items.map((a) => (
-            <Plate key={a.id} role={a.id === active?.id ? 'raised' : 'recessed'} gap="$2" testID={`account-${a.id}`}>
-              <Row gap="$3" justifyContent="space-between">
-                <Row gap="$3" flexShrink={1}>
-                  <Signature address={a.address} size={36} />
-                  <Column flexShrink={1}>
-                    {editing === a.id ? (
-                      <Input value={label} onChange={setLabel} autoFocus onSubmit={() => run(async () => { await engine.accounts.rename({ id: a.id, label }); setEditing(null) })} testID={`rename-${a.id}`} />
-                    ) : (
-                      <Body size="title" numberOfLines={1} onPress={() => { setEditing(a.id); setLabel(a.label) }}>
-                        {a.label}
-                      </Body>
-                    )}
-                    <Body tone="mute" size="caption">
-                      {shortAddress(a.address)} · {a.kind}
-                      {a.hidden ? ` · ${t({ id: 'acct.hidden', message: 'hidden' })}` : ''}
-                    </Body>
-                  </Column>
+    <Column flex={1}>
+      <ScrollView contentContainerStyle={{ padding: inset, gap: 12, ...(wide ? { maxWidth: 640, width: '100%', alignSelf: 'center' } : {}) }} testID="accounts">
+        <PageHeader title={t({ id: 'accounts.title', message: 'Accounts' })} right={<Pill label={t({ id: 'acct.add', message: 'Add' })} icon={<Icon name="plus" size={14} color={paint.arc} />} tone="arc" onPress={() => setSheet({ kind: 'add' })} testID="add-account-open" />} />
+        {groups.map((g) => {
+          const visible = g.items.filter((a) => !a.hidden)
+          const hidden = g.items.filter((a) => a.hidden)
+          const open = showHidden[g.id] ?? false
+          return (
+            <Plate key={g.id} role="card" gap={4} paddingVertical="$2" paddingHorizontal="$3" testID={`group-${g.id}`}>
+              <Row alignItems="center" gap="$2" minHeight={36}>
+                <Row width={28} height={28} borderRadius={14} backgroundColor="$glassRaised" alignItems="center" justifyContent="center">
+                  <Icon name={g.icon} size={15} color={paint.arc} />
                 </Row>
-                {a.id !== active?.id ? (
-                  <Key label={t({ id: 'acct.use', message: 'Use' })} kind="secondary" onPress={() => run(async () => { await engine.accounts.setActive({ id: a.id }); router.back() })} testID={`use-${a.id}`} />
-                ) : (
-                  <Body tone="arc" size="caption">
-                    {t({ id: 'acct.active', message: 'Active' })}
-                  </Body>
-                )}
-              </Row>
-              <Row gap="$4">
-                <Body tone="mute" size="caption" onPress={() => run(() => engine.accounts.setHidden({ id: a.id, hidden: !a.hidden }).then(() => undefined))}>
-                  {a.hidden ? t({ id: 'acct.show', message: 'Show' }) : t({ id: 'acct.hide', message: 'Hide' })}
+                <Body fontWeight="600" flex={1} numberOfLines={1}>
+                  {g.title}
                 </Body>
-                {a.kind !== 'hd' ? (
-                  <Body tone="burn" size="caption" onPress={() => run(() => engine.accounts.remove({ id: a.id }))}>
-                    {t({ id: 'acct.remove', message: 'Remove' })}
-                  </Body>
+                {g.seed ? (
+                  g.seed.backedUp ? (
+                    <Body tone="mute" size="caption">
+                      {t({ id: 'acct.backedUp', message: 'Backed up' })}
+                    </Body>
+                  ) : (
+                    <Pill label={t({ id: 'acct.backup.short', message: 'Back up' })} tone="ember" size="sm" onPress={() => router.navigate('backup')} testID={`backup-${g.seed.id}`} />
+                  )
                 ) : null}
+                {g.seed ? <IconButton icon="more" label={t({ id: 'acct.seedMenu', message: 'Wallet options' })} onPress={() => setSheet({ kind: 'seedMenu', seed: g.seed as SeedView })} testID={`seed-menu-${g.seed.id}`} /> : null}
               </Row>
-            </Plate>
-          ))}
-          {g.seed ? (
-            <Body tone="arc" size="caption" onPress={() => run(() => engine.accounts.derive({ seedId: g.seed!.id }).then(() => undefined))} testID={`derive-${g.seed.id}`}>
-              {t({ id: 'acct.derive', message: '+ Next account from this seed' })}
-            </Body>
-          ) : null}
-        </Column>
-      ))}
-
-      <Plate gap="$3" testID="add-account">
-        <Body size="title">{t({ id: 'acct.add', message: 'Add' })}</Body>
-        <Row gap="$2" flexWrap="wrap">
-          <Key label={t({ id: 'acct.add.seed', message: 'Seed' })} kind={adding === 'seed' ? 'primary' : 'secondary'} onPress={() => setAdding('seed')} />
-          <Key label={t({ id: 'acct.add.key', message: 'Private key' })} kind={adding === 'imported' ? 'primary' : 'secondary'} onPress={() => setAdding('imported')} />
-          <Key label={t({ id: 'acct.add.watch', message: 'Watch' })} kind={adding === 'watch' ? 'primary' : 'secondary'} onPress={() => setAdding('watch')} />
-          <Key label={t({ id: 'acct.add.hardware', message: 'Hardware' })} kind={adding === 'hardware' ? 'primary' : 'secondary'} onPress={() => setAdding('hardware')} />
-        </Row>
-        {adding === 'seed' && host.secretsAllowed ? (
-          <Column gap="$2">
-            <Input value={field} onChange={setField} multiline mono placeholder={t({ id: 'ob.import.ph', message: '12 or 24 words, separated by spaces' })} />
-            <Input value={passphrase} onChange={setPassphrase} secure label={t({ id: 'ob.passphrase', message: 'BIP-39 passphrase (optional, advanced)' })} />
-            <Key label={t({ id: 'acct.add.seed.key', message: 'Add seed' })} disabled={busy} onPress={() => run(async () => { await engine.accounts.addSeed({ mnemonic: field, ...(passphrase ? { passphrase } : {}) }); setField(''); setAdding(null) })} />
-          </Column>
-        ) : null}
-        {adding === 'seed' && !host.secretsAllowed ? <Key label={t({ id: 'acct.openTab', message: 'Continue in a full tab' })} onPress={() => host.openSecretScreen?.('accounts')} /> : null}
-        {adding === 'imported' && host.secretsAllowed ? (
-          <Column gap="$2">
-            <Input value={field} onChange={setField} secure mono placeholder="0x…" />
-            <Body tone="mute" size="caption">
-              {t({ id: 'acct.add.key.note', message: 'This key is not part of any recovery phrase. Back it up separately.' })}
-            </Body>
-            <Key label={t({ id: 'acct.add.key.key', message: 'Import key' })} disabled={busy} onPress={() => run(async () => { await engine.accounts.addImported({ privateKey: field.trim() }); setField(''); setAdding(null) })} />
-          </Column>
-        ) : null}
-        {adding === 'imported' && !host.secretsAllowed ? <Key label={t({ id: 'acct.openTab', message: 'Continue in a full tab' })} onPress={() => host.openSecretScreen?.('accounts')} /> : null}
-        {adding === 'watch' ? (
-          <Column gap="$2">
-            <Input value={field} onChange={setField} mono placeholder="0x…" />
-            <Key label={t({ id: 'acct.add.watch.key', message: 'Watch address' })} disabled={busy || !/^0x[0-9a-fA-F]{40}$/.test(field.trim())} onPress={() => run(async () => { await engine.accounts.addWatch({ address: field.trim() }); setField(''); setAdding(null) })} />
-          </Column>
-        ) : null}
-        {adding === 'hardware' ? (
-          <Column gap="$3">
-            <Row gap="$2" flexWrap="wrap" testID="hardware-kinds">
-              {(['ledger', 'trezor', 'keystone'] as const).map((k) => (
-                <Chip key={k} onPress={() => setHwKind(k)} cursor="pointer" minHeight={36} justifyContent="center" borderColor={hwKind === k ? paint.arc : undefined} testID={`hardware-kind-${k}`}>
-                  <Body tone={hwKind === k ? 'arc' : 'mute'} size="caption">
-                    {k === 'ledger' ? 'Ledger' : k === 'trezor' ? 'Trezor' : 'Keystone'}
-                  </Body>
-                </Chip>
+              {visible.map((a) => (
+                <AccountRow key={a.id} account={a} active={a.id === active?.id} onSelect={() => select(a)} onMenu={() => setSheet({ kind: 'menu', account: a })} />
               ))}
-            </Row>
-            {hwKind === 'ledger' ? <LedgerPicker onAdded={() => setAdding(null)} /> : hwKind === 'trezor' ? <TrezorPicker onAdded={() => setAdding(null)} /> : <KeystonePicker onAdded={() => setAdding(null)} />}
-          </Column>
+              {hidden.length ? (
+                <>
+                  <Pressable onPress={() => setShowHidden((s) => ({ ...s, [g.id]: !open }))} accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }} testID={`hidden-${g.id}`}>
+                    <Row gap={6} alignItems="center">
+                      <Icon name={open ? 'chevronUp' : 'chevronDown'} size={14} color={paint.mute} />
+                      <Body tone="mute" size="caption">
+                        {hidden.length === 1 ? t({ id: 'acct.hidden.one', message: '1 hidden' }) : t({ id: 'acct.hidden.many', message: '{n} hidden', values: { n: hidden.length } })}
+                      </Body>
+                    </Row>
+                  </Pressable>
+                  {open ? hidden.map((a) => <AccountRow key={a.id} account={a} active={a.id === active?.id} onSelect={() => select(a)} onMenu={() => setSheet({ kind: 'menu', account: a })} />) : null}
+                </>
+              ) : null}
+            </Plate>
+          )
+        })}
+        {accounts.length === 0 ? (
+          <Plate gap="$2" testID="accounts-empty">
+            <Body tone="mute">{t({ id: 'acct.empty', message: 'No accounts yet. Add a recovery phrase, a key, an address to watch or a hardware wallet.' })}</Body>
+            <Key label={t({ id: 'acct.add', message: 'Add' })} size="compact" onPress={() => setSheet({ kind: 'add' })} />
+          </Plate>
         ) : null}
         {error ? <Body tone="burn">{error}</Body> : null}
-      </Plate>
+      </ScrollView>
 
-      {revealFor ? (
-        <Plate role="raised" gap="$3" testID="reveal">
-          <Row gap="$2">
-            <Icon name="lock" size={18} color={paint.mute} />
-            <Body size="title">{t({ id: 'reveal.title', message: 'Recovery phrase · {label}', values: { label: revealFor.label } })}</Body>
-          </Row>
-          {revealed ? (
-            <>
-              <WordGrid words={revealed} />
-              <Key label={t({ id: 'reveal.hide', message: 'Hide' })} kind="secondary" onPress={() => { setRevealed(null); setRevealFor(null) }} />
-            </>
-          ) : (
-            <>
-              <Body tone="mute">{t({ id: 'reveal.body', message: 'Enter your password. Make sure nobody can see your screen.' })}</Body>
-              <Input value={revealPassword} onChange={setRevealPassword} secure autoFocus testID="reveal-password" />
-              <Row gap="$2">
-                <Key label={t({ id: 'reveal.key', message: 'Reveal' })} disabled={busy || !revealPassword} onPress={() => run(async () => { const r = await engine.vault.reveal({ seedId: revealFor.id, password: revealPassword }); setRevealed(r.mnemonic.split(' ')); setRevealPassword('') })} testID="reveal-submit" />
-                <Key label={t({ id: 'cancel', message: 'Cancel' })} kind="secondary" onPress={() => setRevealFor(null)} />
-              </Row>
-            </>
-          )}
-        </Plate>
-      ) : null}
-
-    </ScrollView>
-  )
-}
-
-/** Pair a Ledger over USB and pick addresses from both derivation schemes (§8.1). */
-function LedgerPicker({ onAdded }: { onAdded: () => void }) {
-  const engine = useEngine()
-  const host = useHost()
-  const [status, setStatus] = useState<Awaited<ReturnType<typeof engine.hardware.ledgerStatus>> | null>(null)
-  const [rows, setRows] = useState<Array<{ scheme: 'bip44' | 'live'; path: string; address: string; index: number }>>([])
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [added, setAdded] = useState<string[]>([])
-
-  const refresh = async (): Promise<void> => {
-    setBusy(true)
-    setError(null)
-    try {
-      const st = await engine.hardware.ledgerStatus()
-      setStatus(st)
-      if (st.devices.length > 0 && st.app) {
-        const [a, b] = await Promise.all([engine.hardware.ledgerAddresses({ scheme: 'bip44', count: 5 }), engine.hardware.ledgerAddresses({ scheme: 'live', count: 5 })])
-        setRows([...a.map((x) => ({ ...x, scheme: 'bip44' as const })), ...b.map((x) => ({ ...x, scheme: 'live' as const }))])
-      } else {
-        setRows([])
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  useEffect(() => {
-    void refresh()
-  }, [])
-
-  const pair = async (): Promise<void> => {
-    if (!host.requestHid) return
-    setError(null)
-    try {
-      const ok = await host.requestHid()
-      if (!ok) setError(t({ id: 'ledger.nopick', message: 'No device was chosen.' }))
-      await refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    }
-  }
-
-  const add = async (row: { scheme: 'bip44' | 'live'; path: string; address: string; index: number }): Promise<void> => {
-    setBusy(true)
-    setError(null)
-    try {
-      await engine.accounts.addHardware({ kind: 'ledger', address: row.address, path: row.path, ...(status?.devices[0] ? { deviceId: status.devices[0].deviceId } : {}), label: `Ledger ${row.scheme === 'live' ? 'Live' : 'BIP-44'} #${row.index}` })
-      setAdded((xs) => [...xs, row.address.toLowerCase()])
-      onAdded()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (status && !status.available) {
-    return (
-      <Column gap="$2" testID="ledger-unavailable">
-        <Body tone="mute" size="caption">
-          {t({ id: 'ledger.unavailable', message: 'Ledger over USB works from the full tab in Chrome, and over Bluetooth on the phone. In this window you can watch its address, or sign on a paired device.' })}
-        </Body>
-        {host.openSecretScreen && host.body !== 'extension-tab' ? <Key label={t({ id: 'acct.openTab', message: 'Continue in a full tab' })} onPress={() => host.openSecretScreen?.('accounts')} /> : null}
-      </Column>
-    )
-  }
-  // WebHID's device chooser only opens from a full tab. A device paired there works from the popup afterwards.
-  if (status && status.devices.length === 0 && !host.requestHid && (host.body === 'extension-popup' || host.body === 'extension-sign') && host.openSecretScreen) {
-    return (
-      <Column gap="$2" testID="ledger-pair-in-tab">
-        <Body tone="mute" size="caption">
-          {t({ id: 'ledger.tabonly', message: 'Pairing a Ledger over USB happens in a full tab: the browser’s device chooser cannot open from this window. Once paired, it works from here too.' })}
-        </Body>
-        <Key label={t({ id: 'acct.openTab', message: 'Continue in a full tab' })} onPress={() => host.openSecretScreen?.('accounts')} testID="ledger-open-tab" />
-      </Column>
-    )
-  }
-  return (
-    <Column gap="$3" testID="ledger-picker">
-      <Body tone="mute" size="caption">
-        {t({ id: 'ledger.body', message: 'Plug in your Ledger, unlock it and open the Ethereum app. Your keys never leave the device; BoltVault only shows you what it will sign.' })}
-      </Body>
-      <Row gap="$2" flexWrap="wrap">
-        {host.requestHid ? <Key label={t({ id: 'ledger.pair', message: 'Pair Ledger' })} kind="secondary" disabled={busy} onPress={() => void pair()} testID="ledger-pair" /> : null}
-        <Key label={t({ id: 'ledger.refresh', message: 'Refresh' })} kind="secondary" disabled={busy} onPress={() => void refresh()} testID="ledger-refresh" />
-      </Row>
-      {status?.devices[0] ? (
-        <Body size="caption" tone={status.app ? 'arc' : 'ember'} testID="ledger-status">
-          {status.app ? t({ id: 'ledger.ready', message: '{m} · Ethereum app {v}{b}', values: { m: status.devices[0].model, v: status.app.version, b: status.app.blindSigning ? '' : ' · blind signing off' } }) : (status.problem ?? t({ id: 'ledger.openapp', message: 'Open the Ethereum app on the device.' }))}
-        </Body>
-      ) : status ? (
-        <Body tone="mute" size="caption">
-          {t({ id: 'ledger.none', message: 'No Ledger paired yet. Press Pair Ledger, then pick your Ledger in the browser’s device list.' })}
-        </Body>
-      ) : null}
-      {status?.app && !status.app.blindSigning ? (
-        <Body tone="ember" size="caption">
-          {t({ id: 'ledger.blind', message: 'Swaps and contract calls need blind signing: Ethereum app › Settings › Blind signing on the device. Plain sends work without it.' })}
-        </Body>
-      ) : null}
-      {(['bip44', 'live'] as const).map((scheme) => {
-        const list = rows.filter((r) => r.scheme === scheme)
-        if (list.length === 0) return null
-        return (
-          <Column key={scheme} gap="$1" testID={`ledger-${scheme}`}>
-            <Body size="caption">{scheme === 'bip44' ? t({ id: 'ledger.bip44', message: 'BIP-44 (MetaMask, most wallets)' }) : t({ id: 'ledger.live', message: 'Ledger Live' })}</Body>
-            {list.map((r) => (
-              <Row key={r.path} justifyContent="space-between" alignItems="center" minHeight={44}>
-                <Body tone="mute" size="caption" fontFamily="$mono">
-                  {shortAddress(r.address)} · {r.path}
-                </Body>
-                <Key label={added.includes(r.address.toLowerCase()) ? t({ id: 'ledger.added', message: 'Added' }) : t({ id: 'ledger.add', message: 'Add' })} kind="secondary" disabled={busy || added.includes(r.address.toLowerCase())} onPress={() => void add(r)} testID={`ledger-add-${scheme}-${r.index}`} />
-              </Row>
-            ))}
-          </Column>
-        )
-      })}
-      {error ? <Body tone="burn">{error}</Body> : null}
+      <MenuSheet open={sheet?.kind === 'menu'} onClose={() => setSheet(null)} title={sheet?.kind === 'menu' ? sheet.account.label : ''} items={sheet?.kind === 'menu' ? menuFor(sheet.account) : []} reducedMotion={reducedMotion} testID="account-menu" />
+      <MenuSheet open={sheet?.kind === 'seedMenu'} onClose={() => setSheet(null)} title={sheet?.kind === 'seedMenu' ? sheet.seed.label : ''} items={sheet?.kind === 'seedMenu' ? seedMenu(sheet.seed) : []} reducedMotion={reducedMotion} testID="seed-menu" />
+      <AccountDetailsSheet open={sheet?.kind === 'details'} onClose={() => setSheet(null)} account={sheet?.kind === 'details' ? sheet.account : null} seed={sheet?.kind === 'details' ? (seeds.find((s) => s.id === sheet.account.seedId) ?? null) : null} reducedMotion={reducedMotion} />
+      <RenameSheet open={sheet?.kind === 'rename'} onClose={() => setSheet(null)} title={t({ id: 'acct.rename', message: 'Rename' })} value={sheet?.kind === 'rename' ? sheet.account.label : ''} onSave={async (label) => { if (sheet?.kind === 'rename') await run(() => engine.accounts.rename({ id: sheet.account.id, label })) }} reducedMotion={reducedMotion} testID="rename-account" />
+      <RenameSheet open={sheet?.kind === 'renameSeed'} onClose={() => setSheet(null)} title={t({ id: 'acct.renameSeed', message: 'Rename this wallet' })} value={sheet?.kind === 'renameSeed' ? sheet.seed.label : ''} onSave={async (label) => { if (sheet?.kind === 'renameSeed') await run(() => engine.accounts.renameSeed({ seedId: sheet.seed.id, label })) }} reducedMotion={reducedMotion} testID="rename-seed" />
+      <ConfirmSheet
+        open={sheet?.kind === 'confirm'}
+        onClose={() => setSheet(null)}
+        title={t({ id: 'acct.remove.title', message: 'Remove {label}?', values: { label: sheet?.kind === 'confirm' ? sheet.account.label : '' } })}
+        body={sheet?.kind === 'confirm' && sheet.account.kind === 'imported' ? t({ id: 'acct.remove.key', message: 'This key is not part of a recovery phrase. Without its own backup, anything at this address is gone for good.' }) : t({ id: 'acct.remove.body', message: 'BoltVault stops showing this address. Nothing on the chain changes; you can add it again any time.' })}
+        confirmLabel={t({ id: 'acct.remove', message: 'Remove' })}
+        onConfirm={() => {
+          if (sheet?.kind === 'confirm') void run(() => engine.accounts.remove({ id: sheet.account.id }))
+          setSheet(null)
+        }}
+        reducedMotion={reducedMotion}
+        testID="confirm-remove"
+      />
+      <RevealSheet open={sheet?.kind === 'reveal'} onClose={() => setSheet(null)} seed={sheet?.kind === 'reveal' ? sheet.seed : null} reducedMotion={reducedMotion} />
+      <AddAccountSheet open={sheet?.kind === 'add'} onClose={() => setSheet(null)} onAdded={refresh} reducedMotion={reducedMotion} />
     </Column>
   )
 }

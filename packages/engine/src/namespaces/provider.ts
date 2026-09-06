@@ -20,7 +20,7 @@ import { assess, emptyContext, estimateSimulation, NO_SIMULATION, parseTypedData
 import type { Hex } from 'viem'
 import { privateKeyToAccount, type LocalAccount } from 'viem/accounts'
 import type { ActivityStore } from '../activityStore'
-import { ConnectDecisionDataSchema, type ApprovalPayload, type AssessmentView, type PreparedTx } from '../approvalPayloads'
+import { WatchAssetOptionsSchema, ConnectDecisionDataSchema, type ApprovalPayload, type AssessmentView, type PreparedTx } from '../approvalPayloads'
 import type { ApprovalStore } from '../approvals'
 import { EngineError } from '../errors'
 import type { EventBus } from '../host'
@@ -55,6 +55,9 @@ export interface ProviderDeps {
   readonly fetch?: typeof fetch
   /** Receipt polling cadence; defaults to the chain's block time. */
   readonly receiptPollMs?: number
+  /** `wallet_watchAsset` (plan A3): the chain's word on a token for the sheet, and the add once approved. */
+  readonly tokenMetadata?: (chainId: number, address: string) => Promise<{ name: string; symbol: string; decimals: number; hasCode: boolean }>
+  readonly watchAsset?: (input: { chainId: number; address: string; origin: string; claimed?: { symbol?: string; decimals?: number } }) => Promise<unknown>
 }
 
 export interface PortInfo {
@@ -298,8 +301,23 @@ export class ProviderService {
         return { kind: 'switch_chain', chainId: intent.chainId, clientRequestId: intent.clientRequestId }
       case 'add_chain':
         return { kind: 'add_chain', chainId: intent.chainId, clientRequestId: intent.clientRequestId }
-      case 'watch_asset':
-        return { kind: 'watch_asset', type: intent.type, options: intent.options, clientRequestId: intent.clientRequestId }
+      case 'watch_asset': {
+        const opts = intent.type === 'ERC20' ? WatchAssetOptionsSchema.safeParse(intent.options) : null
+        const address = opts?.success ? opts.data.address : null
+        let onChain: { name: string; symbol: string; decimals: number } | null = null
+        if (address && d.tokenMetadata) {
+          try {
+            const m = await d.tokenMetadata(intent.chainId, address)
+            if (m.hasCode) onChain = { name: m.name, symbol: m.symbol, decimals: m.decimals }
+          } catch {
+            onChain = null
+          }
+        }
+        const symbol = opts?.success ? (opts.data.symbol ?? null) : null
+        const decimals = opts?.success ? (opts.data.decimals ?? null) : null
+        const mismatch = onChain !== null && ((symbol !== null && symbol.toUpperCase() !== onChain.symbol.toUpperCase()) || (decimals !== null && decimals !== onChain.decimals))
+        return { kind: 'watch_asset', type: intent.type, options: intent.options, address, symbol, decimals, onChain, mismatch, clientRequestId: intent.clientRequestId }
+      }
       case 'sign_message': {
         const assessment = await this.assessment(intent.origin, intent.chainId, intent.from, { kind: 'message', from: intent.from, message: intent.message }, null)
         return { kind: 'sign_message', from: intent.from, message: intent.message, text: decodeMessage(intent.message).text, assessment: toView(assessment), clientRequestId: intent.clientRequestId }
@@ -447,8 +465,12 @@ export class ProviderService {
       case 'switch_chain':
       case 'add_chain':
         return null
-      case 'watch_asset':
+      case 'watch_asset': {
+        const opts = intent.type === 'ERC20' ? WatchAssetOptionsSchema.safeParse(intent.options) : null
+        if (!opts?.success) throw new RpcError(RPC.INVALID_PARAMS, 'wallet_watchAsset needs an ERC20 with a contract address.')
+        await d.watchAsset?.({ chainId: intent.chainId, address: opts.data.address, origin: intent.origin, claimed: { ...(opts.data.symbol ? { symbol: opts.data.symbol } : {}), ...(opts.data.decimals !== undefined ? { decimals: opts.data.decimals } : {}) } })
         return true
+      }
       case 'sign_message': {
         const account = await this.signer(intent.accountId)
         return account.signMessage({ message: { raw: intent.message } })

@@ -1,0 +1,100 @@
+/**
+ * One account in the rail (plan C2): the signature, the name, the short
+ * address with the last-good balance beside it, an "Active" mark, and the
+ * menu control. Tapping the row makes it the active account.
+ */
+import { Body, Column, Dot, IconButton, Pressable, Row, Signature, paint, shortAddress } from '@boltvault/ui'
+import type { AccountView } from '@boltvault/engine'
+import { useEffect, useState } from 'react'
+import { useEngine } from '../../engine/EngineProvider'
+import { formatFiat } from '../../format'
+import { t } from '../../i18n'
+
+/** The account's last-good total, from the persisted portfolio document; '' until one exists. */
+export function useAccountTotal(accountId: string): string {
+  const engine = useEngine()
+  const [text, setText] = useState('')
+  useEffect(() => {
+    let alive = true
+    engine.portfolio.cached({ accountId }).then(
+      (s) => {
+        if (alive && s && s.total !== null) setText(formatFiat(s.total, s.currency))
+      },
+      () => undefined,
+    )
+    const off = engine.events.subscribe((e) => {
+      if (e.type === 'portfolio.snapshot' && e.snapshot.accountId === accountId && e.snapshot.total !== null && alive) setText(formatFiat(e.snapshot.total, e.snapshot.currency))
+    })
+    return () => {
+      alive = false
+      off()
+    }
+  }, [engine, accountId])
+  return text
+}
+
+export function kindLabel(a: AccountView): string {
+  switch (a.kind) {
+    case 'hd':
+      return t({ id: 'acct.kind.hd', message: 'Recovery phrase' })
+    case 'imported':
+      return t({ id: 'acct.kind.imported', message: 'Imported key' })
+    case 'ledger':
+      return 'Ledger'
+    case 'trezor':
+      return 'Trezor'
+    case 'keystone':
+      return 'Keystone'
+    case 'watch':
+      return t({ id: 'acct.kind.watch', message: 'Watch-only' })
+  }
+}
+
+/** "BIP-44 · #3" for a hardware account, "#3" for a phrase account, nothing for the rest. */
+export function derivationLabel(a: AccountView): string | null {
+  if (a.hardware) {
+    const scheme = a.hardware.scheme === 'live' ? 'Ledger Live' : a.hardware.scheme === 'bip44' ? 'BIP-44' : null
+    if (scheme && a.hardware.index !== undefined) return `${scheme} · #${a.hardware.index}`
+    return a.hardware.path
+  }
+  if (a.kind === 'hd' && a.index !== undefined) return `#${a.index}`
+  return null
+}
+
+export function AccountRow({ account, active, onSelect, onMenu }: { account: AccountView; active: boolean; onSelect: () => void; onMenu: () => void }) {
+  const total = useAccountTotal(account.id)
+  const meta = [shortAddress(account.address), total || null].filter(Boolean).join(' · ')
+  return (
+    <Row alignItems="center" gap="$2" opacity={account.hidden ? 0.55 : 1} testID={`account-${account.id}`}>
+      <Pressable onPress={onSelect} accessibilityRole="button" accessibilityLabel={account.label} accessibilityState={{ selected: active }} style={{ flex: 1, minHeight: 52, justifyContent: 'center' }} testID={`use-${account.id}`}>
+        <Row gap="$3" alignItems="center">
+          <Signature address={account.address} size={32} />
+          <Column flex={1} alignItems="flex-start">
+            <Row gap="$2" alignItems="center">
+              <Body fontWeight="600" numberOfLines={1} flexShrink={1}>
+                {account.label}
+              </Body>
+              {active ? (
+                <Row gap={4} alignItems="center">
+                  <Dot color={paint.arc} size={6} />
+                  <Body tone="arc" size="caption">
+                    {t({ id: 'acct.active', message: 'Active' })}
+                  </Body>
+                </Row>
+              ) : null}
+              {account.hidden ? (
+                <Body tone="mute" size="caption">
+                  {t({ id: 'acct.hidden', message: 'hidden' })}
+                </Body>
+              ) : null}
+            </Row>
+            <Body tone="mute" size="caption" numberOfLines={1}>
+              {meta}
+            </Body>
+          </Column>
+        </Row>
+      </Pressable>
+      <IconButton icon="more" label={t({ id: 'acct.menu', message: 'Account options' })} onPress={onMenu} testID={`menu-${account.id}`} />
+    </Row>
+  )
+}

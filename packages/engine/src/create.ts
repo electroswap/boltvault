@@ -190,6 +190,8 @@ export function createEngine(deps: EngineDeps): Engine {
     settings,
     activity,
     addressBook: () => contacts.referenceAddresses(),
+    tokenMetadata: (chainId, address) => tokens.metadata(chainId, address),
+    watchAsset: (i) => tokens.addCustom({ chainId: i.chainId, address: i.address, source: 'dapp', origin: i.origin, ...(i.claimed ? { claimed: i.claimed } : {}) }),
     tokenInfo: async (chainId) => {
       const out: Record<string, { symbol: string; decimals: number; name?: string }> = {}
       for (const t of await tokens.universe(chainId)) if (t.address !== 'native') out[t.address.toLowerCase()] = { symbol: t.symbol, decimals: t.decimals, name: t.name }

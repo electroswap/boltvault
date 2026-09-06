@@ -160,7 +160,7 @@ describe('vault v2 + accounts', () => {
     const watch = await engine.accounts.addWatch({ address: '0x000000000000000000000000000000000000dead' })
     expect(watch.hasKey).toBe(false)
     const ledger = await engine.accounts.addHardware({ kind: 'ledger', address: '0x000000000000000000000000000000000000beef', path: "m/44'/60'/0'/0/0", deviceId: 'nano-x' })
-    expect(ledger.hardware).toEqual({ path: "m/44'/60'/0'/0/0", deviceId: 'nano-x' })
+    expect(ledger.hardware).toEqual({ path: "m/44'/60'/0'/0/0", deviceId: 'nano-x', scheme: 'bip44', index: 0 })
     await expectError(engine.accounts.addWatch({ address: '0x000000000000000000000000000000000000dead' }), 'invalid_argument')
 
     let list = await engine.accounts.list()
