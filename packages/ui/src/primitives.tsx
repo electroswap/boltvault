@@ -56,7 +56,13 @@ const PlateFrame = styled(TView, {
       console: { backgroundColor: '$glassRaised', borderRadius: '$console', borderWidth: 0, shadowColor: glow.plate, shadowRadius: 32, shadowOpacity: 1, shadowOffset: { width: 0, height: 10 } },
       card: { backgroundColor: '$glass', borderRadius: '$recessed', borderWidth: 0, hoverStyle: { backgroundColor: '$glassRaised' }, pressStyle: { opacity: 0.9 } },
       tile: { backgroundColor: '$glassRaised', borderRadius: '$raised', borderWidth: 0, pressStyle: { backgroundColor: '$glassRaisedSolid' } },
-      well: { backgroundColor: '$well', borderRadius: '$well', borderWidth: 1, borderColor: '$edge' },
+      // `borderRadius: radius.well`, not `'$well'`. `well` is the one name that
+      // is both a colour token (paint.well) and a radius token, and the string
+      // form resolved to the colour — an invalid radius, so it computed to 0.
+      // That is why every amount well drew hard corners inside its rounded
+      // console while every other plate nested correctly. Measured, not read:
+      // e2e/radii.spec.ts.
+      well: { backgroundColor: '$well', borderRadius: radius.well, borderWidth: 1, borderColor: '$edge' },
     },
   } as const,
   defaultVariants: { role: 'recessed' },

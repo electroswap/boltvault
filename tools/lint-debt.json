@@ -1,45 +1,40 @@
 {
-  "$comment": "Code the master plan schedules for rewrite or refactor (the master plan §1.3). These paths are exempt from ESLint and the no-any gate ONLY until the milestone listed retires them; a path may never be added here for new code. CI fails if a listed path no longer exists (so the entry is removed when the rewrite lands).",
+  "$comment": "Code the master plan schedules for rewrite or refactor (the master plan \u00a71.3). These paths are exempt from ESLint and the no-any gate ONLY until the milestone listed retires them; a path may never be added here for new code. CI fails if a listed path no longer exists (so the entry is removed when the rewrite lands).",
   "entries": [
     {
       "path": "packages/adapters",
       "retiresIn": "M6",
-      "why": "seaport + hyperlane shims have fabricated ABIs; rewritten in packages/electroswap (plan §2.7 S5/S6)"
+      "why": "seaport + hyperlane shims have fabricated ABIs; rewritten in packages/electroswap (plan \u00a72.7 S5/S6)"
     },
     {
       "path": "packages/farm",
       "retiresIn": "M6",
-      "why": "calldata regenerated from the real YieldFarm ABI (plan §8.8)"
+      "why": "calldata regenerated from the real YieldFarm ABI (plan \u00a78.8)"
     },
     {
       "path": "packages/launchpad",
       "retiresIn": "M6",
-      "why": "calldata regenerated from the real pool ABI (plan §8.9)"
+      "why": "calldata regenerated from the real pool ABI (plan \u00a78.9)"
     },
     {
       "path": "packages/nft",
       "retiresIn": "M6",
-      "why": "order flow rebuilt on seaport-js + POST /api/nfts/order (plan §8.10)"
+      "why": "order flow rebuilt on seaport-js + POST /api/nfts/order (plan \u00a78.10)"
     },
     {
       "path": "packages/ledger",
       "retiresIn": "M5",
-      "why": "rewritten with real WebHID/BLE transports and v normalisation (plan §2.7 S3/S7)"
+      "why": "rewritten with real WebHID/BLE transports and v normalisation (plan \u00a72.7 S3/S7)"
     },
     {
       "path": "packages/trezor",
       "retiresIn": "M8",
-      "why": "rewritten on @trezor/connect-webextension (plan §2.7 S7)"
+      "why": "rewritten on @trezor/connect-webextension (plan \u00a72.7 S7)"
     },
     {
       "path": "packages/wc",
       "retiresIn": "M9",
-      "why": "rewritten on @reown/walletkit (plan §5.3)"
-    },
-    {
-      "path": "packages/design",
-      "retiresIn": "M1",
-      "why": "tokens move to packages/ui; primitives replaced by interface-first Tamagui primitives (plan §2.6)"
+      "why": "rewritten on @reown/walletkit (plan \u00a75.3)"
     }
   ]
 }
