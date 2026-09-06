@@ -2,11 +2,11 @@
  * AmountWell — the one amount field (Send, Swap, Bridge): a label row with an
  * optional control at its right, the amount big and bare beside the token
  * pill, then what it is worth on the left and what you hold on the right
- * with a MAX pill. A read-only well (what you receive) shows the amount as
+ * with a MAX key. A read-only well (what you receive) shows the amount as
  * a readout instead of a field. Every screen that takes an amount uses it,
  * so the eye learns the shape once.
  */
-import { Body, Column, Icon, Input, Pill, Plate, Row, paint, type IconName } from '@boltvault/ui'
+import { Body, Column, Icon, Input, MaxKey, Plate, Row, paint, type IconName } from '@boltvault/ui'
 import type { ReactNode } from 'react'
 import { t } from '../i18n'
 
@@ -68,11 +68,7 @@ export function AmountWell({ label, value, onChange, readOnly = false, tokenPill
               </Body>
             </Row>
           ) : null}
-          {onMax ? (
-            <Column marginVertical={-11}>
-              <Pill label={t({ id: 'max.caps', message: 'MAX' })} tone="arc" size="sm" onPress={onMax} testID={maxTestID} />
-            </Column>
-          ) : null}
+          {onMax ? <MaxKey label={t({ id: 'max.caps', message: 'MAX' })} onPress={onMax} testID={maxTestID} /> : null}
         </Row>
       </Row>
       {error ? (

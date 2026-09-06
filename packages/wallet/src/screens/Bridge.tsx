@@ -13,6 +13,7 @@ import type { BridgeQuote, BridgeRoute, BridgeStatus, ChainView } from '@boltvau
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
 import { AmountWell } from '../components/AmountWell'
+import { ChainSelectPill } from '../components/ChainSelect'
 import { PageHeader } from '../components/PageHeader'
 import { ScreenFooter } from '../components/ScreenFooter'
 import { useEngine, useEngineEvent } from '../engine/EngineProvider'
@@ -41,10 +42,18 @@ function shortName(name: string): string {
   return name.replace(/ C-Chain$/, '').replace(/ Smart Chain$/, '').replace(/ One$/, '')
 }
 
+/**
+ * Bridge's From/To selects. This used to be a local copy of ChainSelectPill
+ * that defaulted to size="md" (36 px) and carried no accessibility label —
+ * two components for one job, against "one component, one place" in the style
+ * bible. It is the shared pill now, at size="sm" (28 px): the owner asked for
+ * a smaller selector, and inside an amount well's label row the compact size
+ * is the right one anyway.
+ */
 function ChainSelect({ chainId, label, onPress, testID }: { chainId: number | null; label: string; onPress: () => void; testID: string }) {
   return (
-    <Column marginVertical={-6}>
-      <Pill label={label} icon={chainId !== null ? <ChainMark chainId={chainId} size={16} /> : undefined} chevron tone="ink" onPress={onPress} testID={testID} />
+    <Column marginVertical={-2}>
+      <ChainSelectPill chainId={chainId} label={label} size="sm" onPress={onPress} testID={testID} />
     </Column>
   )
 }
@@ -201,7 +210,7 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
         <PageHeader title={t({ id: 'bridge.title', message: 'Bridge' })} subtitle={active.label ? t({ id: 'from.account', message: 'from {a}', values: { a: `${active.label} · ${shortAddress(active.address)}` } }) : undefined} />
 
         {/* The console: From and To wells, the flip (or the cable, in flight) on the seam. */}
-        <Plate role="console" gap="$2" padding={10} testID="bridge-console">
+        <Plate role="console" gap="$1" padding={10} testID="bridge-console">
           <AmountWell
             label={t({ id: 'bridge.from', message: 'From' })}
             right={<ChainSelect chainId={fromChain} label={chainName(fromChain)} onPress={() => setSheet('from')} testID="bridge-from-select" />}
@@ -217,7 +226,7 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
             balanceTestID="bridge-balance"
           />
 
-          <Row justifyContent="center" marginVertical={-18} zIndex={2}>
+          <Row justifyContent="center" marginVertical={-20} zIndex={2}>
             <Pressable onPress={flip} accessibilityRole="button" accessibilityLabel={t({ id: 'bridge.flip', message: 'Swap direction' })} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }} testID="bridge-flip">
               <Chip width={36} height={36} borderRadius={18} padding={0} justifyContent="center" alignItems="center" backgroundColor="$glassRaisedSolid" borderWidth={0} overflow="hidden">
                 <Icon name="swap" color={paint.arc} size={18} />

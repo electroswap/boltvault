@@ -74,6 +74,8 @@ Glow: raised plates `rgba(60,100,255,0.22)` radius 24; the primary key `rgba(70,
 
 Plates never carry a grey shadow. Depth comes from the rim and the glow, and from the Grid showing through the fill.
 
+**Corners nest concentrically.** A shape inside a rounded shape takes the parent's radius minus the gap between them — `innerRadius(outer, inset)` in `tokens.ts`. Equal radii make the inner corner look too round and glue the pair together; an unrelated radius reads as two designs meeting. A child that sits flush inside a clipping parent takes **no** radius of its own and lets the parent's clip shape it: two radii on one corner draw that corner twice, which is the doubled edge the owner saw on cards nested inside cards. (2026-09-06: the campaign banner drew 12 inside a 14 clip, and a dApp favicon drew 12 inside an 11 px circle.)
+
 The glow rule: `console` is a screen's one main panel; `raised` is at most one hero plate per screen; everything a `map()` produces is a `card`; the action grid is `tile`s; static information is `recessed`; inputs and stat strips are `well`s. Two glowing plates next to each other bleed into one — that is why lists are cards.
 
 Chrome: one header per pushed screen (`ScreenHeader` / `PageHeader`): a 44 px row with an icon-only Back, the title beside it, and a right slot; in the popup the right slot ends with the expand control that opens the same screen in a full tab. Keys are 56 px only for a screen's primary verb (Swap, Send, Unlock, Deposit, Claim); Back, Copy, Pin, Hide, Save, Cancel, Close, the auto-lock options and every option chip are compact (44 px hit, 36 px surface) or pills. Every list paints its last-good rows at once and refreshes behind them; a first visit shows a skeleton with the current sweeping through it, never a blank body, and a value older than a minute shows the still, mute filament with "as of" beside it.
@@ -115,7 +117,11 @@ One component, one place. The selector is a pill — the chain's mark, its name,
 
 ## Amount well
 
-Every amount (Send, Swap, Bridge) is the same well: the label row with an optional control at its right, the amount big and bare beside the token pill, then what it is worth at the left and what you hold at the right with a MAX pill. A read-only well (what you receive) shows the amount as a readout in the same place. Fields never draw the browser's focus ring; focus is the `arcEdge` hairline.
+Every amount (Send, Swap, Bridge) is the same well: the label row with an optional control at its right, the amount big and bare beside the token pill, then what it is worth at the left and what you hold at the right with a **MAX key**. A read-only well (what you receive) shows the amount as a readout in the same place. Fields never draw the browser's focus ring; focus is the `arcEdge` hairline.
+
+**MAX is not a pill** (2026-09-06, owner). A pill is this product's shape for a *choice* — a token, a duration, a scope, a filter. MAX is a verb, and wearing the pill shape made every amount well look like it held two selectable chips. It is a small square-shouldered key: `glassRaised`, an `edge` hairline, an `arc` label, 24 px tall at radius 8 — smaller than the well's 12 that contains it, per the concentric rule below.
+
+The two wells sit close. The gap between them is 12 px with the flip control centred on the seam, not the 24 px that made one console read as two cards.
 
 ## The action grid
 

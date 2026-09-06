@@ -19,6 +19,12 @@ export interface ArtworkProps {
   readonly reducedMotion?: boolean
   /** A listed piece's price tag glows `arc`; a piece with an offer carries an `ember` mark (§8.10). */
   readonly badge?: { readonly text: string; readonly tone: 'arc' | 'ember' } | null
+  /**
+   * Corner radius. Pass 0 when a parent already clips this to its own shape:
+   * two radii on one corner draw it twice, which is the doubled edge the
+   * owner flagged on cards nested inside cards.
+   */
+  readonly radius?: number
   readonly testID?: string
 }
 
@@ -35,7 +41,7 @@ function initials(label: string): string {
     .toUpperCase()
 }
 
-export function Artwork({ uri, label, size, sweep = false, reducedMotion = false, badge = null, testID }: ArtworkProps) {
+export function Artwork({ uri, label, size, sweep = false, reducedMotion = false, badge = null, radius = 12, testID }: ArtworkProps) {
   const [failedUri, setFailedUri] = useState<string | null>(null)
   // Keyed by the uri, not a bare boolean: a recycled row that swapped in a new
   // image used to stay stuck on the placeholder because `failed` never reset.
@@ -46,7 +52,7 @@ export function Artwork({ uri, label, size, sweep = false, reducedMotion = false
   // A small box cannot hold a name: it shows the name's initials instead ("Electric Legends" → EL).
   const small = Math.min(width, height) < 80
   return (
-    <Column width={width} height={height} borderRadius={12} overflow="hidden" backgroundColor="$glass" borderWidth={1} borderColor="rgba(95,216,255,0.12)" testID={testID}>
+    <Column width={width} height={height} borderRadius={radius} overflow="hidden" backgroundColor="$glass" borderWidth={1} borderColor="rgba(95,216,255,0.12)" testID={testID}>
       {show ? (
         <Image source={{ uri: uri ?? '' }} onError={() => setFailedUri(uri ?? null)} style={{ width, height }} resizeMode="cover" accessibilityLabel={label} />
       ) : (

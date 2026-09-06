@@ -90,6 +90,20 @@ export const metrics = {
   popup: { width: 400, height: 600 },
 } as const
 
+/**
+ * Concentric corners: a shape inside a rounded shape takes the parent's radius
+ * minus the gap between them. Equal radii make the inner corner look too round
+ * and the pair look glued; an unrelated radius reads as two designs. Owner:
+ * "within some of those cards we have other cards that have square edges,
+ * which does not feel like a harmonious design."
+ *
+ * A child that sits flush inside a clipping parent should use `none` and let
+ * the parent's clip shape it — two radii on one corner draw it twice.
+ */
+export function innerRadius(outer: number, inset: number): number {
+  return Math.max(0, Math.round(outer - inset))
+}
+
 /** Radii by plate role — one radius on everything is the template tell. */
 export const radius = {
   recessed: 14,

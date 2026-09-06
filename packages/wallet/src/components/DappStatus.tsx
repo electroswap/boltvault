@@ -64,7 +64,7 @@ export function DappStrip({ state, onPress, testID = 'home-dapp' }: { state: Dap
     <Pressable onPress={none ? undefined : onPress} accessibilityRole="button" accessibilityLabel={none ? label : `${label}, ${status}`} testID={testID} style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 6 }}>
       <Row gap={8} alignItems="center">
         <Row width={22} height={22} borderRadius={11} backgroundColor="$glassRaised" alignItems="center" justifyContent="center" overflow="hidden" flexShrink={0}>
-          {state && state.kind !== 'none' && state.favicon ? <Artwork uri={state.favicon} label={state.host} size={22} /> : <Icon name="link" size={12} color={paint.mute} />}
+          {state && state.kind !== 'none' && state.favicon ? <Artwork uri={state.favicon} label={state.host} size={22} radius={0} /> : <Icon name="link" size={12} color={paint.mute} />}
         </Row>
         <Column flex={1} minWidth={0} alignItems="flex-start">
           <Body size="caption" tone={none ? 'mute' : 'ink'} numberOfLines={1}>

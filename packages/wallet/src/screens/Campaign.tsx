@@ -104,7 +104,7 @@ export function Campaign({ body, chainId, pool, reducedMotion = false }: { body:
             <Column testID="campaign-hero">
               <Column height={72} borderRadius={14} overflow="hidden" position="relative" backgroundColor="rgba(55, 166, 255, 0.10)">
                 {c.bannerUrl ? (
-                  <Artwork uri={c.bannerUrl} label={c.token.name} size={{ width: 1000, height: 72 }} />
+                  <Artwork uri={c.bannerUrl} label={c.token.name} size={{ width: 1000, height: 72 }} radius={0} />
                 ) : (
                   <Column position="absolute" left={0} right={0} top={0} bottom={0} opacity={0.35}>
                     <CurrentFill />
