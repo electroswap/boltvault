@@ -6,6 +6,23 @@
  *
  *   SHOTS="home:funded:popup,send:funded:popup:segment=x" SHOT_DIR=/tmp/shots \
  *     pnpm exec playwright test e2e/shot.spec.ts
+ *
+ * These are deterministic, which is what baselines need, but they are the
+ * *fixture* engine: no service worker and no network. Know what that hides.
+ * A whole list of reported defects survived several passes because this was
+ * the only loop anyone looked at — placeholder avatars (the fixtures set
+ * logoUri: null on every token), the popup's real width (this forces a
+ * 400x600 viewport against harness.html, which never loads the popup's own
+ * sizing rules), and every request the app makes.
+ *
+ * For what the product actually does, use e2e/probe.spec.ts: the real popup,
+ * the real service worker, the real API, with a screenshot per step.
+ *
+ *   PROBE=1 PROBE_SHOTS=/tmp/live pnpm exec playwright test e2e/probe.spec.ts
+ *
+ * Since the ElectroSwap logos ship in the bundle and resolve by address, the
+ * fixture shots do now show real token marks — the fixtures always used real
+ * ETN addresses; nothing could resolve them before.
  */
 import { test } from '@playwright/test'
 import { mkdir } from 'node:fs/promises'

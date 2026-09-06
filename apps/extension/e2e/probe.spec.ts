@@ -14,12 +14,21 @@
  *     pnpm exec playwright test e2e/probe.spec.ts
  */
 import { test } from '@playwright/test'
-import { writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { launchWithExtension } from './extension'
 import { createVault, engineCall } from './flows'
 
 const OUT = process.env['PROBE_OUT'] ?? '/tmp/boltvault-probe.json'
 const WATCH = process.env['PROBE_ADDRESS'] ?? ''
+/**
+ * Where to write a screenshot per step. Owner: "Apparently you're using a mock
+ * API to do testing and your screenshots. I want the real API to be used."
+ * These shots are the real popup, the real service worker and the real API —
+ * not harness.html against the offline fixture engine — so they are the ones
+ * to look at when the question is what the product actually does.
+ */
+const SHOT_DIR = process.env['PROBE_SHOTS'] ?? ''
 
 test.skip(process.env['PROBE'] !== '1', 'PROBE is unset')
 
@@ -96,6 +105,7 @@ test('probe', async () => {
   if (WATCH !== '') await engineCall(tab, 'accounts', 'addWatch', { address: WATCH, label: 'Probe' })
   await tab.close()
 
+  if (SHOT_DIR !== '') await mkdir(SHOT_DIR, { recursive: true })
   const popup = await ext.context.newPage()
   await popup.setViewportSize({ width: 400, height: 600 })
 
@@ -106,6 +116,7 @@ test('probe', async () => {
       scrollWidth: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,
     }))
+    if (SHOT_DIR !== '') await popup.screenshot({ path: join(SHOT_DIR, `${step.replace(/[:]/g, '-')}.png`) })
     snapshots.push({ step, ...tally, ...size })
     tally = emptyTally()
   }
