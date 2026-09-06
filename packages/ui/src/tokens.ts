@@ -115,11 +115,17 @@ export const space = {
   12: 48,
 } as const
 
+/**
+ * Families carry a real fallback stack. Declaring a bare 'Oxanium' meant that
+ * for the first frames of every load — before the woff2 was applied — the
+ * browser fell back to its *default* family, which is a serif. That is the
+ * serif "BoltVault" the owner filmed. A stack cannot happen to be a serif.
+ */
 export const fonts = {
   /** Readouts ≥ 24 px: Oxanium 600, tabular numerals, tracking −0.03em. */
-  readout: 'Oxanium',
+  readout: "'Oxanium', 'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
   /** Everything a human reads — addresses and hashes included, tabular: Sora 400/600, 13–17 px, sentence case. */
-  text: 'Sora',
+  text: "'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
 } as const
 
 export const type = {

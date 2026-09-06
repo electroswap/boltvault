@@ -53,6 +53,7 @@ Glow: raised plates `rgba(60,100,255,0.22)` radius 24; the primary key `rgba(70,
 - **Text**: Sora 400/600, 13–17 px, sentence case, ≤ 70 characters a line. Labels above a number are Sora 400 13 px `mute`.
 - **Addresses and hashes**: Sora tabular 13–14 px `mute`, `0x1F90…7B63`, with their own copy control beside them. There is no monospace face in the product (2026-09-06: the IBM Plex Mono declaration was never shipped as a file and fell back to a serif; it is gone from the tokens, the config and every call site).
 - No third family. Numerals never fall back to Sora.
+- **The fonts are never seen arriving.** Both faces ship as local woff2, every weight is preloaded in every entry document, and `font-display` is `block` — never `swap`, which by definition paints fallback text first and then changes it under the reader. Every family in `tokens.ts` is a full stack ending in a generic sans; a bare `font-family: Sora` falls back to the UA default, which is a *serif*, and that is twice now that a bare declaration has put a serif on screen (the Plex Mono note above was the first). `e2e/fonts.spec.ts` holds all three of these.
 
 ## Materials and roles
 
