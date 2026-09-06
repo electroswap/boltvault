@@ -45,7 +45,7 @@ export function BusBar({ chainId, address, symbol, amount, value, change, share,
         backgroundColor={selected || card ? '$glass' : 'transparent'}
       >
         <Row gap="$3">
-          <TokenAvatar chainId={chainId} address={address} logoUri={logoUri} size={32} />
+          <TokenAvatar chainId={chainId} address={address} symbol={symbol} logoUri={logoUri} size={32} />
           <Column flex={1} gap={2}>
             <Row justifyContent="space-between">
               <Row gap="$2">

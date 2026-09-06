@@ -96,6 +96,14 @@ One fragment shader, written twice (GLSL ES 3.0 for the extension, SkSL for Skia
 
 The seat avatar remains a 40 px crop of the account's Grid, so an account is still recognisable by its light.
 
+## Token marks
+
+A token shows its logo. We ship the ElectroSwap list's marks — all fifteen, plus native ETN — inside the bundle, so the common case needs no network and cannot flicker; anything else resolves from its list `logoURI`, then the sibling extension on the static host (it serves `.svg` for most and `.png` for a few, and the wrong one 404s).
+
+A token with **no** logo is its symbol on a glass disc: `glassRaisedSolid` fill, an `edge` hairline, the symbol in `ink` at Sora 600, upper-cased, clipped to four characters and scaled so it fits. One look for every unknown token — it never competes with a real logo beside it.
+
+There are **no generated pixel patterns anywhere in the product** (2026-09-06: the 5×5 mirrored identicon behind every token avatar is gone, and so is the second copy that lived in the unused `packages/design`). A generated pattern says nothing a symbol does not say better, and it read as a broken image. The account Signature above is not one of these — it is drawn geometry, not a hash grid.
+
 ## Selected
 
 A chosen chip (a pill, a segment, a chain, a timeframe) is a **filled tint of the arc** — `arcSoft` fill, `arcEdge` hairline, ink label at 600 — never a lit rim, never a bare colour change of the label. Unchosen chips are raised glass with the edge hairline and a mute label. The fill eases in over 160 ms. This is the one selected treatment; a screen that invents another is wrong.

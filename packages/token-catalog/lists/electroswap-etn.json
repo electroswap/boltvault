@@ -1,0 +1,206 @@
+{
+  "name": "ElectroSwap Tokens",
+  "logoURI": "https://static.electroswap.io/tokens/images/0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1.svg",
+  "keywords": [
+    "locked",
+    "liquidity",
+    "native",
+    "erc20",
+    "launchpad"
+  ],
+  "tags": {
+    "wetn": {
+      "name": "Wrapped Electroneum",
+      "description": "Wrapped native ETN coins"
+    },
+    "es": {
+      "name": "ElectroSwap",
+      "description": "Token exclusive to the ElectroSwap DEX"
+    },
+    "meme": {
+      "name": "Meme",
+      "description": "This is a meme token"
+    },
+    "hyperlane": {
+      "name": "Hyperlane",
+      "description": "Bridged via Hyperlane Nexus"
+    },
+    "launchpad": {
+      "name": "Launchpad",
+      "description": "ElectroSwap Launchpad Token"
+    }
+  },
+  "tokens": [
+    {
+      "name": "Wrapped Electroneum",
+      "decimals": 18,
+      "symbol": "WETN",
+      "address": "0x138DAFbDA0CCB3d8E39C19edb0510Fc31b7C1c77",
+      "logoURI": "https://static.electroswap.io/tokens/images/0x138DAFbDA0CCB3d8E39C19edb0510Fc31b7C1c77.svg",
+      "chainId": 52014,
+      "tags": [
+        "wetn"
+      ]
+    },
+    {
+      "name": "USD Coin",
+      "decimals": 6,
+      "symbol": "USDC",
+      "address": "0x3187deAd7A2Bd6770F5Fe81495D1B715926AAe6e",
+      "logoURI": "https://static.electroswap.io/tokens/images/0x74d64C56926E3D758404600B4B6f3954F4216e51.svg",
+      "chainId": 52014,
+      "tags": [
+        "hyperlane"
+      ]
+    },
+    {
+      "name": "Tether USD",
+      "decimals": 6,
+      "symbol": "USDT",
+      "address": "0x48E722f1458b253c2FB0E573F939318D7Dbd54e7",
+      "logoURI": "https://static.electroswap.io/tokens/images/0xD70B4b2e14cBA41fE011ea0c7021B6E64d960d87.svg",
+      "chainId": 52014,
+      "tags": [
+        "hyperlane"
+      ]
+    },
+    {
+      "name": "ElectroSwap",
+      "decimals": 18,
+      "symbol": "BOLT",
+      "address": "0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1",
+      "logoURI": "https://static.electroswap.io/tokens/images/0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1.svg",
+      "chainId": 52014,
+      "tags": [
+        "es"
+      ]
+    },
+    {
+      "name": "Dynamo",
+      "decimals": 18,
+      "symbol": "DYNO",
+      "address": "0xEe432C220273e4F949007B4c1946562826Efa055",
+      "logoURI": "https://static.electroswap.io/tokens/images/0xEe432C220273e4F949007B4c1946562826Efa055.svg",
+      "chainId": 52014,
+      "tags": [
+        "es"
+      ]
+    },
+    {
+      "name": "Pandy",
+      "decimals": 18,
+      "symbol": "PDY",
+      "address": "0xc20d02538368D8F7deBeAeB99D9a8b4d4D1DDC1C",
+      "logoURI": "https://static.electroswap.io/tokens/images/0xc20d02538368D8F7deBeAeB99D9a8b4d4D1DDC1C.png",
+      "chainId": 52014,
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "name": "Fugazi",
+      "decimals": 18,
+      "symbol": "FUGAZI",
+      "address": "0x075533AB8EeC6A6999F07C8bc2f1900eB8312e25",
+      "logoURI": "https://static.electroswap.io/tokens/images/0x075533AB8EeC6A6999F07C8bc2f1900eB8312e25.png",
+      "chainId": 52014,
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "name": "Wrapped Electroneum",
+      "decimals": 18,
+      "symbol": "tWETN",
+      "address": "0x154c9fD7F006b92b6afa746098d8081A831DC1FC",
+      "logoURI": "https://static.electroswap.io/tokens/images/0x154c9fD7F006b92b6afa746098d8081A831DC1FC.svg",
+      "chainId": 5201420,
+      "tags": [
+        "wetn"
+      ]
+    },
+    {
+      "name": "ElectroSwap",
+      "decimals": 18,
+      "symbol": "tBOLT",
+      "address": "0x8768CcA8591160B423A5b7eFA72842A0AC55382D",
+      "logoURI": "https://static.electroswap.io/tokens/images/0x8768CcA8591160B423A5b7eFA72842A0AC55382D.svg",
+      "chainId": 5201420,
+      "tags": [
+        "es"
+      ]
+    },
+    {
+      "name": "Test USDC",
+      "decimals": 18,
+      "symbol": "tUSDC",
+      "address": "0x9a110A3Ecc8704e93Bd4FA1bA44D5CF93327202B",
+      "logoURI": "https://static.electroswap.io/tokens/images/0x9a110A3Ecc8704e93Bd4FA1bA44D5CF93327202B.svg",
+      "chainId": 5201420,
+      "tags": [
+        "stable"
+      ]
+    },
+    {
+      "name": "Test USDT",
+      "decimals": 18,
+      "symbol": "tUSDT",
+      "address": "0x02FeC8c559fB598762df8D033bD7A3Df9b374771",
+      "logoURI": "https://static.electroswap.io/tokens/images/0x02FeC8c559fB598762df8D033bD7A3Df9b374771.svg",
+      "chainId": 5201420,
+      "tags": [
+        "stable"
+      ]
+    },
+    {
+      "name": "Test Dynamo",
+      "decimals": 18,
+      "symbol": "tDYNO",
+      "address": "0x162D5a58096b63D89D83e0C66b4731A6CC8b10aF",
+      "logoURI": "https://static.electroswap.io/tokens/images/0x162D5a58096b63D89D83e0C66b4731A6CC8b10aF.svg",
+      "chainId": 5201420,
+      "tags": [
+        "es"
+      ]
+    },
+    {
+      "name": "ETN Club",
+      "decimals": 18,
+      "symbol": "CLUB",
+      "address": "0xC9FC4AB00911793D99b5c7Bd01f01203C21D4131",
+      "logoURI": "https://static.electroswap.io/tokens/images/0xC9FC4AB00911793D99b5c7Bd01f01203C21D4131.png",
+      "chainId": 52014,
+      "tags": [
+        "launchpad"
+      ]
+    },
+    {
+      "name": "Planet Zephyros",
+      "decimals": 18,
+      "symbol": "CORE",
+      "address": "0x309B916b3A90cb3E071697Ea9680e9217A30066f",
+      "logoURI": "https://static.electroswap.io/tokens/images/0x309B916b3A90cb3E071697Ea9680e9217A30066f.png",
+      "chainId": 52014,
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "name": "DECENTRONEUM",
+      "decimals": 18,
+      "symbol": "DCNT",
+      "address": "0xE74e4E7A064310466f3bdBd3F3Ce4e8c8F7CF1d5",
+      "logoURI": "https://static.electroswap.io/tokens/images/0xE74e4E7A064310466f3bdBd3F3Ce4e8c8F7CF1d5.png",
+      "chainId": 52014,
+      "tags": [
+        "launchpad"
+      ]
+    }
+  ],
+  "timestamp": "2025-11-25T23:11:23.517Z",
+  "version": {
+    "major": 1,
+    "minor": 0,
+    "patch": 19
+  }
+}

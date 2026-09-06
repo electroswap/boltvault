@@ -67,7 +67,7 @@ export function CampaignCard({ campaign: c, onPress, onStar }: { campaign: Campa
   return (
     <Plate role="card" gap="$2" onPress={onPress} cursor="pointer" testID={`sky-${c.pool}`}>
       <Row gap="$3" alignItems="center">
-        <TokenAvatar chainId={c.chainId} address={c.token.address ?? c.pool} logoUri={c.logoUrl} size={44} />
+        <TokenAvatar chainId={c.chainId} address={c.token.address ?? c.pool} symbol={c.token.symbol} logoUri={c.logoUrl} size={44} />
         <Column flex={1} minWidth={0} alignItems="stretch">
           <Row gap="$2" alignItems="center" alignSelf="stretch">
             <Body fontWeight="600" numberOfLines={1} flexShrink={1} minWidth={0}>

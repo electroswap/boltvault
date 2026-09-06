@@ -255,7 +255,7 @@ export function TokenRow({ token, onPress, onPin }: { token: ExploreToken; onPre
   return (
     <Row gap="$2" alignItems="center" minHeight={52} testID={`explore-token-${token.symbol}`}>
       <Row flex={1} gap="$3" alignItems="center" onPress={onPress} cursor="pointer" minHeight={44}>
-        <TokenAvatar chainId={token.chainId} address={token.address === 'native' ? '0x0000000000000000000000000000000000000000' : token.address} logoUri={token.logoUri} size={28} />
+        <TokenAvatar chainId={token.chainId} address={token.address} symbol={token.symbol} logoUri={token.logoUri} size={28} />
         <Column flex={1}>
           <Row gap="$2" alignItems="center">
             <Body>{token.symbol}</Body>

@@ -36,7 +36,10 @@ function initials(label: string): string {
 }
 
 export function Artwork({ uri, label, size, sweep = false, reducedMotion = false, badge = null, testID }: ArtworkProps) {
-  const [failed, setFailed] = useState(false)
+  const [failedUri, setFailedUri] = useState<string | null>(null)
+  // Keyed by the uri, not a bare boolean: a recycled row that swapped in a new
+  // image used to stay stuck on the placeholder because `failed` never reset.
+  const failed = uri !== undefined && uri !== null && uri === failedUri
   const width = typeof size === 'number' ? size : size.width
   const height = typeof size === 'number' ? size : size.height
   const show = !!uri && !failed
@@ -45,7 +48,7 @@ export function Artwork({ uri, label, size, sweep = false, reducedMotion = false
   return (
     <Column width={width} height={height} borderRadius={12} overflow="hidden" backgroundColor="$glass" borderWidth={1} borderColor="rgba(95,216,255,0.12)" testID={testID}>
       {show ? (
-        <Image source={{ uri: uri ?? '' }} onError={() => setFailed(true)} style={{ width, height }} resizeMode="cover" accessibilityLabel={label} />
+        <Image source={{ uri: uri ?? '' }} onError={() => setFailedUri(uri ?? null)} style={{ width, height }} resizeMode="cover" accessibilityLabel={label} />
       ) : (
         <Column flex={1} alignItems="center" justifyContent="center" padding={small ? 2 : 8}>
           {small ? (

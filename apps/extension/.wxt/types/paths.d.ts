@@ -21,6 +21,22 @@ declare module "wxt/browser" {
     | "/popup.html"
     | "/sign.html"
     | "/tab.html"
+    | "/tokens/0x02FeC8c559fB598762df8D033bD7A3Df9b374771.svg"
+    | "/tokens/0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1.svg"
+    | "/tokens/0x075533AB8EeC6A6999F07C8bc2f1900eB8312e25.png"
+    | "/tokens/0x138DAFbDA0CCB3d8E39C19edb0510Fc31b7C1c77.svg"
+    | "/tokens/0x154c9fD7F006b92b6afa746098d8081A831DC1FC.svg"
+    | "/tokens/0x162D5a58096b63D89D83e0C66b4731A6CC8b10aF.svg"
+    | "/tokens/0x309B916b3A90cb3E071697Ea9680e9217A30066f.png"
+    | "/tokens/0x74d64C56926E3D758404600B4B6f3954F4216e51.svg"
+    | "/tokens/0x8768CcA8591160B423A5b7eFA72842A0AC55382D.svg"
+    | "/tokens/0x9a110A3Ecc8704e93Bd4FA1bA44D5CF93327202B.svg"
+    | "/tokens/0xc20d02538368D8F7deBeAeB99D9a8b4d4D1DDC1C.png"
+    | "/tokens/0xC9FC4AB00911793D99b5c7Bd01f01203C21D4131.png"
+    | "/tokens/0xD70B4b2e14cBA41fE011ea0c7021B6E64d960d87.svg"
+    | "/tokens/0xE74e4E7A064310466f3bdBd3F3Ce4e8c8F7CF1d5.png"
+    | "/tokens/0xEe432C220273e4F949007B4c1946562826Efa055.svg"
+    | "/tokens/etn.svg"
   type HtmlPublicPath = Extract<PublicPath, `${string}.html`>
   export interface WxtRuntime {
     getURL(path: PublicPath): string;

@@ -14,10 +14,10 @@ export function PairAvatars({ farm, size = 28 }: { farm: FarmView; size?: number
   return (
     <Row width={size * 1.7} height={size} position="relative">
       <Column position="absolute" left={0} top={0}>
-        <TokenAvatar chainId={farm.chainId} address={farm.token0} logoUri={null} size={size} />
+        <TokenAvatar chainId={farm.chainId} address={farm.token0} symbol={farm.symbol0} size={size} />
       </Column>
       <Column position="absolute" left={size * 0.7} top={0}>
-        <TokenAvatar chainId={farm.chainId} address={farm.token1} logoUri={null} size={size} />
+        <TokenAvatar chainId={farm.chainId} address={farm.token1} symbol={farm.symbol1} size={size} />
       </Column>
     </Row>
   )

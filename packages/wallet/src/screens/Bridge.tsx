@@ -207,7 +207,7 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
             right={<ChainSelect chainId={fromChain} label={chainName(fromChain)} onPress={() => setSheet('from')} testID="bridge-from-select" />}
             value={amount}
             onChange={setAmount}
-            tokenPill={route ? <Pill label={route.symbol} icon={<TokenAvatar chainId={fromChain} address={route.token} logoUri={null} size={18} />} chevron={symbols.length > 1} tone="ink" size="md" onPress={symbols.length > 1 ? () => setSheet('asset') : undefined} testID="bridge-asset-select" /> : undefined}
+            tokenPill={route ? <Pill label={route.symbol} icon={<TokenAvatar chainId={fromChain} address={route.token} symbol={route.symbol} size={18} />} chevron={symbols.length > 1} tone="ink" size="md" onPress={symbols.length > 1 ? () => setSheet('asset') : undefined} testID="bridge-asset-select" /> : undefined}
             fiat={amount.trim() && Number(amount) > 0 ? formatFiat(Number(amount), 'USD') : null}
             balance={quote ? `${formatRaw(quote.balanceRaw, quote.decimals)} ${quote.symbol}` : null}
             onMax={quote ? () => setAmount(formatRaw(quote.balanceRaw, quote.decimals).replace(/,/g, '')) : undefined}
@@ -364,7 +364,7 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
             return (
               <Pressable key={sym} onPress={() => { setSymbol(sym); setSheet(null) }} accessibilityRole="button" accessibilityState={{ selected }} accessibilityLabel={sym} style={{ minHeight: 52, justifyContent: 'center' }} testID={`bridge-asset-${sym}`}>
                 <Row gap="$3" alignItems="center">
-                  {r ? <TokenAvatar chainId={fromChain} address={r.token} logoUri={null} size={24} /> : null}
+                  {r ? <TokenAvatar chainId={fromChain} address={r.token} symbol={r.symbol} size={24} /> : null}
                   <Column flex={1} alignItems="flex-start">
                     <Body fontWeight={selected ? '600' : '400'}>{sym}</Body>
                     <Body tone="mute" size="caption">

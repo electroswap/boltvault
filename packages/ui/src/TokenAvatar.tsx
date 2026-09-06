@@ -1,62 +1,79 @@
 /**
- * TokenAvatar — identicon in 50 ms, photo fades in if a logo loads
- * (master plan §10.3). The identicon is deterministic from (chainId, address)
- * so a bus bar is never a blank disc.
+ * TokenAvatar — a token's logo, with TokenMark as the last frame.
+ *
+ * Resolution order, first that loads wins:
+ *   1. the bundled file (all 15 listed ElectroSwap tokens + native ETN)
+ *   2. the list/custom logoUri the engine handed us
+ *   3. the sibling extension on the ElectroSwap static host — it serves .svg
+ *      for most tokens and .png for a few, and asking for the wrong one 404s
+ *   4. TokenMark: the symbol on a glass disc
+ *
+ * The winner is remembered in a module-level map, so scrolling a list or
+ * reopening the popup never re-walks the candidates. Previously this component
+ * held `loaded`/`failed` in local state only, so every remount retried a URL
+ * already known to 404 and showed the placeholder while it did.
  */
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Image, View } from 'react-native'
-import Svg, { Rect } from 'react-native-svg'
-import { fnv1a32, seededRandom } from './hash'
-import { paint, light } from './tokens'
+import { TokenMark } from './TokenMark'
+import { normaliseTokenAddress, tokenLogoCandidates } from './tokenLogos'
+import { paint } from './tokens'
 
 export interface TokenAvatarProps {
   readonly chainId: number
   readonly address: string
+  /** Drawn on the disc when no image loads. */
+  readonly symbol?: string | null
   readonly logoUri?: string | null
   readonly size?: number
   readonly testID?: string
 }
 
-const PALETTE = [light.arc, light.plasma, light.flare, paint.ember, light.core]
+/** Resolved winners (or null for "nothing loaded"), by chain and address. */
+const resolved = new Map<string, string | null>()
 
-export function identiconCells(chainId: number, address: string): { cells: boolean[]; color: string } {
-  const rnd = seededRandom(fnv1a32(`${chainId}:${address.toLowerCase()}`))
-  const color = PALETTE[Math.floor(rnd() * PALETTE.length)] ?? light.arc
-  // 5×5, mirrored horizontally: 15 random bits.
-  const half: boolean[] = []
-  for (let i = 0; i < 15; i++) half.push(rnd() > 0.45)
-  const cells: boolean[] = []
-  for (let y = 0; y < 5; y++) {
-    for (let x = 0; x < 5; x++) {
-      const hx = x < 3 ? x : 4 - x
-      cells.push(half[y * 3 + hx] ?? false)
-    }
-  }
-  return { cells, color }
-}
+export function TokenAvatar({ chainId, address, symbol, logoUri, size = 32, testID }: TokenAvatarProps) {
+  const key = `${chainId}:${normaliseTokenAddress(address)}`
+  const candidates = useMemo(() => tokenLogoCandidates(chainId, address, logoUri), [chainId, address, logoUri])
 
-export function TokenAvatar({ chainId, address, logoUri, size = 32, testID }: TokenAvatarProps) {
-  const [loaded, setLoaded] = useState(false)
-  const [failed, setFailed] = useState(false)
-  const { cells, color } = identiconCells(chainId, address)
-  const cell = size / 5
-  const showImage = !!logoUri && !failed
+  // A previously resolved winner short-circuits the walk entirely.
+  const known = resolved.get(key)
+  const settled = known !== undefined && known !== null
+  const startAt = known === undefined ? 0 : known === null ? candidates.length : Math.max(0, candidates.indexOf(known))
+
+  const [index, setIndex] = useState(startAt)
+  const [loaded, setLoaded] = useState(settled)
+
+  useEffect(() => {
+    setIndex(startAt)
+    setLoaded(settled)
+  }, [key, startAt, settled])
+
+  const uri = index < candidates.length ? candidates[index] : undefined
+
   return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: paint.glassRaised }} testID={testID}>
-      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ position: 'absolute', opacity: loaded ? 0 : 1 }}>
-        {cells.map((on, i) =>
-          on ? <Rect key={i} x={(i % 5) * cell} y={Math.floor(i / 5) * cell} width={cell} height={cell} fill={color} opacity={0.9} /> : null,
-        )}
-      </Svg>
-      {showImage ? (
+    <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: paint.glassRaisedSolid }} testID={testID}>
+      {loaded ? null : (
+        <View style={{ position: 'absolute' }}>
+          <TokenMark symbol={symbol} size={size} />
+        </View>
+      )}
+      {uri === undefined ? null : (
         <Image
-          source={{ uri: logoUri }}
+          source={{ uri }}
           style={{ width: size, height: size, opacity: loaded ? 1 : 0 }}
-          onLoad={() => setLoaded(true)}
-          onError={() => setFailed(true)}
+          onLoad={() => {
+            resolved.set(key, uri)
+            setLoaded(true)
+          }}
+          onError={() => {
+            const next = index + 1
+            if (next >= candidates.length) resolved.set(key, null)
+            setIndex(next)
+          }}
           accessibilityIgnoresInvertColors
         />
-      ) : null}
+      )}
     </View>
   )
 }

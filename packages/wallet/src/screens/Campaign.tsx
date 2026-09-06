@@ -113,7 +113,7 @@ export function Campaign({ body, chainId, pool, reducedMotion = false }: { body:
                 <Column position="absolute" left={0} right={0} bottom={0} height={36} backgroundColor="rgba(7,10,31,0.6)" />
               </Column>
               <Row gap="$3" alignItems="flex-end" marginTop={-28} paddingHorizontal={12}>
-                <TokenAvatar chainId={chainId} address={c.token.address ?? pool} logoUri={c.logoUrl} size={56} />
+                <TokenAvatar chainId={chainId} address={c.token.address ?? pool} symbol={c.token.symbol} logoUri={c.logoUrl} size={56} />
                 <Column flex={1} alignItems="flex-start" paddingBottom={4}>
                   <Body size="title" numberOfLines={1} testID="campaign-name">
                     {c.token.name}

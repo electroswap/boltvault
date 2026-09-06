@@ -114,9 +114,14 @@ export class TokensService {
 
   logoFor(chainId: number, address: string, listUri?: string | undefined): string | null {
     if (listUri && /^https?:\/\//.test(listUri)) return listUri
-    // Native ETN has no address of its own; its logo is the wrapped token's on the ElectroSwap static host.
-    if (address === 'native') return isEtnChain(chainId) ? `https://static.electroswap.io/tokens/images/${getAddress(ELECTRONEUM_ADDRESSES[chainId].wetn)}.png` : null
-    if (isElectroneumChainId(chainId) && isAddress(address)) return `https://static.electroswap.io/tokens/images/${getAddress(address)}.png`
+    // The static host serves .svg for most tokens and .png for a few; the old
+    // `.png` convention 404'd for WETN, USDC, USDT, BOLT, DYNO and — because
+    // native falls through to the wrapped token's file — for native ETN, which
+    // is why ETN showed a placeholder and never a logo. Ask for .svg; the UI
+    // tries the sibling extension if it misses, and the 15 listed tokens plus
+    // native are bundled anyway so they never reach the network.
+    if (address === 'native') return isEtnChain(chainId) ? `https://static.electroswap.io/tokens/images/${getAddress(ELECTRONEUM_ADDRESSES[chainId].wetn)}.svg` : null
+    if (isElectroneumChainId(chainId) && isAddress(address)) return `https://static.electroswap.io/tokens/images/${getAddress(address)}.svg`
     return null
   }
 
