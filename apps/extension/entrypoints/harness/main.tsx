@@ -7,6 +7,7 @@
  * harness.html?scenario=funded&screen=home&body=extension-popup&motion=reduced
  */
 import { App, createFixtureEngine, isTabId, type FixtureScenario, type ScreenId } from '@boltvault/wallet'
+import '../../src/chrome.css'
 import { createRoot } from 'react-dom/client'
 
 const q = new URLSearchParams(location.search)

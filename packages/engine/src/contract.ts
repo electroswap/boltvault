@@ -60,6 +60,8 @@ import type {
   SyncStatus,
   TokenDetailView,
   LiquidityView,
+  ChartDuration,
+  PriceHistoryView,
   TokenView,
   VaultStatus,
   WatchItem,
@@ -241,6 +243,9 @@ export interface ExploreNamespace {
   cachedTokens(input: { chainId: number }): Promise<Cached<ExploreToken[]> | null>
   tokenDetail(input: { chainId: number; address: string }): Promise<TokenDetailView | null>
   cachedTokenDetail(input: { chainId: number; address: string }): Promise<Cached<TokenDetailView> | null>
+  /** One timeframe of price history (plan B5); null when the market is unreachable. */
+  priceHistory(input: { chainId: number; address: string; duration: ChartDuration }): Promise<PriceHistoryView | null>
+  cachedPriceHistory(input: { chainId: number; address: string; duration: ChartDuration }): Promise<Cached<PriceHistoryView> | null>
   /** Locked liquidity for a token (native → WETN); null when the market is unreachable. */
   liquidity(input: { chainId: number; address: string }): Promise<LiquidityView | null>
   cachedLiquidity(input: { chainId: number; address: string }): Promise<Cached<LiquidityView> | null>

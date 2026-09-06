@@ -19,6 +19,9 @@ const MARKET = `market(currency: USD) { price { value currency } totalValueLocke
 export const TOP_TOKENS = `query TopTokens($chain: Chain) { topTokens(chain: $chain, orderBy: VOLUME, pageSize: 200, page: 1) { id address symbol name decimals standard ${MARKET} project { safetyLevel isSpam logoUrl } } }`
 
 /** One token's market line plus the sparkline. */
+/** Token details › chart (plan B5): one duration of price history with the period's high and low. */
+export const PRICE_HISTORY = `query PriceHistory($address: String, $chain: Chain, $duration: HistoryDuration!) { token(address: $address, chain: $chain) { market(currency: USD) { priceHistory(duration: $duration) { timestamp value } high: priceHighLow(duration: $duration, highLow: HIGH) { value } low: priceHighLow(duration: $duration, highLow: LOW) { value } } } }`
+
 export const TOKEN_DETAIL = `query TokenDetail($address: String, $chain: Chain) { token(address: $address, chain: $chain) { id address symbol name decimals standard ${MARKET} sparkline: market(currency: USD) { priceHistory(duration: DAY) { timestamp value } } project { description homepageUrl twitterUrl telegramUrl safetyLevel isSpam logoUrl } } }`
 
 const COLLECTION = `id collectionId name description isVerified numAssets image { url } bannerImage { url } nftContracts { address standard name symbol totalSupply } listingFees { payoutAddress basisPoints } markets(currencies: [ETN]) { floorPrice { value } totalVolume { value } volume(duration: DAY) { value } owners listings { value } percentListed { value } }`

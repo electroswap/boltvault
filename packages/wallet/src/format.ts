@@ -5,6 +5,14 @@ export function formatFiat(value: number, currency: 'USD' | 'ETN'): string {
   return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
+/** A unit price: two decimals from $1 up, four significant digits below (ETN at $0.00296, not "$0.00"). */
+export function formatPrice(value: number | null, currency: 'USD' | 'ETN'): string {
+  if (value === null || !Number.isFinite(value)) return '—'
+  if (value === 0 || value >= 1) return formatFiat(value, currency)
+  const s = value.toLocaleString('en-US', { maximumSignificantDigits: 4, minimumSignificantDigits: 2 })
+  return currency === 'USD' ? `$${s}` : `${s} ETN`
+}
+
 export function formatQuantity(q: string): string {
   const n = Number(q)
   if (!Number.isFinite(n)) return q

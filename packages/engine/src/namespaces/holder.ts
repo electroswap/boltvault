@@ -8,7 +8,7 @@
  * be read the fee falls back to the base bips, never lower.
  */
 import { BOLTVAULT_FEE_SCHEDULE, BOLTVAULT_FEE_SINK, ELECTRONEUM_ADDRESSES } from '@boltvault/chains'
-import { BASE_FEE_BIPS, DYNO_WEIGHT_ONE, ERC20_ABI, FALLBACK_SCHEDULE, FEE_SCHEDULE_ABI, nextTier, tierFor, type FeeSchedule } from '@boltvault/electroswap'
+import { DYNO_WEIGHT_ONE, ERC20_ABI, FALLBACK_SCHEDULE, FEE_SCHEDULE_ABI, nextTier, tierFor, type FeeSchedule } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
 import { getAddress, isAddress, type Hex } from 'viem'
 import { z } from 'zod'
@@ -148,10 +148,14 @@ export class HolderService {
       const farm = score > wallet + dynoPart ? score - wallet - dynoPart : 0n
       return { ...base, bips: Number(bips), tier: Number(tier), score: score.toString(), nextTierAt: next ? next.minScore.toString() : null, nextTierBips: next ? next.bips : null, source: 'chain', breakdown: { wallet: wallet.toString(), farm: farm.toString(), dyno: dynoPart.toString() } }
     }
-    // No schedule answer: the base fee (never lower), with the wallet's own BOLT shown for context.
-    const local = tierFor(scheduleSource === 'chain' ? schedule : FALLBACK_SCHEDULE, wallet)
-    const next = nextTier(FALLBACK_SCHEDULE, local.tier)
-    return { ...base, bips: BASE_FEE_BIPS, tier: 0, score: wallet.toString(), nextTierAt: next ? next.minScore.toString() : null, nextTierBips: next ? next.bips : null, source: 'fallback', breakdown: { wallet: wallet.toString(), farm: '0', dyno: '0' } }
+    // No schedule answer (owner's walk, 2026-09-05): the published schedule against what the chain does show — wallet BOLT and
+    // DYNO (farm deposits need the contract). A 3M-BOLT holder is the top tier here, not tier 0; the wallet sets PAY_PORTION.
+    const sched = scheduleSource === 'chain' ? schedule : FALLBACK_SCHEDULE
+    const dynoPart = sched.dynoWeight > 0n ? (dynoAmt * sched.dynoWeight) / DYNO_WEIGHT_ONE : 0n
+    const score = wallet + dynoPart
+    const local = tierFor(sched, score)
+    const next = nextTier(sched, local.tier)
+    return { ...base, bips: local.bips, tier: local.tier, score: score.toString(), nextTierAt: next ? next.minScore.toString() : null, nextTierBips: next ? next.bips : null, source: 'fallback', breakdown: { wallet: wallet.toString(), farm: '0', dyno: dynoPart.toString() } }
   }
 }
 

@@ -3,6 +3,7 @@
  * engine on `sign.html?id=<request>`, sized fixed, closed by the decision.
  */
 import { App } from '@boltvault/wallet'
+import '../../src/chrome.css'
 import { createRoot } from 'react-dom/client'
 import { installActivityTouch } from '../../src/activity-touch'
 import { connectEngine } from '../../src/engine-client'

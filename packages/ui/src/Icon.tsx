@@ -14,7 +14,7 @@ const PATHS = {
   settings: 'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z',
   send: 'M21 3 10.5 13.5M21 3l-6.5 18-4-7.5L3 9.5z',
   receive: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h3v3h-3zM20 17v3h-3',
-  bridge: 'M3 16c3-6 6-6 9 0s6 6 9 0M3 8h18',
+  bridge: 'M2 17c2-6 6-9 10-9s8 3 10 9M6 17v-4M12 17V8M18 17v-4M2 17h20',
   scan: 'M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16',
   chevronDown: 'm6 9 6 6 6-6',
   chevronRight: 'm9 6 6 6-6 6',
@@ -36,8 +36,8 @@ const PATHS = {
   search: 'M10.5 18a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15zM21 21l-5-5',
   star: 'm12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.3L12 17.5l-5.6 2.9 1.1-6.3L3 9.7l6.2-.9z',
   bell: 'M6 8a6 6 0 1 1 12 0v5l2 3H4l2-3zM10 20a2 2 0 0 0 4 0',
-  farm: 'M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3',
-  launch: 'M5 19c1-4 3-6 7-7M12 12c2 0 6-3 7-8-5 1-8 5-8 7l1 1zM9 15l-3 3',
+  farm: 'M12 21v-9M12 12c0-4 3-7 8-7 0 4-3 7-8 7zM12 15c0-3-2.5-5-6-5 0 3 2.5 5 6 5zM5 21h14',
+  launch: 'M12 15c-3-3-3-8 2-12 5 4 5 9 2 12zM12 15v6M9 13H6l2-4M15 13h3l-2-4M12 8h.01',
   nft: 'M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 16l4-4 4 4 3-3 5 5M15 9h.01',
   approvals: 'M9 11h6M9 15h4M5 5h14a1 1 0 0 1 1 1v14l-3-2-3 2-3-2-3 2-3-2-3 2V6a1 1 0 0 1 1-1z',
   spark: 'M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6',
@@ -51,6 +51,7 @@ const PATHS = {
   chevronUp: 'm6 15 6-6 6 6',
   pin: 'M12 16v5M8 4h8l-1 5 3 3H6l3-3z',
   chart: 'M3 17l5-6 4 3 5-7 4 4',
+  coins: 'M8 8a6 2.5 0 1 0 12 0 6 2.5 0 1 0-12 0zM8 8v4c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V8M4 12a6 2.5 0 0 0 0 5M4 12v4c0 1.4 2.7 2.5 6 2.5 1 0 2-.1 2.8-.3',
   tune: 'M4 7h9M17 7h3M4 17h3M11 17h9M13 5v4M7 15v4',
   link: 'M10 14a4 4 0 0 0 5.6 0l3-3a4 4 0 0 0-5.6-5.6l-1 1M14 10a4 4 0 0 0-5.6 0l-3 3a4 4 0 0 0 5.6 5.6l1-1',
   info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm0-9v5m0-9h.01',
@@ -75,13 +76,15 @@ export interface IconProps {
   readonly name: IconName
   readonly size?: number
   readonly color?: string
+  /** 1.75 by default; a tile's glyph reads better at 2. */
+  readonly strokeWidth?: number
   readonly testID?: string
 }
 
-export function Icon({ name, size = 22, color = paint.ink, testID }: IconProps) {
+export function Icon({ name, size = 22, color = paint.ink, strokeWidth = 1.75, testID }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" testID={testID}>
-      <Path d={PATHS[name]} stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d={PATHS[name]} stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   )
 }

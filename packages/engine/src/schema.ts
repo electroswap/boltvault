@@ -532,6 +532,21 @@ export const TokenDetailViewSchema = z.object({
 })
 export type TokenDetailView = z.infer<typeof TokenDetailViewSchema>
 
+/** The chart's timeframes (owner decision): 1D · 1W · 1M · 1Y. */
+export const ChartDurationSchema = z.enum(['1D', '1W', '1M', '1Y'])
+export type ChartDuration = z.infer<typeof ChartDurationSchema>
+
+/** One timeframe of a token's price history (plan B5), oldest first, with the period's high and low. */
+export const PriceHistoryViewSchema = z.object({
+  chainId: z.number().int().positive(),
+  address: z.string(),
+  duration: ChartDurationSchema,
+  points: z.array(z.object({ t: z.number(), v: z.number() })),
+  high: Fiat,
+  low: Fiat,
+})
+export type PriceHistoryView = z.infer<typeof PriceHistoryViewSchema>
+
 /** Locked liquidity for a token (plan B4, owner item W3): the share of the pool supply under active locks, and how many locks. */
 export const LiquidityViewSchema = z.object({
   chainId: z.number().int().positive(),

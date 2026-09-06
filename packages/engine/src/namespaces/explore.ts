@@ -6,12 +6,12 @@
  * everywhere else.
  */
 import { ELECTRONEUM_ADDRESSES } from '@boltvault/chains'
-import { fetchCollectionBalances, fetchCollections, fetchTokenDetail, fetchTopCollections, fetchTopTokens, type CollectionView as EsCollection, type ElectroSwapClient } from '@boltvault/electroswap'
+import { fetchCollectionBalances, fetchCollections, fetchPriceHistory, fetchTokenDetail, fetchTopCollections, fetchTopTokens, type CollectionView as EsCollection, type ElectroSwapClient, type HistoryDuration } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
 import { cacheKey, type Cached, type DocCache } from '../cache'
 import type { EventBus, NamespaceSpec } from '../host'
-import { AccountIdSchema, CollectionViewSchema, ExploreTokenSchema, LiquidityViewSchema, TokenDetailViewSchema, type CollectionView, type ExploreToken, type LiquidityView, type TokenDetailView } from '../schema'
+import { AccountIdSchema, ChartDurationSchema, CollectionViewSchema, ExploreTokenSchema, LiquidityViewSchema, PriceHistoryViewSchema, TokenDetailViewSchema, type ChartDuration, type CollectionView, type ExploreToken, type LiquidityView, type PriceHistoryView, type TokenDetailView } from '../schema'
 import type { TokensService } from './tokens'
 import type { VaultManager } from './vault'
 import type { WatchlistService } from './watchlist'
@@ -31,6 +31,9 @@ const DETAIL_TTL_MS = 60_000
 const TOKENS_SPEC = (chainId: number) => ({ key: cacheKey('explore', 'tokens', chainId), schema: z.array(ExploreTokenSchema) })
 const COLLECTIONS_SPEC = (chainId: number, accountId: string | undefined) => ({ key: cacheKey('explore', 'collections', chainId, accountId ?? '-'), schema: z.array(CollectionViewSchema) })
 const DETAIL_SPEC = (chainId: number, address: string) => ({ key: cacheKey('explore', 'tokendetail', chainId, address), schema: TokenDetailViewSchema })
+const HISTORY_TTL_MS = 5 * 60_000
+const HISTORY_SPEC = (chainId: number, address: string, duration: ChartDuration) => ({ key: cacheKey('explore', 'history', chainId, address, duration), schema: PriceHistoryViewSchema })
+const API_DURATION: Record<ChartDuration, HistoryDuration> = { '1D': 'DAY', '1W': 'WEEK', '1M': 'MONTH', '1Y': 'YEAR' }
 const LIQUIDITY_TTL_MS = 10 * 60_000
 const LIQUIDITY_SPEC = (chainId: number, address: string) => ({ key: cacheKey('explore', 'liquidity', chainId, address), schema: LiquidityViewSchema })
 const isEtn = (chainId: number): chainId is 52014 | 5201420 => chainId === 52014 || chainId === 5201420
@@ -101,6 +104,28 @@ export class ExploreService {
 
   async cachedTokenDetail(chainId: number, address: string): Promise<Cached<TokenDetailView> | null> {
     return this.deps.cache.read(DETAIL_SPEC(chainId, address))
+  }
+
+  /** One timeframe of price history (plan B5), five minutes stale-first, per duration. */
+  async priceHistory(chainId: number, address: string, duration: ChartDuration): Promise<PriceHistoryView | null> {
+    const d = this.deps
+    if (!d.electroswap || !isEtn(chainId)) return null
+    const client = d.electroswap
+    try {
+      return (
+        await d.cache.through(HISTORY_SPEC(chainId, address, duration), HISTORY_TTL_MS, async () => {
+          const h = await fetchPriceHistory(client, chainId, address === 'native' ? 'NATIVE' : address, API_DURATION[duration])
+          if (!h) throw new Error('no market')
+          return { chainId, address, duration, points: [...h.points], high: h.high, low: h.low }
+        })
+      ).value
+    } catch {
+      return null
+    }
+  }
+
+  async cachedPriceHistory(chainId: number, address: string, duration: ChartDuration): Promise<Cached<PriceHistoryView> | null> {
+    return this.deps.cache.read(HISTORY_SPEC(chainId, address, duration))
   }
 
   /** Locked liquidity (plan B4): ETN itself has no pool, so the native side reads as WETN. Ten minutes stale-first. */
@@ -239,6 +264,8 @@ export function exploreNamespace(explore: ExploreService): NamespaceSpec {
     cachedTokens: { input: Chain, handler: (arg) => explore.cachedTokens((arg as { chainId: number }).chainId) },
     tokenDetail: { input: Chain.extend({ address: z.string() }), handler: (arg) => explore.tokenDetail((arg as { chainId: number }).chainId, (arg as { address: string }).address) },
     cachedTokenDetail: { input: Chain.extend({ address: z.string() }), handler: (arg) => explore.cachedTokenDetail((arg as { chainId: number }).chainId, (arg as { address: string }).address) },
+    priceHistory: { input: Chain.extend({ address: z.string(), duration: ChartDurationSchema }), handler: (arg) => explore.priceHistory((arg as { chainId: number }).chainId, (arg as { address: string }).address, (arg as { duration: ChartDuration }).duration) },
+    cachedPriceHistory: { input: Chain.extend({ address: z.string(), duration: ChartDurationSchema }), handler: (arg) => explore.cachedPriceHistory((arg as { chainId: number }).chainId, (arg as { address: string }).address, (arg as { duration: ChartDuration }).duration) },
     liquidity: { input: Chain.extend({ address: z.string() }), handler: (arg) => explore.liquidity((arg as { chainId: number }).chainId, (arg as { address: string }).address) },
     cachedLiquidity: { input: Chain.extend({ address: z.string() }), handler: (arg) => explore.cachedLiquidity((arg as { chainId: number }).chainId, (arg as { address: string }).address) },
     collections: { input: Chain.extend({ accountId: AccountIdSchema.optional() }), handler: (arg) => explore.collections((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId) },

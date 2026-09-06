@@ -1,0 +1,27 @@
+/*
+ * The extension pages' chrome (owner's walk, 2026-09-05): a screen fits its
+ * body wherever it can, and where it must scroll the browser's grey slider is
+ * replaced by a thin glass thumb on a transparent track that only appears
+ * while there is something to scroll.
+ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(122, 140, 255, 0.28) transparent;
+}
+*::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(122, 140, 255, 0.28);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(122, 140, 255, 0.5);
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}

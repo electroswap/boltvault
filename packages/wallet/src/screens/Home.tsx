@@ -122,7 +122,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     { id: 'send', icon: 'send', label: t({ id: 'key.send', message: 'Send' }), badge: null, onPress: () => router.navigate('send') },
     { id: 'receive', icon: 'receive', label: t({ id: 'key.receive', message: 'Receive' }), badge: null, onPress: () => router.navigate('receive') },
     { id: 'bridge', icon: 'bridge', label: t({ id: 'key.bridge', message: 'Bridge' }), badge: bridgeInFlight ? { text: t({ id: 'home.badge.arriving', message: 'Arriving' }), tone: 'arc' } : null, onPress: () => router.navigate('bridge', scope.scope !== 'all' && scope.scope !== ETN ? { chainId: scope.scope } : undefined) },
-    { id: 'tokens', icon: 'chart', label: t({ id: 'key.tokens', message: 'Tokens' }), badge: null, onPress: () => router.navigate('explore', { segment: 'tokens' }) },
+    { id: 'tokens', icon: 'coins', label: t({ id: 'key.tokens', message: 'Tokens' }), badge: null, onPress: () => router.navigate('explore', { segment: 'tokens' }) },
     { id: 'collectibles', icon: 'nft', label: t({ id: 'key.collectibles', message: 'Collectibles' }), badge: offers > 0 ? { text: t({ id: 'home.badge.offers', message: '{n} offers', values: { n: offers } }), tone: 'ember' } : null, onPress: () => router.navigate('explore', { segment: 'collectibles' }) },
     { id: 'launchpad', icon: 'launch', label: t({ id: 'key.launchpad', message: 'Launchpad' }), badge: live > 0 ? { text: t({ id: 'home.badge.live', message: '{n} live', values: { n: live } }), tone: 'arc' } : null, onPress: () => router.navigate('explore', { segment: 'launch' }) },
     { id: 'farms', icon: 'farm', label: t({ id: 'key.farms', message: 'Farms' }), badge: toCollect > 0n ? { text: t({ id: 'home.badge.collect', message: '{d} DYNO', values: { d: dyno >= 10 ? dyno.toFixed(0) : dyno.toFixed(1) } }), tone: 'surge' } : null, onPress: () => router.navigate('explore', { segment: 'farms' }) },
@@ -167,7 +167,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
 
   return (
     <Column flex={1} testID="home">
-      <ScrollView contentContainerStyle={{ padding: inset, gap: 12, ...(wide ? { maxWidth: 680, width: '100%', alignSelf: 'center' } : {}) }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: inset, paddingTop: inset, paddingBottom: 12, gap: 10, ...(wide ? { maxWidth: 680, width: '100%', alignSelf: 'center' } : {}) }}>
         <Ignition reducedMotion={reducedMotion} order={0}>
           <Row justifyContent="space-between" alignItems="center" minHeight={metrics.header}>
             {active ? (
@@ -289,7 +289,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
 
 function Accessory({ icon, tone, text, onPress, testID }: { icon: IconName; tone: string; text: string; onPress: () => void; testID: string }) {
   return (
-    <Plate role="card" gap={2} onPress={onPress} cursor="pointer" minHeight={44} justifyContent="center" testID={testID}>
+    <Plate role="card" gap={2} paddingVertical={8} onPress={onPress} cursor="pointer" minHeight={44} justifyContent="center" testID={testID}>
       <Row gap="$2" alignItems="center">
         <Icon name={icon} size={16} color={tone} />
         <Body size="caption" flexShrink={1} numberOfLines={1}>

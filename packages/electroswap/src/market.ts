@@ -6,7 +6,7 @@
  */
 import { z } from 'zod'
 import type { ElectroSwapClient } from './client'
-import { chainEnum, NFT_ACTIVITY, NFT_ASSETS, NFT_ASSET_DETAILS, NFT_BALANCES, NFT_BID_OBLIGATION, NFT_BIDS, NFT_COLLECTION_BALANCES, NFT_COLLECTIONS, PRESALE, PRESALES, TOKEN_DETAIL, TOP_COLLECTIONS, TOP_TOKENS, YIELD_FARMS } from './queries'
+import { chainEnum, NFT_ACTIVITY, NFT_ASSETS, NFT_ASSET_DETAILS, NFT_BALANCES, NFT_BID_OBLIGATION, NFT_BIDS, NFT_COLLECTION_BALANCES, NFT_COLLECTIONS, PRESALE, PRESALES, PRICE_HISTORY, TOKEN_DETAIL, TOP_COLLECTIONS, TOP_TOKENS, YIELD_FARMS } from './queries'
 
 const amount = z.object({ value: z.number().nullable().optional() }).nullable().optional()
 const num = (a: z.infer<typeof amount>): number | null => (a && typeof a.value === 'number' && Number.isFinite(a.value) ? a.value : null)
@@ -107,6 +107,26 @@ export async function fetchTokenDetail(client: ElectroSwapClient, chainId: numbe
   const points = (n.sparkline?.priceHistory ?? []).filter((p): p is { timestamp: number; value: number } => p !== null).map((p) => ({ t: p.timestamp, v: p.value }))
   points.sort((a, b) => a.t - b.t)
   return { ...base, description: n.project?.description ?? null, homepageUrl: n.project?.homepageUrl ?? null, twitterUrl: n.project?.twitterUrl ?? null, telegramUrl: n.project?.telegramUrl ?? null, sparkline: points }
+}
+
+export type HistoryDuration = 'DAY' | 'WEEK' | 'MONTH' | 'YEAR'
+
+export interface PriceHistoryView {
+  /** Oldest first. */
+  readonly points: ReadonlyArray<{ t: number; v: number }>
+  readonly high: number | null
+  readonly low: number | null
+}
+
+/** One duration of a token's price history (plan B5). The API's `priceHighLow` returns null for a token without a market. */
+export async function fetchPriceHistory(client: ElectroSwapClient, chainId: number, address: string, duration: HistoryDuration): Promise<PriceHistoryView | null> {
+  const data = await client.query<unknown>(PRICE_HISTORY, { address, chain: chainEnum(chainId), duration })
+  const parsed = z.object({ token: z.object({ market: z.object({ priceHistory: z.array(z.object({ timestamp: z.number(), value: z.number() }).nullable()).nullable().optional(), high: amount, low: amount }).nullable().optional() }).nullable().optional() }).parse(data)
+  const m = parsed.token?.market
+  if (!m) return null
+  const points = (m.priceHistory ?? []).filter((p): p is { timestamp: number; value: number } => p !== null && Number.isFinite(p.value)).map((p) => ({ t: p.timestamp, v: p.value }))
+  points.sort((a, b) => a.t - b.t)
+  return { points, high: num(m.high), low: num(m.low) }
 }
 
 // ---- collections and assets ------------------------------------------------------------------

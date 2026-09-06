@@ -1058,7 +1058,7 @@ msgctxt "copied"
 msgid "Copied"
 msgstr "Copied"
 
-#: packages/wallet/src/screens/Token.tsx
+#: packages/wallet/src/screens/Campaign.tsx
 msgctxt "copy"
 msgid "Copy"
 msgstr "Copy"
@@ -2368,6 +2368,11 @@ msgctxt "legends.working"
 msgid "Working…"
 msgstr "Working…"
 
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "less"
+msgid "Less"
+msgstr "Less"
+
 #: packages/wallet/src/screens/Swap.tsx
 msgctxt "limit.above"
 msgid "{p}% above market — fills when the price gets there"
@@ -2953,12 +2958,12 @@ msgctxt "piece.yours"
 msgid "Yours"
 msgstr "Yours"
 
-#: packages/wallet/src/screens/Explore.tsx
+#: packages/wallet/src/screens/Token.tsx
 msgctxt "pin.off"
 msgid "Unpin from Home"
 msgstr "Unpin from Home"
 
-#: packages/wallet/src/screens/Explore.tsx
+#: packages/wallet/src/screens/Token.tsx
 msgctxt "pin.on"
 msgid "Pin to Home"
 msgstr "Pin to Home"
@@ -3072,6 +3077,11 @@ msgstr "Open the Rack"
 msgctxt "rack.title"
 msgid "Your collection"
 msgstr "Your collection"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "readmore"
+msgid "Read more"
+msgstr "Read more"
 
 #: packages/wallet/src/screens/Receive.tsx
 msgctxt "receive.copy"
@@ -3713,7 +3723,7 @@ msgctxt "swap.locks"
 msgid "{p}% locked · {n}"
 msgstr "{p}% locked · {n}"
 
-#: packages/wallet/src/screens/Swap.tsx
+#: packages/wallet/src/screens/Token.tsx
 msgctxt "swap.locks.many"
 msgid "{n} locks"
 msgstr "{n} locks"
@@ -3723,7 +3733,7 @@ msgctxt "swap.locks.none"
 msgid "No locks"
 msgstr "No locks"
 
-#: packages/wallet/src/screens/Swap.tsx
+#: packages/wallet/src/screens/Token.tsx
 msgctxt "swap.locks.one"
 msgid "1 lock"
 msgstr "1 lock"
@@ -3874,9 +3884,9 @@ msgid "Manage approvals"
 msgstr "Manage approvals"
 
 #: packages/wallet/src/screens/Token.tsx
-msgctxt "token.contract"
-msgid "Contract"
-msgstr "Contract"
+msgctxt "token.copyAddress"
+msgid "Copy address"
+msgstr "Copy address"
 
 #: packages/wallet/src/screens/Token.tsx
 msgctxt "token.custom"
@@ -3894,14 +3904,34 @@ msgid "Open in explorer"
 msgstr "Open in explorer"
 
 #: packages/wallet/src/screens/Token.tsx
+msgctxt "token.hidden"
+msgid "Hidden"
+msgstr "Hidden"
+
+#: packages/wallet/src/screens/Token.tsx
 msgctxt "token.hide"
 msgid "Hide"
 msgstr "Hide"
 
 #: packages/wallet/src/screens/Token.tsx
-msgctxt "token.market"
-msgid "Market"
-msgstr "Market"
+msgctxt "token.hl"
+msgid "H {h} · L {l}"
+msgstr "H {h} · L {l}"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.link.site"
+msgid "Website"
+msgstr "Website"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.locks"
+msgid "{p}% liquidity locked · {n}"
+msgstr "{p}% liquidity locked · {n}"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.locks.none"
+msgid "No liquidity locks"
+msgstr "No liquidity locks"
 
 #: packages/wallet/src/screens/Token.tsx
 msgctxt "token.market.none"
@@ -3910,18 +3940,13 @@ msgstr "Market data arrives from ElectroSwap once the wallet key is enabled on t
 
 #: packages/wallet/src/screens/Token.tsx
 msgctxt "token.market.other"
-msgid "No safety or market data for tokens outside Electroneum."
-msgstr "No safety or market data for tokens outside Electroneum."
+msgid "No market data outside Electroneum"
+msgstr "No market data outside Electroneum"
 
 #: packages/wallet/src/screens/Token.tsx
-msgctxt "token.pin"
-msgid "Pin to Home"
-msgstr "Pin to Home"
-
-#: packages/wallet/src/screens/Token.tsx
-msgctxt "token.price"
-msgid "Price"
-msgstr "Price"
+msgctxt "token.month"
+msgid "this month"
+msgstr "this month"
 
 #: packages/wallet/src/screens/Token.tsx
 msgctxt "token.remove"
@@ -3929,19 +3954,79 @@ msgid "Remove"
 msgstr "Remove"
 
 #: packages/wallet/src/screens/Token.tsx
-msgctxt "token.show"
-msgid "Show"
-msgstr "Show"
+msgctxt "token.safety.blocked"
+msgid "Blocked"
+msgstr "Blocked"
 
 #: packages/wallet/src/screens/Token.tsx
-msgctxt "token.unpin"
-msgid "Unpin"
-msgstr "Unpin"
+msgctxt "token.safety.spam"
+msgid "Flagged as spam"
+msgstr "Flagged as spam"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.safety.strong"
+msgid "Strong warning"
+msgstr "Strong warning"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.safety.verified"
+msgid "Verified"
+msgstr "Verified"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.safety.warning"
+msgid "Warning"
+msgstr "Warning"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.stat.24h"
+msgid "24 hours"
+msgstr "24 hours"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.stat.7d"
+msgid "7 days"
+msgstr "7 days"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.stat.fdv"
+msgid "FDV"
+msgstr "FDV"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.stat.mcap"
+msgid "Market cap"
+msgstr "Market cap"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.stat.tvl"
+msgid "TVL"
+msgstr "TVL"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.stat.volume"
+msgid "Volume 24h"
+msgstr "Volume 24h"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.today"
+msgid "today"
+msgstr "today"
 
 #: packages/wallet/src/screens/Token.tsx
 msgctxt "token.unpriced"
-msgid "No price available"
-msgstr "No price available"
+msgid "No price"
+msgstr "No price"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.week"
+msgid "this week"
+msgstr "this week"
+
+#: packages/wallet/src/screens/Token.tsx
+msgctxt "token.year"
+msgid "this year"
+msgstr "this year"
 
 #: packages/wallet/src/screens/Token.tsx
 msgctxt "token.yours"

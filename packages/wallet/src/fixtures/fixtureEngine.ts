@@ -228,7 +228,15 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
     engine.host.override('explore', {
       available: { handler: async () => true },
       tokens: { input: Any, handler: async () => exploreTokens },
-      tokenDetail: { input: Any, handler: async () => null },
+      tokenDetail: {
+        input: Any,
+        handler: async (arg) => {
+          const a = (arg as { address: string }).address.toLowerCase()
+          if (a !== BOLT.toLowerCase()) return null
+          return { address: BOLT, symbol: 'BOLT', name: 'BOLT', decimals: 18, native: false, price: 0.19, change24h: -0.8, change7d: 3.2, volume24h: 42_100, tvl: 380_000, marketCap: 1_900_000, fdv: 2_400_000, safety: 'VERIFIED', spam: false, logoUrl: null, description: 'BOLT is the ElectroSwap utility token. Holding it lowers the wallet fee on every swap, boosts farm rewards through the multiplier stairs, and puts you on the launchpad allowlist. Supply is fixed; a share of every marketplace fee buys BOLT back for the Legends vault.', homepageUrl: 'https://electroswap.io', twitterUrl: 'https://x.com/electroswap', telegramUrl: 'https://t.me/electroswap', sparkline: fixturePrices('1D').points }
+        },
+      },
+      priceHistory: { input: Any, handler: async (arg) => ((arg as { address: string }).address.toLowerCase() === BOLT.toLowerCase() ? fixturePrices((arg as { duration: '1D' | '1W' | '1M' | '1Y' }).duration) : null) },
       liquidity: { input: Any, handler: async (arg) => ((arg as { address: string }).address.toLowerCase() === BOLT.toLowerCase() ? { chainId: 52014, address: BOLT, lockedPct: 87, lockCount: 2 } : null) },
       collections: { input: Any, handler: async () => [legendsCollection, voltsCollection] },
       collection: { input: Any, handler: async (arg) => ((arg as { address: string }).address.toLowerCase() === LEGENDS.toLowerCase() ? legendsCollection : voltsCollection) },
@@ -308,3 +316,20 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
 }
 
 export const FIXTURE_SCENARIOS: readonly FixtureScenario[] = ['fresh', 'locked', 'unlocked', 'funded', 'connect', 'sign', 'keystone']
+
+/** A deterministic BOLT price series for the chart baselines: a gentle climb with two dips, ending at $0.19. */
+function fixturePrices(duration: '1D' | '1W' | '1M' | '1Y'): { chainId: number; address: string; duration: '1D' | '1W' | '1M' | '1Y'; points: Array<{ t: number; v: number }>; high: number | null; low: number | null } {
+  const span = duration === '1D' ? 86_400 : duration === '1W' ? 7 * 86_400 : duration === '1M' ? 30 * 86_400 : 365 * 86_400
+  const n = 48
+  const end = Math.floor(FIXED_NOW / 1000)
+  const points: Array<{ t: number; v: number }> = []
+  for (let i = 0; i < n; i += 1) {
+    const x = i / (n - 1)
+    const v = 0.19 * (0.86 + 0.14 * x + 0.05 * Math.sin(x * 9.5) - 0.03 * Math.cos(x * 23))
+    points.push({ t: end - Math.round((1 - x) * span), v: Math.round(v * 1e5) / 1e5 })
+  }
+  const last = points[points.length - 1]
+  if (last) last.v = 0.19
+  const vs = points.map((p) => p.v)
+  return { chainId: 52014, address: '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1', duration, points, high: Math.max(...vs), low: Math.min(...vs) }
+}

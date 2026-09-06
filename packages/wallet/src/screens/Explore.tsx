@@ -14,7 +14,7 @@ import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { useCached } from '../hooks/useCached'
 import { useNotifications } from '../hooks/useNotifications'
-import { formatChange, formatFiat, formatPct, formatRaw } from '../format'
+import { formatChange, formatFiat, formatPct, formatPrice, formatRaw } from '../format'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { useReducedMotion } from '../state/useReducedMotion'
@@ -206,7 +206,7 @@ export function TokenRow({ token, onPress, onPin }: { token: ExploreToken; onPre
           </Body>
         </Column>
         <Column alignItems="flex-end">
-          <Body>{token.price !== null ? formatFiat(token.price, 'USD') : '—'}</Body>
+          <Body>{formatPrice(token.price, 'USD')}</Body>
           {change ? (
             <Body tone={change.startsWith('+') ? 'surge' : change.startsWith('−') ? 'burn' : 'mute'} size="caption">
               {change}
