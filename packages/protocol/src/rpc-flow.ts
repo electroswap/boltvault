@@ -9,7 +9,7 @@
  * *transport* established.
  */
 import { RPC, RpcError } from './errors'
-import { APPROVAL_METHODS, classify, MAX_LOG_RANGE, SAFE_RATE_PER_SECOND } from './methods'
+import { APPROVAL_METHODS, classify, MAX_LOG_RANGE, SAFE_RATE_PER_SECOND, SESSION_METHODS } from './methods'
 import type { SiteRegistry } from './sessions'
 
 export type Hex = `0x${string}`
@@ -166,6 +166,14 @@ export class RpcFlow {
   }
 
   private async safe(origin: string, chainId: number, method: string, params: readonly unknown[]): Promise<unknown> {
+    // A SAFE method used to need no session at all — the connection gate lived
+    // only in `approval()` — so any page could read chain state through the
+    // wallet's RPC, and broadcast a signed transaction, without ever asking to
+    // connect. Discovery methods stay open; everything that touches chain state
+    // now needs the origin to be connected.
+    if (SESSION_METHODS.has(method) && !(await this.ctx.session(origin))) {
+      throw new RpcError(RPC.UNAUTHORIZED, 'Not connected. Call eth_requestAccounts first.')
+    }
     switch (method) {
       case 'eth_chainId':
         return hexChainId(chainId)

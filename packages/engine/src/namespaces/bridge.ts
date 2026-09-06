@@ -14,6 +14,7 @@ import type { Platform } from '@boltvault/platform'
 import { maxUint256, parseUnits, type Hex } from 'viem'
 import { z } from 'zod'
 import { EngineError } from '../errors'
+import type { SealedMap } from '../sealed'
 import type { EventBus, NamespaceSpec } from '../host'
 import { readMany } from '../multicall'
 import { AccountIdSchema, BridgeStatusSchema, type BridgeQuote, type BridgeRoute, type BridgeStatus, type SwapStep } from '../schema'
@@ -32,12 +33,15 @@ export interface BridgeDeps {
   readonly provider: ProviderService
   readonly flows: FlowStore
   readonly settings: SettingsStore
+  /** Bridge transfers, sealed under the DEK. */
+  readonly transfers: SealedMap<{ items: BridgeStatus[] }>
   readonly receiptPollMs?: number
   /** Signed flags (§3.7): the bridge and per-corridor kill-switches. */
   readonly statics?: { corridorDisabled(fromChainId: number, toChainId: number, symbol: string): boolean }
 }
 
-const DOC: DocSpec<{ items: BridgeStatus[] }> = { key: 'bridge.transfers', version: 1, schema: z.object({ items: z.array(BridgeStatusSchema) }), defaultValue: () => ({ items: [] }) }
+/** One sealed entry; bridge rows carry amounts and both addresses. */
+const BRIDGE_ID = 'all'
 const TIMEOUT_MS = 30 * 60_000
 const SCAN_WINDOW = 5_000n
 const ZERO = '0x0000000000000000000000000000000000000000' as Hex
@@ -52,15 +56,21 @@ export class BridgeService {
 
   constructor(private readonly deps: BridgeDeps) {}
 
+  /** Drop the decrypted transfers on lock, so unlocking re-reads them. */
+  forget(): void {
+    this.items = []
+    this.hydrated = false
+  }
+
   private async hydrate(): Promise<void> {
     if (this.hydrated) return
-    const { value } = await readDoc(this.deps.platform.storage.local, DOC, () => this.deps.platform.now())
+    const value = (await this.deps.transfers.get(BRIDGE_ID)) ?? { items: [] }
     this.items = value.items
     this.hydrated = true
   }
 
   private async persist(): Promise<void> {
-    await writeDoc(this.deps.platform.storage.local, DOC, { items: this.items.slice(-50) })
+    await this.deps.transfers.set(BRIDGE_ID, { items: this.items.slice(-50) })
     this.deps.bus.emit({ type: 'bridge.changed', transfers: this.items })
   }
 

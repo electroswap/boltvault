@@ -44,6 +44,21 @@ export const fromHex = (hex: string): Uint8Array => {
   return u8
 }
 
+/**
+ * Overwrite key material once it is finished with (master plan §3.2, which
+ * promises lock "zeroises DEK, seeds and any derived private keys
+ * (`Uint8Array.fill(0)`)" — before this, no `.fill(0)` existed anywhere in the
+ * tree).
+ *
+ * Honest scope: this shortens how long a key sits in a reachable buffer. It
+ * cannot defeat code running inside the wallet's own process, and JS engines
+ * may keep copies a caller cannot reach (string interning, GC-moved buffers).
+ * It is defence in depth, not a boundary.
+ */
+export function zeroise(...buffers: ReadonlyArray<Uint8Array | null | undefined>): void {
+  for (const b of buffers) b?.fill(0)
+}
+
 export function randomBytes(n: number): Uint8Array {
   const u8 = new Uint8Array(n)
   crypto.getRandomValues(u8)

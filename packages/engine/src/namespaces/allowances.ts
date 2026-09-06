@@ -10,6 +10,7 @@ import { knownContract, knownSpenders, permit2Address } from '@boltvault/securit
 import { encodeFunctionData, maxUint256, pad, parseAbi, type Hex } from 'viem'
 import { z } from 'zod'
 import { EngineError } from '../errors'
+import type { SealedMap } from '../sealed'
 import type { EventBus, NamespaceSpec } from '../host'
 import { readMany } from '../multicall'
 import { AccountIdSchema, AllowanceViewSchema, type AllowanceView } from '../schema'
@@ -28,12 +29,8 @@ const LOG_CHUNK = 10_000
 const UNLIMITED = maxUint256 >> 1n
 const UNLIMITED_160 = ((1n << 160n) - 1n) >> 1n
 
-const cacheDoc = (accountId: string, chainId: number): DocSpec<{ rows: AllowanceView[]; at: number }> => ({
-  key: `allowances.${accountId}.${chainId}`,
-  version: 1,
-  schema: z.object({ rows: z.array(AllowanceViewSchema), at: z.number().int().nonnegative() }),
-  defaultValue: () => ({ rows: [], at: 0 }),
-})
+/** Sealed under the DEK: which contracts an account approved, and for how much. */
+const allowanceId = (accountId: string, chainId: number): string => `${accountId}.${chainId}`
 
 export interface AllowancesDeps {
   readonly platform: Platform
@@ -42,13 +39,15 @@ export interface AllowancesDeps {
   readonly tokens: TokensService
   readonly vault: VaultManager
   readonly provider: ProviderService
+  /** Token approvals per `<accountId>.<chainId>`, sealed under the DEK. */
+  readonly allowances: SealedMap<{ rows: AllowanceView[]; at: number }>
 }
 
 export class AllowancesService {
   constructor(private readonly deps: AllowancesDeps) {}
 
   async cached(accountId: string, chainId: number): Promise<{ rows: AllowanceView[]; at: number }> {
-    return (await readDoc(this.deps.platform.storage.local, cacheDoc(accountId, chainId), () => this.deps.platform.now())).value
+    return (await this.deps.allowances.get(allowanceId(accountId, chainId))) ?? { rows: [], at: 0 }
   }
 
   async scan(accountId: string, chainId: number, opts: { logs?: boolean } = {}): Promise<AllowanceView[]> {
@@ -109,7 +108,7 @@ export class AllowancesService {
     })
 
     rows.sort((a, b) => rank(b) - rank(a))
-    await writeDoc(d.platform.storage.local, cacheDoc(accountId, chainId), { rows, at: d.platform.now() })
+    await d.allowances.set(allowanceId(accountId, chainId), { rows, at: d.platform.now() })
     d.bus.emit({ type: 'allowances.changed', accountId, chainId, rows })
     return rows
   }

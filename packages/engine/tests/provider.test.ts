@@ -95,7 +95,8 @@ describe('provider service', () => {
     expect(await a.request('eth_chainId')).toBe('0xcb2e')
     expect(await a.request('wallet_switchEthereumChain', [{ chainId: '0x4f5e0c' }])).toBeNull()
     expect(await a.request('eth_chainId')).toBe('0x4f5e0c')
-    expect(await a.request('eth_blockNumber')).toBe('0xf4240')
+    // Chain state needs a session; discovery does not.
+    await expect(a.request('eth_blockNumber')).rejects.toMatchObject({ code: 4100 })
     expect(await a.request('eth_accounts')).toEqual([])
     const b = dapp(engine, ORIGIN_B)
     expect(await b.request('eth_chainId')).toBe('0xcb2e')

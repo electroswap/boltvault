@@ -23,7 +23,7 @@ No analytics. No remote code. Open source.
 ## Permissions justification (Chrome Web Store / AMO)
 
 - **`<all_urls>` host permission** — to inject the EIP-1193 provider (`window.ethereum`, EIP-6963) into web pages at `document_start` so decentralised apps can find the wallet. The content script only relays messages the page addresses to the wallet; it never reads page content, never fetches remote code, and every request the page makes ends in the wallet's own approval window. On Firefox the permission is optional and the wallet asks for it on first open.
-- **`storage`** — the encrypted vault and settings. **`alarms`** — auto-lock and background checks (watchlist, signed flags). **`scripting`** — the MAIN-world provider on browsers without manifest `world` support. **`notifications`** — watchlist alerts. **`activeTab`** — the connected-site title and favicon.
+- **`storage`** — the encrypted vault and settings. **`alarms`** — auto-lock and background checks (watchlist, signed flags). **`scripting`** — required by the bundled Trezor Connect, which injects its own content script into the `connect.trezor.io` popup during hardware pairing. (The MAIN-world provider is injected by the manifest's `world: "MAIN"`, not by `chrome.scripting`.) **`notifications`** — watchlist alerts. **`activeTab`** — the connected-site title and favicon.
 - **Not requested:** `tabs` (unless the favicon fetch proves to need it), `webRequest`, `history`, `cookies`, `offscreen`, `externally_connectable`.
 
 ## Privacy answers

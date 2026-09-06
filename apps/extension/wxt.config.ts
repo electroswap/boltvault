@@ -50,6 +50,12 @@ export default defineConfig({
     version: '0.1.0',
     key: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAszcj6eWrS7qV2fSKdV8Z23VNTrdvhUfuwu/MFh2l5JunYWDMm0JIw2Ez0E55ueD6uYiv3nev0s9JqpgW2MGpiw+vlAxg4+zAuJt287yUwOM+IrgJlmgGw1+wgcl128PUiXLyBWANFOnyfV7h/xerqPjr8eZSy8WBNBAPLqdO8/pY0iNrDakDsbHx/3RYdbzoXsTY9LuHfQjhFoT8PI2a++o24nWqPTeu8eV+Sm6Xi6FJnHoFw9+ExssWZ9s2eMXOZuM0hmEf3ykl0uML5r9M8UVWQvocU3XPBPuuVUD2uKekwYS6uIzMtNRgPl4vGd5Z64XUoaHmvHGXiJXbrAuJhQIDAQAB',
     minimum_chrome_version: '117',
+    // `scripting` is not used by our own code — but it is not unused. Bundled
+    // @trezor/connect-webextension calls chrome.permissions.getAll() and only
+    // injects its content script into the connect.trezor.io popup when
+    // `scripting` is present; without it, it silently takes a no-op branch and
+    // Trezor pairing breaks with no error. The MAIN-world provider is injected
+    // by the manifest (`world: 'MAIN'`), never by chrome.scripting.
     permissions: ['storage', 'alarms', 'scripting', 'notifications', 'activeTab'],
     host_permissions: ['<all_urls>'],
     content_security_policy: {

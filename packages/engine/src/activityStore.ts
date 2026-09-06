@@ -8,7 +8,7 @@
 import { xchacha20poly1305 } from '@noble/ciphers/chacha'
 import { hkdf } from '@noble/hashes/hkdf'
 import { sha256 } from '@noble/hashes/sha256'
-import { fromHex, toHex } from '@boltvault/core'
+import { fromHex, toHex, zeroise } from '@boltvault/core'
 import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
 import { EngineError } from './errors'
@@ -30,7 +30,10 @@ export class ActivityStore {
   ) {}
 
   private async key(): Promise<Uint8Array> {
-    return hkdf(sha256, await this.dek(), undefined, new TextEncoder().encode('bv/activity'), 32)
+    const dek = await this.dek()
+    const key = hkdf(sha256, dek, undefined, new TextEncoder().encode('bv/activity'), 32)
+    zeroise(dek)
+    return key
   }
 
   /** Empty when locked (never throws for a read). */

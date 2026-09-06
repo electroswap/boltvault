@@ -33,6 +33,58 @@ export const SAFE_METHODS: ReadonlySet<string> = new Set([
   'eth_unsubscribe',
 ])
 
+/**
+ * The SAFE methods any origin may call without ever connecting.
+ *
+ * Discovery needs these: EIP-1193 expects a provider to answer `eth_chainId`
+ * before a page decides whether to prompt. They reveal nothing about the user —
+ * `eth_accounts` returns `[]` until a session exists.
+ */
+export const PUBLIC_METHODS: ReadonlySet<string> = new Set([
+  'eth_chainId',
+  'net_version',
+  'net_listening',
+  'web3_clientVersion',
+  'eth_accounts',
+  'wallet_getPermissions',
+])
+
+/**
+ * SAFE methods that require a connected origin.
+ *
+ * The at-rest audit's F4 was reported as "a connected dApp can read the address
+ * and balance", which is the intended EIP-1193 model. The real defect it
+ * pointed at is different: the connection gate only ever existed in the
+ * approval funnel, so *any* page the user visited — never connected, never
+ * prompted — could reach chain state through the wallet's RPC at 60 req/s, and
+ * could broadcast an already-signed transaction with `eth_sendRawTransaction`.
+ * That made the wallet an open RPC relay for the whole web.
+ *
+ * Requiring a session here costs compatibility with dApps that probe chain
+ * state before prompting to connect; they now get 4100 until the user connects.
+ */
+export const SESSION_METHODS: ReadonlySet<string> = new Set([
+  'eth_blockNumber',
+  'eth_call',
+  'eth_estimateGas',
+  'eth_getBalance',
+  'eth_getCode',
+  'eth_getStorageAt',
+  'eth_getLogs',
+  'eth_getTransactionReceipt',
+  'eth_getTransactionByHash',
+  'eth_getTransactionCount',
+  'eth_gasPrice',
+  'eth_maxPriorityFeePerGas',
+  'eth_feeHistory',
+  'eth_getBlockByNumber',
+  'eth_getBlockByHash',
+  'eth_sendRawTransaction',
+  'wallet_getCapabilities',
+  'eth_subscribe',
+  'eth_unsubscribe',
+])
+
 export const CONNECT_METHODS: ReadonlySet<string> = new Set(['eth_requestAccounts', 'wallet_requestPermissions'])
 
 export const APPROVAL_METHODS: ReadonlySet<string> = new Set(['eth_sendTransaction', 'personal_sign', 'eth_signTypedData_v3', 'eth_signTypedData_v4', 'eth_sign', 'wallet_watchAsset'])

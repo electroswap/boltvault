@@ -21,7 +21,16 @@ export interface KeyValueStore {
 }
 
 export interface PlatformStorage {
-  /** Durable, non-secret, JSON documents (settings, sites, snapshots). */
+  /**
+   * Durable JSON documents. **Not private**: on the extension this is
+   * `chrome.storage.local` (the same area as `secret`, only a different key
+   * prefix), and on mobile an unencrypted MMKV file. Anything naming an
+   * account, an address or a balance belongs in a DEK-sealed blob
+   * (`engine/src/sealed.ts`), not here — see the at-rest audit and §3.2.
+   * Reserved for values that must be readable *before* unlock: settings the
+   * content script needs at document_start, the KDF parameters needed to
+   * unlock, signed public lists, and origin→chain.
+   */
   readonly local: KeyValueStore
   /**
    * Unlock material and other in-memory-only state. Extension: storage.session

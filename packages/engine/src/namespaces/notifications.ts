@@ -7,11 +7,13 @@
  */
 import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
+import type { SealedMap } from '../sealed'
 import type { EventBus, NamespaceSpec } from '../host'
 import { NotificationViewSchema, type NotificationView } from '../schema'
 import { readDoc, writeDoc, type DocSpec } from '../storage'
 
-const DOC: DocSpec<NotificationView[]> = { key: 'notifications', version: 1, schema: z.array(NotificationViewSchema), defaultValue: () => [] }
+/** One sealed entry; inbox rows name tokens, campaigns and amounts. */
+const INBOX_ID = 'all'
 const MAX = 100
 
 export class NotificationsService {
@@ -20,17 +22,24 @@ export class NotificationsService {
   constructor(
     private readonly platform: Platform,
     private readonly bus: EventBus,
+    /** Sealed under the DEK; empty while locked, so a locked wallet shows no inbox. */
+    private readonly inbox: SealedMap<NotificationView[]>,
   ) {}
+
+  /** Drop the decrypted inbox on lock, so unlocking re-reads it. */
+  forget(): void {
+    this.items = null
+  }
 
   private async hydrate(): Promise<NotificationView[]> {
     if (this.items) return this.items
-    this.items = (await readDoc(this.platform.storage.local, DOC, () => this.platform.now())).value
+    this.items = (await this.inbox.get(INBOX_ID)) ?? []
     return this.items
   }
 
   private async persist(items: NotificationView[]): Promise<void> {
     this.items = items.slice(0, MAX)
-    await writeDoc(this.platform.storage.local, DOC, this.items)
+    await this.inbox.set(INBOX_ID, this.items)
     this.bus.emit({ type: 'notifications.changed', unread: this.items.filter((n) => !n.read).length })
   }
 

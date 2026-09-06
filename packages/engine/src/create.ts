@@ -11,6 +11,7 @@ import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
 import { ActivityStore } from './activityStore'
 import { createSealedStores } from './blobs'
+import { migrateSealed } from './migrateSealed'
 import { ApprovalStore } from './approvals'
 import { CacheShards } from './cache'
 import { createEngineClient } from './client'
@@ -164,7 +165,7 @@ export function createEngine(deps: EngineDeps): Engine {
   // Everything account-scoped lives in a DEK-sealed blob rather than a plaintext
   // document per account (at-rest audit 2026-09-06; master plan §3.2).
   const sealed = createSealedStores(deps.platform, dek)
-  const notifications = new NotificationsService(deps.platform, host.events)
+  const notifications = new NotificationsService(deps.platform, host.events, sealed.notifications)
   const prefs = new PrefsService(deps.platform, host.events)
   // Every OS notification the watcher sends is also an inbox entry (plan A6): the tag says what it was about.
   const notifyingPlatform: Platform = {
@@ -220,9 +221,9 @@ export function createEngine(deps: EngineDeps): Engine {
   const prices = deps.pricesUrl === null ? null : new GeckoTerminalPrices(fetchImpl, () => deps.platform.now(), ...(deps.pricesUrl ? [deps.pricesUrl] : []))
   const portfolio = new PortfolioService({ platform: deps.platform, bus: host.events, chains, tokens, vault, electroswap, prices, snapshots: sealed.portfolio, looks: sealed.looks })
   const names = new NamesService(chains, () => deps.platform.now())
-  const allowances = new AllowancesService({ platform: deps.platform, bus: host.events, chains, tokens, vault, provider })
+  const allowances = new AllowancesService({ platform: deps.platform, bus: host.events, chains, tokens, vault, provider, allowances: sealed.allowances })
   const send = new SendService({ platform: deps.platform, chains, tokens, names, vault, provider })
-  const scanner = new ActivityScanner({ platform: deps.platform, chains, activity, tokens, vault, settings, cache, bus: host.events })
+  const scanner = new ActivityScanner({ platform: deps.platform, chains, activity, tokens, vault, settings, cache, bus: host.events, scan: sealed.scan })
   const holder = new HolderService({ platform: deps.platform, chains, vault, cache })
   const flows = new FlowStore({ platform: deps.platform, bus: host.events, activity })
   const swap = new SwapService({ statics,  platform: deps.platform, chains, tokens, vault, provider, settings, holder, flows })
@@ -234,20 +235,26 @@ export function createEngine(deps: EngineDeps): Engine {
   const nft = new NftService({ platform: deps.platform, chains, vault, provider, flows, electroswap, explore, legends, cache, notifications, custom: customCollections })
   const farm = new FarmService({ platform: deps.platform, chains, tokens, vault, provider, flows, settings, electroswap, cache })
   const launchpad = new LaunchpadService({ platform: deps.platform, chains, vault, provider, flows, electroswap, names, watchlist, cache })
-  const positions = new PositionsService({ platform: deps.platform, bus: host.events, farm, legends, limit, launchpad, tokens })
+  const positions = new PositionsService({ platform: deps.platform, bus: host.events, farm, legends, limit, launchpad, tokens, positions: sealed.positions })
   const remote = new RemoteSignService({ platform: deps.platform, bus: host.events, sync, vault, provider, canSignHere: async (a) => (await vault.privateKeyFor(a.id).catch(() => null)) !== null || (a.kind !== 'hd' && a.kind !== 'imported' && hardware.canSign(a)), ...(deps.receiptPollMs !== undefined ? { pollMs: deps.receiptPollMs * 5 } : {}) })
   provider.setRemote(remote)
   sync.setRecordHook((rec, from) => remote.onRecord(rec, from))
   const dapps = new DappsService({ provider, bus: host.events, now: () => deps.platform.now(), random: (n) => deps.platform.random(n) })
   const connect = new ConnectService({ walletKit: deps.walletKit ?? null, dapps, chains, vault, sites, bus: host.events })
   connect.init()
-  const bridge = new BridgeService({ statics, platform: deps.platform, bus: host.events, chains, vault, provider, flows, settings, ...(deps.receiptPollMs !== undefined ? { receiptPollMs: deps.receiptPollMs } : {}) })
+  const bridge = new BridgeService({ statics, platform: deps.platform, bus: host.events, chains, vault, provider, flows, settings, transfers: sealed.bridge, ...(deps.receiptPollMs !== undefined ? { receiptPollMs: deps.receiptPollMs } : {}) })
   watchlist.attach({
     tokens: (chainId) => explore.tokens(chainId),
     collections: (chainId) => explore.collections(chainId),
     campaigns: (chainId) => launchpad.list(chainId, undefined, ['ACTIVE', 'PENDING']),
     accessory: async (accountId, chainId) => (await positions.snapshot(accountId, chainId)).accessory,
   })
+
+  let migrating: Promise<unknown> | null = null
+  const runMigration = (): Promise<unknown> => {
+    migrating ??= migrateSealed(deps.platform, sealed).catch(() => undefined)
+    return migrating
+  }
 
   vault.init()
   scanner.attach()
@@ -256,9 +263,15 @@ export function createEngine(deps: EngineDeps): Engine {
     if (!e.status.unlocked) {
       activity.forget()
       contacts.forget()
+      notifications.forget()
+      bridge.forget()
       sealed.forget()
       cacheShards.forget()
     } else {
+      // The DEK is what the blobs are sealed under, so the one-shot move of the
+      // old plaintext documents happens here. Sites re-hydrates afterwards: it
+      // was hydrated at boot from the public half alone.
+      void runMigration().then(() => sites.hydrate().catch(() => undefined))
       void provider.resumeWatchers()
       void bridge.resume()
     }

@@ -27,8 +27,12 @@ export default defineContentScript({
     // Settings that shape the provider (MetaMask compatibility, default wallet)
     // arrive a few milliseconds later than the provider itself; storage is
     // asynchronous at document_start (§4.5).
-    void browser.storage.local.get('settings').then((r: Record<string, unknown>) => {
-      const doc = r['settings'] as { data?: { metaMaskCompat?: boolean; defaultWallet?: boolean } } | undefined
+    // The physical key is prefixed (`platform/src/extension.ts` maps the engine's
+    // `local` store onto `chrome.storage.local` under `bv:local:`). Reading the
+    // bare name always missed, so this event never fired and `metaMaskCompat` /
+    // `defaultWallet` silently never took effect.
+    void browser.storage.local.get('bv:local:settings').then((r: Record<string, unknown>) => {
+      const doc = r['bv:local:settings'] as { data?: { metaMaskCompat?: boolean; defaultWallet?: boolean } } | undefined
       const value = doc?.data
       if (!value) return
       window.dispatchEvent(new CustomEvent(CONFIG_EVENT, { detail: { isMetaMask: value.metaMaskCompat === true, defaultWallet: value.defaultWallet === true } }))

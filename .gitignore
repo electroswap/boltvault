@@ -14,6 +14,8 @@ node_modules/
 .out/
 pnpm-lock.yaml.lock
 .turbo/
+# Audit working directory: dumps of real wallet storage, recovered plaintext
+# and crack output land here. Never commit it.
 
 # Internal working documents, not published
 internal-docs/

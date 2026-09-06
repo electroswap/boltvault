@@ -15,6 +15,7 @@ import { AccountIdSchema, ScanSummarySchema, type ActivityEntry, type ScanSummar
 import type { SettingsStore } from '../settingsStore'
 import { readDoc, writeDoc, type DocSpec } from '../storage'
 import { cacheKey, type Cached, type DocCache } from '../cache'
+import type { SealedMap } from '../sealed'
 import type { EventBus } from '../host'
 import type { ChainsService } from './chains'
 import type { TokensService } from './tokens'
@@ -31,12 +32,8 @@ const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a
 const WINDOW = 50_000
 const CHUNK = 10_000
 
-const cursorDoc = (accountId: string, chainId: number): DocSpec<{ block: number }> => ({
-  key: `activity.scan.${accountId}.${chainId}`,
-  version: 1,
-  schema: z.object({ block: z.number().int().nonnegative() }),
-  defaultValue: () => ({ block: 0 }),
-})
+/** Sealed under the DEK: a cursor per `<accountId>.<chainId>`. */
+const cursorId = (accountId: string, chainId: number): string => `${accountId}.${chainId}`
 
 export interface ScanDeps {
   readonly platform: Platform
@@ -46,6 +43,8 @@ export interface ScanDeps {
   readonly vault: VaultManager
   readonly settings?: SettingsStore
   readonly cache?: DocCache
+  /** Log-scan cursors per `<accountId>.<chainId>`, sealed under the DEK. */
+  readonly scan: SealedMap<{ block: number }>
   readonly bus?: EventBus
 }
 
@@ -129,7 +128,7 @@ export class ActivityScanner {
     if (!account) throw new EngineError('not_found', 'no such account')
     const owner = account.address as Hex
     const head = Number((await d.chains.head(chainId)).blockNumber)
-    const { value: cursor } = await readDoc(d.platform.storage.local, cursorDoc(accountId, chainId), () => d.platform.now())
+    const cursor = (await d.scan.get(cursorId(accountId, chainId))) ?? { block: 0 }
     const from = Math.max(cursor.block + 1, head - WINDOW, 0)
     if (from > head) return { added: 0, fromBlock: from, toBlock: head }
     const universe = await d.tokens.universe(chainId)
@@ -169,7 +168,7 @@ export class ActivityScanner {
         added += 1
       }
       scanned = end
-      await writeDoc(d.platform.storage.local, cursorDoc(accountId, chainId), { block: scanned })
+      await d.scan.set(cursorId(accountId, chainId), { block: scanned })
     }
     return { added, fromBlock: from, toBlock: scanned }
   }

@@ -7,6 +7,7 @@
 import type { Platform } from '@boltvault/platform'
 import { formatUnits } from 'viem'
 import { z } from 'zod'
+import type { SealedMap } from '../sealed'
 import type { EventBus, NamespaceSpec } from '../host'
 import { AccountIdSchema, PositionsSchema, type Positions } from '../schema'
 import type { FarmService } from './farm'
@@ -23,6 +24,8 @@ export interface PositionsDeps {
   readonly limit: LimitService
   readonly launchpad: LaunchpadService
   readonly tokens: TokensService
+  /** Positions per `<chainId>.<accountId>`, sealed under the DEK. */
+  readonly positions: SealedMap<Positions>
 }
 
 function trim(s: string): string {
@@ -34,20 +37,14 @@ export class PositionsService {
 
   constructor(private readonly deps: PositionsDeps) {}
 
+  /** Sealed under the DEK; the id used to be the storage key, which named the account. */
   private key(accountId: string, chainId: number): string {
-    return `positions.${chainId}.${accountId}`
+    return `${chainId}.${accountId}`
   }
 
   /** The persisted last snapshot, for the first paint. */
   async cached(accountId: string, chainId: number): Promise<Positions | null> {
-    const raw = await this.deps.platform.storage.local.get(this.key(accountId, chainId))
-    if (!raw) return null
-    try {
-      const parsed = PositionsSchema.safeParse(JSON.parse(raw))
-      return parsed.success ? parsed.data : null
-    } catch {
-      return null
-    }
+    return this.deps.positions.get(this.key(accountId, chainId))
   }
 
   async snapshot(accountId: string, chainId: number): Promise<Positions> {
@@ -87,7 +84,7 @@ export class PositionsService {
       else if (refund) accessory = { kind: 'claim_refund', text: `A refund from ${refund.token.symbol} is waiting`, target: `campaign:${refund.pool}` }
     }
     const positions: Positions = { accountId, chainId, farms, legends, orders, campaigns, accessory, observedAt: d.platform.now() }
-    await d.platform.storage.local.set(this.key(accountId, chainId), JSON.stringify(positions)).catch(() => undefined)
+    await d.positions.set(this.key(accountId, chainId), positions).catch(() => undefined)
     d.bus.emit({ type: 'positions.changed', positions })
     return positions
   }

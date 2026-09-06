@@ -59,6 +59,9 @@ describe('method table', () => {
   })
   it('passes SAFE reads through on the origin chain and rate-limits them', async () => {
     const h = harness()
+    // Chain reads need a session now (see "an unconnected origin" below).
+    await req(h, A, 'eth_requestAccounts')
+    await req(h, B, 'eth_requestAccounts')
     expect(await req(h, A, 'eth_blockNumber')).toBe('ok:eth_blockNumber')
     expect(h.safe[0]).toEqual({ chainId: 52014, method: 'eth_blockNumber' })
     for (let i = 0; i < 70; i++) await req(h, A, 'eth_blockNumber').catch(() => undefined)
@@ -70,11 +73,33 @@ describe('method table', () => {
   })
   it('bounds eth_getLogs ranges', async () => {
     const h = harness()
+    await req(h, A, 'eth_requestAccounts')
     await expect(req(h, A, 'eth_getLogs', [{ fromBlock: '0x1', toBlock: '0x10000' }])).rejects.toMatchObject({ code: RPC.LIMIT_EXCEEDED })
     await expect(req(h, A, 'eth_getLogs', [{ fromBlock: '0x1' }])).rejects.toMatchObject({ code: RPC.LIMIT_EXCEEDED })
     expect(await req(h, A, 'eth_getLogs', [{ fromBlock: '0x1', toBlock: '0x100' }])).toBe('ok:eth_getLogs')
     expect(await req(h, A, 'eth_getLogs', [{ fromBlock: 'latest', toBlock: 'latest' }])).toBe('ok:eth_getLogs')
   })
+  it('refuses chain state to an unconnected origin, but still answers discovery', async () => {
+    const h = harness()
+    // Discovery is open: EIP-1193 expects a provider to answer before a page
+    // decides whether to prompt, and none of this names the user.
+    expect(await req(h, A, 'eth_chainId')).toBe('0xcb2e')
+    expect(await req(h, A, 'net_version')).toBe('52014')
+    expect(await req(h, A, 'eth_accounts')).toEqual([])
+
+    // Chain state is not. Before this gate existed, any page the user merely
+    // visited could read through the wallet's RPC at 60 req/s and could
+    // broadcast an already-signed transaction — an open relay for the web.
+    for (const method of ['eth_blockNumber', 'eth_call', 'eth_getBalance', 'eth_getLogs', 'eth_getStorageAt', 'eth_sendRawTransaction']) {
+      await expect(req(h, A, method, [])).rejects.toMatchObject({ code: RPC.UNAUTHORIZED })
+    }
+    expect(h.safe).toEqual([])
+
+    // ...and it works again once the origin actually connects.
+    await req(h, A, 'eth_requestAccounts')
+    expect(await req(h, A, 'eth_blockNumber')).toBe('ok:eth_blockNumber')
+  })
+
   it('advertises no atomic batching', async () => {
     const h = harness()
     await req(h, A, 'eth_requestAccounts')

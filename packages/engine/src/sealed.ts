@@ -16,7 +16,7 @@
 import { xchacha20poly1305 } from '@noble/ciphers/chacha'
 import { hkdf } from '@noble/hashes/hkdf'
 import { sha256 } from '@noble/hashes/sha256'
-import { fromHex, toHex } from '@boltvault/core'
+import { fromHex, toHex, zeroise } from '@boltvault/core'
 import type { Platform } from '@boltvault/platform'
 import { z, type ZodType } from 'zod'
 import { EngineError } from './errors'
@@ -79,7 +79,12 @@ export class SealedMap<T> {
   }
 
   private async key(): Promise<Uint8Array> {
-    return hkdf(sha256, await this.dek(), undefined, this.infoBytes, 32)
+    const dek = await this.dek()
+    const key = hkdf(sha256, dek, undefined, this.infoBytes, 32)
+    // The accessor hands us a fresh copy; the session hex is the real home, so
+    // this copy is ours to clear (§3.2).
+    zeroise(dek)
+    return key
   }
 
   /** `null` when locked, absent, or unreadable — never throws. */
@@ -174,9 +179,12 @@ export class SealedMap<T> {
       const pt = xchacha20poly1305(key, fromHex(parsed.nonce), this.aadBytes).decrypt(fromHex(parsed.ct))
       const blob = this.blob.safeParse(JSON.parse(new TextDecoder().decode(pt)))
       this.items = blob.success ? blob.data.items : []
+      zeroise(pt)
     } catch {
       // wrong key (a different vault) or tamper → treat as empty, never overwrite silently
       this.items = []
+    } finally {
+      zeroise(key)
     }
     return this.items
   }
@@ -186,6 +194,7 @@ export class SealedMap<T> {
     const nonce = this.platform.random(24)
     const pt = new TextEncoder().encode(JSON.stringify({ v: 1, items }))
     const ct = xchacha20poly1305(key, nonce, this.aadBytes).encrypt(pt)
+    zeroise(key, pt)
     await this.platform.storage.local.set(this.opts.key, JSON.stringify({ nonce: toHex(nonce), ct: toHex(ct) }))
     this.items = items
   }
