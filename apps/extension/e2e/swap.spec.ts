@@ -86,11 +86,17 @@ test('quote with the fee stack, then approve → permit → swap through the she
     await expect(popup.getByTestId('home')).toBeVisible({ timeout: 15_000 })
     await popup.getByTestId('tabs').getByText('Swap').click()
     await expect(popup.getByTestId('swap')).toBeVisible()
+    // The first-swap coach is an overlay, once (plan B4).
+    await expect(popup.getByTestId('swap-coach')).toBeVisible({ timeout: 10_000 })
+    await popup.getByTestId('swap-coach-ok').click()
+    await expect(popup.getByTestId('swap-coach')).toHaveCount(0)
 
-    // Pay FIX, receive USDC (the default), 2 FIX.
+    // Pay FIX, receive USDC (BOLT is the default pair; pick USDC), 2 FIX.
     await popup.getByTestId('swap-token-in').click()
     await popup.getByTestId('swap-pick-FIX').click()
     await expect(popup.getByTestId('swap-token-in')).toContainText('FIX')
+    await popup.getByTestId('swap-token-out').click()
+    await popup.getByTestId('swap-pick-USDC').click()
     await expect(popup.getByTestId('swap-token-out')).toContainText('USDC')
     await popup.getByTestId('swap-amount-in').fill('2')
     await expect(popup.getByTestId('swap-amount-out')).toContainText('0.99', { timeout: 20_000 }) // 1 USDC − 0.30 %
@@ -100,7 +106,12 @@ test('quote with the fee stack, then approve → permit → swap through the she
     await expect(popup.getByTestId('swap-rate')).toContainText('1 FIX = 0.5 USDC')
     await expect(popup.getByTestId('swap-route')).toContainText('V3 0.3%')
     await expect(popup.getByTestId('swap-min')).toContainText('USDC')
-    await expect(popup.getByTestId('swap-coach')).toBeVisible()
+    await expect(popup.getByTestId('swap-locks')).toContainText(/No lock/)
+    // Slippage is a sheet: a preset changes the pill; Done closes it.
+    await popup.getByTestId('swap-slippage').click()
+    await popup.getByTestId('swap-slippage-100').click()
+    await popup.getByTestId('swap-slippage-done').click()
+    await expect(popup.getByTestId('swap-slippage')).toContainText('1.00%')
     // The fee line opens the schedule sheet.
     await popup.getByTestId('swap-fee-line').click()
     await expect(popup.getByTestId('fee-sheet')).toBeVisible()

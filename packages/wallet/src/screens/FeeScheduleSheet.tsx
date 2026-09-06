@@ -2,16 +2,17 @@
  * The fee-schedule sheet (master plan §8.18): every tier from chain, your
  * score and where it comes from, and the distance to the next tier with a
  * Swap-prefilled key. Reached from the Swap fee line, Settings › Spending
- * and About.
+ * and About. Children scroll inside the Sheet; Close sits in its footer
+ * (plan B1), so it is reachable at any height.
  */
-import { Body, Column, Key, Plate, Row, ScrollView, Sheet, shortAddress } from '@boltvault/ui'
+import { Body, Column, Key, Plate, Row, Sheet, shortAddress } from '@boltvault/ui'
 import type { FeeScheduleView, HolderTier } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { formatBolt, formatPct } from '../format'
 import { t } from '../i18n'
 
-export function FeeScheduleSheet({ open, onClose, accountId, chainId, onGetBolt }: { open: boolean; onClose: () => void; accountId: string | null; chainId: number; onGetBolt?: () => void }) {
+export function FeeScheduleSheet({ open, onClose, accountId, chainId, onGetBolt, reducedMotion = false }: { open: boolean; onClose: () => void; accountId: string | null; chainId: number; onGetBolt?: () => void; reducedMotion?: boolean }) {
   const engine = useEngine()
   const [schedule, setSchedule] = useState<FeeScheduleView | null>(null)
   const [tier, setTier] = useState<HolderTier | null>(null)
@@ -25,8 +26,8 @@ export function FeeScheduleSheet({ open, onClose, accountId, chainId, onGetBolt 
     }
   }, [engine, open, accountId, chainId])
   return (
-    <Sheet open={open} onClose={onClose} title={t({ id: 'fee.sheet.title', message: 'Wallet fee schedule' })} testID="fee-sheet">
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
+    <Sheet open={open} onClose={onClose} title={t({ id: 'fee.sheet.title', message: 'Wallet fee schedule' })} reducedMotion={reducedMotion} footer={<Key label={t({ id: 'close', message: 'Close' })} kind="secondary" size="compact" onPress={onClose} testID="fee-close" />} testID="fee-sheet">
+      <Column gap="$3">
         <Body tone="mute" size="caption">
           {t({ id: 'fee.sheet.body', message: 'Every in-wallet swap pays a fee on what you receive. The more BOLT you hold — in your wallet or deposited as a farm boost — the less you pay. The schedule lives on chain; the wallet reads it live.' })}
         </Body>
@@ -68,7 +69,7 @@ export function FeeScheduleSheet({ open, onClose, accountId, chainId, onGetBolt 
                 <Body tone="ember" size="caption" testID="fee-next">
                   {t({ id: 'fee.next', message: '{n} more BOLT-eq for {p}', values: { n: formatBolt((BigInt(tier.nextTierAt) - BigInt(tier.score)).toString()), p: formatPct(tier.nextTierBips) } })}
                 </Body>
-                {onGetBolt ? <Key label={t({ id: 'fee.getBolt', message: 'Get BOLT' })} kind="secondary" onPress={onGetBolt} testID="fee-get-bolt" /> : null}
+                {onGetBolt ? <Key label={t({ id: 'fee.getBolt', message: 'Get BOLT' })} kind="secondary" size="compact" onPress={onGetBolt} testID="fee-get-bolt" /> : null}
               </Column>
             ) : (
               <Body tone="arc" size="caption">
@@ -80,8 +81,7 @@ export function FeeScheduleSheet({ open, onClose, accountId, chainId, onGetBolt 
         <Body tone="mute" size="caption" testID="fee-sink">
           {schedule?.sink ? t({ id: 'fee.sink', message: 'Fees go to the fee sink {a}. What it does with them is published in About.', values: { a: shortAddress(schedule.sink) } }) : t({ id: 'fee.sink.none', message: 'The fee sink for this network is not set yet; in-wallet swaps stay off until it is.' })}
         </Body>
-        <Key label={t({ id: 'close', message: 'Close' })} kind="secondary" onPress={onClose} testID="fee-close" />
-      </ScrollView>
+      </Column>
     </Sheet>
   )
 }

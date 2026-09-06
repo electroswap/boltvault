@@ -59,6 +59,7 @@ import type {
   SwapQuote,
   SyncStatus,
   TokenDetailView,
+  LiquidityView,
   TokenView,
   VaultStatus,
   WatchItem,
@@ -240,6 +241,9 @@ export interface ExploreNamespace {
   cachedTokens(input: { chainId: number }): Promise<Cached<ExploreToken[]> | null>
   tokenDetail(input: { chainId: number; address: string }): Promise<TokenDetailView | null>
   cachedTokenDetail(input: { chainId: number; address: string }): Promise<Cached<TokenDetailView> | null>
+  /** Locked liquidity for a token (native → WETN); null when the market is unreachable. */
+  liquidity(input: { chainId: number; address: string }): Promise<LiquidityView | null>
+  cachedLiquidity(input: { chainId: number; address: string }): Promise<Cached<LiquidityView> | null>
   collections(input: { chainId: number; accountId?: AccountId }): Promise<CollectionView[]>
   cachedCollections(input: { chainId: number; accountId?: AccountId }): Promise<Cached<CollectionView[]> | null>
   collection(input: { chainId: number; address: string; accountId?: AccountId }): Promise<CollectionView | null>

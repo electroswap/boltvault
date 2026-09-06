@@ -27,6 +27,8 @@ const CASES: Array<{ screen: string; scenario: string; sizes: Array<keyof typeof
   { screen: 'home', scenario: 'locked', sizes: ['popup'] },
   { screen: 'home', scenario: 'funded', sizes: ['popup', 'tab', 'mobile'] },
   { screen: 'swap', scenario: 'funded', sizes: ['popup', 'mobile'] },
+  // The first-swap coach overlay: an account that has not swapped and has not dismissed it.
+  { screen: 'swap', scenario: 'unlocked', sizes: ['popup'] },
   { screen: 'explore', scenario: 'funded', sizes: ['popup'] },
   { screen: 'portfolio', scenario: 'funded', sizes: ['popup', 'tab'] },
   { screen: 'activity', scenario: 'funded', sizes: ['popup'] },

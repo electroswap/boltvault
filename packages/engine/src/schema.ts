@@ -532,6 +532,16 @@ export const TokenDetailViewSchema = z.object({
 })
 export type TokenDetailView = z.infer<typeof TokenDetailViewSchema>
 
+/** Locked liquidity for a token (plan B4, owner item W3): the share of the pool supply under active locks, and how many locks. */
+export const LiquidityViewSchema = z.object({
+  chainId: z.number().int().positive(),
+  address: z.string(),
+  /** 0..100. */
+  lockedPct: z.number().min(0).max(100),
+  lockCount: z.number().int().nonnegative(),
+})
+export type LiquidityView = z.infer<typeof LiquidityViewSchema>
+
 /** One entry in the notifications inbox (plan A6). `target` is a route hint: `campaign:<pool>`, `token:<address>`, `collection:<address>`, `legends`, `positions`, `offers`. */
 export const NotificationViewSchema = z.object({
   id: z.string(),

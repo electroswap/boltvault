@@ -216,6 +216,8 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
     ]
     const offersInbox: OffersInbox = { received: [{ asset: owned[0] as AssetView, offer }], made: [{ address: '0x8888888888888888888888888888888888888888', tokenId: '404', name: 'Volt #404', imageUrl: null, collectionName: 'Volts', offer: { ...offer, priceEtn: 2.5, priceRaw: '2500000000000000000', orderHash: '0xbid2', maker: address }, expiresAt: Math.floor(FIXED_NOW / 1000) + 2 * 86_400 }], obligationWei: '2500000000000000000', wetnBalanceWei: '4000000000000000000' }
     const Any = z.object({}).passthrough()
+    // The first-swap coach has been read (plan B4); the screenshot shows the console, not the overlay.
+    await engine.engine.prefs.set({ swapCoachDismissed: true })
     engine.host.override('activityScan', {
       scanAll: { input: Any, handler: async () => ({ accountId, chainIds: [52014, 1, 56, 8453], added: 0, problems: [], observedAt: FIXED_NOW }) },
       cached: { input: Any, handler: async () => ({ value: { accountId, chainIds: [52014, 1, 56, 8453], added: 0, problems: [], observedAt: FIXED_NOW - 120_000 }, observedAt: FIXED_NOW - 120_000 }) },
@@ -227,6 +229,7 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
       available: { handler: async () => true },
       tokens: { input: Any, handler: async () => exploreTokens },
       tokenDetail: { input: Any, handler: async () => null },
+      liquidity: { input: Any, handler: async (arg) => ((arg as { address: string }).address.toLowerCase() === BOLT.toLowerCase() ? { chainId: 52014, address: BOLT, lockedPct: 87, lockCount: 2 } : null) },
       collections: { input: Any, handler: async () => [legendsCollection, voltsCollection] },
       collection: { input: Any, handler: async (arg) => ((arg as { address: string }).address.toLowerCase() === LEGENDS.toLowerCase() ? legendsCollection : voltsCollection) },
       search: { input: Any, handler: async (arg) => ({ tokens: exploreTokens.filter((x) => x.symbol.toLowerCase().includes(String((arg as { query: string }).query).toLowerCase())), collections: [] }) },

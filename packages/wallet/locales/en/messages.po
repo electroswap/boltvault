@@ -1268,6 +1268,11 @@ msgctxt "devices.what"
 msgid "Paired devices share settings, per-site chains and watch/hardware accounts. Seeds and keys never sync — move a vault with the export code in Security."
 msgstr "Paired devices share settings, per-site chains and watch/hardware accounts. Seeds and keys never sync — move a vault with the export code in Security."
 
+#: packages/wallet/src/components/SlippageSheet.tsx
+msgctxt "done"
+msgid "Done"
+msgstr "Done"
+
 #: packages/wallet/src/screens/Explore.tsx
 msgctxt "explore.alerts"
 msgid "Alerts"
@@ -3588,20 +3593,50 @@ msgctxt "swap.balance"
 msgid "Balance: {q}"
 msgstr "Balance: {q}"
 
-#: packages/wallet/src/screens/Swap.tsx
-msgctxt "swap.coach"
-msgid "Your first swap of a token takes up to three signatures: allow Permit2 once (the shared allowance contract ElectroSwap uses), permit this exact amount, then the swap itself. ETN in needs only the swap."
-msgstr "Your first swap of a token takes up to three signatures: allow Permit2 once (the shared allowance contract ElectroSwap uses), permit this exact amount, then the swap itself. ETN in needs only the swap."
+#: packages/wallet/src/components/SwapCoachSheet.tsx
+msgctxt "swap.coach.1"
+msgid "Allow Permit2, once"
+msgstr "Allow Permit2, once"
 
-#: packages/wallet/src/screens/Swap.tsx
+#: packages/wallet/src/components/SwapCoachSheet.tsx
+msgctxt "swap.coach.1.body"
+msgid "The shared allowance contract ElectroSwap uses. One signature per token, ever."
+msgstr "The shared allowance contract ElectroSwap uses. One signature per token, ever."
+
+#: packages/wallet/src/components/SwapCoachSheet.tsx
+msgctxt "swap.coach.2"
+msgid "Permit this exact amount"
+msgstr "Permit this exact amount"
+
+#: packages/wallet/src/components/SwapCoachSheet.tsx
+msgctxt "swap.coach.2.body"
+msgid "A signed message, not a transaction. Nothing else can move."
+msgstr "A signed message, not a transaction. Nothing else can move."
+
+#: packages/wallet/src/components/SwapCoachSheet.tsx
+msgctxt "swap.coach.3"
+msgid "The swap itself"
+msgstr "The swap itself"
+
+#: packages/wallet/src/components/SwapCoachSheet.tsx
+msgctxt "swap.coach.3.body"
+msgid "Paying with ETN needs only this one."
+msgstr "Paying with ETN needs only this one."
+
+#: packages/wallet/src/components/SwapCoachSheet.tsx
 msgctxt "swap.coach.fee"
 msgid "The wallet fee comes out of what you receive; holding BOLT lowers it. Tap the fee line for the schedule."
 msgstr "The wallet fee comes out of what you receive; holding BOLT lowers it. Tap the fee line for the schedule."
 
-#: packages/wallet/src/screens/Swap.tsx
+#: packages/wallet/src/components/SwapCoachSheet.tsx
 msgctxt "swap.coach.ok"
 msgid "Got it"
 msgstr "Got it"
+
+#: packages/wallet/src/components/SwapCoachSheet.tsx
+msgctxt "swap.coach.title"
+msgid "Your first swap"
+msgstr "Your first swap"
 
 #: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.done"
@@ -3614,14 +3649,24 @@ msgid "Wallet fee"
 msgstr "Wallet fee"
 
 #: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.fee.a11y"
+msgid "Wallet fee schedule"
+msgstr "Wallet fee schedule"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.fee.detail"
+msgid "{a} {s} to {sink}"
+msgstr "{a} {s} to {sink}"
+
+#: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.fee.idle"
 msgid "0.50% · hold BOLT for less"
 msgstr "0.50% · hold BOLT for less"
 
 #: packages/wallet/src/screens/Swap.tsx
-msgctxt "swap.fee.line"
-msgid "{p} · BOLT tier {t} · {a} {s} to {sink}"
-msgstr "{p} · BOLT tier {t} · {a} {s} to {sink}"
+msgctxt "swap.fee.main"
+msgid "{p} · BOLT tier {t}"
+msgstr "{p} · BOLT tier {t}"
 
 #: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.fee.next"
@@ -3632,6 +3677,11 @@ msgstr "hold {n} BOLT-eq for {p}"
 msgctxt "swap.fee.zero"
 msgid "No wallet fee · BOLT tier {t}"
 msgstr "No wallet fee · BOLT tier {t}"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.flip"
+msgid "Swap direction"
+msgstr "Swap direction"
 
 #: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.impact"
@@ -3652,6 +3702,36 @@ msgstr "Swap anyway"
 msgctxt "swap.limit.key"
 msgid "Place order"
 msgstr "Place order"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.locked"
+msgid "Liquidity locked"
+msgstr "Liquidity locked"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.locks"
+msgid "{p}% locked · {n}"
+msgstr "{p}% locked · {n}"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.locks.many"
+msgid "{n} locks"
+msgstr "{n} locks"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.locks.none"
+msgid "No locks"
+msgstr "No locks"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.locks.one"
+msgid "1 lock"
+msgstr "1 lock"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.locks.unknown"
+msgid "No lock data"
+msgstr "No lock data"
 
 #: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.min"
@@ -3683,10 +3763,30 @@ msgctxt "swap.pick.in"
 msgid "You pay"
 msgstr "You pay"
 
+#: packages/wallet/src/components/TokenPickerSheet.tsx
+msgctxt "swap.pick.lookup"
+msgid "Looking that address up…"
+msgstr "Looking that address up…"
+
+#: packages/wallet/src/components/TokenPickerSheet.tsx
+msgctxt "swap.pick.new"
+msgid "Not on the list"
+msgstr "Not on the list"
+
+#: packages/wallet/src/components/TokenPickerSheet.tsx
+msgctxt "swap.pick.none"
+msgid "Nothing matches. Paste a token address to add it."
+msgstr "Nothing matches. Paste a token address to add it."
+
 #: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.pick.out"
 msgid "You receive"
 msgstr "You receive"
+
+#: packages/wallet/src/components/TokenPickerSheet.tsx
+msgctxt "swap.pick.search"
+msgid "Search by name or paste an address"
+msgstr "Search by name or paste an address"
 
 #: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.receive"
@@ -3697,6 +3797,31 @@ msgstr "You receive"
 msgctxt "swap.slippage"
 msgid "Slippage {p}"
 msgstr "Slippage {p}"
+
+#: packages/wallet/src/components/SlippageSheet.tsx
+msgctxt "swap.slippage.body"
+msgid "How far the price may move between the quote and the block it lands in. The swap reverts past this instead of paying more."
+msgstr "How far the price may move between the quote and the block it lands in. The swap reverts past this instead of paying more."
+
+#: packages/wallet/src/components/SlippageSheet.tsx
+msgctxt "swap.slippage.default"
+msgid "Use {p} as my default"
+msgstr "Use {p} as my default"
+
+#: packages/wallet/src/components/SlippageSheet.tsx
+msgctxt "swap.slippage.high"
+msgid "Above 3% a swap can be front-run for the difference."
+msgstr "Above 3% a swap can be front-run for the difference."
+
+#: packages/wallet/src/components/SlippageSheet.tsx
+msgctxt "swap.slippage.saved"
+msgid "Saved as your default"
+msgstr "Saved as your default"
+
+#: packages/wallet/src/components/SlippageSheet.tsx
+msgctxt "swap.slippage.title"
+msgid "Slippage"
+msgstr "Slippage"
 
 #: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.stale"
@@ -3712,6 +3837,16 @@ msgstr "{a} {s} → at least {b} {u}"
 msgctxt "swap.tax"
 msgid "+{p} token tax"
 msgstr "+{p} token tax"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.tax.label"
+msgid "Token tax"
+msgstr "Token tax"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.title"
+msgid "Swap"
+msgstr "Swap"
 
 #: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.working"
