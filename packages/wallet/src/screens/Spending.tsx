@@ -3,13 +3,13 @@
  * token approvals, and the wallet fee schedule — your tier, every tier and
  * the sink, read-only. Step-ups and the send allow-list keep their rows.
  */
-import { Body, Chip, Column, Icon, Key, Plate, Row, ScrollView, Toggle, metrics, paint, shortAddress } from '@boltvault/ui'
+import { Body, Chip, Column, Icon, Plate, Row, ScrollView, Toggle, metrics, paint, shortAddress } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import type { HolderTier, Settings } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { formatBolt, formatPct } from '../format'
 import { t } from '../i18n'
-import { useRouter } from '../navigation/router'
 import { useWalletState } from '../state/useWalletState'
 import { FeeScheduleSheet } from './FeeScheduleSheet'
 
@@ -18,7 +18,6 @@ const SLIPPAGES = [10, 50, 100, 300] as const
 
 export function Spending({ body }: { body: 'extension-popup' | 'extension-tab' | 'mobile' }) {
   const engine = useEngine()
-  const router = useRouter()
   const { active } = useWalletState()
   const [settings, setSettings] = useState<Settings | null>(null)
   const [tier, setTier] = useState<HolderTier | null>(null)
@@ -36,10 +35,7 @@ export function Spending({ body }: { body: 'extension-popup' | 'extension-tab' |
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="spending">
-      <Row justifyContent="space-between">
-        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-        <Body size="title">{t({ id: 'settings.spending', message: 'Spending' })}</Body>
-      </Row>
+      <PageHeader title={t({ id: 'settings.spending', message: 'Spending' })} />
 
       <Plate gap="$2" testID="spending-slippage">
         <Body size="title">{t({ id: 'spending.slippage', message: 'Swap slippage' })}</Body>

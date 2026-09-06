@@ -4,13 +4,13 @@
  * addresses, the signed-flags state, crash reports (off by default), and
  * where the audit, the SBOM and the security policy live.
  */
-import { Body, Column, Icon, Key, Plate, Row, ScrollView, Toggle, metrics, paint, shortAddress } from '@boltvault/ui'
+import { Body, Column, Key, Plate, ScrollView, Toggle, metrics, paint, shortAddress } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import type { AboutView, FlagsView, Settings } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
-import { useRouter } from '../navigation/router'
 
 const ETN = 52014
 const SECURITY_URL = 'https://wallet.electroswap.io/security'
@@ -18,7 +18,6 @@ const SECURITY_URL = 'https://wallet.electroswap.io/security'
 export function About({ body }: { body: 'extension-popup' | 'extension-tab' | 'mobile' }) {
   const engine = useEngine()
   const host = useHost()
-  const router = useRouter()
   const [settings, setSettings] = useState<Settings | null>(null)
   const [flags, setFlags] = useState<FlagsView | null>(null)
   const [about, setAbout] = useState<AboutView | null>(null)
@@ -38,10 +37,7 @@ export function About({ body }: { body: 'extension-popup' | 'extension-tab' | 'm
   }
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="about">
-      <Row justifyContent="space-between">
-        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-        <Body size="title">{t({ id: 'settings.about', message: 'About' })}</Body>
-      </Row>
+      <PageHeader title={t({ id: 'settings.about', message: 'About' })} />
 
       <Plate gap={4} testID="about-version">
         <Body size="title">BoltVault {host.version ?? '0.1.0'}</Body>
@@ -57,11 +53,6 @@ export function About({ body }: { body: 'extension-popup' | 'extension-tab' | 'm
             {t({ id: 'about.dev.body', message: 'This build talks to {o} instead of ElectroSwap’s servers. Prices, activity, the marketplace and the launchpad come from there.', values: { o: about.apiOrigin } })}
           </Body>
         </Plate>
-      ) : null}
-      {about ? (
-        <Body tone="mute" size="caption" testID="about-features">
-          {about.features.limitOrders ? t({ id: 'about.limit.on', message: 'Limit orders are on in this build.' }) : t({ id: 'about.limit.off', message: 'Limit orders are off in this build.' })}
-        </Body>
       ) : null}
 
       <Plate gap={4} testID="about-encryption">

@@ -1,15 +1,17 @@
 /**
  * Explore (master plan §8.11): the ElectroSwap market inside the wallet —
  * tokens by volume, collections, campaigns, farms, and one search across all
- * of it. Display data from the API, cached 60 s while a surface is open and
- * kept last-good; the chain stays the quantity source everywhere else.
+ * of it. Display data from the API, persisted last-good and served stale
+ * first (plan A2), refreshed after 60 s; the chain stays the quantity source
+ * everywhere else.
  */
 import { ELECTRONEUM_ADDRESSES } from '@boltvault/chains'
-import { fetchCollectionBalances, fetchCollections, fetchTokenDetail, fetchTopCollections, fetchTopTokens, type CollectionView as EsCollection, type ElectroSwapClient, type TokenDetailView } from '@boltvault/electroswap'
+import { fetchCollectionBalances, fetchCollections, fetchTokenDetail, fetchTopCollections, fetchTopTokens, type CollectionView as EsCollection, type ElectroSwapClient } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
-import type { NamespaceSpec } from '../host'
-import { AccountIdSchema, type CollectionView, type ExploreToken } from '../schema'
+import { cacheKey, type Cached, type DocCache } from '../cache'
+import type { EventBus, NamespaceSpec } from '../host'
+import { AccountIdSchema, CollectionViewSchema, ExploreTokenSchema, TokenDetailViewSchema, type CollectionView, type ExploreToken, type TokenDetailView } from '../schema'
 import type { TokensService } from './tokens'
 import type { VaultManager } from './vault'
 import type { WatchlistService } from './watchlist'
@@ -20,16 +22,27 @@ export interface ExploreDeps {
   readonly tokens: TokensService
   readonly vault: VaultManager
   readonly watchlist: WatchlistService
+  readonly cache: DocCache
+  readonly bus?: EventBus
 }
 
 const TTL_MS = 60_000
+const DETAIL_TTL_MS = 60_000
+const TOKENS_SPEC = (chainId: number) => ({ key: cacheKey('explore', 'tokens', chainId), schema: z.array(ExploreTokenSchema) })
+const COLLECTIONS_SPEC = (chainId: number, accountId: string | undefined) => ({ key: cacheKey('explore', 'collections', chainId, accountId ?? '-'), schema: z.array(CollectionViewSchema) })
+const DETAIL_SPEC = (chainId: number, address: string) => ({ key: cacheKey('explore', 'tokendetail', chainId, address), schema: TokenDetailViewSchema })
 const isEtn = (chainId: number): chainId is 52014 | 5201420 => chainId === 52014 || chainId === 5201420
 
 export class ExploreService {
-  private tokenCache = new Map<number, { at: number; rows: ExploreToken[] }>()
-  private collectionCache = new Map<number, { at: number; rows: EsCollection[] }>()
+  /** The raw API rows behind `collections`, for `collection()` to reuse within a session. */
+  private collectionRows = new Map<number, EsCollection[]>()
 
-  constructor(private readonly deps: ExploreDeps) {}
+  constructor(private readonly deps: ExploreDeps) {
+    // A pin is applied at serve time, so a pin change is a cache change for the token list (pages re-read).
+    deps.bus?.subscribe((e) => {
+      if (e.type === 'tokens.changed') deps.bus?.emit({ type: 'cache.changed', key: cacheKey('explore', 'tokens', e.chainId), observedAt: deps.platform.now() })
+    })
+  }
 
   get available(): boolean {
     return this.deps.electroswap !== null
@@ -39,67 +52,84 @@ export class ExploreService {
   async tokens(chainId: number): Promise<ExploreToken[]> {
     const d = this.deps
     if (!d.electroswap || !isEtn(chainId)) return []
-    const now = d.platform.now()
-    const hit = this.tokenCache.get(chainId)
-    if (hit && now - hit.at < TTL_MS) return this.withStars(hit.rows)
+    const client = d.electroswap
     try {
-      const rows = await fetchTopTokens(d.electroswap, chainId)
-      const universe = await d.tokens.universe(chainId)
-      const out: ExploreToken[] = rows
-        .filter((r) => !r.spam)
-        .map((r) => {
-          const u = universe.find((x) => x.address.toLowerCase() === r.address.toLowerCase())
-          return { chainId, address: r.address, symbol: r.symbol, name: r.name, decimals: r.decimals, logoUri: u?.logoUri ?? r.logoUrl, price: r.price, change24h: r.change24h, change7d: r.change7d, volume24h: r.volume24h, tvl: r.tvl, marketCap: r.marketCap, safety: r.safety, starred: false }
-        })
-      this.tokenCache.set(chainId, { at: now, rows: out })
-      return this.withStars(out)
+      const hit = await d.cache.through(TOKENS_SPEC(chainId), TTL_MS, async () => {
+        const rows = await fetchTopTokens(client, chainId)
+        const universe = await d.tokens.universe(chainId)
+        return rows
+          .filter((r) => !r.spam)
+          .map((r): ExploreToken => {
+            const u = universe.find((x) => x.address.toLowerCase() === r.address.toLowerCase())
+            return { chainId, address: r.address, symbol: r.symbol, name: r.name, decimals: r.decimals, logoUri: u?.logoUri ?? r.logoUrl, price: r.price, change24h: r.change24h, change7d: r.change7d, volume24h: r.volume24h, tvl: r.tvl, marketCap: r.marketCap, safety: r.safety, pinned: false }
+          })
+      })
+      return this.withPins(chainId, hit.value)
     } catch {
-      return hit ? this.withStars(hit.rows) : []
+      return []
     }
   }
 
-  private withStars(rows: ExploreToken[]): ExploreToken[] {
-    const starred = new Set(this.deps.watchlist.cached().filter((w) => w.kind === 'token').map((w) => `${w.chainId}:${w.address.toLowerCase()}`))
-    return rows.map((r) => ({ ...r, starred: starred.has(`${r.chainId}:${r.address.toLowerCase()}`) }))
+  /** The last-good token list at once, or null when nothing was ever fetched. */
+  async cachedTokens(chainId: number): Promise<Cached<ExploreToken[]> | null> {
+    const hit = await this.deps.cache.read(TOKENS_SPEC(chainId))
+    return hit ? { ...hit, value: await this.withPins(chainId, hit.value) } : null
+  }
+
+  /** Pins are read at serve time (`tokens.prefs`), so a cached list never shows a stale star. */
+  private async withPins(chainId: number, rows: ExploreToken[]): Promise<ExploreToken[]> {
+    const pinned = new Set((await this.deps.tokens.prefs()).pinned)
+    return rows.map((r) => ({ ...r, pinned: pinned.has(`${chainId}:${r.address.toLowerCase()}`) }))
   }
 
   async tokenDetail(chainId: number, address: string): Promise<TokenDetailView | null> {
     const d = this.deps
     if (!d.electroswap || !isEtn(chainId)) return null
+    const client = d.electroswap
     try {
-      return await fetchTokenDetail(d.electroswap, chainId, address === 'native' ? 'NATIVE' : address)
+      return (await d.cache.through(DETAIL_SPEC(chainId, address), DETAIL_TTL_MS, async () => {
+        const v = await fetchTokenDetail(client, chainId, address === 'native' ? 'NATIVE' : address)
+        if (!v) throw new Error('no such token')
+        return { ...v, sparkline: [...v.sparkline] }
+      })).value
     } catch {
       return null
     }
+  }
+
+  async cachedTokenDetail(chainId: number, address: string): Promise<Cached<TokenDetailView> | null> {
+    return this.deps.cache.read(DETAIL_SPEC(chainId, address))
   }
 
   /** Explore › Collectibles: top collections, Electric Legends pinned first with the dividends mark (§8.10). */
   async collections(chainId: number, accountId?: string): Promise<CollectionView[]> {
     const d = this.deps
     if (!d.electroswap || !isEtn(chainId)) return []
-    const now = d.platform.now()
-    let rows = this.collectionCache.get(chainId)?.rows ?? []
-    const fresh = this.collectionCache.get(chainId)
-    if (!fresh || now - fresh.at >= TTL_MS) {
-      try {
-        rows = await fetchTopCollections(d.electroswap, chainId)
-        this.collectionCache.set(chainId, { at: now, rows })
-      } catch {
-        // last-good
-      }
-    }
-    const owned = new Map<string, number>()
-    if (accountId) {
-      const account = (await d.vault.accounts()).find((a) => a.id === accountId)
-      if (account) {
-        try {
-          for (const c of await fetchCollectionBalances(d.electroswap, chainId, account.address)) owned.set(c.address.toLowerCase(), c.balance)
-        } catch {
-          // no balances → 0
+    const client = d.electroswap
+    try {
+      return (await d.cache.through(COLLECTIONS_SPEC(chainId, accountId), TTL_MS, async () => {
+        const rows = await fetchTopCollections(client, chainId)
+        this.collectionRows.set(chainId, rows)
+        const owned = new Map<string, number>()
+        if (accountId) {
+          const account = (await d.vault.accounts()).find((a) => a.id === accountId)
+          if (account) {
+            try {
+              for (const c of await fetchCollectionBalances(client, chainId, account.address)) owned.set(c.address.toLowerCase(), c.balance)
+            } catch {
+              // no balances → 0
+            }
+          }
         }
-      }
+        return this.toViews(chainId, rows, owned)
+      })).value
+    } catch {
+      return []
     }
-    return this.toViews(chainId, rows, owned)
+  }
+
+  async cachedCollections(chainId: number, accountId?: string): Promise<Cached<CollectionView[]> | null> {
+    return this.deps.cache.read(COLLECTIONS_SPEC(chainId, accountId))
   }
 
   toViews(chainId: number, rows: readonly EsCollection[], owned: ReadonlyMap<string, number>): CollectionView[] {
@@ -134,7 +164,7 @@ export class ExploreService {
   async collection(chainId: number, address: string, accountId?: string): Promise<CollectionView | null> {
     const d = this.deps
     if (!d.electroswap || !isEtn(chainId)) return null
-    const cached = this.collectionCache.get(chainId)?.rows.find((r) => r.address.toLowerCase() === address.toLowerCase())
+    const cached = this.collectionRows.get(chainId)?.find((r) => r.address.toLowerCase() === address.toLowerCase())
     let row = cached ?? null
     if (!row) {
       try {
@@ -182,8 +212,11 @@ export function exploreNamespace(explore: ExploreService): NamespaceSpec {
   return {
     available: { handler: async () => explore.available },
     tokens: { input: Chain, handler: (arg) => explore.tokens((arg as { chainId: number }).chainId) },
+    cachedTokens: { input: Chain, handler: (arg) => explore.cachedTokens((arg as { chainId: number }).chainId) },
     tokenDetail: { input: Chain.extend({ address: z.string() }), handler: (arg) => explore.tokenDetail((arg as { chainId: number }).chainId, (arg as { address: string }).address) },
+    cachedTokenDetail: { input: Chain.extend({ address: z.string() }), handler: (arg) => explore.cachedTokenDetail((arg as { chainId: number }).chainId, (arg as { address: string }).address) },
     collections: { input: Chain.extend({ accountId: AccountIdSchema.optional() }), handler: (arg) => explore.collections((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId) },
+    cachedCollections: { input: Chain.extend({ accountId: AccountIdSchema.optional() }), handler: (arg) => explore.cachedCollections((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId) },
     collection: { input: Chain.extend({ address: z.string(), accountId: AccountIdSchema.optional() }), handler: (arg) => explore.collection((arg as { chainId: number }).chainId, (arg as { address: string }).address, (arg as { accountId?: string }).accountId) },
     search: { input: Chain.extend({ query: z.string().max(120) }), handler: (arg) => explore.search((arg as { chainId: number }).chainId, (arg as { query: string }).query) },
   }

@@ -96,7 +96,7 @@ describe('vault v2 + accounts', () => {
     expect(status.wraps).toEqual([{ by: 'password', id: 'password' }])
     expect(status.seeds).toEqual([{ id: created.seedId, label: 'Seed 1', backedUp: false, accountCount: 1, hasPassphrase: false }])
     expect(status.backupComplete).toBe(false)
-    expect(status.lockAt).toBe(platform.now() + 300_000)
+    expect(status.lockAt).toBe(platform.now() + 900_000) // 15 idle minutes by default (plan A1)
 
     const active = await engine.accounts.active()
     expect(active?.address).toMatch(/^0x[0-9a-fA-F]{40}$/)
@@ -118,7 +118,12 @@ describe('vault v2 + accounts', () => {
     const revealed = await engine.vault.reveal({ seedId: created.seedId, password: 'correct horse battery' })
     expect(revealed.mnemonic).toBe(created.mnemonic)
 
-    await platform.clock.advance(300_001)
+    // 15 idle minutes (plan A1); a touch at minute 14 pushes the deadline out, silence after that locks.
+    await platform.clock.advance(14 * 60_000)
+    expect((await engine.vault.touch()).lockAt).toBe(platform.now() + 900_000)
+    await platform.clock.advance(120_000)
+    expect((await engine.vault.status()).unlocked).toBe(true)
+    await platform.clock.advance(900_001)
     status = await engine.vault.status()
     expect(status.unlocked).toBe(false)
     expect(await platform.storage.session.get('vault.dek')).toBeNull()

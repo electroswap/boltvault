@@ -20,6 +20,8 @@ export interface PasskeyProvider {
 
 export interface UiHost {
   readonly body: 'extension-popup' | 'extension-tab' | 'extension-sign' | 'mobile' | 'harness'
+  /** The system's reduce-motion preference (the default for Settings › Appearance › Reduce motion). */
+  prefersReducedMotion?(): boolean
   /** True when secrets (seed words, exports) may render in this surface. */
   readonly secretsAllowed: boolean
   /** Open a screen in a surface where secrets are allowed (the extension tab). */

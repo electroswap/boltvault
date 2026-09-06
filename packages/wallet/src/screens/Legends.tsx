@@ -3,7 +3,8 @@
  * piece as a medallion, Activate and Claim, and the mint plate when the
  * collection is minting. Reached from Home › Positions and the accessory.
  */
-import { Body, Icon, Key, Plate, Row, ScrollView, metrics, paint } from '@boltvault/ui'
+import { Body, Key, Plate, Row, ScrollView, metrics } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import type { LegendsStatus } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
@@ -56,10 +57,7 @@ export function Legends({ body, reducedMotion = false }: { body: BodyKind; reduc
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="legends">
-      <Row justifyContent="space-between" alignItems="center">
-        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-        <Body size="title">{t({ id: 'legends.screen', message: 'Electric Legends' })}</Body>
-      </Row>
+      <PageHeader title={t({ id: 'legends.screen', message: 'Electric Legends' })} />
       {error ? <Body tone="burn">{error}</Body> : null}
       {status && active ? (
         <>

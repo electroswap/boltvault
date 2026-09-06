@@ -81,7 +81,11 @@ export default defineBackground(() => {
   browser.runtime.onConnect.addListener((port) => {
     const cls = classifySender(port.sender, browser.runtime.id, browser.runtime.getURL(''))
     if (port.name === UI_PORT_NAME && cls === 'ui') {
+      // The worker stays alive while any wallet page is open, and a page that (re)connects repaints from a fresh announcement (plan A1).
+      const release = platform.keepAlive.hold('ui-port')
+      port.onDisconnect.addListener(() => release())
       serveChannel(engine.host, portChannel(port), 'ui')
+      void engine.vault.announce().catch(() => undefined)
       return
     }
     if (port.name === PROVIDER_PORT_NAME && cls === 'content') {

@@ -3,18 +3,17 @@
  * the per-block tick, sound, and the display currency. Sound and the tick
  * are off until asked for; nothing here nags.
  */
-import { Body, Chip, Icon, Key, Plate, Row, ScrollView, Toggle, metrics, paint } from '@boltvault/ui'
+import { Body, Chip, Plate, Row, ScrollView, Toggle, metrics, paint } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import type { Settings } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
-import { useRouter } from '../navigation/router'
 
 export function Feel({ body }: { body: 'extension-popup' | 'extension-tab' | 'mobile' }) {
   const engine = useEngine()
   const host = useHost()
-  const router = useRouter()
   const [settings, setSettings] = useState<Settings | null>(null)
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   useEffect(() => {
@@ -26,13 +25,13 @@ export function Feel({ body }: { body: 'extension-popup' | 'extension-tab' | 'mo
   const phone = body === 'mobile'
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="feel">
-      <Row justifyContent="space-between">
-        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-        <Body size="title">{t({ id: 'settings.feel', message: 'Appearance & feel' })}</Body>
-      </Row>
+      <PageHeader title={t({ id: 'settings.feel', message: 'Appearance & feel' })} />
       <Plate gap="$2" testID="feel-motion">
-        <Toggle value={settings?.reducedMotion ?? false} onChange={(v) => set({ reducedMotion: v })} label={t({ id: 'feel.motion', message: 'Reduce motion' })} hint={t({ id: 'feel.motion.hint', message: 'The Field holds still, digits update without rolling, the discharge is a short fade. The app is complete without motion.' })} testID="feel-motion-toggle" />
+        <Toggle value={settings?.reducedMotion ?? false} onChange={(v) => set({ reducedMotion: v })} label={t({ id: 'feel.motion', message: 'Reduce motion' })} hint={t({ id: 'feel.motion.hint', message: 'The background holds still and digits update without rolling. Also follows your system’s reduce-motion setting.' })} testID="feel-motion-toggle" />
       </Plate>
+      {/* Haptics and sound are the phone's (plan A4); the extension never shows them. */}
+      {phone ? (
+        <>
       <Plate gap="$2" testID="feel-haptics">
         <Toggle value={settings?.haptics ?? true} onChange={(v) => set({ haptics: v })} label={t({ id: 'feel.haptics', message: 'Haptics' })} hint={phone ? t({ id: 'feel.haptics.hint', message: 'A light tick on confirm and keys, medium on a receipt, heavy on danger.' }) : t({ id: 'feel.haptics.web', message: 'Felt on the phone.' })} disabled={!phone || !host.haptic} testID="feel-haptics-toggle" />
         <Toggle value={settings?.blockTick ?? false} onChange={(v) => set({ blockTick: v })} label={t({ id: 'feel.tick', message: 'Tick every Electroneum block' })} hint={t({ id: 'feel.tick.hint', message: 'One light tap every five seconds while Home is open. Off unless you like it.' })} disabled={!phone || !host.haptic || settings?.haptics === false} testID="feel-tick-toggle" />
@@ -51,6 +50,8 @@ export function Feel({ body }: { body: 'extension-popup' | 'extension-tab' | 'mo
           </Row>
         ) : null}
       </Plate>
+        </>
+      ) : null}
       <Plate gap="$2" testID="feel-currency">
         <Body size="title">{t({ id: 'feel.currency', message: 'Display currency' })}</Body>
         <Row gap="$2">

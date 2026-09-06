@@ -128,7 +128,8 @@ export interface CustomTokenStoreEntry {
   readonly origin?: string
 }
 
-export type AutoLock = 'immediately' | '1min' | '5min' | '30min' | 'never'
+/** Idle timeout: the timer restarts on every interaction; the vault always locks when the browser closes. */
+export type AutoLock = '5min' | '15min' | '60min' | 'never'
 
 export interface BoltVaultSettings {
   /** 'BoltVault is default wallet' — the only window.ethereum writer. */
@@ -166,7 +167,7 @@ export const DEFAULT_SETTINGS: BoltVaultSettings = {
   ethSignEnabled: false,
   exactApprovals: true,
   slippageBips: 50,
-  enabledChains: [1, 56, 8453, 42161, 10, 137, 43114],
+  enabledChains: [1, 56, 8453],
   showTestnet: false,
   haptics: true,
   blockTick: false,
@@ -174,7 +175,7 @@ export const DEFAULT_SETTINGS: BoltVaultSettings = {
   pushEnabled: false,
   crashReports: false,
   sendWhitelist: false,
-  autoLock: '5min',
+  autoLock: '15min',
   displayCurrency: 'USD',
   reducedMotion: false,
 }

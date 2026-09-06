@@ -3,7 +3,8 @@
  * pieces with Accept, every offer the account made with Cancel, and the
  * WETN the open offers commit against the balance.
  */
-import { Artwork, Body, Column, Icon, Key, Plate, Row, ScrollView, metrics, paint, shortAddress } from '@boltvault/ui'
+import { Artwork, Body, Column, Key, Plate, Row, ScrollView, metrics, shortAddress } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import type { OffersInbox } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
@@ -56,10 +57,7 @@ export function Offers({ body, reducedMotion = false }: { body: BodyKind; reduce
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="offers">
-      <Row justifyContent="space-between" alignItems="center">
-        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-        <Body size="title">{t({ id: 'offers.title', message: 'Offers' })}</Body>
-      </Row>
+      <PageHeader title={t({ id: 'offers.title', message: 'Offers' })} />
       {inbox ? (
         <Plate gap={2} testID="offers-obligation">
           <Body tone="mute" size="caption">

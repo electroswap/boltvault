@@ -22,24 +22,27 @@ export interface BusBarProps {
   readonly logoUri?: string | null
   readonly selected?: boolean
   readonly mark?: string | null
+  /** `card`: on glass with an edge, for a list over the moving Grid (the Portfolio). */
+  readonly variant?: 'bar' | 'card'
   readonly onPress?: () => void
   readonly testID?: string
 }
 
-export function BusBar({ chainId, address, symbol, amount, value, change, share, logoUri, selected, mark, onPress, testID }: BusBarProps) {
+export function BusBar({ chainId, address, symbol, amount, value, change, share, logoUri, selected, mark, variant = 'bar', onPress, testID }: BusBarProps) {
+  const card = variant === 'card'
   const up = change?.startsWith('+')
   const down = change?.startsWith('-') || change?.startsWith('−')
   const width = `${Math.max(0, Math.min(1, share)) * 100}%` as const
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${amount} ${symbol}${value ? `, ${value}` : ''}`} testID={testID}>
       <Column
-        height={metrics.busBar}
+        height={card ? 56 : metrics.busBar}
         justifyContent="center"
         paddingHorizontal="$3"
         borderRadius="$recessed"
         borderWidth={1}
-        borderColor={selected ? '$arc' : 'transparent'}
-        backgroundColor={selected ? '$glass' : 'transparent'}
+        borderColor={selected ? '$arc' : card ? '$edge' : 'transparent'}
+        backgroundColor={selected || card ? '$glass' : 'transparent'}
       >
         <Row gap="$3">
           <TokenAvatar chainId={chainId} address={address} logoUri={logoUri} size={32} />

@@ -3,19 +3,18 @@
  * disable (Electroneum is always on), the testnet toggle, and a custom RPC
  * per chain validated by `eth_chainId` before it is kept.
  */
-import { Body, Chip, Column, Icon, Input, Key, Plate, Row, ScrollView, Toggle, metrics, paint } from '@boltvault/ui'
+import { Body, Chip, Column, Input, Key, Plate, Row, ScrollView, Toggle, metrics } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import type { ChainView, Settings } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { t } from '../i18n'
-import { useRouter } from '../navigation/router'
 
 const ETN = 52014
 const ETN_TESTNET = 5201420
 
 export function Networks({ body }: { body: 'extension-popup' | 'extension-tab' | 'mobile' }) {
   const engine = useEngine()
-  const router = useRouter()
   const [chains, setChains] = useState<ChainView[]>([])
   const [settings, setSettings] = useState<Settings | null>(null)
   const [rpcs, setRpcs] = useState<Record<string, { url: string; trace?: string }>>({})
@@ -32,7 +31,9 @@ export function Networks({ body }: { body: 'extension-popup' | 'extension-tab' |
   }, [engine])
 
   const set = (patch: Partial<Settings>): void => {
-    engine.settings.set(patch).then(setSettings, () => undefined)
+    // Hiding the testnet also turns it off, so it cannot linger in Home's scope or the activity scan.
+    const p = patch.showTestnet === false && settings ? { ...patch, enabledChains: settings.enabledChains.filter((c) => c !== ETN_TESTNET) } : patch
+    engine.settings.set(p).then(setSettings, () => undefined)
   }
   const enabled = new Set(settings?.enabledChains ?? [])
   const toggle = (chainId: number, on: boolean): void => {
@@ -59,10 +60,7 @@ export function Networks({ body }: { body: 'extension-popup' | 'extension-tab' |
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="networks">
-      <Row justifyContent="space-between">
-        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-        <Body size="title">{t({ id: 'settings.networks', message: 'Networks' })}</Body>
-      </Row>
+      <PageHeader title={t({ id: 'settings.networks', message: 'Networks' })} />
       <Body tone="mute" size="caption">
         {t({ id: 'networks.body', message: 'Electroneum is home and always on. Other chains show balances, send, receive, activity and approvals through public RPCs; swaps and markets stay on Electroneum.' })}
       </Body>

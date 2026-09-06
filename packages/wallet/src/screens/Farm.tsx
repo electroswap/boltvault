@@ -7,7 +7,8 @@
  * before a second deposit; Withdraw is a slider with a live preview;
  * Collect discharges the coil into the readout.
  */
-import { Body, Chip, Coil, Icon, Input, Key, Plate, Row, ScrollView, Sheet, Slider, Toggle, metrics, paint } from '@boltvault/ui'
+import { Body, Chip, Coil, Input, Key, Plate, Row, ScrollView, Sheet, Slider, Toggle, metrics, paint } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import type { FarmDepositQuote, FarmView, FarmWithdrawQuote } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
@@ -119,12 +120,7 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="farm">
-      <Row justifyContent="space-between" alignItems="center">
-        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-        <Body size="title" numberOfLines={1}>
-          {farm ? farm.name || `${farm.symbol0}/${farm.symbol1}` : t({ id: 'farm.title', message: 'Farm' })}
-        </Body>
-      </Row>
+      <PageHeader title={farm ? farm.name || `${farm.symbol0}/${farm.symbol1}` : t({ id: 'farm.title', message: 'Farm' })} />
       {farm ? (
         <>
           <Row justifyContent="center">

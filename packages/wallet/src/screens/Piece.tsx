@@ -6,6 +6,7 @@
  * earns. Every verb runs through the sheet and lands here as a Discharge.
  */
 import { Artwork, Body, Chip, Column, Icon, Input, Key, Plate, Row, ScrollView, Sheet, metrics, paint, shortAddress } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import type { AssetView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
@@ -76,9 +77,7 @@ export function Piece({ body, chainId, address, tokenId, reducedMotion = false }
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="piece">
-      <Row justifyContent="space-between" alignItems="center">
-        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-        {asset ? (
+      <PageHeader title={asset?.name ?? ''} right={<>{asset ? (
           <Chip onPress={() => router.navigate('collection', { chainId, address })} cursor="pointer" minHeight={44} justifyContent="center" testID="piece-collection">
             <Row gap="$1" alignItems="center">
               <Body tone="mute" size="caption" numberOfLines={1}>
@@ -87,8 +86,7 @@ export function Piece({ body, chainId, address, tokenId, reducedMotion = false }
               {asset.collectionVerified ? <Icon name="check" size={14} color={paint.arc} /> : null}
             </Row>
           </Chip>
-        ) : null}
-      </Row>
+        ) : null}</>} />
       {loadError ? <Body tone="burn">{loadError}</Body> : null}
       {!asset && !loadError ? (
         <Body tone="mute" size="caption">

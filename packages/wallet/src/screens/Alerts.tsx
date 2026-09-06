@@ -4,7 +4,8 @@
  * "tell me when it goes live" per campaign — and the two daily nudges the
  * wallet sends on its own (rewards to collect, dividends to claim).
  */
-import { Body, Chip, Column, Icon, Input, Key, Plate, Row, ScrollView, Toggle, metrics, paint, shortAddress } from '@boltvault/ui'
+import { Body, Chip, Column, Input, Key, Plate, Row, ScrollView, Toggle, metrics, shortAddress } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import type { WatchItem } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
@@ -44,13 +45,11 @@ export function Alerts({ body }: { body: BodyKind }) {
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="alerts">
-      <Row justifyContent="space-between" alignItems="center">
-        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-        <Body size="title">{t({ id: 'alerts.title', message: 'Notifications' })}</Body>
-      </Row>
+      <PageHeader title={t({ id: 'alerts.title', message: 'Notifications' })} />
       <Body tone="mute" size="caption">
         {t({ id: 'alerts.body', message: 'Star a token, collection or campaign from Explore, then set what to tell you about. Rewards to collect and dividends to claim are mentioned once a day on their own. Nothing here nags.' })}
       </Body>
+      {host.push ? (
       <Plate gap="$2" testID="alerts-push">
         <Row justifyContent="space-between" alignItems="center">
           <Body size="title">{t({ id: 'alerts.push', message: 'Push' })}</Body>
@@ -60,6 +59,7 @@ export function Alerts({ body }: { body: BodyKind }) {
           {!host.push ? t({ id: 'alerts.push.web', message: 'The extension checks in the background on its own; push is for the phone.' }) : pushState === 'granted' ? t({ id: 'alerts.push.granted', message: 'On. Incoming funds, sales and offers, campaigns going live, rewards and dividends arrive while the app is closed.' }) : pushState === 'denied' ? t({ id: 'alerts.push.denied', message: 'Notifications are off for BoltVault in the system settings.' }) : t({ id: 'alerts.push.off.body', message: 'Off. Turn it on to hear about incoming funds, sales, campaigns and rewards while the app is closed. Only a type and an id ever travel; the app fetches the details.' })}
         </Body>
       </Plate>
+      ) : null}
       {items.length === 0 ? (
         <Plate gap="$2" testID="alerts-empty">
           <Body tone="mute" size="caption">

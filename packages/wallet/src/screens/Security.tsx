@@ -1,19 +1,18 @@
 /** Settings › Security (master plan §8.14): password, auto-lock, passkeys, export. */
-import { AnimatedQR, Body, Column, Icon, Input, Key, Plate, Row, ScrollView, metrics, paint } from '@boltvault/ui'
+import { AnimatedQR, Body, Column, Input, Key, Plate, Row, ScrollView, metrics } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import type { AutoLock } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
-import { useRouter } from '../navigation/router'
 import { useWalletState } from '../state/useWalletState'
 
-const AUTO_LOCKS: AutoLock[] = ['immediately', '1min', '5min', '30min', 'never']
+const AUTO_LOCKS: AutoLock[] = ['5min', '15min', '60min', 'never']
 
 export function Security({ body }: { body: 'extension-popup' | 'extension-tab' | 'mobile' }) {
   const engine = useEngine()
   const host = useHost()
-  const router = useRouter()
   const { vault, refresh } = useWalletState()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
@@ -52,16 +51,16 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 16 }} testID="security">
-      <Row justifyContent="space-between">
-        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-        <Body size="title">{t({ id: 'security.title', message: 'Security' })}</Body>
-      </Row>
+      <PageHeader title={t({ id: 'security.title', message: 'Security' })} />
 
       <Plate gap="$3" testID="autolock">
         <Body size="title">{t({ id: 'security.autolock', message: 'Auto-lock' })}</Body>
+        <Body tone="mute" size="caption">
+          {t({ id: 'security.autolock.hint', message: 'Locks after this long without activity. Always locks when the browser closes.' })}
+        </Body>
         <Row gap="$2" flexWrap="wrap">
           {AUTO_LOCKS.map((a) => (
-            <Key key={a} label={a === 'immediately' ? t({ id: 'al.now', message: 'On close' }) : a === 'never' ? t({ id: 'al.never', message: 'Never' }) : a} kind={vault?.autoLock === a ? 'primary' : 'secondary'} onPress={() => run(() => engine.vault.setAutoLock({ autoLock: a }).then(() => undefined))} testID={`autolock-${a}`} />
+            <Key key={a} label={a === '5min' ? t({ id: 'al.5', message: '5 min' }) : a === '15min' ? t({ id: 'al.15', message: '15 min' }) : a === '60min' ? t({ id: 'al.60', message: '1 hour' }) : t({ id: 'al.never', message: 'Never' })} kind={vault?.autoLock === a ? 'primary' : 'secondary'} size="compact" onPress={() => run(() => engine.vault.setAutoLock({ autoLock: a }).then(() => undefined))} testID={`autolock-${a}`} />
           ))}
         </Row>
       </Plate>

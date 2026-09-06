@@ -42,6 +42,8 @@ import { HolderService, holderNamespace } from './namespaces/holder'
 import { LimitService, limitNamespace } from './namespaces/limit'
 import { SwapService, swapNamespace } from './namespaces/swap'
 import { aboutNamespace } from './namespaces/about'
+import { DocCache } from './cache'
+import { NotificationsService, notificationsNamespace } from './namespaces/notifications'
 import { SitesService, sitesNamespace } from './namespaces/sites'
 import { HttpRelay, MemoryRelay, SyncService, syncNamespace, type Relay } from './namespaces/sync'
 import { TokensService, tokensNamespace } from './namespaces/tokens'
@@ -131,6 +133,9 @@ export interface Engine {
   readonly dapps: DappsService
   readonly connect: ConnectService
   readonly statics: StaticsService
+  /** The serve-stale document cache (tests and fixtures invalidate through it). */
+  readonly cache: DocCache
+  readonly notifications: NotificationsService
   readonly ready: Promise<void>
   dispose(): void
 }
@@ -143,6 +148,20 @@ export function createEngine(deps: EngineDeps): Engine {
   const fetchImpl: typeof fetch = deps.fetch ?? ((input, init) => fetch(input, init))
   let staticsRef: StaticsService | null = null
   const settings = new SettingsStore(deps.platform, host.events, deps.os)
+  const cache = new DocCache(deps.platform.storage.local, host.events, () => deps.platform.now())
+  const notifications = new NotificationsService(deps.platform, host.events)
+  // Every OS notification the watcher sends is also an inbox entry (plan A6): the tag says what it was about.
+  const notifyingPlatform: Platform = {
+    ...deps.platform,
+    notify: async (n) => {
+      const [prefix, a, b] = (n.tag ?? '').split(':')
+      const kind = prefix === 'live' ? 'live' : prefix === 'collect' ? 'collect' : prefix === 'dividends' ? 'dividends' : 'alert'
+      const target = prefix === 'live' ? `campaign:${a ?? ''}` : prefix === 'above' || prefix === 'below' ? `${a ?? 'token'}:${b ?? ''}` : prefix === 'collect' ? 'positions' : prefix === 'dividends' ? 'legends' : null
+      const day = Math.floor(deps.platform.now() / 86_400_000)
+      await notifications.push({ id: `${n.tag ?? n.title}:${kind === 'alert' || kind === 'live' ? deps.platform.now() : day}`, kind, title: n.title, body: n.body, target }).catch(() => undefined)
+      await deps.platform.notify(n)
+    },
+  }
   const vault = new VaultManager(deps.platform, host.events, settings, deps.kdf ? { kdf: deps.kdf } : {})
   const approvals = new ApprovalStore(deps.platform, host.events)
   const sites = new SitesService(deps.platform, host.events)
@@ -190,17 +209,17 @@ export function createEngine(deps: EngineDeps): Engine {
   const names = new NamesService(chains, () => deps.platform.now())
   const allowances = new AllowancesService({ platform: deps.platform, bus: host.events, chains, tokens, vault, provider })
   const send = new SendService({ platform: deps.platform, chains, tokens, names, vault, provider })
-  const scanner = new ActivityScanner({ platform: deps.platform, chains, activity, tokens, vault })
-  const holder = new HolderService({ platform: deps.platform, chains, vault })
+  const scanner = new ActivityScanner({ platform: deps.platform, chains, activity, tokens, vault, settings, cache, bus: host.events })
+  const holder = new HolderService({ platform: deps.platform, chains, vault, cache })
   const flows = new FlowStore({ platform: deps.platform, bus: host.events, activity })
   const swap = new SwapService({ statics,  platform: deps.platform, chains, tokens, vault, provider, settings, holder, flows })
   const limit = new LimitService({ platform: deps.platform, bus: host.events, chains, tokens, vault, provider, settings, flows, enabled: features.limitOrders })
-  const watchlist = new WatchlistService({ platform: deps.platform, bus: host.events, vault })
-  const explore = new ExploreService({ platform: deps.platform, electroswap, tokens, vault, watchlist })
+  const watchlist = new WatchlistService({ platform: notifyingPlatform, bus: host.events, vault })
+  const explore = new ExploreService({ platform: deps.platform, electroswap, tokens, vault, watchlist, cache, bus: host.events })
   const legends = new LegendsService({ platform: deps.platform, chains, vault, provider, flows })
-  const nft = new NftService({ platform: deps.platform, chains, vault, provider, flows, electroswap, explore, legends })
-  const farm = new FarmService({ platform: deps.platform, chains, tokens, vault, provider, flows, settings, electroswap })
-  const launchpad = new LaunchpadService({ platform: deps.platform, chains, vault, provider, flows, electroswap, names, watchlist })
+  const nft = new NftService({ platform: deps.platform, chains, vault, provider, flows, electroswap, explore, legends, cache, notifications })
+  const farm = new FarmService({ platform: deps.platform, chains, tokens, vault, provider, flows, settings, electroswap, cache })
+  const launchpad = new LaunchpadService({ platform: deps.platform, chains, vault, provider, flows, electroswap, names, watchlist, cache })
   const positions = new PositionsService({ platform: deps.platform, bus: host.events, farm, legends, limit, launchpad, tokens })
   const remote = new RemoteSignService({ platform: deps.platform, bus: host.events, sync, vault, provider, canSignHere: async (a) => (await vault.privateKeyFor(a.id).catch(() => null)) !== null || (a.kind !== 'hd' && a.kind !== 'imported' && hardware.canSign(a)), ...(deps.receiptPollMs !== undefined ? { pollMs: deps.receiptPollMs * 5 } : {}) })
   provider.setRemote(remote)
@@ -217,6 +236,7 @@ export function createEngine(deps: EngineDeps): Engine {
   })
 
   vault.init()
+  scanner.attach()
   host.events.subscribe((e) => {
     if (e.type !== 'vault.status') return
     if (!e.status.unlocked) {
@@ -238,6 +258,8 @@ export function createEngine(deps: EngineDeps): Engine {
       input: ApprovalDecisionSchema,
       handler: async (arg) => {
         await approvals.decide(arg as ApprovalDecision)
+        // A signing decision is activity: the idle timer restarts.
+        void vault.touch().catch(() => undefined)
       },
     },
   })
@@ -284,6 +306,7 @@ export function createEngine(deps: EngineDeps): Engine {
   host.register('connect', connectNamespace(connect))
   host.register('flags', flagsNamespace(statics))
   host.register('about', aboutNamespace({ apiOrigin, apiIsDefault: apiOrigin === DEFAULT_API_ORIGIN, features }))
+  host.register('notifications', notificationsNamespace(notifications))
 
   const ready = Promise.all([approvals.hydrate(), sites.hydrate(), settings.get(), provider.init(), watchlist.hydrate(), statics.hydrate()]).then(() => {
     // Signed flags refresh in the background; nothing waits on the network (§3.7).
@@ -298,6 +321,8 @@ export function createEngine(deps: EngineDeps): Engine {
     approvals,
     sites,
     chains,
+    cache,
+    notifications,
     settings,
     activity,
     sync,

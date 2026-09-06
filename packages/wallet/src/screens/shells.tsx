@@ -3,7 +3,8 @@
  * copy voice and the empty states are final; their data arrives with their
  * milestone (Settings M4, Sign M3).
  */
-import { Body, Column, Icon, Key, Plate, Row, ScrollView, metrics, paint } from '@boltvault/ui'
+import { Body, Column, Icon, IconButton, Plate, Row, ScrollView, metrics, paint } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
@@ -39,10 +40,7 @@ export function SettingsShell({ body }: { body: Body_ }) {
   ]
   return (
     <ScrollView contentContainerStyle={{ padding: insetFor(body), gap: 12 }} testID="settings">
-      <Row gap="$3" justifyContent="space-between">
-        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-        <Key label={t({ id: 'settings.lock', message: 'Lock' })} kind="secondary" onPress={() => void engine.vault.lock()} icon={<Icon name="lock" size={18} color={paint.ink} />} testID="lock-key" />
-      </Row>
+      <PageHeader title={t({ id: 'settings.title', message: 'Settings' })} right={<IconButton icon="lock" label={t({ id: 'settings.lock', message: 'Lock' })} onPress={() => void engine.vault.lock()} testID="lock-key" />} />
       {groups.map((g) => {
         const target = g.id === 'accounts' ? 'accounts' : g.id === 'security' ? 'security' : g.id === 'devices' ? 'devices' : g.id === 'sites' ? 'sites' : g.id === 'approvals' ? 'allowances' : g.id === 'spending' ? 'spending' : g.id === 'notifications' ? 'alerts' : g.id === 'networks' ? 'networks' : g.id === 'feel' ? 'feel' : g.id === 'about' ? 'about' : null
         return (
@@ -64,11 +62,9 @@ export function SettingsShell({ body }: { body: Body_ }) {
 }
 
 export function PlaceholderScreen({ body, title, note }: { body: Body_; title: string; note: string }) {
-  const router = useRouter()
   return (
     <Column padding={insetFor(body)} gap="$4" testID="placeholder">
-      <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-      <Body size="title">{title}</Body>
+      <PageHeader title={title} />
       <Body tone="mute">{note}</Body>
     </Column>
   )

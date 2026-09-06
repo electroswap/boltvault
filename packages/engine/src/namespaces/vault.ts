@@ -59,12 +59,13 @@ const KEY_LOCK_AT = 'vault.lockAt'
 export const AUTOLOCK_ALARM = 'vault.autolock'
 
 const AUTO_LOCK_MS: Record<AutoLock, number> = {
-  immediately: 0,
-  '1min': 60_000,
   '5min': 300_000,
-  '30min': 1_800_000,
+  '15min': 900_000,
+  '60min': 3_600_000,
   never: Number.POSITIVE_INFINITY,
 }
+/** A touch within this long of the last one is a no-op (the alarm is not rescheduled on every keystroke). */
+const TOUCH_DEBOUNCE_MS = 30_000
 
 const ACTIVE_DOC: DocSpec<{ id: string | null }> = {
   key: 'accounts.active',
@@ -129,8 +130,18 @@ export class VaultManager {
   init(): void {
     if (this.stopAlarms) return
     this.stopAlarms = this.platform.alarms.onFire((name) => {
-      if (name === AUTOLOCK_ALARM) void this.lock()
+      if (name === AUTOLOCK_ALARM) void this.onAutoLockAlarm()
     })
+  }
+
+  /** The alarm fired: lock, unless a touch moved the deadline past now (then re-arm at the moved deadline). */
+  private async onAutoLockAlarm(): Promise<void> {
+    const at = Number((await this.platform.storage.session.get(KEY_LOCK_AT)) ?? 0)
+    if (at > this.platform.now() + 1_000) {
+      await this.platform.alarms.schedule(AUTOLOCK_ALARM, at)
+      return
+    }
+    await this.lock()
   }
 
   dispose(): void {
@@ -330,23 +341,43 @@ export class VaultManager {
     return { accounts: await this.unlockWithDek(dek, pt) }
   }
 
-  private async scheduleAutoLock(): Promise<void> {
+  private scheduleAutoLock(): Promise<{ lockAt: number | null }> {
+    return this.arm(true)
+  }
+
+  /** Push the idle deadline out. `force` ignores the debounce (unlock, a settings change). */
+  private async arm(force: boolean): Promise<{ lockAt: number | null }> {
     const { autoLock } = await this.settings.get()
     const ms = AUTO_LOCK_MS[autoLock]
-    if (ms === 0) {
-      const at = this.platform.now() + 30_000
-      await this.platform.alarms.schedule(AUTOLOCK_ALARM, at)
-      await this.platform.storage.session.set(KEY_LOCK_AT, String(at))
-      return
-    }
     if (!Number.isFinite(ms)) {
       await this.platform.alarms.cancel(AUTOLOCK_ALARM)
       await this.platform.storage.session.remove(KEY_LOCK_AT)
-      return
+      return { lockAt: null }
     }
-    const at = this.platform.now() + ms
+    const now = this.platform.now()
+    if (!force) {
+      const current = Number((await this.platform.storage.session.get(KEY_LOCK_AT)) ?? 0)
+      if (current - now > ms - TOUCH_DEBOUNCE_MS) return { lockAt: current }
+    }
+    const at = now + ms
     await this.platform.alarms.schedule(AUTOLOCK_ALARM, at)
     await this.platform.storage.session.set(KEY_LOCK_AT, String(at))
+    return { lockAt: at }
+  }
+
+  /** A human interacted with the wallet: the idle timer restarts. Cheap enough to call on every gesture. */
+  async touch(): Promise<{ lockAt: number | null }> {
+    if (!(await this.isUnlocked())) return { lockAt: null }
+    return this.arm(false)
+  }
+
+  /** Re-announce the current status and accounts (a page that reconnected after a worker restart repaints from these). */
+  async announce(): Promise<void> {
+    const status = await this.status()
+    this.bus.emit({ type: 'vault.status', status })
+    if (!status.unlocked) return
+    const accounts = await this.accounts().catch(() => [])
+    this.bus.emit({ type: 'accounts.changed', accounts, activeId: await this.activeId() })
   }
 
   async applyAutoLock(): Promise<VaultStatus> {
@@ -688,6 +719,7 @@ export function vaultNamespace(vault: VaultManager, settings: SettingsStore): Na
       handler: (arg) => vault.unlockWithDevice(arg as { keyId: string; keyHex: string }),
     },
     lock: { handler: () => vault.lock() },
+    touch: { handler: () => vault.touch() },
     reveal: {
       input: z.object({ seedId: z.string(), password: PasswordSchema }),
       handler: (arg) => vault.reveal(arg as { seedId: string; password: string }),

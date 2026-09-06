@@ -41,9 +41,11 @@ import type { Platform } from '@boltvault/platform'
 import { encodeFunctionData, parseAbi, parseUnits, type Hex } from 'viem'
 import { z } from 'zod'
 import { EngineError } from '../errors'
+import { cacheKey, type Cached, type DocCache } from '../cache'
 import type { NamespaceSpec } from '../host'
+import type { NotificationsService } from './notifications'
 import { readMany } from '../multicall'
-import { AccountIdSchema, type AssetView, type Inventory, type NftActivityView, type OffersInbox, type OrderView } from '../schema'
+import { InventorySchema, AccountIdSchema, type AssetView, type Inventory, type NftActivityView, type OffersInbox, type OrderView } from '../schema'
 import type { ChainsService } from './chains'
 import type { ExploreService } from './explore'
 import type { FlowStepRun, FlowStore } from './flows'
@@ -64,7 +66,13 @@ export interface NftDeps {
   readonly electroswap: ElectroSwapClient | null
   readonly explore: ExploreService
   readonly legends: LegendsService
+  readonly cache: DocCache
+  readonly notifications?: NotificationsService
 }
+
+/** The Rack embedded on Home and the Rack page mount back to back; within this window the second read is the first. */
+const INVENTORY_TTL_MS = 20_000
+const inventorySpec = (chainId: number, accountId: string) => ({ key: cacheKey('nft', 'inventory', chainId, accountId), schema: InventorySchema })
 
 const isEtn = (chainId: number): chainId is 52014 | 5201420 => chainId === 52014 || chainId === 5201420
 const hex = (n: bigint): Hex => `0x${n.toString(16)}`
@@ -128,8 +136,31 @@ export class NftService {
     }
   }
 
-  /** The Rack: every piece the account holds, with floors, listings and offers (§8.10). */
+  /** The Rack: every piece the account holds, with floors, listings and offers (§8.10). Last-good within 20 s; persisted for the next popup open. */
   async inventory(accountId: string, chainId: number): Promise<Inventory> {
+    const { chainId: cid } = this.client(chainId)
+    const inv = (await this.deps.cache.through(inventorySpec(cid, accountId), INVENTORY_TTL_MS, () => this.buildInventory(accountId, chainId))).value
+    void this.noteOffers(inv)
+    return inv
+  }
+
+  async cachedInventory(accountId: string, chainId: number): Promise<Cached<Inventory> | null> {
+    return this.deps.cache.read(inventorySpec(chainId, accountId))
+  }
+
+  /** Every open bid on a piece is one inbox entry, once per order hash (plan A6). */
+  private async noteOffers(inv: Inventory): Promise<void> {
+    const n = this.deps.notifications
+    if (!n) return
+    for (const a of inv.assets) {
+      for (const b of a.bids) {
+        if (!b.orderHash) continue
+        await n.push({ id: `offer:${b.orderHash.toLowerCase()}`, kind: 'offer', title: `Offer on ${a.name}`, body: b.priceEtn !== null ? `${b.priceEtn} WETN` : 'A new offer', target: 'offers' }).catch(() => undefined)
+      }
+    }
+  }
+
+  private async buildInventory(accountId: string, chainId: number): Promise<Inventory> {
     const { client, chainId: cid } = this.client(chainId)
     const account = await this.account(accountId)
     const [owned, balances] = await Promise.all([fetchOwnedAssets(client, cid, account.address), fetchCollectionBalances(client, cid, account.address).catch(() => [])])
@@ -435,6 +466,7 @@ const OrderInput = AccountPiece.extend({ priceEtn: z.string().max(40), days: z.n
 export function nftNamespace(nft: NftService): NamespaceSpec {
   return {
     inventory: { input: Chain.extend({ accountId: AccountIdSchema }), handler: (arg) => nft.inventory((arg as { accountId: string }).accountId, (arg as { chainId: number }).chainId) },
+    cachedInventory: { input: Chain.extend({ accountId: AccountIdSchema }), handler: (arg) => nft.cachedInventory((arg as { accountId: string }).accountId, (arg as { chainId: number }).chainId) },
     assets: {
       input: Chain.extend({ address: z.string(), orderBy: z.enum(['PRICE', 'RARITY']).optional(), asc: z.boolean().optional(), listed: z.boolean().optional(), traits: z.array(z.object({ name: z.string(), values: z.array(z.string()) })).optional(), query: z.string().max(80).optional(), after: z.string().optional(), accountId: AccountIdSchema.optional() }),
       handler: (arg) => {

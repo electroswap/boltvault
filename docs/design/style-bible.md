@@ -59,7 +59,9 @@ Glow: raised plates `rgba(60,100,255,0.22)` radius 24; the primary key `rgba(70,
 | Role | Fill | Rim | Radius | Glow |
 |---|---|---|---|---|
 | Console (a screen's main panel: the swap card, the sign sheet) | `glassRaised` | lit rim 70 % | 20 | yes |
-| Raised plate (holdings, positions, a campaign) | `glassRaised` | lit rim 45 % | 16 | soft |
+| Raised plate (at most one hero per screen: your position, the dividends card) | `glassRaised` | lit rim 45 % | 16 | soft |
+| Card (anything in a list that opens something: token rows, activity, offers, wallets) | `glass` | lit rim 30 % | 14 | none; hover raises |
+| Tile (the Home action grid) | `glassRaised` | lit rim 45 % | 14 | none; press goes solid |
 | Recessed plate (fee line, notice, secondary info) | `glass` | `edge` | 14 | none |
 | Well (an input, a terminal's amount area) | `well` | `edge`, lit rim on focus | 12 | none |
 | Pill (token, duration, slippage, scope) | `glassRaised` | `edge`; lit rim when selected | 999 | none |
@@ -70,6 +72,10 @@ Glow: raised plates `rgba(60,100,255,0.22)` radius 24; the primary key `rgba(70,
 | Sheet | `glassRaised` | lit rim on the top edge | 20 top | yes |
 
 Plates never carry a grey shadow. Depth comes from the rim and the glow, and from the Grid showing through the fill.
+
+The glow rule: `console` is a screen's one main panel; `raised` is at most one hero plate per screen; everything a `map()` produces is a `card`; the action grid is `tile`s; static information is `recessed`; inputs and stat strips are `well`s. Two glowing plates next to each other bleed into one — that is why lists are cards.
+
+Chrome: one header per pushed screen (`ScreenHeader` / `PageHeader`): a 44 px row with an icon-only Back, the title beside it, and a right slot; in the popup the right slot ends with the expand control that opens the same screen in a full tab. Keys are 56 px only for a screen's primary verb (Swap, Send, Unlock, Deposit, Claim); Back, Copy, Pin, Hide, Save, Cancel, Close, the auto-lock options and every option chip are compact (44 px hit, 36 px surface) or pills. Every list paints its last-good rows at once and refreshes behind them; a first visit shows a skeleton with the current sweeping through it, never a blank body, and a value older than a minute shows the still, mute filament with "as of" beside it.
 
 ## Layout
 

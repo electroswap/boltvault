@@ -169,7 +169,7 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
               onPress={() => (path === 'create' ? startCreate() : setStep(path === 'import' ? 'import' : 'watch'))}
               testID="ob-password-continue"
             />
-            <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => setStep('welcome')} />
+            <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" size="compact" onPress={() => setStep('welcome')} />
           </Column>
         ) : null}
 
@@ -248,7 +248,7 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
             </Plate>
             {error ? <Body tone="burn">{error}</Body> : null}
             <Key label={t({ id: 'ob.import.key', message: 'Import' })} onPress={doImport} disabled={busy} testID="ob-import-confirm" />
-            <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => setStep('import')} />
+            <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" size="compact" onPress={() => setStep('import')} />
           </Column>
         ) : null}
 

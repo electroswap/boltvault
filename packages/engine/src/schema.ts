@@ -40,7 +40,7 @@ export const AccountViewSchema = z.object({
 })
 export type AccountView = z.infer<typeof AccountViewSchema>
 
-export const AutoLockSchema = z.enum(['immediately', '1min', '5min', '30min', 'never'])
+export const AutoLockSchema = z.enum(['5min', '15min', '60min', 'never'])
 export type AutoLock = z.infer<typeof AutoLockSchema>
 
 export const WrapKindSchema = z.enum(['password', 'prf', 'device'])
@@ -501,9 +501,59 @@ export const ExploreTokenSchema = z.object({
   tvl: Fiat,
   marketCap: Fiat,
   safety: z.enum(['VERIFIED', 'MEDIUM_WARNING', 'STRONG_WARNING', 'BLOCKED']).nullable(),
-  starred: z.boolean(),
+  /** On a token list the star is the pin (`tokens.setPrefs`): a pinned token stays on Home at any balance. */
+  pinned: z.boolean(),
 })
 export type ExploreToken = z.infer<typeof ExploreTokenSchema>
+
+/** A token's dossier from the ElectroSwap API (display only; quantities stay on the chain). Mirrors `TokenDetailView` in @boltvault/electroswap. */
+export const TokenDetailViewSchema = z.object({
+  address: z.string(),
+  symbol: z.string(),
+  name: z.string(),
+  decimals: z.number().int().nonnegative(),
+  native: z.boolean(),
+  price: Fiat,
+  change24h: Fiat,
+  change7d: Fiat,
+  volume24h: Fiat,
+  tvl: Fiat,
+  marketCap: Fiat,
+  fdv: Fiat,
+  safety: z.enum(['VERIFIED', 'MEDIUM_WARNING', 'STRONG_WARNING', 'BLOCKED']).nullable(),
+  spam: z.boolean(),
+  logoUrl: z.string().nullable(),
+  description: z.string().nullable(),
+  homepageUrl: z.string().nullable(),
+  twitterUrl: z.string().nullable(),
+  telegramUrl: z.string().nullable(),
+  /** Day sparkline, oldest first. */
+  sparkline: z.array(z.object({ t: z.number(), v: z.number() })),
+})
+export type TokenDetailView = z.infer<typeof TokenDetailViewSchema>
+
+/** One entry in the notifications inbox (plan A6). `target` is a route hint: `campaign:<pool>`, `token:<address>`, `collection:<address>`, `legends`, `positions`, `offers`. */
+export const NotificationViewSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['alert', 'live', 'offer', 'collect', 'dividends', 'arrival', 'system']),
+  title: z.string(),
+  body: z.string(),
+  target: z.string().nullable(),
+  at: z.number().int().nonnegative(),
+  read: z.boolean(),
+})
+export type NotificationView = z.infer<typeof NotificationViewSchema>
+
+/** What the inbound-transfer scan last did for an account (plan A2). */
+export const ScanSummarySchema = z.object({
+  accountId: AccountIdSchema,
+  chainIds: z.array(z.number().int().positive()),
+  added: z.number().int().nonnegative(),
+  /** Chains whose scan failed this round. */
+  problems: z.array(z.number().int().positive()),
+  observedAt: z.number().int().nonnegative(),
+})
+export type ScanSummary = z.infer<typeof ScanSummarySchema>
 
 export const CollectionViewSchema = z.object({
   chainId: z.number().int().positive(),
@@ -944,5 +994,8 @@ export const EngineEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('chains.head'), head: ChainHeadSchema }),
   z.object({ type: z.literal('approvals.changed'), pending: z.array(ApprovalRequestSchema) }),
   z.object({ type: z.literal('settings.changed'), settings: SettingsSchema }),
+  /** A cached resource was written or dropped; pages re-read `cached…()` for that key (the value never rides the event). */
+  z.object({ type: z.literal('cache.changed'), key: z.string(), observedAt: z.number().int().nonnegative() }),
+  z.object({ type: z.literal('notifications.changed'), unread: z.number().int().nonnegative() }),
 ])
 export type EngineEvent = z.infer<typeof EngineEventSchema>

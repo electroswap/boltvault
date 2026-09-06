@@ -13,9 +13,10 @@ import type { Platform } from '@boltvault/platform'
 import { getAddress, isAddress, type Hex } from 'viem'
 import { z } from 'zod'
 import { EngineError } from '../errors'
+import { cacheKey, type Cached, type DocCache } from '../cache'
 import type { NamespaceSpec } from '../host'
 import { readMany } from '../multicall'
-import { AccountIdSchema, type FeeScheduleView, type HolderTier } from '../schema'
+import { HolderTierSchema, AccountIdSchema, type FeeScheduleView, type HolderTier } from '../schema'
 import type { ChainsService } from './chains'
 import type { VaultManager } from './vault'
 
@@ -28,10 +29,12 @@ export interface HolderDeps {
   readonly platform: Platform
   readonly chains: ChainsService
   readonly vault: VaultManager
+  readonly cache?: DocCache
 }
 
 /** A tier read is good for one block (§8.18: "cached per block"). */
 const TIER_CACHE_MS = 5_000
+const tierSpec = (chainId: number, accountId: string) => ({ key: cacheKey('holder', 'tier', chainId, accountId), schema: HolderTierSchema })
 
 function isEtn(chainId: number): chainId is 52014 | 5201420 {
   return chainId === 52014 || chainId === 5201420
@@ -102,9 +105,22 @@ export class HolderService {
     if (!fresh && cached && now - cached.at < TIER_CACHE_MS) return cached.value
     const account = (await this.deps.vault.accounts()).find((x) => x.id === accountId)
     if (!account) throw new EngineError('not_found', 'no such account')
-    const value = await this.read(account.address as Hex, chainId)
+    let value: HolderTier
+    try {
+      value = await this.read(account.address as Hex, chainId)
+    } catch (err) {
+      const last = await this.deps.cache?.read(tierSpec(chainId, accountId))
+      if (!last) throw err
+      return last.value
+    }
     this.tierCache.set(key, { at: now, value })
+    void this.deps.cache?.write(tierSpec(chainId, accountId), value).catch(() => undefined)
     return value
+  }
+
+  /** The last tier written, at once; null before the first read. */
+  async cachedTier(accountId: string, chainId: number): Promise<Cached<HolderTier> | null> {
+    return (await this.deps.cache?.read(tierSpec(chainId, accountId))) ?? null
   }
 
   private async read(owner: Hex, chainId: number): Promise<HolderTier> {
@@ -144,6 +160,7 @@ const ChainArg = z.object({ chainId: z.number().int().positive() })
 export function holderNamespace(holder: HolderService): NamespaceSpec {
   return {
     tier: { input: z.object({ accountId: AccountIdSchema, chainId: z.number().int().positive() }), handler: (arg) => holder.tier((arg as { accountId: string }).accountId, (arg as { chainId: number }).chainId) },
+    cachedTier: { input: z.object({ accountId: AccountIdSchema, chainId: z.number().int().positive() }), handler: (arg) => holder.cachedTier((arg as { accountId: string }).accountId, (arg as { chainId: number }).chainId) },
     schedule: { input: ChainArg, handler: (arg) => holder.schedule((arg as { chainId: number }).chainId) },
     addresses: { input: ChainArg, handler: async (arg) => holder.addresses((arg as { chainId: number }).chainId) },
     configure: { input: z.object({ chainId: z.number().int().positive(), sink: z.string().nullable(), schedule: z.string().nullable() }), handler: async (arg) => holder.configure(arg as { chainId: number; sink: string | null; schedule: string | null }) },

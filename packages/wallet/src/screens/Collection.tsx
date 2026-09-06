@@ -4,6 +4,7 @@
  * Electric Legends — the dividends vessel and the Mint key.
  */
 import { Artwork, Body, Chip, Column, Icon, Key, Plate, Row, ScrollView, metrics, paint } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import type { AssetView, CollectionView, LegendsStatus, NftActivityView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { LegendsVault } from '../components/LegendsVault'
@@ -98,9 +99,7 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="collection">
-      <Row justifyContent="space-between" alignItems="center">
-        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-        {collection ? (
+      <PageHeader title={collection?.name ?? ''} right={<>{collection ? (
           <Chip onPress={() => engine.watchlist[collection.starred ? 'unstar' : 'star']({ kind: 'collection', chainId, address, label: collection.name }).then(() => setCollection({ ...collection, starred: !collection.starred }))} cursor="pointer" minHeight={44} justifyContent="center" testID="collection-star">
             <Row gap="$1" alignItems="center">
               <Icon name="star" size={16} color={collection.starred ? paint.ember : paint.mute} />
@@ -109,8 +108,7 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
               </Body>
             </Row>
           </Chip>
-        ) : null}
-      </Row>
+        ) : null}</>} />
       {collection ? (
         <Column gap="$3">
           {collection.bannerUrl ? <Artwork uri={collection.bannerUrl} label={collection.name} size={{ width: (body === 'extension-popup' ? 360 : 640) - inset * 2, height: 96 }} /> : null}

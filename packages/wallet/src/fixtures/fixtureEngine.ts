@@ -192,10 +192,10 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
     const POOL = '0x9999999999999999999999999999999999999999'
     const OTHER = '0x6666666666666666666666666666666666666666'
     const exploreTokens: ExploreToken[] = [
-      { chainId: 52014, address: 'native', symbol: 'ETN', name: 'Electroneum', decimals: 18, logoUri: null, price: 0.00296, change24h: 2.1, change7d: 5.4, volume24h: 184_200, tvl: 1_240_000, marketCap: 53_000_000, safety: 'VERIFIED', starred: false },
-      { chainId: 52014, address: BOLT, symbol: 'BOLT', name: 'BOLT', decimals: 18, logoUri: null, price: 0.19, change24h: -0.8, change7d: 3.2, volume24h: 42_100, tvl: 380_000, marketCap: 1_900_000, safety: 'VERIFIED', starred: true },
-      { chainId: 52014, address: USDC, symbol: 'USDC', name: 'Hyperlane USDC', decimals: 6, logoUri: null, price: 1, change24h: 0, change7d: 0, volume24h: 96_400, tvl: 610_000, marketCap: null, safety: 'VERIFIED', starred: false },
-      { chainId: 52014, address: '0xEe432C220273e4F949007B4c1946562826Efa055', symbol: 'DYNO', name: 'DYNO', decimals: 18, logoUri: null, price: 0.012, change24h: 11.4, change7d: -2.2, volume24h: 12_000, tvl: 41_000, marketCap: 240_000, safety: 'VERIFIED', starred: false },
+      { chainId: 52014, address: 'native', symbol: 'ETN', name: 'Electroneum', decimals: 18, logoUri: null, price: 0.00296, change24h: 2.1, change7d: 5.4, volume24h: 184_200, tvl: 1_240_000, marketCap: 53_000_000, safety: 'VERIFIED', pinned: false },
+      { chainId: 52014, address: BOLT, symbol: 'BOLT', name: 'BOLT', decimals: 18, logoUri: null, price: 0.19, change24h: -0.8, change7d: 3.2, volume24h: 42_100, tvl: 380_000, marketCap: 1_900_000, safety: 'VERIFIED', pinned: true },
+      { chainId: 52014, address: USDC, symbol: 'USDC', name: 'Hyperlane USDC', decimals: 6, logoUri: null, price: 1, change24h: 0, change7d: 0, volume24h: 96_400, tvl: 610_000, marketCap: null, safety: 'VERIFIED', pinned: false },
+      { chainId: 52014, address: '0xEe432C220273e4F949007B4c1946562826Efa055', symbol: 'DYNO', name: 'DYNO', decimals: 18, logoUri: null, price: 0.012, change24h: 11.4, change7d: -2.2, volume24h: 12_000, tvl: 41_000, marketCap: 240_000, safety: 'VERIFIED', pinned: false },
     ]
     const legendsCollection: CollectionView = { chainId: 52014, address: LEGENDS, name: 'Electric Legends', description: 'The flagship ElectroSwap collection. Every Legend shares a third of the marketplace fees.', verified: true, standard: 'ERC721', totalSupply: 500, imageUrl: null, bannerUrl: null, creatorFee: { payoutAddress: OTHER, basisPoints: 500 }, floorEtn: 40, volume24hEtn: 128, totalVolumeEtn: 41_208, owners: 212, listed: 31, percentListed: 6.2, traits: [{ name: 'Element', values: ['Volt', 'Arc', 'Plasma'] }], paysDividends: true, starred: false, owned: 2 }
     const voltsCollection: CollectionView = { chainId: 52014, address: '0x8888888888888888888888888888888888888888', name: 'Volts', description: null, verified: true, standard: 'ERC721', totalSupply: 2_000, imageUrl: null, bannerUrl: null, creatorFee: null, floorEtn: 2.4, volume24hEtn: 900, totalVolumeEtn: 12_000, owners: 640, listed: 140, percentListed: 7, traits: [], paysDividends: false, starred: false, owned: 0 }
@@ -216,6 +216,13 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
     ]
     const offersInbox: OffersInbox = { received: [{ asset: owned[0] as AssetView, offer }], made: [{ address: '0x8888888888888888888888888888888888888888', tokenId: '404', name: 'Volt #404', imageUrl: null, collectionName: 'Volts', offer: { ...offer, priceEtn: 2.5, priceRaw: '2500000000000000000', orderHash: '0xbid2', maker: address }, expiresAt: Math.floor(FIXED_NOW / 1000) + 2 * 86_400 }], obligationWei: '2500000000000000000', wetnBalanceWei: '4000000000000000000' }
     const Any = z.object({}).passthrough()
+    engine.host.override('activityScan', {
+      scanAll: { input: Any, handler: async () => ({ accountId, chainIds: [52014, 1, 56, 8453], added: 0, problems: [], observedAt: FIXED_NOW }) },
+      cached: { input: Any, handler: async () => ({ value: { accountId, chainIds: [52014, 1, 56, 8453], added: 0, problems: [], observedAt: FIXED_NOW - 120_000 }, observedAt: FIXED_NOW - 120_000 }) },
+    })
+    // The inbox (plan A6): one offer and one fired alert, so Activity's attention section and the dock badge have something to show.
+    await engine.notifications.push({ id: 'offer:fixture', kind: 'offer', title: 'Offer on Electric Legend #77', body: '1,400 ETN from 0x9a2c…41e0', target: 'offers' })
+    await engine.notifications.push({ id: 'above:token:fixture', kind: 'alert', title: 'BOLT crossed $0.19', body: 'Your alert at $0.18 fired.', target: `token:${BOLT}` })
     engine.host.override('explore', {
       available: { handler: async () => true },
       tokens: { input: Any, handler: async () => exploreTokens },

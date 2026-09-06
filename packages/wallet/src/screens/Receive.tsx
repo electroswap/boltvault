@@ -4,14 +4,14 @@
  * Ethereum scanner cannot mistake it, and "Request amount" builds a transfer
  * URI for a token.
  */
-import { Body, Chip, Column, Icon, Input, Key, Plate, QR, Row, ScrollView, Signature, metrics, paint } from '@boltvault/ui'
+import { Body, Chip, Column, Input, Key, Plate, QR, Row, ScrollView, Signature, metrics, paint } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import type { ChainView, TokenView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { parseUnits } from 'viem'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
-import { useRouter } from '../navigation/router'
 import { useWalletState } from '../state/useWalletState'
 
 const ETN = 52014
@@ -19,7 +19,6 @@ const ETN = 52014
 export function Receive({ body, token: initialToken, chainId: initialChainId }: { body: 'extension-popup' | 'extension-tab' | 'mobile'; token?: string; chainId?: number }) {
   const engine = useEngine()
   const host = useHost()
-  const router = useRouter()
   const { active } = useWalletState()
   const [chain, setChain] = useState<ChainView | null>(null)
   const [tokens, setTokens] = useState<TokenView[]>([])
@@ -63,10 +62,7 @@ export function Receive({ body, token: initialToken, chainId: initialChainId }: 
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14, alignItems: 'stretch' }} testID="receive">
-      <Row justifyContent="space-between">
-        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-        <Body size="title">{t({ id: 'receive.title', message: 'Receive' })}</Body>
-      </Row>
+      <PageHeader title={t({ id: 'receive.title', message: 'Receive' })} />
 
       <Plate role="raised" gap="$3" alignItems="center" testID="receive-plate">
         <QR value={uri} size={body === 'extension-popup' ? 200 : 240} testID="receive-qr" />

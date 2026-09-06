@@ -69,16 +69,6 @@ msgid "Kill-switches and the scam list are signed by ElectroSwap and checked eve
 msgstr "Kill-switches and the scam list are signed by ElectroSwap and checked every six hours ({n} scam origins)."
 
 #: packages/wallet/src/screens/About.tsx
-msgctxt "about.limit.off"
-msgid "Limit orders are off in this build."
-msgstr "Limit orders are off in this build."
-
-#: packages/wallet/src/screens/About.tsx
-msgctxt "about.limit.on"
-msgid "Limit orders are on in this build."
-msgstr "Limit orders are on in this build."
-
-#: packages/wallet/src/screens/About.tsx
 msgctxt "about.privacy"
 msgid "No analytics. Only ElectroSwap’s API and the chain RPCs ever see an address."
 msgstr "No analytics. Only ElectroSwap’s API and the chain RPCs ever see an address."
@@ -219,16 +209,6 @@ msgid "Show"
 msgstr "Show"
 
 #: packages/wallet/src/screens/Accounts.tsx
-msgctxt "acct.sync.hint"
-msgid "Sync accounts to paired devices"
-msgstr "Sync accounts to paired devices"
-
-#: packages/wallet/src/screens/Accounts.tsx
-msgctxt "acct.sync.hint.body"
-msgid "Watch and hardware accounts sync; seeds and keys never do. Pair in Settings › Devices."
-msgstr "Watch and hardware accounts sync; seeds and keys never do. Pair in Settings › Devices."
-
-#: packages/wallet/src/screens/Accounts.tsx
 msgctxt "acct.use"
 msgid "Use"
 msgstr "Use"
@@ -247,6 +227,11 @@ msgstr "All"
 msgctxt "activity.approvals"
 msgid "Approvals"
 msgstr "Approvals"
+
+#: packages/wallet/src/screens/Activity.tsx
+msgctxt "activity.attention"
+msgid "Needs attention"
+msgstr "Needs attention"
 
 #: packages/wallet/src/screens/Activity.tsx
 msgctxt "activity.confirmed"
@@ -289,9 +274,9 @@ msgid "What you were warned about"
 msgstr "What you were warned about"
 
 #: packages/wallet/src/screens/Activity.tsx
-msgctxt "activity.scanning"
-msgid "Checking for arrivals…"
-msgstr "Checking for arrivals…"
+msgctxt "activity.scan.problem"
+msgid "Some chains did not answer"
+msgstr "Some chains did not answer"
 
 #: packages/wallet/src/screens/Activity.tsx
 msgctxt "activity.sent"
@@ -314,14 +299,24 @@ msgid "To"
 msgstr "To"
 
 #: packages/wallet/src/screens/Security.tsx
+msgctxt "al.15"
+msgid "15 min"
+msgstr "15 min"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "al.5"
+msgid "5 min"
+msgstr "5 min"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "al.60"
+msgid "1 hour"
+msgstr "1 hour"
+
+#: packages/wallet/src/screens/Security.tsx
 msgctxt "al.never"
 msgid "Never"
 msgstr "Never"
-
-#: packages/wallet/src/screens/Security.tsx
-msgctxt "al.now"
-msgid "On close"
-msgstr "On close"
 
 #: packages/wallet/src/screens/Alerts.tsx
 msgctxt "alerts.above"
@@ -623,7 +618,7 @@ msgctxt "approval.watch.body"
 msgid "Add a token this site suggests to your list. Its details are checked against the chain before it shows."
 msgstr "Add a token this site suggests to your list. Its details are checked against the chain before it shows."
 
-#: packages/wallet/src/screens/shells.tsx
+#: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "back"
 msgid "Back"
 msgstr "Back"
@@ -1274,6 +1269,16 @@ msgid "Paired devices share settings, per-site chains and watch/hardware account
 msgstr "Paired devices share settings, per-site chains and watch/hardware accounts. Seeds and keys never sync — move a vault with the export code in Security."
 
 #: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.alerts"
+msgid "Alerts"
+msgstr "Alerts"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "explore.browser"
+msgid "Browser"
+msgstr "Browser"
+
+#: packages/wallet/src/screens/Explore.tsx
 msgctxt "explore.collectibles"
 msgid "Collectibles"
 msgstr "Collectibles"
@@ -1329,14 +1334,14 @@ msgid "Markets are on Electroneum"
 msgstr "Markets are on Electroneum"
 
 #: packages/wallet/src/screens/Explore.tsx
-msgctxt "explore.owned"
+msgctxt "explore.own"
 msgid "you own {n}"
 msgstr "you own {n}"
 
 #: packages/wallet/src/screens/Explore.tsx
 msgctxt "explore.rack"
-msgid "Your collection →"
-msgstr "Your collection →"
+msgid "Your collection"
+msgstr "Your collection"
 
 #: packages/wallet/src/screens/Explore.tsx
 msgctxt "explore.search"
@@ -1402,6 +1407,11 @@ msgstr "{b} BOLT boosting at {m}×"
 msgctxt "farm.boost.none"
 msgid "No BOLT boost yet"
 msgstr "No BOLT boost yet"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "farm.card.collect"
+msgid "{d} DYNO to collect"
+msgstr "{d} DYNO to collect"
 
 #: packages/wallet/src/screens/Farm.tsx
 msgctxt "farm.cb.body"
@@ -1650,8 +1660,8 @@ msgstr "Reduce motion"
 
 #: packages/wallet/src/screens/Feel.tsx
 msgctxt "feel.motion.hint"
-msgid "The Field holds still, digits update without rolling, the discharge is a short fade. The app is complete without motion."
-msgstr "The Field holds still, digits update without rolling, the discharge is a short fade. The app is complete without motion."
+msgid "The background holds still and digits update without rolling. Also follows your system’s reduce-motion setting."
+msgstr "The background holds still and digits update without rolling. Also follows your system’s reduce-motion setting."
 
 #: packages/wallet/src/screens/Feel.tsx
 msgctxt "feel.sound"
@@ -1832,6 +1842,31 @@ msgstr "Withdraw"
 msgctxt "flow.wrap"
 msgid "Wrap ETN"
 msgstr "Wrap ETN"
+
+#: packages/wallet/src/components/FreshnessLine.tsx
+msgctxt "fresh.days"
+msgid "As of {d} days ago"
+msgstr "As of {d} days ago"
+
+#: packages/wallet/src/components/FreshnessLine.tsx
+msgctxt "fresh.hours"
+msgid "As of {h} h ago"
+msgstr "As of {h} h ago"
+
+#: packages/wallet/src/components/FreshnessLine.tsx
+msgctxt "fresh.minutes"
+msgid "As of {m} min ago"
+msgstr "As of {m} min ago"
+
+#: packages/wallet/src/components/FreshnessLine.tsx
+msgctxt "fresh.moment"
+msgid "As of a moment ago"
+msgstr "As of a moment ago"
+
+#: packages/wallet/src/components/PageHeader.tsx
+msgctxt "header.expand"
+msgid "Open in a full tab"
+msgstr "Open in a full tab"
 
 #: packages/wallet/src/screens/Receive.tsx
 msgctxt "hide"
@@ -2823,6 +2858,16 @@ msgctxt "piece.yours"
 msgid "Yours"
 msgstr "Yours"
 
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "pin.off"
+msgid "Unpin from Home"
+msgstr "Unpin from Home"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "pin.on"
+msgid "Pin to Home"
+msgstr "Pin to Home"
+
 #: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "pw.good"
 msgid "Good"
@@ -3012,6 +3057,11 @@ msgstr "Encryption: Argon2id → XChaCha20-Poly1305, one data key per vault, wra
 msgctxt "security.autolock"
 msgid "Auto-lock"
 msgstr "Auto-lock"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.autolock.hint"
+msgid "Locks after this long without activity. Always locks when the browser closes."
+msgstr "Locks after this long without activity. Always locks when the browser closes."
 
 #: packages/wallet/src/screens/Security.tsx
 msgctxt "security.current"
@@ -3278,35 +3328,10 @@ msgctxt "settings.spending.rows"
 msgid "Slippage, approvals, step-ups, wallet fee schedule"
 msgstr "Slippage, approvals, step-ups, wallet fee schedule"
 
-#: packages/wallet/src/screens/Accounts.tsx
-msgctxt "share.body"
-msgid "Your signature, your name and your tier — never a balance."
-msgstr "Your signature, your name and your tier — never a balance."
-
-#: packages/wallet/src/screens/Accounts.tsx
-msgctxt "share.copy"
-msgid "Copy link"
-msgstr "Copy link"
-
-#: packages/wallet/src/screens/Accounts.tsx
-msgctxt "share.hide"
-msgid "Hide"
-msgstr "Hide"
-
-#: packages/wallet/src/screens/Accounts.tsx
-msgctxt "share.key"
-msgid "Share"
-msgstr "Share"
-
-#: packages/wallet/src/screens/Accounts.tsx
-msgctxt "share.show"
-msgid "Show"
-msgstr "Show"
-
-#: packages/wallet/src/screens/Accounts.tsx
-msgctxt "share.title"
-msgid "Share card"
-msgstr "Share card"
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.title"
+msgid "Settings"
+msgstr "Settings"
 
 #: packages/wallet/src/screens/Receive.tsx
 msgctxt "show"
@@ -3742,6 +3767,16 @@ msgstr "Get the update"
 msgctxt "update.title"
 msgid "Update BoltVault to keep going"
 msgstr "Update BoltVault to keep going"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "watch.alerts.off"
+msgid "Stop alerts"
+msgstr "Stop alerts"
+
+#: packages/wallet/src/screens/Explore.tsx
+msgctxt "watch.alerts.on"
+msgid "Alert me"
+msgstr "Alert me"
 
 #: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "watch.label"

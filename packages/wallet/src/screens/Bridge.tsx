@@ -6,6 +6,7 @@
  * cable and lands on delivery; arriving on Electroneum offers "Get ETN".
  */
 import { Body, Cable, Chip, Column, Icon, Input, Key, Plate, Row, ScrollView, metrics, paint, shortAddress } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import type { BridgeQuote, BridgeRoute, BridgeStatus, ChainView, Settings } from '@boltvault/engine'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useEngine, useEngineEvent } from '../engine/EngineProvider'
@@ -164,10 +165,7 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="bridge">
-      <Row justifyContent="space-between">
-        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-        <Body size="title">{t({ id: 'bridge.title', message: 'Bridge' })}</Body>
-      </Row>
+      <PageHeader title={t({ id: 'bridge.title', message: 'Bridge' })} />
 
       {/* Two chain plates joined by the cable: side by side with room (tab), stacked with the cable between them elsewhere. */}
       <Plates stacked={stacked}>

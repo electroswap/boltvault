@@ -15,7 +15,7 @@ import { parseTypedData } from '@boltvault/security'
 import { startMockRpc, type MockRpc } from '@boltvault/testing'
 import { decodeFunctionData, encodeAbiParameters, encodeFunctionResult, parseAbiParameters, parseTransaction, type Hex } from 'viem'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createEngine, marketplaceConfig, parseApprovalPayload, resetMulticallCache, CANONICAL_MULTICALL3, type ApprovalRequest, type Engine, type SwapFlow } from '../src'
+import { createEngine, marketplaceConfig, parseApprovalPayload, resetMulticallCache, CANONICAL_MULTICALL3, type ApprovalRequest, type Engine, type SwapFlow, cacheKey } from '../src'
 
 const PASSWORD = 'correct horse battery staple 42'
 const KDF = { m: 8 * 1024, t: 1, p: 1 }
@@ -388,15 +388,18 @@ describe('the uber-app on the mainnet mock', () => {
     await engine.engine.watchlist.star({ kind: 'token', chainId: CHAIN, address: BOLT, label: 'BOLT' })
     await engine.engine.watchlist.setAlert({ kind: 'token', chainId: CHAIN, address: BOLT, above: 0.25, below: null, onLive: false })
     expect((await engine.engine.watchlist.list())[0]).toMatchObject({ kind: 'token', above: 0.25 })
-    expect((await engine.engine.explore.tokens({ chainId: CHAIN }))[0]?.starred).toBe(true)
+    // On a token list the star is the pin (plan A5): starring for alerts does not pin, pinning does.
+    expect((await engine.engine.explore.tokens({ chainId: CHAIN }))[0]?.pinned).toBe(false)
+    await engine.engine.tokens.setPrefs({ chainId: CHAIN, address: BOLT, pinned: true })
+    expect((await engine.engine.explore.tokens({ chainId: CHAIN }))[0]?.pinned).toBe(true)
     // First pass records the value (0.19) and nudges about the dividends; the second sees the crossing.
     const first = await engine.engine.watchlist.check()
     expect(first).toContain(`dividends:${accountId}`)
     price = 0.3
     await new Promise((r) => setTimeout(r, 5))
-    engine.explore['tokenCache'].clear()
+    await engine.cache.invalidate(cacheKey('explore', 'tokens', CHAIN))
     const second = await engine.engine.watchlist.check()
-    expect(second).toContain(`above:${BOLT}`)
+    expect(second).toContain(`above:token:${BOLT}`)
     expect(second).not.toContain(`dividends:${accountId}`)
     expect(notes.some((n) => n.title === 'BOLT above $0.25')).toBe(true)
   })

@@ -3,56 +3,51 @@
  * shelves with real depth — listed pieces carry a glowing price tag, pieces
  * with an open offer an ember mark. A collection header shows floor value
  * and counts; filters by listed / unlisted / collection; the offers inbox
- * is one key away. Opening a piece is a move into its lit view.
+ * is one key away. The last visit's shelves paint at once and refresh
+ * behind (plan A2); a first visit shows skeleton tiles.
  */
-import { Artwork, Body, Chip, Column, Icon, Key, Plate, Row, ScrollView, metrics, paint } from '@boltvault/ui'
-import type { Inventory } from '@boltvault/engine'
-import { useEffect, useState } from 'react'
-import { useEngine } from '../engine/EngineProvider'
+import { Artwork, Body, Chip, Column, Key, Plate, Row, ScrollView, SkeletonTiles, metrics, paint } from '@boltvault/ui'
+import { cacheKey, type Inventory } from '@boltvault/engine'
+import { useState } from 'react'
+import { FreshnessLine } from '../components/FreshnessLine'
+import { PageHeader } from '../components/PageHeader'
+import { useCached } from '../hooks/useCached'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
+import { useReducedMotion } from '../state/useReducedMotion'
 import { useWalletState } from '../state/useWalletState'
 
 type BodyKind = 'extension-popup' | 'extension-tab' | 'mobile'
 type Filter = 'all' | 'listed' | 'unlisted'
+const ETN = 52014
 
 export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedded?: boolean; limit?: number }) {
-  const engine = useEngine()
   const router = useRouter()
+  const reducedMotion = useReducedMotion()
   const { active } = useWalletState()
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
-  const [inventory, setInventory] = useState<Inventory | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [collection, setCollection] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const cols = body === 'extension-popup' ? 3 : 4
   const size = Math.floor(((body === 'extension-popup' ? 360 : 640) - inset * 2 - 8 * (cols - 1)) / cols)
+  const accountId = active?.id ?? null
 
-  useEffect(() => {
-    if (!active) return
-    let alive = true
-    engine.nft.inventory({ accountId: active.id, chainId: 52014 }).then(
-      (inv) => alive && setInventory(inv),
-      (err: unknown) => alive && setError(err instanceof Error ? err.message : String(err)),
-    )
-    return () => {
-      alive = false
-    }
-  }, [engine, active])
+  const inv = useCached<Inventory>({
+    key: accountId ? cacheKey('nft', 'inventory', ETN, accountId) : null,
+    cached: (e) => (accountId ? e.nft.cachedInventory({ accountId, chainId: ETN }) : Promise.resolve(null)),
+    fresh: (e) => (accountId ? e.nft.inventory({ accountId, chainId: ETN }) : Promise.reject(new Error('no account'))),
+  })
+  const inventory = inv.value
 
   const pieces = (inventory?.assets ?? []).filter((a) => (filter === 'listed' ? a.listing !== null : filter === 'unlisted' ? a.listing === null : true)).filter((a) => (collection ? a.address.toLowerCase() === collection.toLowerCase() : true))
   const shown = limit ? pieces.slice(0, limit) : pieces
-  const shelves: typeof shown[] = []
+  const shelves: (typeof shown)[] = []
   for (let i = 0; i < shown.length; i += cols) shelves.push(shown.slice(i, i + cols))
 
   const content = (
     <>
-      {!embedded ? (
-        <Row justifyContent="space-between" alignItems="center">
-          <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-          <Body size="title">{t({ id: 'rack.title', message: 'Your collection' })}</Body>
-        </Row>
-      ) : null}
+      {!embedded ? <PageHeader title={t({ id: 'rack.title', message: 'Your collection' })} /> : null}
+      {!embedded ? <FreshnessLine freshness={inv.freshness} observedAt={inv.observedAt} refreshing={inv.refreshing} reducedMotion={reducedMotion} testID="rack-freshness" /> : null}
       {inventory ? (
         <Row gap="$3" flexWrap="wrap" alignItems="center" testID="rack-header">
           <Body tone="mute" size="caption">
@@ -110,11 +105,12 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
           ))}
         </Row>
       ) : null}
-      {error ? <Body tone="burn">{error}</Body> : null}
+      {inv.error && !inventory ? <Body tone="burn">{inv.error}</Body> : null}
+      {inv.freshness === 'loading' ? <SkeletonTiles count={cols * 2} size={size} columns={cols} reducedMotion={reducedMotion} testID="rack-loading" /> : null}
       {inventory && inventory.assets.length === 0 ? (
         <Plate gap="$2" testID="rack-empty">
           <Body tone="mute">{t({ id: 'rack.empty', message: 'Nothing on the shelves yet. Explore collections on Electroneum — buying a piece lands it here.' })}</Body>
-          <Key label={t({ id: 'rack.explore', message: 'Explore collectibles' })} kind="secondary" onPress={() => router.navigate('explore', { segment: 'collectibles' })} testID="rack-explore" />
+          <Key label={t({ id: 'rack.explore', message: 'Explore collectibles' })} kind="secondary" size="compact" onPress={() => router.navigate('explore', { segment: 'collectibles' })} testID="rack-explore" />
         </Plate>
       ) : null}
       <Column gap={14} testID="rack-shelves">
@@ -122,7 +118,7 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
           <Column key={i} gap={0}>
             <Row gap={8} alignItems="flex-end">
               {row.map((a) => (
-                <Column key={`${a.address}:${a.tokenId}`} onPress={() => router.navigate('nft', { chainId: 52014, address: a.address, tokenId: a.tokenId })} cursor="pointer" testID={`rack-piece-${a.tokenId}`}>
+                <Column key={`${a.address}:${a.tokenId}`} onPress={() => router.navigate('nft', { chainId: ETN, address: a.address, tokenId: a.tokenId })} cursor="pointer" testID={`rack-piece-${a.tokenId}`}>
                   <Artwork uri={a.smallImageUrl} label={a.name} size={size} badge={a.listing?.priceEtn !== null && a.listing?.priceEtn !== undefined ? { text: `${a.listing.priceEtn} ETN`, tone: 'arc' } : a.bids.length ? { text: t({ id: 'rack.offer', message: 'Offer' }), tone: 'ember' } : null} />
                 </Column>
               ))}
@@ -133,7 +129,7 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
           </Column>
         ))}
       </Column>
-      {embedded && pieces.length > (limit ?? 0) ? <Key label={t({ id: 'rack.open', message: 'Open the Rack' })} kind="secondary" onPress={() => router.navigate('rack')} testID="rack-open" /> : null}
+      {embedded && pieces.length > (limit ?? 0) ? <Key label={t({ id: 'rack.open', message: 'Open the Rack' })} kind="secondary" size="compact" onPress={() => router.navigate('rack')} testID="rack-open" /> : null}
     </>
   )
   if (embedded) return <Column gap="$3">{content}</Column>

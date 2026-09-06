@@ -45,6 +45,8 @@ import { useFlowNavigation } from '../state/useSwapFlow'
 import { useLinks } from '../state/useLinks'
 import { useFeelEvents } from '../feel'
 import { useWalletState } from '../state/useWalletState'
+import { MotionContext, useReducedMotion } from '../state/useReducedMotion'
+import { useNotifications } from '../hooks/useNotifications'
 import { TABS, TAB_ORDER, type TabId } from './registry'
 import { useRouter } from './router'
 
@@ -58,33 +60,44 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   const { vault, loading } = useWalletState()
   const { pending } = useApprovals()
   const { current, state } = router
+  // One answer for every screen (plan A4): the setting, the system preference, or the harness override.
+  const reducedMotion = useReducedMotion(reducedMotionOverride)
+  const { unread } = useNotifications()
   // A swap or limit-order flow opens its sheets from here, where nothing unmounts (§8.6).
   useFlowNavigation()
   useFeelEvents()
   useLinks()
-  const items = TAB_ORDER.map((id) => ({ id, label: t({ id: TABS[id].labelId, message: TABS[id].labelMessage }), icon: TABS[id].icon }))
+  const items = TAB_ORDER.map((id) => ({ id, label: t({ id: TABS[id].labelId, message: TABS[id].labelMessage }), icon: TABS[id].icon, ...(id === 'activity' && unread > 0 ? { badge: unread } : {}) }))
   const showTabs = state.stack.length === 0
 
   const locked = !loading && !!vault?.exists && !vault.unlocked
   if (locked && current.screen !== 'onboarding' && current.screen !== 'moments') {
-    return <Unlock body={body} reducedMotion={reducedMotionOverride} />
+    return (
+      <MotionContext.Provider value={reducedMotion}>
+        <Unlock body={body} reducedMotion={reducedMotion} />
+      </MotionContext.Provider>
+    )
   }
 
   // A dApp is waiting: the popup and the phone show the sheet over everything (§8.15).
   // Our own flows (Send, Revoke) navigate to the sheet themselves.
   const external = pending.filter((p) => !p.origin.startsWith('internal:'))
   if (external.length > 0 && body !== 'extension-tab' && current.screen !== 'sign' && current.screen !== 'onboarding' && current.screen !== 'moments') {
-    return <Approval body={body} reducedMotion={reducedMotionOverride} requestId={external[0]?.id} />
+    return (
+      <MotionContext.Provider value={reducedMotion}>
+        <Approval body={body} reducedMotion={reducedMotion} requestId={external[0]?.id} />
+      </MotionContext.Provider>
+    )
   }
 
   let screen: React.ReactNode
   switch (current.screen) {
     case 'home':
-      screen = <Home body={body} reducedMotionOverride={reducedMotionOverride} />
+      screen = <Home body={body} reducedMotionOverride={reducedMotion} />
       break
     case 'swap': {
       const p = current.params as { tokenIn?: string; tokenOut?: string } | undefined
-      screen = <Swap body={body} reducedMotion={reducedMotionOverride} {...(p?.tokenIn ? { tokenIn: p.tokenIn } : {})} {...(p?.tokenOut ? { tokenOut: p.tokenOut } : {})} />
+      screen = <Swap body={body} reducedMotion={reducedMotion} {...(p?.tokenIn ? { tokenIn: p.tokenIn } : {})} {...(p?.tokenOut ? { tokenOut: p.tokenOut } : {})} />
       break
     }
     case 'explore': {
@@ -94,36 +107,36 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
     }
     case 'collection': {
       const p = current.params as { chainId: number; address: string } | undefined
-      screen = <Collection body={body} reducedMotion={reducedMotionOverride} chainId={p?.chainId ?? 52014} address={p?.address ?? ''} />
+      screen = <Collection body={body} reducedMotion={reducedMotion} chainId={p?.chainId ?? 52014} address={p?.address ?? ''} />
       break
     }
     case 'nft': {
       const p = current.params as { chainId: number; address: string; tokenId: string } | undefined
-      screen = <Piece body={body} reducedMotion={reducedMotionOverride} chainId={p?.chainId ?? 52014} address={p?.address ?? ''} tokenId={p?.tokenId ?? '0'} />
+      screen = <Piece body={body} reducedMotion={reducedMotion} chainId={p?.chainId ?? 52014} address={p?.address ?? ''} tokenId={p?.tokenId ?? '0'} />
       break
     }
     case 'rack':
       screen = <Rack body={body} />
       break
     case 'offers':
-      screen = <Offers body={body} reducedMotion={reducedMotionOverride} />
+      screen = <Offers body={body} reducedMotion={reducedMotion} />
       break
     case 'farm': {
       const p = current.params as { chainId: number; farmId: number } | undefined
-      screen = <Farm body={body} reducedMotion={reducedMotionOverride} chainId={p?.chainId ?? 52014} farmId={p?.farmId ?? 0} />
+      screen = <Farm body={body} reducedMotion={reducedMotion} chainId={p?.chainId ?? 52014} farmId={p?.farmId ?? 0} />
       break
     }
     case 'campaign': {
       const p = current.params as { chainId: number; pool: string } | undefined
-      screen = <Campaign body={body} reducedMotion={reducedMotionOverride} chainId={p?.chainId ?? 52014} pool={p?.pool ?? ''} />
+      screen = <Campaign body={body} reducedMotion={reducedMotion} chainId={p?.chainId ?? 52014} pool={p?.pool ?? ''} />
       break
     }
     case 'legends':
-      screen = <Legends body={body} reducedMotion={reducedMotionOverride} />
+      screen = <Legends body={body} reducedMotion={reducedMotion} />
       break
     case 'bridge': {
       const p = current.params as { chainId?: number; token?: string } | undefined
-      screen = <Bridge body={body} reducedMotion={reducedMotionOverride} {...(p?.chainId ? { chainId: p.chainId } : {})} {...(p?.token ? { token: p.token } : {})} />
+      screen = <Bridge body={body} reducedMotion={reducedMotion} {...(p?.chainId ? { chainId: p.chainId } : {})} {...(p?.token ? { token: p.token } : {})} />
       break
     }
     case 'networks':
@@ -168,20 +181,20 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
       screen = <Accounts body={body} />
       break
     case 'backup':
-      screen = <Backup reducedMotion={reducedMotionOverride} />
+      screen = <Backup reducedMotion={reducedMotion} />
       break
     case 'unlock':
-      screen = <Unlock body={body} reducedMotion={reducedMotionOverride} />
+      screen = <Unlock body={body} reducedMotion={reducedMotion} />
       break
     case 'onboarding':
-      screen = <Onboarding reducedMotion={reducedMotionOverride} />
+      screen = <Onboarding reducedMotion={reducedMotion} />
       break
     case 'moments':
-      screen = <Moments reducedMotion={reducedMotionOverride} />
+      screen = <Moments reducedMotion={reducedMotion} />
       break
     case 'sign': {
       const requestId = (current.params as { requestId?: string } | undefined)?.requestId
-      screen = <Approval body={body} reducedMotion={reducedMotionOverride} {...(requestId ? { requestId } : {})} />
+      screen = <Approval body={body} reducedMotion={reducedMotion} {...(requestId ? { requestId } : {})} />
       break
     }
     case 'receive': {
@@ -191,7 +204,7 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
     }
     case 'send': {
       const p = current.params as { token?: string; to?: string; requestId?: string; chainId?: number } | undefined
-      screen = <Send body={body} reducedMotion={reducedMotionOverride} {...(p?.token ? { token: p.token } : {})} {...(p?.to ? { to: p.to } : {})} {...(p?.requestId ? { requestId: p.requestId } : {})} {...(p?.chainId ? { chainId: p.chainId } : {})} />
+      screen = <Send body={body} reducedMotion={reducedMotion} {...(p?.token ? { token: p.token } : {})} {...(p?.to ? { to: p.to } : {})} {...(p?.requestId ? { requestId: p.requestId } : {})} {...(p?.chainId ? { chainId: p.chainId } : {})} />
       break
     }
     case 'token': {
@@ -202,12 +215,14 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   }
 
   return (
-    <Column flex={1} backgroundColor="$void">
-      <Column flex={1}>{screen}</Column>
-      {showTabs ? <TabBar items={items} activeId={state.tab} onSelect={(id) => router.setTab(id as TabId)} testID="tabs" /> : null}
-      {/* Last child, so a device round trip sheet paints above the tab bar (§7.5). */}
-      <HardwarePrompt body={body} reducedMotion={reducedMotionOverride} />
-      <UpdateRequired />
-    </Column>
+    <MotionContext.Provider value={reducedMotion}>
+      <Column flex={1} backgroundColor="$void">
+        <Column flex={1}>{screen}</Column>
+        {showTabs ? <TabBar items={items} activeId={state.tab} onSelect={(id) => router.setTab(id as TabId)} testID="tabs" /> : null}
+        {/* Last child, so a device round trip sheet paints above the tab bar (§7.5). */}
+        <HardwarePrompt body={body} reducedMotion={reducedMotion} />
+        <UpdateRequired />
+      </Column>
+    </MotionContext.Provider>
   )
 }

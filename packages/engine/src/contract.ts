@@ -10,48 +10,60 @@
  * Namespaces land with their milestone; a host without one answers
  * `not_implemented`, which the UI renders as an honest empty state.
  */
-import type { TokenDetailView } from '@boltvault/electroswap'
+import type { Cached } from './cache'
 import type {
   AboutView,
   AccountId,
   AccountView,
   ActivityEntry,
+  AllowanceView,
   ApprovalDecision,
   ApprovalRequest,
+  AssetView,
   AutoLock,
+  BridgeQuote,
+  BridgeRoute,
+  BridgeStatus,
+  CampaignView,
   ChainHead,
   ChainView,
-  EngineEvent,
-  PortfolioSnapshot,
-  TokenView,
-  NameLookup,
-  AllowanceView,
+  CollectionView,
   ContactView,
+  DappSession,
+  EngineEvent,
+  ExploreToken,
+  FarmDepositQuote,
+  FarmView,
+  FarmWithdrawQuote,
+  FeeScheduleView,
+  FlagsView,
+  HolderTier,
+  Inventory,
+  KeystonePending,
+  LegendsStatus,
+  LimitOrderView,
+  LimitQuote,
+  NameLookup,
+  NftActivityView,
+  NotificationView,
+  OffersInbox,
+  PortfolioSnapshot,
+  Positions,
+  RemoteRequest,
+  ScanSummary,
   SendQuote,
   Settings,
   SiteView,
-  SwapQuote,
   SwapFlow,
-  HolderTier,
-  FeeScheduleView,
-  LimitQuote,
-  LimitOrderView,
-  ExploreToken,
-  CollectionView,
-  AssetView,
-  Inventory,
-  OffersInbox,
-  NftActivityView,
-  LegendsStatus,
-  FarmView,
-  FarmDepositQuote,
-  FarmWithdrawQuote,
-  CampaignView,
-  WatchItem,
-  Positions,
+  SwapQuote,
   SyncStatus,
+  TokenDetailView,
+  TokenView,
   VaultStatus,
- BridgeQuote, BridgeRoute, BridgeStatus, KeystonePending, RemoteRequest, DappSession, WcProposalView, WcSessionView, FlagsView } from './schema'
+  WatchItem,
+  WcProposalView,
+  WcSessionView,
+} from './schema'
 
 export type Unsubscribe = () => void
 
@@ -70,6 +82,8 @@ export interface VaultNamespace {
   unlockWithPasskey(input: { credentialId: string; prfSecretHex: string }): Promise<{ accounts: AccountView[] }>
   unlockWithDevice(input: { keyId: string; keyHex: string }): Promise<{ accounts: AccountView[] }>
   lock(): Promise<void>
+  /** A human interacted: the idle auto-lock timer restarts (debounced in the engine). */
+  touch(): Promise<{ lockAt: number | null }>
   /** Seed reveal — password re-verified, UI-class senders only, quiet mode in the UI. */
   reveal(input: { seedId: string; password: string }): Promise<{ mnemonic: string; passphraseSet: boolean }>
   changePassword(input: { current: string; next: string }): Promise<VaultStatus>
@@ -147,6 +161,9 @@ export interface PortfolioNamespace {
 export interface ActivityScanNamespace {
   /** Bounded inbound transfer scan (§8.12); returns how many entries were added. */
   scan(input: { accountId: AccountId; chainId: number }): Promise<{ added: number; fromBlock: number; toBlock: number }>
+  /** Every enabled chain in turn; a round younger than 60 s is returned as is unless forced. */
+  scanAll(input: { accountId: AccountId; force?: boolean }): Promise<ScanSummary>
+  cached(input: { accountId: AccountId }): Promise<Cached<ScanSummary> | null>
 }
 
 export interface TokensNamespace {
@@ -198,6 +215,7 @@ export interface SwapNamespace {
 /** The BOLT/DYNO holder program (§8.18): the account's fee tier and the whole schedule. */
 export interface HolderNamespace {
   tier(input: { accountId: AccountId; chainId: number }): Promise<HolderTier>
+  cachedTier(input: { accountId: AccountId; chainId: number }): Promise<Cached<HolderTier> | null>
   schedule(input: { chainId: number }): Promise<FeeScheduleView>
   addresses(input: { chainId: number }): Promise<{ sink: string | null; schedule: string | null }>
   /** Dev/test only; refused for a chain whose sink is pinned in the build. */
@@ -216,8 +234,11 @@ export interface LimitNamespace {
 export interface ExploreNamespace {
   available(): Promise<boolean>
   tokens(input: { chainId: number }): Promise<ExploreToken[]>
+  cachedTokens(input: { chainId: number }): Promise<Cached<ExploreToken[]> | null>
   tokenDetail(input: { chainId: number; address: string }): Promise<TokenDetailView | null>
+  cachedTokenDetail(input: { chainId: number; address: string }): Promise<Cached<TokenDetailView> | null>
   collections(input: { chainId: number; accountId?: AccountId }): Promise<CollectionView[]>
+  cachedCollections(input: { chainId: number; accountId?: AccountId }): Promise<Cached<CollectionView[]> | null>
   collection(input: { chainId: number; address: string; accountId?: AccountId }): Promise<CollectionView | null>
   search(input: { chainId: number; query: string }): Promise<{ tokens: ExploreToken[]; collections: CollectionView[] }>
 }
@@ -225,6 +246,7 @@ export interface ExploreNamespace {
 /** The NFT marketplace (§8.10) on Seaport 1.5. Flows resolve once the first sheet exists; progress arrives as `swap.progress`. */
 export interface NftNamespace {
   inventory(input: { accountId: AccountId; chainId: number }): Promise<Inventory>
+  cachedInventory(input: { accountId: AccountId; chainId: number }): Promise<Cached<Inventory> | null>
   assets(input: { chainId: number; address: string; orderBy?: 'PRICE' | 'RARITY'; asc?: boolean; listed?: boolean; traits?: Array<{ name: string; values: string[] }>; query?: string; after?: string; accountId?: AccountId }): Promise<{ assets: AssetView[]; total: number | null; next: string | null }>
   asset(input: { chainId: number; address: string; tokenId: string; accountId?: AccountId }): Promise<AssetView | null>
   activity(input: { chainId: number; address: string; tokenId?: string }): Promise<NftActivityView[]>
@@ -259,6 +281,7 @@ export interface BridgeNamespace {
 /** Yield farms (§8.8): positions from the chain; Deposit · Withdraw · Collect through the sheet. */
 export interface FarmNamespace {
   list(input: { chainId: number; accountId?: AccountId }): Promise<FarmView[]>
+  cachedList(input: { chainId: number; accountId?: AccountId }): Promise<Cached<FarmView[]> | null>
   farm(input: { chainId: number; farmId: number; accountId?: AccountId }): Promise<FarmView | null>
   quoteDeposit(input: { accountId: AccountId; chainId: number; farmId: number; amount0?: string; amount1?: string; bolt?: string }): Promise<FarmDepositQuote>
   deposit(input: { accountId: AccountId; chainId: number; farmId: number; amount0?: string; amount1?: string; bolt?: string }): Promise<{ flowId: string; requestId: string | null }>
@@ -270,6 +293,7 @@ export interface FarmNamespace {
 /** Launchpad (§8.9). */
 export interface LaunchpadNamespace {
   list(input: { chainId: number; accountId?: AccountId; statuses?: Array<'ACTIVE' | 'LAUNCHED' | 'FAILED' | 'CANCELLED' | 'PENDING'> }): Promise<CampaignView[]>
+  cachedList(input: { chainId: number; accountId?: AccountId }): Promise<Cached<CampaignView[]> | null>
   detail(input: { chainId: number; pool: string; accountId?: AccountId }): Promise<CampaignView | null>
   contribute(input: { accountId: AccountId; chainId: number; pool: string; amountEtn: string }): Promise<{ flowId: string; requestId: string | null }>
   claim(input: { accountId: AccountId; chainId: number; pool: string; kind: 'tokens' | 'refund' | 'referral' }): Promise<{ flowId: string; requestId: string | null }>
@@ -330,6 +354,14 @@ export interface AboutNamespace {
 }
 
 /** Signed flags (§3.7): kill-switches, the minimum version, a notice; only ever disable. */
+/** The notifications inbox (plan A6): the record behind the Activity badge. */
+export interface NotificationsNamespace {
+  list(): Promise<NotificationView[]>
+  unread(): Promise<number>
+  markRead(input?: { ids?: string[] }): Promise<void>
+  clear(): Promise<void>
+}
+
 export interface FlagsNamespace {
   get(): Promise<FlagsView>
   refresh(): Promise<{ flags: 'updated' | 'kept' | 'refused'; scam: 'updated' | 'kept' | 'refused' }>
@@ -399,6 +431,7 @@ export interface WalletEngine {
   readonly connect: ConnectNamespace
   readonly flags: FlagsNamespace
   readonly about: AboutNamespace
+  readonly notifications: NotificationsNamespace
   readonly events: EngineEvents
 }
 

@@ -15,6 +15,8 @@ export function extensionUiHost(body: 'extension-popup' | 'extension-tab' | 'ext
     relayUrl: `${__API_ORIGIN__}/api/wallet/sync`,
     version: browser.runtime.getManifest().version,
     buildHash: __BUILD_HASH__ || null,
+    // The system's reduce-motion preference is the default; Settings › Appearance can force it on (plan A4).
+    prefersReducedMotion: () => (typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false),
     openSecretScreen: (screen: ScreenId) => {
       void browser.tabs.create({ url: browser.runtime.getURL(`/tab.html?screen=${screen}`) })
       if (body !== 'extension-tab') window.close()

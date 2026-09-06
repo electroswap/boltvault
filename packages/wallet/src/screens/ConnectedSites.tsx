@@ -1,16 +1,15 @@
 /** Settings › Connected sites (master plan §8.14): origins as plugs, per-site chain, disconnect. */
-import { Body, Chip, Column, Icon, Input, Key, Plate, Row, ScrollView, metrics, paint, shortAddress } from '@boltvault/ui'
+import { Body, Chip, Column, Input, Key, Plate, Row, ScrollView, metrics, paint, shortAddress } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import type { ChainView, SiteView, WcSessionView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
-import { useRouter } from '../navigation/router'
 import { useWalletState } from '../state/useWalletState'
 
 export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-tab' | 'mobile' }) {
   const engine = useEngine()
-  const router = useRouter()
   const { accounts } = useWalletState()
   const [sites, setSites] = useState<SiteView[]>([])
   const [chains, setChains] = useState<ChainView[]>([])
@@ -47,15 +46,14 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 12 }} testID="sites">
-      <Row justifyContent="space-between">
-        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-        <Body size="title">{t({ id: 'sites.title', message: 'Connected sites' })}</Body>
-      </Row>
+      <PageHeader title={t({ id: 'sites.title', message: 'Connected sites' })} />
       {sites.length === 0 ? (
         <Plate gap="$1">
           <Body tone="mute">{t({ id: 'sites.none', message: 'No site is connected. When a site asks to connect, it appears here with the account and chain it sees.' })}</Body>
         </Plate>
       ) : null}
+      {/* WalletConnect is the phone's; in the browser BoltVault is already in every tab (plan A4). */}
+      {body === 'mobile' ? (
       <Plate gap="$2" testID="walletconnect">
         <Row justifyContent="space-between" alignItems="center">
           <Body size="title">{t({ id: 'wc.title', message: 'WalletConnect' })}</Body>
@@ -86,6 +84,7 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
           </Row>
         ))}
       </Plate>
+      ) : null}
       {sites.map((s) => {
         const account = accounts.find((a) => a.id === s.accountId)
         const chain = chains.find((c) => c.chainId === s.chainId)

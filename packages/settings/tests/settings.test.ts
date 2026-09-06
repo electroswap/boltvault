@@ -50,9 +50,9 @@ describe('normalizeSettings (T6.6)', () => {
   })
 
   it('serializeSettings round-trips through normalizeSettings', () => {
-    const s = normalizeSettings({ autoLock: '1min', displayCurrency: 'ETN' })
+    const s = normalizeSettings({ autoLock: '60min', displayCurrency: 'ETN' })
     const parsed = normalizeSettings(serializeSettings(s))
-    expect(parsed.autoLock).toBe('1min')
+    expect(parsed.autoLock).toBe('60min')
     expect(parsed.displayCurrency).toBe('ETN')
   })
 })

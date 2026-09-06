@@ -4,9 +4,15 @@
  * Reanimated CSS animation so it is real CSS on web and a UI-thread animation
  * on native, with no worklet plugin dependency. The panel is opaque navy
  * glass with the current as a hairline on its top edge.
+ *
+ * Layout contract (plan B1): the panel is a column capped at 88 % of the
+ * screen; the title and `header` stay fixed, the children scroll inside a
+ * bounded region, and `footer` (the Close / primary key) stays fixed under
+ * it. A Sheet must be a sibling of its screen's ScrollView, never a child,
+ * and callers never nest their own ScrollView.
  */
 import type { ReactNode } from 'react'
-import { Pressable, View } from 'react-native'
+import { Pressable, ScrollView, View } from 'react-native'
 import Animated from 'react-native-reanimated'
 import { Icon } from './Icon'
 import { Body, Column, Row } from './primitives'
@@ -18,6 +24,12 @@ export interface SheetProps {
   readonly onClose: () => void
   readonly title?: string
   readonly children: ReactNode
+  /** Fixed under the title (a search field). */
+  readonly header?: ReactNode
+  /** Fixed under the scroll region (the Close or primary key). */
+  readonly footer?: ReactNode
+  /** Children scroll (default). `false` for a body that manages its own height. */
+  readonly scroll?: boolean
   /** Quiet custody mode: no motion, dimmer scrim (§7.9). */
   readonly quiet?: boolean
   /** Reduced motion (§7.6): the sheet simply appears. */
@@ -25,9 +37,11 @@ export interface SheetProps {
   readonly testID?: string
 }
 
-export function Sheet({ open, onClose, title, children, quiet = false, reducedMotion = false, testID }: SheetProps) {
+export function Sheet({ open, onClose, title, children, header, footer, scroll = true, quiet = false, reducedMotion = false, testID }: SheetProps) {
   if (!open) return null
   const still = quiet || reducedMotion
+  const topPad = title || header ? 12 : 20
+  const bottomPad = footer ? 12 : 20
   return (
     <Animated.View
       style={[
@@ -41,7 +55,7 @@ export function Sheet({ open, onClose, title, children, quiet = false, reducedMo
       <Pressable onPress={onClose} accessibilityLabel="Close" style={{ flex: 1 }} />
       <Animated.View
         style={[
-          { backgroundColor: paint.sheet, borderTopLeftRadius: radius.console, borderTopRightRadius: radius.console, maxHeight: '88%', overflow: 'hidden', shadowColor: glow.plate, shadowRadius: 32, shadowOpacity: 1, shadowOffset: { width: 0, height: -8 } },
+          { backgroundColor: paint.sheet, borderTopLeftRadius: radius.console, borderTopRightRadius: radius.console, maxHeight: '88%', overflow: 'hidden', flexDirection: 'column', shadowColor: glow.plate, shadowRadius: 32, shadowOpacity: 1, shadowOffset: { width: 0, height: -8 } },
           // The panel only slides: it is opaque at every frame, so a paused or skipped animation never shows the screen beneath.
           still
             ? null
@@ -56,17 +70,35 @@ export function Sheet({ open, onClose, title, children, quiet = false, reducedMo
         <View style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 1, opacity: 0.8 }} pointerEvents="none">
           <CurrentFill />
         </View>
-        <Column padding="$5" gap="$4">
-          {title ? (
-            <Row justifyContent="space-between">
-              <Body size="title">{title}</Body>
-              <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
-                <Icon name="close" size={20} color={paint.mute} />
-              </Pressable>
-            </Row>
-          ) : null}
-          {children}
-        </Column>
+        {title || header ? (
+          <Column paddingHorizontal="$5" paddingTop="$5" gap="$3" flexShrink={0}>
+            {title ? (
+              <Row justifyContent="space-between">
+                <Body size="title" flexShrink={1} numberOfLines={1}>
+                  {title}
+                </Body>
+                <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="close" size={20} color={paint.mute} />
+                </Pressable>
+              </Row>
+            ) : null}
+            {header}
+          </Column>
+        ) : null}
+        {scroll ? (
+          <ScrollView style={{ flexShrink: 1, minHeight: 0 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: topPad, paddingBottom: bottomPad, gap: 16 }} keyboardShouldPersistTaps="handled">
+            {children}
+          </ScrollView>
+        ) : (
+          <Column flexShrink={1} minHeight={0} paddingHorizontal="$5" paddingTop={topPad} paddingBottom={bottomPad} gap="$4">
+            {children}
+          </Column>
+        )}
+        {footer ? (
+          <Column paddingHorizontal="$5" paddingBottom="$5" paddingTop={4} gap="$2" flexShrink={0}>
+            {footer}
+          </Column>
+        ) : null}
       </Animated.View>
     </Animated.View>
   )

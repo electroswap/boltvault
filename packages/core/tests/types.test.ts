@@ -53,12 +53,12 @@ describe('core types', () => {
     expect(h.category).toBe('SEND')
   })
 
-  it('DEFAULT_SETTINGS match design (exactApprovals on, ethSign off, 5min auto-lock)', () => {
+  it('DEFAULT_SETTINGS match design (exactApprovals on, ethSign off, 15min auto-lock)', () => {
     const s: BoltVaultSettings = DEFAULT_SETTINGS
     expect(s.exactApprovals).toBe(true)
     expect(s.ethSignEnabled).toBe(false)
     expect(s.defaultWallet).toBe(false)
-    expect(s.autoLock).toBe('5min')
+    expect(s.autoLock).toBe('15min')
   })
 
   it('VaultFileV1 envelope shape is versioned', () => {

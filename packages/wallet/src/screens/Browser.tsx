@@ -7,6 +7,7 @@
  * re-injected.
  */
 import { Body, Chip, Column, Icon, Input, Key, Plate, Row, WebView, metrics, paint, type WebViewHandle } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import type { DappSession } from '@boltvault/engine'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
@@ -122,10 +123,7 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
   if (!host.browser) {
     return (
       <Column flex={1} padding={inset} gap="$3" testID="browser">
-        <Row justifyContent="space-between">
-          <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-          <Body size="title">{t({ id: 'browser.title', message: 'Browser' })}</Body>
-        </Row>
+        <PageHeader title={t({ id: 'browser.title', message: 'Browser' })} />
         <Plate gap="$2">
           <Body tone="mute">{t({ id: 'browser.web', message: 'The in-app browser is a phone feature. In the browser extension, BoltVault is already in every tab — open the site and connect from there.' })}</Body>
           <Key label={t({ id: 'browser.open', message: 'Open app.electroswap.io' })} kind="secondary" onPress={() => void host.openUrl?.(HOME)} testID="browser-open" />

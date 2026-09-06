@@ -7,6 +7,8 @@ export interface KeyProps {
   readonly label: string
   readonly onPress?: () => void
   readonly kind?: 'primary' | 'secondary' | 'danger'
+  /** `regular` (56 px) only for a screen's primary verb; `compact` (44 px) for everything else. */
+  readonly size?: 'regular' | 'compact'
   readonly disabled?: boolean
   readonly testID?: string
   readonly icon?: ReactNode
@@ -19,10 +21,13 @@ export interface KeyProps {
  * the current (blue into violet) with a glow; the secondary is glass with a
  * lit rim; danger is copper.
  */
-export function Key({ label, onPress, kind = 'primary', disabled = false, testID, icon, stacked = false }: KeyProps) {
+export function Key({ label, onPress, kind = 'primary', size = 'regular', disabled = false, testID, icon, stacked = false }: KeyProps) {
+  const compact = size === 'compact'
+  const r = compact ? 12 : radius.key
   return (
     <KeyFrame
       kind={kind}
+      size={size}
       disabled={disabled}
       onPress={disabled ? undefined : onPress}
       testID={testID}
@@ -30,17 +35,17 @@ export function Key({ label, onPress, kind = 'primary', disabled = false, testID
       aria-label={label}
       aria-disabled={disabled}
       flexDirection={stacked ? 'column' : 'row'}
-      gap={stacked ? 2 : 8}
-      paddingHorizontal={stacked ? '$2' : '$6'}
-      height={stacked ? 60 : 56}
+      gap={stacked ? 2 : compact ? 6 : 8}
+      paddingHorizontal={stacked ? '$2' : compact ? '$4' : '$6'}
+      height={stacked ? (compact ? 52 : 60) : compact ? 44 : 56}
       flex={stacked ? 1 : undefined}
     >
-      {kind === 'primary' ? <CurrentFill radius={radius.key} /> : null}
-      {kind === 'secondary' ? <Rim radius={radius.key} opacity={0.35} /> : null}
+      {kind === 'primary' ? <CurrentFill radius={r} /> : null}
+      {kind === 'secondary' ? <Rim radius={r} opacity={0.35} /> : null}
       {/* A positioned layer: on the web an absolute SVG paints above in-flow text whatever the order. */}
-      <Row flexDirection={stacked ? 'column' : 'row'} alignItems="center" justifyContent="center" gap={stacked ? 2 : 8} zIndex={1}>
+      <Row flexDirection={stacked ? 'column' : 'row'} alignItems="center" justifyContent="center" gap={stacked ? 2 : compact ? 6 : 8} zIndex={1}>
         {icon}
-        <KeyLabel fontSize={stacked ? '$2' : '$3'}>{label}</KeyLabel>
+        <KeyLabel fontSize={stacked || compact ? '$2' : '$3'}>{label}</KeyLabel>
       </Row>
     </KeyFrame>
   )

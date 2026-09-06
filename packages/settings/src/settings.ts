@@ -9,14 +9,16 @@
 import type { AutoLock, BoltVaultSettings, ConnectedSite } from '@boltvault/core'
 import { DEFAULT_SETTINGS } from '@boltvault/core'
 
-const AUTO_LOCKS: readonly AutoLock[] = ['immediately', '1min', '5min', '30min', 'never']
+const AUTO_LOCKS: readonly AutoLock[] = ['5min', '15min', '60min', 'never']
+/** Pre-idle-timer values (absolute timers, every one shorter than the user meant): one notch up. */
+export const LEGACY_AUTO_LOCK: Readonly<Record<string, AutoLock>> = { immediately: '5min', '1min': '5min', '30min': '60min' }
 const CURRENCIES = ['USD', 'ETN'] as const
 
 /**
  * Normalize a raw stored settings object (string JSON or object) into a valid
  * `BoltVaultSettings`. Unknown/missing fields fall back to `DEFAULT_SETTINGS`;
- * enums are clamped to their valid set. `reducedMotion` comes from the OS
- * (readonly) — passed in separately, defaulting to false.
+ * enums are clamped to their valid set. `reducedMotion` is the stored choice;
+ * `os.reducedMotion` (the system preference) is only its default.
  */
 export function normalizeSettings(
   raw: string | Record<string, unknown> | null | undefined,
@@ -43,7 +45,7 @@ export function normalizeSettings(
   const autoLock: AutoLock =
     typeof autoLockRaw === 'string' && (AUTO_LOCKS as readonly string[]).includes(autoLockRaw)
       ? (autoLockRaw as AutoLock)
-      : DEFAULT_SETTINGS.autoLock
+      : (typeof autoLockRaw === 'string' && LEGACY_AUTO_LOCK[autoLockRaw]) || DEFAULT_SETTINGS.autoLock
 
   const curRaw = obj['displayCurrency']
   const displayCurrency =
@@ -67,7 +69,7 @@ export function normalizeSettings(
     sendWhitelist: bool('sendWhitelist', DEFAULT_SETTINGS.sendWhitelist),
     autoLock,
     displayCurrency,
-    reducedMotion: typeof os.reducedMotion === 'boolean' ? os.reducedMotion : DEFAULT_SETTINGS.reducedMotion,
+    reducedMotion: bool('reducedMotion', typeof os.reducedMotion === 'boolean' ? os.reducedMotion : DEFAULT_SETTINGS.reducedMotion),
   }
 }
 

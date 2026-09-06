@@ -12,9 +12,10 @@ import type { Platform } from '@boltvault/platform'
 import { parseUnits, type Hex } from 'viem'
 import { z } from 'zod'
 import { EngineError } from '../errors'
+import { cacheKey, type Cached, type DocCache } from '../cache'
 import type { NamespaceSpec } from '../host'
 import { readMany, type ReadCall, type ReadResult } from '../multicall'
-import { AccountIdSchema, type CampaignView } from '../schema'
+import { CampaignViewSchema, AccountIdSchema, type CampaignView } from '../schema'
 import type { ChainsService } from './chains'
 import type { FlowStore } from './flows'
 import type { NamesService } from './names'
@@ -31,7 +32,10 @@ export interface LaunchpadDeps {
   readonly electroswap: ElectroSwapClient | null
   readonly names: NamesService
   readonly watchlist: WatchlistService
+  readonly cache?: DocCache
 }
+
+const listSpec = (chainId: number, accountId: string | undefined) => ({ key: cacheKey('launchpad', 'list', chainId, accountId ?? '-'), schema: z.array(CampaignViewSchema) })
 
 const REFERRAL_TTL_MS = 24 * 3_600_000
 const isEtn = (chainId: number): chainId is 52014 | 5201420 => chainId === 52014 || chainId === 5201420
@@ -125,12 +129,22 @@ export class LaunchpadService {
   async list(chainId: number, accountId?: string, statuses?: PresaleWireStatus[]): Promise<CampaignView[]> {
     const d = this.deps
     if (!d.electroswap || !isEtn(chainId)) return []
-    const owner = accountId ? (await this.account(accountId)).address : null
-    const rows = await fetchCampaigns(d.electroswap, chainId, statuses).catch(() => [] as EsCampaign[])
-    const views = await this.enrich(chainId, rows.slice(0, 40), owner)
-    const rank = (p: CampaignView['phase']): number => (p === 'live' ? 0 : p === 'upcoming' ? 1 : p === 'awaiting_finalize' ? 2 : p === 'launched' ? 3 : 4)
-    views.sort((a, b) => rank(a.phase) - rank(b.phase) || b.starts - a.starts)
-    return views
+    const client = d.electroswap
+    const build = async (): Promise<CampaignView[]> => {
+      const owner = accountId ? (await this.account(accountId)).address : null
+      const rows = await fetchCampaigns(client, chainId, statuses).catch(() => [] as EsCampaign[])
+      const views = await this.enrich(chainId, rows.slice(0, 40), owner)
+      const rank = (p: CampaignView['phase']): number => (p === 'live' ? 0 : p === 'upcoming' ? 1 : p === 'awaiting_finalize' ? 2 : p === 'launched' ? 3 : 4)
+      views.sort((a, b) => rank(a.phase) - rank(b.phase) || b.starts - a.starts)
+      return views
+    }
+    // Only the unfiltered list is the cached one; a status filter is a one-off read.
+    if (!d.cache || statuses) return build()
+    return (await d.cache.refresh(listSpec(chainId, accountId), build)).value
+  }
+
+  async cachedList(chainId: number, accountId?: string): Promise<Cached<CampaignView[]> | null> {
+    return (await this.deps.cache?.read(listSpec(chainId, accountId))) ?? null
   }
 
   async detail(chainId: number, pool: string, accountId?: string): Promise<CampaignView | null> {
@@ -230,6 +244,7 @@ const Chain = z.object({ chainId: z.number().int().positive() })
 export function launchpadNamespace(launchpad: LaunchpadService): NamespaceSpec {
   return {
     list: { input: Chain.extend({ accountId: AccountIdSchema.optional(), statuses: z.array(z.enum(['ACTIVE', 'LAUNCHED', 'FAILED', 'CANCELLED', 'PENDING'])).optional() }), handler: (arg) => launchpad.list((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId, (arg as { statuses?: PresaleWireStatus[] }).statuses) },
+    cachedList: { input: z.object({ chainId: z.number().int().positive(), accountId: AccountIdSchema.optional() }), handler: (arg) => launchpad.cachedList((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId) },
     detail: { input: Chain.extend({ pool: z.string(), accountId: AccountIdSchema.optional() }), handler: (arg) => launchpad.detail((arg as { chainId: number }).chainId, (arg as { pool: string }).pool, (arg as { accountId?: string }).accountId) },
     contribute: { input: Chain.extend({ accountId: AccountIdSchema, pool: z.string(), amountEtn: z.string().max(60) }), handler: (arg) => launchpad.contribute(arg as { accountId: string; chainId: number; pool: string; amountEtn: string }) },
     claim: { input: Chain.extend({ accountId: AccountIdSchema, pool: z.string(), kind: z.enum(['tokens', 'refund', 'referral']) }), handler: (arg) => launchpad.claim(arg as { accountId: string; chainId: number; pool: string; kind: 'tokens' | 'refund' | 'referral' }) },

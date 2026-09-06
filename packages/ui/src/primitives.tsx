@@ -34,9 +34,12 @@ export const Row = styled(TView, {
 
 /**
  * A glass plate. The role decides the material (style bible › materials):
- * recessed (a quiet edge), raised (a lit rim and a soft glow), console (a
- * screen's main panel: brighter rim, deeper glow), well (an input or a
- * terminal inside a console: darker than its plate).
+ * console (a screen's one main panel: brighter rim, deeper glow), raised
+ * (at most one hero plate per screen: lit rim, soft glow), card (anything
+ * rendered in a list that opens something: quiet rim, no glow — so a column
+ * of cards never bleeds together), tile (the Home action grid: raised fill,
+ * no glow), recessed (static information: a quiet edge), well (an input or
+ * a terminal inside a console: darker than its plate).
  */
 const PlateFrame = styled(TView, {
   name: 'Plate',
@@ -49,19 +52,21 @@ const PlateFrame = styled(TView, {
   variants: {
     role: {
       recessed: { backgroundColor: '$glass', borderRadius: '$recessed', borderWidth: 1, borderColor: '$edge' },
-      raised: { backgroundColor: '$glassRaised', borderRadius: '$raised', borderWidth: 0, shadowColor: glow.plate, shadowRadius: 24, shadowOpacity: 1, shadowOffset: { width: 0, height: 8 } },
+      raised: { backgroundColor: '$glassRaised', borderRadius: '$raised', borderWidth: 0, shadowColor: glow.plateSoft, shadowRadius: 16, shadowOpacity: 1, shadowOffset: { width: 0, height: 4 } },
       console: { backgroundColor: '$glassRaised', borderRadius: '$console', borderWidth: 0, shadowColor: glow.plate, shadowRadius: 32, shadowOpacity: 1, shadowOffset: { width: 0, height: 10 } },
+      card: { backgroundColor: '$glass', borderRadius: '$recessed', borderWidth: 0, hoverStyle: { backgroundColor: '$glassRaised' }, pressStyle: { opacity: 0.9 } },
+      tile: { backgroundColor: '$glassRaised', borderRadius: '$raised', borderWidth: 0, pressStyle: { backgroundColor: '$glassRaisedSolid' } },
       well: { backgroundColor: '$well', borderRadius: '$well', borderWidth: 1, borderColor: '$edge' },
     },
   } as const,
   defaultVariants: { role: 'recessed' },
 })
 
-export type PlateRole = 'recessed' | 'raised' | 'console' | 'well'
+export type PlateRole = 'recessed' | 'raised' | 'console' | 'card' | 'tile' | 'well'
 export type PlateProps = Omit<ComponentProps<typeof PlateFrame>, 'role'> & { readonly role?: PlateRole; readonly children?: ReactNode }
 
-const RIM_BY_ROLE: Record<PlateRole, number> = { recessed: 0, raised: 0.45, console: 0.7, well: 0 }
-const RADIUS_BY_ROLE: Record<PlateRole, number> = { recessed: radius.recessed, raised: radius.raised, console: radius.console, well: radius.well }
+const RIM_BY_ROLE: Record<PlateRole, number> = { recessed: 0, raised: 0.45, console: 0.7, card: 0.3, tile: 0.45, well: 0 }
+const RADIUS_BY_ROLE: Record<PlateRole, number> = { recessed: radius.recessed, raised: radius.raised, console: radius.console, card: radius.recessed, tile: radius.raised, well: radius.well }
 
 export function Plate({ role = 'recessed', children, ...rest }: PlateProps) {
   const lit = RIM_BY_ROLE[role]
@@ -99,7 +104,11 @@ export const Body = styled(TText, {
   defaultVariants: { tone: 'ink', size: 'body' },
 })
 
-/** A readout — Oxanium ≥ 24 px, tabular numerals. The hero carries a faint glow. */
+/**
+ * A readout — Oxanium ≥ 24 px, tabular numerals. The hero carries a faint
+ * glow; `stat` (20 px) is the one readout size below 24 px, used only inside
+ * a stat strip.
+ */
 export const Readout = styled(TText, {
   name: 'Readout',
   fontFamily: '$readout',
@@ -111,6 +120,9 @@ export const Readout = styled(TText, {
   variants: {
     hero: {
       true: { fontSize: '$4', lineHeight: '$4', letterSpacing: -1.3, textShadowColor: glow.text, textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
+    },
+    stat: {
+      true: { fontSize: 20, lineHeight: 24, letterSpacing: -0.5 },
     },
   } as const,
 })
@@ -125,8 +137,10 @@ export const Address = styled(TText, {
 })
 
 /**
- * A key: the primary/secondary action control. 56 px tall, 44 px minimum
- * hit. The primary is painted by `Key` with the current; the frame itself is
+ * A key: the primary/secondary action control. `regular` is 56 px and is
+ * reserved for a screen's primary verb; `compact` is a 44 px frame (the hit
+ * target) for everything else — Back, Copy, Save, Cancel, Close, options.
+ * The primary is painted by `Key` with the current; the frame itself is
  * transparent so the gradient shows through.
  */
 export const KeyFrame = styled(TView, {
@@ -146,11 +160,15 @@ export const KeyFrame = styled(TView, {
       secondary: { backgroundColor: '$glassRaised', borderWidth: 0 },
       danger: { backgroundColor: '$burn' },
     },
+    size: {
+      regular: { height: 56, paddingHorizontal: '$6', borderRadius: '$key' },
+      compact: { height: 44, paddingHorizontal: '$4', borderRadius: 12 },
+    },
     disabled: {
       true: { opacity: 0.45, cursor: 'default' },
     },
   } as const,
-  defaultVariants: { kind: 'primary' },
+  defaultVariants: { kind: 'primary', size: 'regular' },
   pressStyle: { opacity: 0.85 },
 })
 
@@ -165,7 +183,7 @@ export const KeyLabel = styled(TText, {
   } as const,
 })
 
-/** A pill: a token, a duration, a scope, a small stamped mark (Custom, Verified, Hyperlane…). */
+/** A pill frame: a token, a duration, a scope, a small stamped mark (Custom, Verified, Hyperlane…). `Pill` wraps it as a control. */
 export const Chip = styled(TView, {
   name: 'Chip',
   position: 'relative',

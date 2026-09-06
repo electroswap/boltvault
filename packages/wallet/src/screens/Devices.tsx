@@ -1,16 +1,15 @@
 /** Settings › Devices & sync (master plan §6): pair, confirm the code, push/pull. */
-import { Body, Column, Icon, Input, Key, Plate, QR, Readout, Row, ScrollView, metrics, paint } from '@boltvault/ui'
+import { Body, Column, Input, Key, Plate, QR, Readout, Row, ScrollView, metrics } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import type { RemoteRequest, SyncStatus } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
-import { useRouter } from '../navigation/router'
 
 export function Devices({ body }: { body: 'extension-popup' | 'extension-tab' | 'mobile' }) {
   const engine = useEngine()
   const host = useHost()
-  const router = useRouter()
   const [status, setStatus] = useState<SyncStatus | null>(null)
   const [mode, setMode] = useState<'idle' | 'offer' | 'answer'>('idle')
   const [offer, setOffer] = useState<string | null>(null)
@@ -45,10 +44,7 @@ export function Devices({ body }: { body: 'extension-popup' | 'extension-tab' | 
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 16 }} testID="devices">
-      <Row justifyContent="space-between">
-        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-        <Body size="title">{t({ id: 'devices.title', message: 'Devices & sync' })}</Body>
-      </Row>
+      <PageHeader title={t({ id: 'devices.title', message: 'Devices & sync' })} />
 
       <Plate gap="$2">
         <Body tone="mute" size="caption">

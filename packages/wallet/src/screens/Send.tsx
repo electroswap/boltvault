@@ -6,6 +6,7 @@
  * lands in Activity and the Discharge plays here.
  */
 import { Body, Chip, Column, Discharge, Icon, Input, Key, Plate, Row, ScrollView, TokenAvatar, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import type { ContactView, SendQuote, TokenView } from '@boltvault/engine'
 import { useEffect, useMemo, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
@@ -140,10 +141,7 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="send">
-      <Row justifyContent="space-between">
-        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-        <Body size="title">{t({ id: 'send.title', message: 'Send' })}</Body>
-      </Row>
+      <PageHeader title={t({ id: 'send.title', message: 'Send' })} />
 
       {/* Token */}
       <Row gap="$2" flexWrap="wrap" testID="send-tokens">

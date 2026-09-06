@@ -140,6 +140,8 @@ describe('the Hyperlane bridge on two mock chains', () => {
   })
 
   it('offers the corridors from Electroneum, verified by standard, and switches off a router with the wrong mailbox', async () => {
+    // Avalanche is off by default (plan A4: Electroneum, Ethereum, BSC and Base); the corridor appears once the chain is on.
+    await engine.engine.settings.set({ enabledChains: [1, 56, 8453, 43114] })
     const routes = await engine.engine.bridge.routes({ fromChainId: ETN })
     expect(routes.map((r) => `${r.symbol}:${r.toChainId}:${r.verified}`)).toEqual(['USDC:1:true', 'USDC:8453:true', 'USDC:43114:true', 'USDT:1:false'])
     expect(routes[3]?.reason).toMatch(/mailbox/)

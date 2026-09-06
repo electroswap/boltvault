@@ -4,6 +4,7 @@
  * honest line where it does not. Keys: Send · Receive · Swap.
  */
 import { Body, Chip, Column, Icon, Key, Plate, Row, ScrollView, TokenAvatar, metrics, paint, shortAddress } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import type { AllowanceView, ChainView, TokenView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
@@ -55,14 +56,11 @@ export function Token({ chainId, address, body }: { chainId: number; address: st
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="token">
-      <Row justifyContent="space-between">
-        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-        <Chip>
+      <PageHeader title={token?.symbol ?? ''} right={<><Chip>
           <Body tone="mute" size="caption">
             {chain?.name ?? `Chain ${chainId}`}
           </Body>
-        </Chip>
-      </Row>
+        </Chip></>} />
 
       <Row gap="$3" alignItems="center">
         <TokenAvatar chainId={chainId} address={isNative ? '0x0000000000000000000000000000000000000000' : address} logoUri={token?.logoUri ?? row?.logoUri ?? null} size={44} />

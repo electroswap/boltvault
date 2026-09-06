@@ -11,9 +11,10 @@ import type { Platform } from '@boltvault/platform'
 import { encodeFunctionData, maxUint256, parseAbi, parseUnits, type Hex } from 'viem'
 import { z } from 'zod'
 import { EngineError } from '../errors'
+import { cacheKey, type Cached, type DocCache } from '../cache'
 import type { NamespaceSpec } from '../host'
 import { readMany, type ReadCall } from '../multicall'
-import { AccountIdSchema, type FarmDepositQuote, type FarmView, type FarmWithdrawQuote, type SwapStep } from '../schema'
+import { FarmViewSchema, AccountIdSchema, type FarmDepositQuote, type FarmView, type FarmWithdrawQuote, type SwapStep } from '../schema'
 import type { SettingsStore } from '../settingsStore'
 import type { ChainsService } from './chains'
 import type { FlowStepRun, FlowStore } from './flows'
@@ -32,7 +33,10 @@ export interface FarmDeps {
   readonly flows: FlowStore
   readonly settings: SettingsStore
   readonly electroswap: ElectroSwapClient | null
+  readonly cache?: DocCache
 }
+
+const listSpec = (chainId: number, accountId: string | undefined) => ({ key: cacheKey('farm', 'list', chainId, accountId ?? '-'), schema: z.array(FarmViewSchema) })
 
 interface FarmTuple {
   readonly id: bigint
@@ -229,13 +233,21 @@ export class FarmService {
   /** Explore › Farms and Home › Positions: every farm, the account's positions first. */
   async list(chainId: number, accountId?: string): Promise<FarmView[]> {
     if (!isEtn(chainId)) return []
-    const owner = accountId ? (await this.account(accountId)).address : null
-    const farms = await this.farms(chainId, owner)
-    const block = await this.head(chainId)
-    const out: FarmView[] = []
-    for (const f of farms) out.push(await this.view(chainId, f.tuple, f.index, owner, block))
-    out.sort((a, b) => (a.position && !b.position ? -1 : !a.position && b.position ? 1 : (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0)))
-    return out
+    const build = async (): Promise<FarmView[]> => {
+      const owner = accountId ? (await this.account(accountId)).address : null
+      const farms = await this.farms(chainId, owner)
+      const block = await this.head(chainId)
+      const out: FarmView[] = []
+      for (const f of farms) out.push(await this.view(chainId, f.tuple, f.index, owner, block))
+      out.sort((a, b) => (a.position && !b.position ? -1 : !a.position && b.position ? 1 : (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0)))
+      return out
+    }
+    if (!this.deps.cache) return build()
+    return (await this.deps.cache.refresh(listSpec(chainId, accountId), build)).value
+  }
+
+  async cachedList(chainId: number, accountId?: string): Promise<Cached<FarmView[]> | null> {
+    return (await this.deps.cache?.read(listSpec(chainId, accountId))) ?? null
   }
 
   async farm(chainId: number, farmId: number, accountId?: string): Promise<FarmView | null> {
@@ -443,6 +455,7 @@ const FarmArg = AccountChain.extend({ farmId: z.number().int().nonnegative() })
 export function farmNamespace(farm: FarmService): NamespaceSpec {
   return {
     list: { input: z.object({ chainId: z.number().int().positive(), accountId: AccountIdSchema.optional() }), handler: (arg) => farm.list((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId) },
+    cachedList: { input: z.object({ chainId: z.number().int().positive(), accountId: AccountIdSchema.optional() }), handler: (arg) => farm.cachedList((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId) },
     farm: { input: z.object({ chainId: z.number().int().positive(), farmId: z.number().int().nonnegative(), accountId: AccountIdSchema.optional() }), handler: (arg) => farm.farm((arg as { chainId: number }).chainId, (arg as { farmId: number }).farmId, (arg as { accountId?: string }).accountId) },
     quoteDeposit: { input: FarmArg.extend({ amount0: z.string().max(60).optional(), amount1: z.string().max(60).optional(), bolt: z.string().max(60).optional() }), handler: (arg) => farm.quoteDeposit(arg as { accountId: string; chainId: number; farmId: number; amount0?: string; amount1?: string; bolt?: string }) },
     deposit: { input: FarmArg.extend({ amount0: z.string().max(60).optional(), amount1: z.string().max(60).optional(), bolt: z.string().max(60).optional() }), handler: (arg) => farm.deposit(arg as { accountId: string; chainId: number; farmId: number; amount0?: string; amount1?: string; bolt?: string }) },

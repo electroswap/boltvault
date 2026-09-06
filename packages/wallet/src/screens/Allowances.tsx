@@ -3,7 +3,8 @@
  * grouped by token; unlimited ones are the fat fuse. Revoke runs through the
  * same sheet as everything else (`internal:approvals`).
  */
-import { Body, Chip, Column, Icon, Key, Plate, Row, ScrollView, metrics, paint, shortAddress } from '@boltvault/ui'
+import { Body, Chip, Column, Key, Plate, Row, ScrollView, metrics, paint, shortAddress } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import type { AllowanceView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
@@ -79,10 +80,7 @@ export function Allowances({ body }: { body: 'extension-popup' | 'extension-tab'
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 12 }} testID="allowances">
-      <Row justifyContent="space-between">
-        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-        <Body size="title">{t({ id: 'allow.title', message: 'Approvals' })}</Body>
-      </Row>
+      <PageHeader title={t({ id: 'allow.title', message: 'Approvals' })} />
       <Plate role="raised" gap="$1" testID="allow-summary">
         <Body size="title" tone={unlimited.length ? 'burn' : 'ink'}>
           {unlimited.length ? t({ id: 'allow.summary.unlimited', message: '{n} unlimited', values: { n: unlimited.length } }) : t({ id: 'allow.summary.none', message: 'No unlimited approvals' })}

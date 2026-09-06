@@ -148,8 +148,8 @@ export class WatchlistService {
           if (value !== null && prev !== null) {
             const unit = i.kind === 'token' ? '$' : ''
             const suffix = i.kind === 'token' ? '' : ' ETN'
-            if (i.above !== null && prev < i.above && value >= i.above) await notify(`${i.label} above ${unit}${i.above}${suffix}`, `Now ${unit}${value}${suffix}.`, `above:${i.address}`)
-            if (i.below !== null && prev > i.below && value <= i.below) await notify(`${i.label} below ${unit}${i.below}${suffix}`, `Now ${unit}${value}${suffix}.`, `below:${i.address}`)
+            if (i.above !== null && prev < i.above && value >= i.above) await notify(`${i.label} above ${unit}${i.above}${suffix}`, `Now ${unit}${value}${suffix}.`, `above:${i.kind}:${i.address}`)
+            if (i.below !== null && prev > i.below && value <= i.below) await notify(`${i.label} below ${unit}${i.below}${suffix}`, `Now ${unit}${value}${suffix}.`, `below:${i.kind}:${i.address}`)
           }
           return { ...i, lastValue: value }
         }),

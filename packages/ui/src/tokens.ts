@@ -63,6 +63,8 @@ export const rim = { from: 'rgba(79, 195, 255, 0.9)', to: 'rgba(139, 92, 246, 0.
 
 export const glow = {
   plate: 'rgba(60, 100, 255, 0.22)',
+  /** Raised plates: one hero per screen, softer than a console. */
+  plateSoft: 'rgba(60, 100, 255, 0.14)',
   key: 'rgba(70, 120, 255, 0.32)',
   text: 'rgba(79, 195, 255, 0.35)',
   tab: 'rgba(79, 195, 255, 0.6)',
@@ -76,6 +78,10 @@ export const metrics = {
   hit: 44,
   busBar: 52,
   key: 56,
+  /** Compact keys, icon buttons, headers: a 44 px frame (the hit target) with a smaller visual inside. */
+  keyCompact: 44,
+  header: 44,
+  tabBar: 52,
   filament: 2,
   popup: { width: 360, height: 600 },
 } as const

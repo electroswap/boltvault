@@ -6,6 +6,7 @@
  * Claim referral rewards — each through the sheet.
  */
 import { Artwork, Body, Chip, Column, Icon, Input, Key, Plate, RollingReadout, Row, ScrollView, Sheet, metrics, paint, shortAddress } from '@boltvault/ui'
+import { PageHeader } from '../components/PageHeader'
 import type { CampaignView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
@@ -13,7 +14,6 @@ import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { formatRaw } from '../format'
 import { t } from '../i18n'
-import { useRouter } from '../navigation/router'
 import { useSwapFlow } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
 
@@ -21,7 +21,6 @@ type BodyKind = 'extension-popup' | 'extension-tab' | 'mobile'
 
 export function Campaign({ body, chainId, pool, reducedMotion = false }: { body: BodyKind; chainId: number; pool: string; reducedMotion?: boolean }) {
   const engine = useEngine()
-  const router = useRouter()
   const host = useHost()
   const { active } = useWalletState()
   const { setActive } = useSwapFlow()
@@ -82,9 +81,7 @@ export function Campaign({ body, chainId, pool, reducedMotion = false }: { body:
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="campaign">
-      <Row justifyContent="space-between" alignItems="center">
-        <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => router.back()} icon={<Icon name="back" size={18} color={paint.ink} />} testID="back" />
-        {c ? (
+      <PageHeader title={c?.token.symbol ?? ''} right={<>{c ? (
           <Chip onPress={() => engine.watchlist[c.starred ? 'unstar' : 'star']({ kind: 'campaign', chainId, address: pool, label: c.token.symbol }).then(() => setC({ ...c, starred: !c.starred }))} cursor="pointer" minHeight={44} justifyContent="center" testID="campaign-star">
             <Row gap="$1" alignItems="center">
               <Icon name="star" size={16} color={c.starred ? paint.ember : paint.mute} />
@@ -93,8 +90,7 @@ export function Campaign({ body, chainId, pool, reducedMotion = false }: { body:
               </Body>
             </Row>
           </Chip>
-        ) : null}
-      </Row>
+        ) : null}</>} />
       {error && !c ? <Body tone="burn">{error}</Body> : null}
       {c ? (
         <>

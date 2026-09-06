@@ -4,7 +4,7 @@
  * is fetched at most every 6 h and kept last-good; custom tokens are
  * verified against the chain (code + name/symbol/decimals) before they join.
  */
-import { ALL_CHAINS, HOME_CHAIN_ID, isElectroneumChainId } from '@boltvault/chains'
+import { ALL_CHAINS, ELECTRONEUM_ADDRESSES, HOME_CHAIN_ID, isElectroneumChainId } from '@boltvault/chains'
 import type { Platform } from '@boltvault/platform'
 import { fetchTokenList, type CustomToken, type TokenEntry } from '@boltvault/token-catalog'
 import { getAddress, isAddress, parseAbi, type Hex } from 'viem'
@@ -65,6 +65,8 @@ export interface TokenMetadata {
   readonly hasCode: boolean
 }
 
+const isEtnChain = (chainId: number): chainId is 52014 | 5201420 => chainId === 52014 || chainId === 5201420
+
 export class TokensService {
   private lists = new Map<number, Promise<TokenEntry[]>>()
 
@@ -105,12 +107,15 @@ export class TokensService {
     return (await readDoc(this.platform.storage.local, CUSTOM_DOC, () => this.platform.now())).value
   }
 
-  private async prefs(): Promise<{ pinned: string[]; hidden: string[] }> {
+  /** Pinned / hidden token keys (`chainId:address`), read by Explore to mark pins at serve time. */
+  async prefs(): Promise<{ pinned: string[]; hidden: string[] }> {
     return (await readDoc(this.platform.storage.local, PREFS_DOC, () => this.platform.now())).value
   }
 
   logoFor(chainId: number, address: string, listUri?: string | undefined): string | null {
     if (listUri && /^https?:\/\//.test(listUri)) return listUri
+    // Native ETN has no address of its own; its logo is the wrapped token's on the ElectroSwap static host.
+    if (address === 'native') return isEtnChain(chainId) ? `https://static.electroswap.io/tokens/images/${getAddress(ELECTRONEUM_ADDRESSES[chainId].wetn)}.png` : null
     if (isElectroneumChainId(chainId) && isAddress(address)) return `https://static.electroswap.io/tokens/images/${getAddress(address)}.png`
     return null
   }
@@ -122,7 +127,7 @@ export class TokensService {
     const pinned = new Set(prefs.pinned)
     const hidden = new Set(prefs.hidden)
     const out: TokenView[] = [
-      { chainId, address: 'native', symbol: def.nativeCurrency.symbol, name: def.nativeCurrency.name, decimals: def.nativeCurrency.decimals, logoUri: null, source: 'native', pinned: true, hidden: false, tags: [] },
+      { chainId, address: 'native', symbol: def.nativeCurrency.symbol, name: def.nativeCurrency.name, decimals: def.nativeCurrency.decimals, logoUri: this.logoFor(chainId, 'native'), source: 'native', pinned: true, hidden: false, tags: [] },
     ]
     const seen = new Set<string>()
     for (const c of custom.filter((x) => x.chainId === chainId)) {
