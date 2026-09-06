@@ -1,17 +1,19 @@
 /**
- * A farm (master plan §8.8): built around the Coil — the outer ring is the
- * duration multiplier with the dates to 2.0× and 2.5× engraved, the inner
- * ring the BOLT stair, the glow the rewards waiting. The position plate
- * ticks the pending DYNO per block (the one honest per-block motion).
- * Deposit shows the pair ratio, the BOLT boost stair and the dilution plate
- * before a second deposit; Withdraw is a slider with a live preview;
- * Collect discharges the coil into the readout.
+ * A farm (master plan §8.8; plan C5): built around the Coil — the outer
+ * ring is the duration multiplier with the dates to 2.0× and 2.5× engraved,
+ * the inner ring the BOLT stair, the glow the rewards waiting — with the
+ * farm's numbers as a stat strip beneath it. The position plate is the one
+ * raised hero on the page and ticks the pending DYNO per block. A closed
+ * farm says so and hides Deposit. Deposit shows the pair ratio, the BOLT
+ * boost stair and the dilution plate before a second deposit; Withdraw is
+ * a slider with a live preview; Collect discharges the coil.
  */
-import { Body, Chip, Coil, Input, Key, Plate, Row, ScrollView, Sheet, Slider, Toggle, metrics, paint } from '@boltvault/ui'
-import { PageHeader } from '../components/PageHeader'
+import { Body, Coil, Column, Input, Key, Pill, Plate, Row, ScrollView, Sheet, SkeletonRows, Slider, StatStrip, Toggle, metrics } from '@boltvault/ui'
 import type { FarmDepositQuote, FarmView, FarmWithdrawQuote } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
+import { PairAvatars } from '../components/cards/FarmCard'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
+import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
 import { useChainHead } from '../hooks/useChainHead'
 import { formatFiat, formatRaw } from '../format'
@@ -36,6 +38,7 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
   const { setActive } = useSwapFlow()
   const { flow, dismiss } = useActiveFlow(['farm'])
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
+  const wide = body === 'extension-tab'
   const [farm, setFarm] = useState<FarmView | null>(null)
   const [sheet, setSheet] = useState<SheetKind>(null)
   const [amount0, setAmount0] = useState('')
@@ -58,7 +61,6 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
     }
   }, [engine, chainId, farmId, active, head?.blockNumber, flow?.status])
 
-  // Deposit quote as the user types; the other side follows the pool's ratio.
   useEffect(() => {
     if (sheet !== 'deposit' || !active) return
     const typed = lastEdited === 0 ? amount0 : amount1
@@ -119,194 +121,192 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
   const glow = p ? Math.min(1, Number(BigInt(p.pendingRewards) / 10n ** 18n) / 100) : 0
 
   return (
-    <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="farm">
-      <PageHeader title={farm ? farm.name || `${farm.symbol0}/${farm.symbol1}` : t({ id: 'farm.title', message: 'Farm' })} />
-      {farm ? (
-        <>
-          <Row justifyContent="center">
-            <Coil durationMultiplier={p?.durationMultiplier ?? 10_000} boltMultiplier={p?.boltMultiplier ?? 10_000} glow={glow} size={body === 'extension-popup' ? 200 : 260} at2x={p ? dateLabel(p.at2x) : null} at25x={p ? dateLabel(p.at25x) : null} reducedMotion={reducedMotion} testID="coil" />
-          </Row>
-          <Row gap="$3" flexWrap="wrap" justifyContent="center">
-            <Body tone="mute" size="caption">
-              {farm.baseApy !== null ? t({ id: 'farm.apy', message: 'APY {a}%', values: { a: farm.baseApy.toFixed(1) } }) : t({ id: 'farm.apy.none', message: 'APY from ElectroSwap when reachable' })}
-            </Body>
-            {farm.thirdPartyApy !== null && farm.thirdParty ? (
-              <Body tone="mute" size="caption">
-                {t({ id: 'farm.apy3', message: '+{a}% {s}', values: { a: farm.thirdPartyApy.toFixed(1), s: farm.thirdParty.symbol } })}
-              </Body>
-            ) : null}
-            {farm.tvlUsd !== null ? (
-              <Body tone="mute" size="caption">
-                {t({ id: 'farm.tvl', message: 'TVL {v}', values: { v: formatFiat(farm.tvlUsd, 'USD') } })}
-              </Body>
-            ) : null}
-            <Body tone="mute" size="caption">
-              {t({ id: 'farm.farmers', message: '{n} farmers', values: { n: farm.farmerCount } })}
-            </Body>
-          </Row>
-          {p ? (
-            <Plate role="raised" gap="$2" testID="farm-position">
-              <Row justifyContent="space-between">
-                <Body size="title">{t({ id: 'farm.yours', message: 'Your position' })}</Body>
-                <Body tone="mute" size="caption">
-                  {t({ id: 'farm.share', message: '{p}% of the farm', values: { p: (p.shareOfFarm * 100).toFixed(2) } })}
-                </Body>
-              </Row>
-              <Body tone="mute" size="caption">
-                {`${formatRaw(p.amount0, farm.decimals0)} ${farm.symbol0} · ${formatRaw(p.amount1, farm.decimals1)} ${farm.symbol1}`}
-              </Body>
-              <Row justifyContent="space-between" alignItems="center">
-                <Body tone="arc" testID="farm-pending">
-                  {t({ id: 'farm.pending', message: '{d} DYNO to collect', values: { d: formatRaw(p.pendingRewards, 18) } })}
-                </Body>
-                {farm.thirdParty && BigInt(p.pendingThirdParty) > 0n ? (
-                  <Body tone="ember" size="caption">
-                    {`+${formatRaw(p.pendingThirdParty, 18)} ${farm.thirdParty.symbol}`}
-                  </Body>
-                ) : null}
-              </Row>
-              <Body tone="mute" size="caption">
-                {BigInt(p.boltDeposited) > 0n ? t({ id: 'farm.boost', message: '{b} BOLT boosting at {m}×', values: { b: formatRaw(p.boltDeposited, 18), m: (p.boltMultiplier / 10_000).toFixed(2) } }) : t({ id: 'farm.boost.none', message: 'No BOLT boost yet' })}
-                {p.nextStair ? ` · ${t({ id: 'farm.nextStair', message: '{b} more BOLT for {m}×', values: { b: formatRaw(p.nextStair.more, 18), m: (p.nextStair.multiplier / 10_000).toFixed(2) } })}` : ''}
-              </Body>
-              {p.at25x !== null || p.at2x !== null ? (
-                <Body tone="mute" size="caption">
-                  {p.at2x !== null ? t({ id: 'farm.to2', message: '2.0× on {d}', values: { d: dateLabel(p.at2x) ?? '' } }) : ''}
-                  {p.at2x !== null && p.at25x !== null ? ' · ' : ''}
-                  {p.at25x !== null ? t({ id: 'farm.to25', message: '2.5× on {d}', values: { d: dateLabel(p.at25x) ?? '' } }) : ''}
-                </Body>
-              ) : (
-                <Body tone="arc" size="caption">
-                  {t({ id: 'farm.max', message: 'Full 2.5× duration bonus' })}
-                </Body>
-              )}
-            </Plate>
-          ) : (
-            <Plate gap="$1" testID="farm-none">
-              <Body tone="mute" size="caption">
-                {t({ id: 'farm.none', message: 'Deposit both sides of the pair to start earning DYNO. Your multiplier grows with time and with BOLT deposited as a boost.' })}
-              </Body>
-            </Plate>
-          )}
-          {error ? <Body tone="burn">{error}</Body> : null}
-          {active ? (
-            <Row gap="$2" flexWrap="wrap" testID="farm-keys">
-              <Key label={t({ id: 'farm.deposit', message: 'Deposit' })} disabled={busy || !farm.active} onPress={() => setSheet('deposit')} testID="farm-deposit" />
-              {p ? <Key label={t({ id: 'farm.withdraw', message: 'Withdraw' })} kind="secondary" disabled={busy} onPress={() => setSheet('withdraw')} testID="farm-withdraw" /> : null}
-              {p ? <Key label={t({ id: 'farm.collect', message: 'Collect' })} kind="secondary" disabled={busy || BigInt(p.pendingRewards) === 0n} onPress={() => void run(() => engine.farm.collect({ accountId: active.id, chainId, farmId, asNative: hasNative }))} testID="farm-collect" /> : null}
+    <Column flex={1}>
+      <ScrollView contentContainerStyle={{ padding: inset, gap: 12, ...(wide ? { maxWidth: 560, width: '100%', alignSelf: 'center' } : {}) }} testID="farm">
+        <PageHeader leading={farm ? <Row gap="$2" alignItems="center"><PairAvatars farm={farm} size={24} /><Body size="title" numberOfLines={1}>{farm.name || `${farm.symbol0}/${farm.symbol1}`}</Body></Row> : undefined} title={farm ? undefined : t({ id: 'farm.title', message: 'Farm' })} right={farm ? <>{!farm.active ? <Pill label={t({ id: 'farm.closed', message: 'Closed' })} tone="ember" size="sm" /> : null}<Pill label={farm.version === 3 ? 'V3' : 'V2'} size="sm" /></> : undefined} />
+        {farm ? (
+          <>
+            <Row justifyContent="center">
+              <Coil durationMultiplier={p?.durationMultiplier ?? 10_000} boltMultiplier={p?.boltMultiplier ?? 10_000} glow={glow} size={body === 'extension-popup' ? 190 : 240} at2x={p ? dateLabel(p.at2x) : null} at25x={p ? dateLabel(p.at25x) : null} reducedMotion={reducedMotion} testID="coil" />
             </Row>
-          ) : null}
-          {p && BigInt(p.pendingRewards) > 0n && p.nextStair ? (
-            <Plate gap="$1" testID="farm-boost-plate">
-              <Body size="caption">{t({ id: 'farm.cb.title', message: 'Collect & boost' })}</Body>
-              <Body tone="mute" size="caption">
-                {t({ id: 'farm.cb.body', message: 'Collect your DYNO, swap it for BOLT, then deposit BOLT as a boost with your next deposit. Boosts land on the 50,000 or 100,000 BOLT stairs — you need {b} more for {m}×.', values: { b: formatRaw(p.nextStair.more, 18), m: (p.nextStair.multiplier / 10_000).toFixed(2) } })}
-              </Body>
-              <Key label={t({ id: 'farm.cb.swap', message: 'Swap DYNO for BOLT' })} kind="secondary" onPress={() => router.navigate('swap', { tokenIn: '0xEe432C220273e4F949007B4c1946562826Efa055', tokenOut: '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1' })} testID="farm-cb-swap" />
-            </Plate>
-          ) : null}
-        </>
-      ) : null}
-
-      <Sheet open={sheet === 'deposit'} onClose={() => setSheet(null)} title={t({ id: 'farm.deposit.title', message: 'Deposit' })} testID="farm-deposit-sheet">
-        <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
-          {farm ? (
-            <>
-              <Input value={amount0} onChange={(v) => { setLastEdited(0); setAmount0(v) }} placeholder="0" label={farm.symbol0} testID="farm-amount0" />
-              <Input value={amount1} onChange={(v) => { setLastEdited(1); setAmount1(v) }} placeholder="0" label={farm.symbol1} testID="farm-amount1" />
-              <Body tone="mute" size="caption">
-                {t({ id: 'farm.ratio', message: 'The pool sets the ratio; unused amounts come back to you.' })}
-              </Body>
-              <Input value={bolt} onChange={setBolt} placeholder="0" label={t({ id: 'farm.boltBoost', message: 'BOLT boost (optional)' })} testID="farm-bolt" />
-              <Row gap="$2" flexWrap="wrap">
-                {['50000', '100000'].map((s) => {
-                  const existing = p ? BigInt(p.boltDeposited) / 10n ** 18n : 0n
-                  const more = BigInt(s) - existing
-                  if (more <= 0n) return null
-                  return (
-                    <Chip key={s} onPress={() => setBolt(more.toString())} cursor="pointer" minHeight={44} justifyContent="center" testID={`farm-stair-${s}`}>
-                      <Body tone="mute" size="caption">
-                        {t({ id: 'farm.stair', message: '{b} → {m}×', values: { b: more.toString(), m: s === '50000' ? '1.05' : '1.15' } })}
-                      </Body>
-                    </Chip>
-                  )
-                })}
-              </Row>
-              {quote && p && quote.multiplierAfter !== quote.multiplierBefore ? (
-                <Plate gap={2} testID="farm-dilution">
-                  <Body tone="ember" size="caption">
-                    {t({ id: 'farm.dilution', message: 'A second deposit re-weights your duration bonus: {a}× today → {b}× after this deposit. It climbs again from there.', values: { a: (quote.multiplierBefore / 10_000).toFixed(2), b: (quote.multiplierAfter / 10_000).toFixed(2) } })}
-                  </Body>
-                </Plate>
-              ) : null}
-              {quote?.boltStair && BigInt(quote.boltRaw) > 0n ? (
-                <Body tone="arc" size="caption">
-                  {t({ id: 'farm.stair.land', message: 'Lands on the {b} BOLT stair · {m}×', values: { b: formatRaw(quote.boltStair.total, 18), m: (quote.boltStair.multiplier / 10_000).toFixed(2) } })}
+            <StatStrip
+              small
+              cells={[
+                { label: t({ id: 'farm.stat.apy', message: 'APY' }), value: farm.baseApy !== null ? `${farm.baseApy.toFixed(1)}%` : '—', ...(farm.thirdPartyApy !== null && farm.thirdParty ? { caption: t({ id: 'farm.apy3', message: '+{a}% {s}', values: { a: farm.thirdPartyApy.toFixed(1), s: farm.thirdParty.symbol } }) } : {}) },
+                { label: t({ id: 'farm.stat.tvl', message: 'TVL' }), value: farm.tvlUsd !== null ? formatFiat(farm.tvlUsd, 'USD') : '—' },
+                { label: t({ id: 'farm.stat.farmers', message: 'Farmers' }), value: String(farm.farmerCount) },
+              ]}
+              testID="farm-stats"
+            />
+            {!farm.active ? (
+              <Plate gap={2} testID="farm-closed">
+                <Body tone="ember" size="caption">
+                  {p ? t({ id: 'farm.closed.position', message: 'This farm no longer takes deposits. Your position still earns what is left; you can collect and withdraw.' }) : t({ id: 'farm.closed.body', message: 'This farm no longer takes deposits.' })}
                 </Body>
-              ) : null}
-              {quote && quote.problems.length ? (
-                <Body tone="burn" size="caption" testID="farm-problem">
-                  {quote.problems[0]}
-                </Body>
-              ) : null}
-              {quote?.ok ? (
-                <Body tone="mute" size="caption">
-                  {t({ id: 'farm.steps', message: '{n} signature{s}: the farm is allowed to pull each token once, then the deposit.', values: { n: quote.steps.length, s: quote.steps.length === 1 ? '' : 's' } })}
-                </Body>
-              ) : null}
-              {error ? <Body tone="burn">{error}</Body> : null}
-              <Key label={t({ id: 'farm.deposit', message: 'Deposit' })} disabled={busy || !quote?.ok} onPress={() => void run(() => engine.farm.deposit({ accountId: active?.id ?? '', chainId, farmId, ...(lastEdited === 0 ? { amount0 } : { amount1 }), ...(bolt.trim() ? { bolt } : {}) }))} testID="farm-deposit-go" />
-            </>
-          ) : null}
-        </ScrollView>
-      </Sheet>
-
-      <Sheet open={sheet === 'withdraw'} onClose={() => setSheet(null)} title={t({ id: 'farm.withdraw.title', message: 'Withdraw' })} testID="farm-withdraw-sheet">
-        <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
-          {farm && p ? (
-            <>
-              <Slider value={percent} onChange={setPercent} testID="farm-slider" />
-              <Row gap="$2">
-                {[25, 50, 75, 100].map((n) => (
-                  <Chip key={n} onPress={() => setPercent(n)} cursor="pointer" minHeight={44} justifyContent="center" borderColor={percent === n ? paint.arc : undefined} testID={`farm-pct-${n}`}>
-                    <Body tone={percent === n ? 'arc' : 'mute'} size="caption">
-                      {`${n}%`}
-                    </Body>
-                  </Chip>
-                ))}
-              </Row>
-              {hasNative ? <Toggle value={asNative} onChange={setAsNative} label={t({ id: 'farm.asNative', message: 'Receive ETN instead of WETN' })} testID="farm-as-native" /> : null}
-              {wq ? (
-                <Plate gap={2} testID="farm-withdraw-preview">
-                  <Body size="caption">{t({ id: 'farm.w.leaves', message: 'What leaves the farm' })}</Body>
+              </Plate>
+            ) : null}
+            {p ? (
+              <Plate role="raised" gap="$2" testID="farm-position">
+                <Row justifyContent="space-between">
+                  <Body fontWeight="600">{t({ id: 'farm.yours', message: 'Your position' })}</Body>
                   <Body tone="mute" size="caption">
-                    {`${formatRaw(wq.amount0Raw, farm.decimals0)} ${farm.symbol0} · ${formatRaw(wq.amount1Raw, farm.decimals1)} ${farm.symbol1}`}
+                    {t({ id: 'farm.share', message: '{p}% of the farm', values: { p: (p.shareOfFarm * 100).toFixed(2) } })}
                   </Body>
-                  <Body tone="arc" size="caption">
-                    {t({ id: 'farm.w.collected', message: '{d} DYNO collected with it', values: { d: formatRaw(wq.rewardsRaw, 18) } })}
+                </Row>
+                <Body tone="mute" size="caption">
+                  {`${formatRaw(p.amount0, farm.decimals0)} ${farm.symbol0} · ${formatRaw(p.amount1, farm.decimals1)} ${farm.symbol1}`}
+                </Body>
+                <Row justifyContent="space-between" alignItems="center">
+                  <Body tone="surge" testID="farm-pending">
+                    {t({ id: 'farm.pending', message: '{d} DYNO to collect', values: { d: formatRaw(p.pendingRewards, 18) } })}
                   </Body>
-                  {BigInt(wq.boltReturnedRaw) > 0n ? (
+                  {farm.thirdParty && BigInt(p.pendingThirdParty) > 0n ? (
                     <Body tone="ember" size="caption">
-                      {t({ id: 'farm.w.bolt', message: '{b} BOLT boost comes back — it only unlocks when you withdraw everything', values: { b: formatRaw(wq.boltReturnedRaw, 18) } })}
-                    </Body>
-                  ) : (
-                    <Body tone="mute" size="caption">
-                      {wq.keepsMultiplier ? t({ id: 'farm.w.keeps', message: 'You keep your duration multiplier. BOLT unlocks only when you withdraw everything.' }) : ''}
-                    </Body>
-                  )}
-                  {wq.problems[0] ? (
-                    <Body tone="burn" size="caption">
-                      {wq.problems[0]}
+                      {`+${formatRaw(p.pendingThirdParty, 18)} ${farm.thirdParty.symbol}`}
                     </Body>
                   ) : null}
-                </Plate>
-              ) : null}
-              {error ? <Body tone="burn">{error}</Body> : null}
-              <Key label={t({ id: 'farm.withdraw', message: 'Withdraw' })} disabled={busy || !wq?.ok || percent === 0} onPress={() => void run(() => engine.farm.withdraw({ accountId: active?.id ?? '', chainId, farmId, percent, asNative: hasNative && asNative }))} testID="farm-withdraw-go" />
-            </>
-          ) : null}
-        </ScrollView>
+                </Row>
+                <Body tone="mute" size="caption">
+                  {BigInt(p.boltDeposited) > 0n ? t({ id: 'farm.boost', message: '{b} BOLT boosting at {m}×', values: { b: formatRaw(p.boltDeposited, 18), m: (p.boltMultiplier / 10_000).toFixed(2) } }) : t({ id: 'farm.boost.none', message: 'No BOLT boost yet' })}
+                  {p.nextStair ? ` · ${t({ id: 'farm.nextStair', message: '{b} more BOLT for {m}×', values: { b: formatRaw(p.nextStair.more, 18), m: (p.nextStair.multiplier / 10_000).toFixed(2) } })}` : ''}
+                </Body>
+                {p.at25x !== null || p.at2x !== null ? (
+                  <Body tone="mute" size="caption">
+                    {p.at2x !== null ? t({ id: 'farm.to2', message: '2.0× on {d}', values: { d: dateLabel(p.at2x) ?? '' } }) : ''}
+                    {p.at2x !== null && p.at25x !== null ? ' · ' : ''}
+                    {p.at25x !== null ? t({ id: 'farm.to25', message: '2.5× on {d}', values: { d: dateLabel(p.at25x) ?? '' } }) : ''}
+                  </Body>
+                ) : (
+                  <Body tone="arc" size="caption">
+                    {t({ id: 'farm.max', message: 'Full 2.5× duration bonus' })}
+                  </Body>
+                )}
+              </Plate>
+            ) : farm.active ? (
+              <Plate gap="$1" testID="farm-none">
+                <Body tone="mute" size="caption">
+                  {t({ id: 'farm.none', message: 'Deposit both sides of the pair to start earning DYNO. Your multiplier grows with time and with BOLT deposited as a boost.' })}
+                </Body>
+              </Plate>
+            ) : null}
+            {error ? <Body tone="burn">{error}</Body> : null}
+            {active ? (
+              <Row gap="$2" testID="farm-keys">
+                {farm.active ? (
+                  <Column flex={1}>
+                    <Key label={t({ id: 'farm.deposit', message: 'Deposit' })} disabled={busy} onPress={() => setSheet('deposit')} testID="farm-deposit" />
+                  </Column>
+                ) : null}
+                {p ? (
+                  <Column flex={1}>
+                    <Key label={t({ id: 'farm.withdraw', message: 'Withdraw' })} kind="secondary" disabled={busy} onPress={() => setSheet('withdraw')} testID="farm-withdraw" />
+                  </Column>
+                ) : null}
+                {p ? (
+                  <Column flex={1}>
+                    <Key label={t({ id: 'farm.collect', message: 'Collect' })} kind="secondary" disabled={busy || BigInt(p.pendingRewards) === 0n} onPress={() => void run(() => engine.farm.collect({ accountId: active.id, chainId, farmId, asNative: hasNative }))} testID="farm-collect" />
+                  </Column>
+                ) : null}
+              </Row>
+            ) : null}
+            {p && BigInt(p.pendingRewards) > 0n && p.nextStair && farm.active ? (
+              <Plate role="card" gap="$1" testID="farm-boost-plate">
+                <Body fontWeight="600">{t({ id: 'farm.cb.title', message: 'Collect & boost' })}</Body>
+                <Body tone="mute" size="caption">
+                  {t({ id: 'farm.cb.body', message: 'Collect your DYNO, swap it for BOLT, then deposit BOLT as a boost with your next deposit. Boosts land on the 50,000 or 100,000 BOLT stairs — you need {b} more for {m}×.', values: { b: formatRaw(p.nextStair.more, 18), m: (p.nextStair.multiplier / 10_000).toFixed(2) } })}
+                </Body>
+                <Key label={t({ id: 'farm.cb.swap', message: 'Swap DYNO for BOLT' })} kind="secondary" size="compact" onPress={() => router.setTab('swap', { tokenIn: '0xEe432C220273e4F949007B4c1946562826Efa055', tokenOut: '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1' })} testID="farm-cb-swap" />
+              </Plate>
+            ) : null}
+          </>
+        ) : error ? null : (
+          <SkeletonRows rows={5} avatar={false} reducedMotion={reducedMotion} testID="farm-loading" />
+        )}
+      </ScrollView>
+
+      <Sheet open={sheet === 'deposit'} onClose={() => setSheet(null)} title={t({ id: 'farm.deposit.title', message: 'Deposit' })} reducedMotion={reducedMotion} footer={<Key label={t({ id: 'farm.deposit', message: 'Deposit' })} disabled={busy || !quote?.ok} onPress={() => void run(() => engine.farm.deposit({ accountId: active?.id ?? '', chainId, farmId, ...(lastEdited === 0 ? { amount0 } : { amount1 }), ...(bolt.trim() ? { bolt } : {}) }))} testID="farm-deposit-go" />} testID="farm-deposit-sheet">
+        {farm ? (
+          <Column gap="$3">
+            <Input value={amount0} onChange={(v) => { setLastEdited(0); setAmount0(v) }} placeholder="0" label={farm.symbol0} testID="farm-amount0" />
+            <Input value={amount1} onChange={(v) => { setLastEdited(1); setAmount1(v) }} placeholder="0" label={farm.symbol1} testID="farm-amount1" />
+            <Body tone="mute" size="caption">
+              {t({ id: 'farm.ratio', message: 'The pool sets the ratio; unused amounts come back to you.' })}
+            </Body>
+            <Input value={bolt} onChange={setBolt} placeholder="0" label={t({ id: 'farm.boltBoost', message: 'BOLT boost (optional)' })} testID="farm-bolt" />
+            <Row gap="$2" flexWrap="wrap">
+              {['50000', '100000'].map((s) => {
+                const existing = p ? BigInt(p.boltDeposited) / 10n ** 18n : 0n
+                const more = BigInt(s) - existing
+                if (more <= 0n) return null
+                return <Pill key={s} label={t({ id: 'farm.stair', message: '{b} → {m}×', values: { b: more.toString(), m: s === '50000' ? '1.05' : '1.15' } })} size="sm" onPress={() => setBolt(more.toString())} testID={`farm-stair-${s}`} />
+              })}
+            </Row>
+            {quote && p && quote.multiplierAfter !== quote.multiplierBefore ? (
+              <Plate gap={2} testID="farm-dilution">
+                <Body tone="ember" size="caption">
+                  {t({ id: 'farm.dilution', message: 'A second deposit re-weights your duration bonus: {a}× today → {b}× after this deposit. It climbs again from there.', values: { a: (quote.multiplierBefore / 10_000).toFixed(2), b: (quote.multiplierAfter / 10_000).toFixed(2) } })}
+                </Body>
+              </Plate>
+            ) : null}
+            {quote?.boltStair && BigInt(quote.boltRaw) > 0n ? (
+              <Body tone="arc" size="caption">
+                {t({ id: 'farm.stair.land', message: 'Lands on the {b} BOLT stair · {m}×', values: { b: formatRaw(quote.boltStair.total, 18), m: (quote.boltStair.multiplier / 10_000).toFixed(2) } })}
+              </Body>
+            ) : null}
+            {quote && quote.problems.length ? (
+              <Body tone="burn" size="caption" testID="farm-problem">
+                {quote.problems[0]}
+              </Body>
+            ) : null}
+            {quote?.ok ? (
+              <Body tone="mute" size="caption">
+                {t({ id: 'farm.steps', message: '{n} signature{s}: the farm is allowed to pull each token once, then the deposit.', values: { n: quote.steps.length, s: quote.steps.length === 1 ? '' : 's' } })}
+              </Body>
+            ) : null}
+            {error ? <Body tone="burn">{error}</Body> : null}
+          </Column>
+        ) : null}
       </Sheet>
-    </ScrollView>
+
+      <Sheet open={sheet === 'withdraw'} onClose={() => setSheet(null)} title={t({ id: 'farm.withdraw.title', message: 'Withdraw' })} reducedMotion={reducedMotion} footer={<Key label={t({ id: 'farm.withdraw', message: 'Withdraw' })} disabled={busy || !wq?.ok || percent === 0} onPress={() => void run(() => engine.farm.withdraw({ accountId: active?.id ?? '', chainId, farmId, percent, asNative: hasNative && asNative }))} testID="farm-withdraw-go" />} testID="farm-withdraw-sheet">
+        {farm && p ? (
+          <Column gap="$3">
+            <Slider value={percent} onChange={setPercent} testID="farm-slider" />
+            <Row gap="$2">
+              {[25, 50, 75, 100].map((n) => (
+                <Pill key={n} label={`${n}%`} selected={percent === n} size="sm" onPress={() => setPercent(n)} testID={`farm-pct-${n}`} />
+              ))}
+            </Row>
+            {hasNative ? <Toggle value={asNative} onChange={setAsNative} label={t({ id: 'farm.asNative', message: 'Receive ETN instead of WETN' })} testID="farm-as-native" /> : null}
+            {wq ? (
+              <Plate gap={2} testID="farm-withdraw-preview">
+                <Body size="caption">{t({ id: 'farm.w.leaves', message: 'What leaves the farm' })}</Body>
+                <Body tone="mute" size="caption">
+                  {`${formatRaw(wq.amount0Raw, farm.decimals0)} ${farm.symbol0} · ${formatRaw(wq.amount1Raw, farm.decimals1)} ${farm.symbol1}`}
+                </Body>
+                <Body tone="arc" size="caption">
+                  {t({ id: 'farm.w.collected', message: '{d} DYNO collected with it', values: { d: formatRaw(wq.rewardsRaw, 18) } })}
+                </Body>
+                {BigInt(wq.boltReturnedRaw) > 0n ? (
+                  <Body tone="ember" size="caption">
+                    {t({ id: 'farm.w.bolt', message: '{b} BOLT boost comes back — it only unlocks when you withdraw everything', values: { b: formatRaw(wq.boltReturnedRaw, 18) } })}
+                  </Body>
+                ) : (
+                  <Body tone="mute" size="caption">
+                    {wq.keepsMultiplier ? t({ id: 'farm.w.keeps', message: 'You keep your duration multiplier. BOLT unlocks only when you withdraw everything.' }) : ''}
+                  </Body>
+                )}
+                {wq.problems[0] ? (
+                  <Body tone="burn" size="caption">
+                    {wq.problems[0]}
+                  </Body>
+                ) : null}
+              </Plate>
+            ) : null}
+            {error ? <Body tone="burn">{error}</Body> : null}
+          </Column>
+        ) : null}
+      </Sheet>
+    </Column>
   )
 }

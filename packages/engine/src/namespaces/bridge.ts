@@ -9,7 +9,7 @@
  * `eth_getLogs`, never an explorer API.
  */
 import { getChain } from '@boltvault/chains'
-import { DISPATCH_ID_TOPIC, PROCESS_ID_TOPIC, TOKEN_ROUTER_ABI, corridor, corridorsFrom, dispatchIdFrom, encodeApproveRouter, encodeTransferRemote, etaMinutes, hyperlaneChain, verificationCalls, verifyCorridor, type Corridor } from '@boltvault/electroswap'
+import { WARP_ROUTES, DISPATCH_ID_TOPIC, PROCESS_ID_TOPIC, TOKEN_ROUTER_ABI, corridor, corridorsFrom, dispatchIdFrom, encodeApproveRouter, encodeTransferRemote, etaMinutes, hyperlaneChain, verificationCalls, verifyCorridor, type Corridor } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
 import { maxUint256, parseUnits, type Hex } from 'viem'
 import { z } from 'zod'
@@ -85,6 +85,14 @@ export class BridgeService {
     // Only a positive answer is cached: an RPC hiccup must not disable a corridor for the session.
     if (result.ok) this.verified.set(key, result)
     return result
+  }
+
+  /** Every chain a warp route starts on, whether it is turned on, and the assets it can send (plan C4). */
+  async origins(): Promise<Array<{ chainId: number; enabled: boolean; symbols: Array<'USDC' | 'USDT'> }>> {
+    const settings = await this.deps.settings.get()
+    const out = new Map<number, Set<'USDC' | 'USDT'>>()
+    for (const route of WARP_ROUTES) for (const e of route.endpoints) out.set(e.chainId, new Set([...(out.get(e.chainId) ?? []), route.symbol]))
+    return [...out.entries()].map(([chainId, symbols]) => ({ chainId, enabled: chainId === 52014 || settings.enabledChains.includes(chainId), symbols: [...symbols] }))
   }
 
   /** Corridors from a chain (and token), each with its verification. Disabled chains are left out. */
@@ -270,6 +278,7 @@ const QuoteInput = z.object({ accountId: AccountIdSchema, fromChainId: z.number(
 
 export function bridgeNamespace(bridge: BridgeService): NamespaceSpec {
   return {
+    origins: { handler: () => bridge.origins() },
     routes: { input: z.object({ fromChainId: z.number().int().positive(), token: z.string().optional() }), handler: (arg) => bridge.routes((arg as { fromChainId: number }).fromChainId, (arg as { token?: string }).token) },
     quote: { input: QuoteInput, handler: (arg) => bridge.quote(arg as { accountId: string; fromChainId: number; toChainId: number; token: string; amount: string; recipient?: string }) },
     execute: { input: QuoteInput, handler: (arg) => bridge.execute(arg as { accountId: string; fromChainId: number; toChainId: number; token: string; amount: string; recipient?: string }) },

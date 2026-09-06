@@ -293,6 +293,8 @@ export interface LegendsNamespace {
 
 /** The Hyperlane bridge (§8.7): verified corridors, a quote with the interchain gas, the flow, and delivery status. */
 export interface BridgeNamespace {
+  /** Every chain a warp route starts on, whether it is turned on, and the assets it can send (plan C4). */
+  origins(): Promise<Array<{ chainId: number; enabled: boolean; symbols: Array<'USDC' | 'USDT'> }>>
   routes(input: { fromChainId: number; token?: string }): Promise<BridgeRoute[]>
   quote(input: { accountId: AccountId; fromChainId: number; toChainId: number; token: string; amount: string; recipient?: string }): Promise<BridgeQuote>
   execute(input: { accountId: AccountId; fromChainId: number; toChainId: number; token: string; amount: string; recipient?: string }): Promise<{ flowId: string; requestId: string | null }>

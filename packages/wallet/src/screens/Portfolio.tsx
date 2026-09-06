@@ -19,7 +19,7 @@ import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { useReducedMotion } from '../state/useReducedMotion'
 import { useWalletState } from '../state/useWalletState'
-import { FarmCard } from './Explore'
+import { FarmCard } from '../components/cards/FarmCard'
 import { Rack } from './Rack'
 
 const ETN = 52014

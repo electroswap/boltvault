@@ -5,12 +5,14 @@
  * (plan A2); a first visit shows skeletons, never a blank body. On a token
  * list the star is the pin (plan A5).
  */
-import { Artwork, Body, Column, Icon, IconButton, Input, Pill, Plate, Pressable, Row, ScrollView, Segmented, SkeletonRows, TokenAvatar, metrics, paint } from '@boltvault/ui'
+import { Body, Column, Icon, IconButton, Input, Pill, Plate, Pressable, Row, ScrollView, Segmented, SkeletonRows, TokenAvatar, metrics, paint } from '@boltvault/ui'
 import { cacheKey, type CampaignView, type CollectionView, type ExploreToken, type FarmView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { AddCollectionSheet } from '../components/AddCollectionSheet'
 import { AddTokenSheet } from '../components/AddTokenSheet'
+import { CampaignCard } from '../components/cards/CampaignCard'
 import { CollectionCard } from '../components/cards/CollectionCard'
+import { FarmCard } from '../components/cards/FarmCard'
 import { FreshnessLine } from '../components/FreshnessLine'
 import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
@@ -18,10 +20,11 @@ import { useHost } from '../host'
 import { useCached } from '../hooks/useCached'
 import { useNotifications } from '../hooks/useNotifications'
 import { usePrefs } from '../hooks/usePrefs'
-import { formatChange, formatFiat, formatPct, formatPrice, formatRaw } from '../format'
+import { formatChange, formatFiat, formatPrice } from '../format'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { useReducedMotion } from '../state/useReducedMotion'
+import { useSwapFlow } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
 
 const ETN = 52014
@@ -33,6 +36,7 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
   const router = useRouter()
   const host = useHost()
   const { active } = useWalletState()
+  const { setActive: setFlow } = useSwapFlow()
   const reducedMotion = useReducedMotion()
   const { unread } = useNotifications()
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
@@ -89,6 +93,19 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
   const pin = (address: string, pinned: boolean): void => {
     void engine.tokens.setPrefs({ chainId: ETN, address, pinned: !pinned }).catch(() => undefined)
     setFound((f) => (f ? { ...f, tokens: f.tokens.map((x) => (x.address === address ? { ...x, pinned: !pinned } : x)) } : f))
+  }
+  const [collecting, setCollecting] = useState<number | null>(null)
+  const collect = async (farmId: number): Promise<void> => {
+    if (!active) return
+    setCollecting(farmId)
+    try {
+      const r = await engine.farm.collect({ accountId: active.id, chainId: ETN, farmId, asNative: true })
+      setFlow(r.flowId)
+    } catch {
+      // The farm page shows the reason; the card stays quiet.
+    } finally {
+      setCollecting(null)
+    }
   }
   const star = async (kind: 'collection' | 'campaign', address: string, label: string, starred: boolean): Promise<void> => {
     if (starred) await engine.watchlist.unstar({ kind, chainId: ETN, address })
@@ -183,11 +200,20 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
               ) : null}
             </Column>
           ) : segment === 'launch' ? (
-            <Sky campaigns={campaigns.value ?? []} onOpen={(pool) => router.navigate('campaign', { chainId: ETN, pool })} onStar={(c) => void star('campaign', c.pool, c.token.symbol, c.starred)} />
+            <Column gap="$2" testID="sky">
+              {(campaigns.value ?? []).map((c) => (
+                <CampaignCard key={c.pool} campaign={c} onPress={() => router.navigate('campaign', { chainId: ETN, pool: c.pool })} onStar={() => void star('campaign', c.pool, c.token.symbol, c.starred)} />
+              ))}
+              {(campaigns.value ?? []).length === 0 ? (
+                <Body tone="mute" size="caption">
+                  {t({ id: 'sky.empty', message: 'No campaigns right now. Star one from a share link to be told when it goes live.' })}
+                </Body>
+              ) : null}
+            </Column>
           ) : (
             <Column gap="$2" testID="explore-farms">
               {(farms.value ?? []).map((f) => (
-                <FarmCard key={f.id} farm={f} onPress={() => router.navigate('farm', { chainId: ETN, farmId: f.id })} />
+                <FarmCard key={f.id} farm={f} onPress={() => router.navigate('farm', { chainId: ETN, farmId: f.id })} onCollect={active && f.position ? () => void collect(f.id) : undefined} busy={collecting === f.id} />
               ))}
               {(farms.value ?? []).length === 0 ? (
                 <Body tone="mute" size="caption">
@@ -203,10 +229,6 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
     <AddCollectionSheet open={addCollectionOpen} onClose={() => setAddCollectionOpen(false)} onAdded={() => collections.refresh()} reducedMotion={reducedMotion} />
     </Column>
   )
-}
-
-function Star({ on, onPress, testID }: { on: boolean; onPress: () => void; testID?: string }) {
-  return <IconButton icon="star" label={on ? t({ id: 'watch.alerts.off', message: 'Stop alerts' }) : t({ id: 'watch.alerts.on', message: 'Alert me' })} active={on} onPress={onPress} testID={testID} />
 }
 
 export function TokenRow({ token, onPress, onPin }: { token: ExploreToken; onPress: () => void; onPin: () => void }) {
@@ -240,89 +262,4 @@ export function TokenRow({ token, onPress, onPin }: { token: ExploreToken; onPre
 
 
 /** The Sky (§8.9): live campaigns first, then upcoming, then ended. */
-export function Sky({ campaigns, onOpen, onStar }: { campaigns: CampaignView[]; onOpen: (pool: string) => void; onStar: (c: CampaignView) => void }) {
-  const now = Math.floor(Date.now() / 1000)
-  const countdown = (c: CampaignView): string => {
-    const secs = c.phase === 'upcoming' ? c.starts - now : c.ends - now
-    if (secs <= 0) return ''
-    const d = Math.floor(secs / 86_400)
-    const h = Math.floor((secs % 86_400) / 3600)
-    return d > 0 ? t({ id: 'sky.days', message: '{d}d {h}h', values: { d, h } }) : t({ id: 'sky.hours', message: '{h}h {m}m', values: { h, m: Math.floor((secs % 3600) / 60) } })
-  }
-  const phaseLabel = (c: CampaignView): string => {
-    switch (c.phase) {
-      case 'live':
-        return t({ id: 'sky.live', message: 'Live · ends in {t}', values: { t: countdown(c) } })
-      case 'upcoming':
-        return t({ id: 'sky.upcoming', message: 'Starts in {t}', values: { t: countdown(c) } })
-      case 'awaiting_finalize':
-        return t({ id: 'sky.finalizing', message: 'Waiting for the team to finalize' })
-      case 'launched':
-        return t({ id: 'sky.launched', message: 'Launched' })
-      case 'failed':
-        return t({ id: 'sky.failed', message: 'Did not reach its target' })
-      case 'cancelled':
-        return t({ id: 'sky.cancelled', message: 'Cancelled' })
-    }
-  }
-  return (
-    <Column gap="$2" testID="sky">
-      {campaigns.map((c) => (
-        <Plate key={c.pool} role="card" gap="$2" onPress={() => onOpen(c.pool)} cursor="pointer" testID={`sky-${c.pool}`}>
-          <Row gap="$3" alignItems="center">
-            <Artwork uri={c.logoUrl} label={c.token.symbol} size={44} />
-            <Column flex={1}>
-              <Row gap="$2" alignItems="center">
-                <Body numberOfLines={1}>{c.token.name}</Body>
-                <Body tone="mute" size="caption">
-                  {c.token.symbol}
-                </Body>
-              </Row>
-              <Body tone={c.phase === 'live' ? 'arc' : 'mute'} size="caption">
-                {phaseLabel(c)}
-              </Body>
-            </Column>
-            {c.phase === 'upcoming' || (c.phase === 'live' && c.starred) ? <Star on={c.starred} onPress={() => onStar(c)} testID={`star-campaign-${c.pool}`} /> : null}
-          </Row>
-          <Row gap="$2" alignItems="center">
-            <Column flex={1} height={6} borderRadius={3} backgroundColor="rgba(122, 140, 255, 0.16)" overflow="hidden">
-              <Column width={`${Math.round(c.fill * 100)}%`} height={6} backgroundColor={paint.arc} />
-            </Column>
-            <Body tone="mute" size="caption">
-              {t({ id: 'sky.raised', message: '{r} / {t} ETN', values: { r: formatRaw(c.raisedWei, 18), t: formatRaw(c.minEtnToLaunchWei, 18) } })}
-            </Body>
-          </Row>
-        </Plate>
-      ))}
-      {campaigns.length === 0 ? (
-        <Body tone="mute" size="caption">
-          {t({ id: 'sky.empty', message: 'No campaigns right now. Star one from a share link to be told when it goes live.' })}
-        </Body>
-      ) : null}
-    </Column>
-  )
-}
 
-export function FarmCard({ farm, onPress }: { farm: FarmView; onPress: () => void }) {
-  const p = farm.position
-  return (
-    <Plate role="card" gap="$1" onPress={onPress} cursor="pointer" testID={`farm-card-${farm.id}`}>
-      <Row justifyContent="space-between" alignItems="center">
-        <Row gap="$2" alignItems="center">
-          <Body>{farm.name || `${farm.symbol0}/${farm.symbol1}`}</Body>
-          <Body tone="mute" size="caption">
-            {farm.version === 3 ? 'V3' : 'V2'}
-          </Body>
-        </Row>
-        {p ? (
-          <Body tone="arc" size="caption">
-            {`${(p.durationMultiplier / 10_000).toFixed(2)}× · ${(p.boltMultiplier / 10_000).toFixed(2)}×`}
-          </Body>
-        ) : null}
-      </Row>
-      <Body tone="mute" size="caption">
-        {[farm.baseApy !== null ? t({ id: 'farm.apy', message: 'APY {a}%', values: { a: farm.baseApy.toFixed(1) } }) : null, farm.thirdPartyApy !== null && farm.thirdParty ? t({ id: 'farm.apy3', message: '+{a}% {s}', values: { a: farm.thirdPartyApy.toFixed(1), s: farm.thirdParty.symbol } }) : null, farm.tvlUsd !== null ? t({ id: 'farm.tvl', message: 'TVL {v}', values: { v: formatFiat(farm.tvlUsd, 'USD') } }) : null, p && p.pendingRewards !== '0' ? t({ id: 'farm.card.collect', message: '{d} DYNO to collect', values: { d: formatRaw(p.pendingRewards, 18) } }) : null].filter(Boolean).join(' · ') || formatPct(0)}
-      </Body>
-    </Plate>
-  )
-}

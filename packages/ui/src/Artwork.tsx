@@ -22,20 +22,41 @@ export interface ArtworkProps {
   readonly testID?: string
 }
 
+/** Up to two initials from a name; leading punctuation is skipped so "Legend #12" reads L1. */
+function initials(label: string): string {
+  const words = label
+    .split(/\s+/)
+    .map((w) => w.replace(/^[^\p{L}\p{N}]+/u, ''))
+    .filter(Boolean)
+  return words
+    .slice(0, 2)
+    .map((w) => w.charAt(0))
+    .join('')
+    .toUpperCase()
+}
+
 export function Artwork({ uri, label, size, sweep = false, reducedMotion = false, badge = null, testID }: ArtworkProps) {
   const [failed, setFailed] = useState(false)
   const width = typeof size === 'number' ? size : size.width
   const height = typeof size === 'number' ? size : size.height
   const show = !!uri && !failed
+  // A small box cannot hold a name: it shows the name's initials instead ("Electric Legends" → EL).
+  const small = Math.min(width, height) < 80
   return (
     <Column width={width} height={height} borderRadius={12} overflow="hidden" backgroundColor="$glass" borderWidth={1} borderColor="rgba(95,216,255,0.12)" testID={testID}>
       {show ? (
         <Image source={{ uri: uri ?? '' }} onError={() => setFailed(true)} style={{ width, height }} resizeMode="cover" accessibilityLabel={label} />
       ) : (
-        <Column flex={1} alignItems="center" justifyContent="center" padding={8}>
-          <Body tone="mute" size="caption" numberOfLines={2} textAlign="center">
-            {label}
-          </Body>
+        <Column flex={1} alignItems="center" justifyContent="center" padding={small ? 2 : 8}>
+          {small ? (
+            <Body tone="mute" fontWeight="600" fontSize={Math.round(Math.min(width, height) * 0.36)} lineHeight={Math.round(Math.min(width, height) * 0.5)} numberOfLines={1}>
+              {initials(label)}
+            </Body>
+          ) : (
+            <Body tone="mute" size="caption" numberOfLines={2} textAlign="center">
+              {label}
+            </Body>
+          )}
         </Column>
       )}
       {/* Contact shadow at the shelf and the specular edge from the Field. */}

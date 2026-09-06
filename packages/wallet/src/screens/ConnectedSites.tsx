@@ -80,7 +80,7 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
                 {hostOf(s.origin)} · {s.chains.length} {t({ id: 'wc.chains', message: 'chains' })}
               </Body>
             </Column>
-            <Key label={t({ id: 'sites.disconnect', message: 'Disconnect' })} kind="danger" onPress={() => void engine.connect.disconnect({ topic: s.topic })} testID={`wc-disconnect-${s.topic}`} />
+            <Key label={t({ id: 'sites.disconnect', message: 'Disconnect' })} kind="danger" size="compact" onPress={() => void engine.connect.disconnect({ topic: s.topic })} testID={`wc-disconnect-${s.topic}`} />
           </Row>
         ))}
       </Plate>
@@ -127,7 +127,7 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
               </Row>
             ) : null}
             <Row>
-              <Key label={t({ id: 'sites.disconnect', message: 'Disconnect' })} kind="danger" onPress={() => void engine.sites.disconnect({ origin: s.origin })} testID={`site-disconnect-${hostOf(s.origin)}`} />
+              <Key label={t({ id: 'sites.disconnect', message: 'Disconnect' })} kind="danger" size="compact" onPress={() => void engine.sites.disconnect({ origin: s.origin })} testID={`site-disconnect-${hostOf(s.origin)}`} />
             </Row>
           </Plate>
         )

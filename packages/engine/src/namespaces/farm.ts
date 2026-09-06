@@ -230,7 +230,7 @@ export class FarmService {
     }
   }
 
-  /** Explore › Farms and Home › Positions: every farm, the account's positions first. */
+  /** Explore › Farms and Home › Positions (plan C5, owner item F1): active farms, plus a closed farm the account still has a position in; positions first, then by TVL, closed-with-position last. */
   async list(chainId: number, accountId?: string): Promise<FarmView[]> {
     if (!isEtn(chainId)) return []
     const build = async (): Promise<FarmView[]> => {
@@ -238,8 +238,13 @@ export class FarmService {
       const farms = await this.farms(chainId, owner)
       const block = await this.head(chainId)
       const out: FarmView[] = []
-      for (const f of farms) out.push(await this.view(chainId, f.tuple, f.index, owner, block))
-      out.sort((a, b) => (a.position && !b.position ? -1 : !a.position && b.position ? 1 : (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0)))
+      for (const f of farms) {
+        if (!f.tuple.active && !owner) continue
+        const v = await this.view(chainId, f.tuple, f.index, owner, block)
+        if (v.active || v.position !== null) out.push(v)
+      }
+      const rank = (f: FarmView): number => (f.position && f.active ? 0 : f.active ? 1 : 2)
+      out.sort((a, b) => rank(a) - rank(b) || (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0))
       return out
     }
     if (!this.deps.cache) return build()

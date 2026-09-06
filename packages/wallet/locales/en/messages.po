@@ -839,14 +839,14 @@ msgid "Two signatures: allow the Hyperlane router to take the tokens, then bridg
 msgstr "Two signatures: allow the Hyperlane router to take the tokens, then bridge."
 
 #: packages/wallet/src/screens/Bridge.tsx
-msgctxt "bridge.asset"
-msgid "Asset"
-msgstr "Asset"
+msgctxt "bridge.asset.hyperlane"
+msgid "Hyperlane {s} — the same asset on both chains"
+msgstr "Hyperlane {s} — the same asset on both chains"
 
 #: packages/wallet/src/screens/Bridge.tsx
-msgctxt "bridge.asset.name"
-msgid "Hyperlane {s}"
-msgstr "Hyperlane {s}"
+msgctxt "bridge.asset.title"
+msgid "Asset"
+msgstr "Asset"
 
 #: packages/wallet/src/screens/Bridge.tsx
 msgctxt "bridge.balance"
@@ -854,14 +854,24 @@ msgid "Balance {b} {s}"
 msgstr "Balance {b} {s}"
 
 #: packages/wallet/src/screens/Bridge.tsx
-msgctxt "bridge.eta"
-msgid "Usually lands in"
-msgstr "Usually lands in"
+msgctxt "bridge.chain.networks"
+msgid "Networks"
+msgstr "Networks"
 
 #: packages/wallet/src/screens/Bridge.tsx
-msgctxt "bridge.eta.min"
-msgid "about {m} minutes"
-msgstr "about {m} minutes"
+msgctxt "bridge.chain.nocorridor"
+msgid "No {s} corridor from {c}"
+msgstr "No {s} corridor from {c}"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.chain.off"
+msgid "Turned off in Settings › Networks"
+msgstr "Turned off in Settings › Networks"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.eta.short"
+msgid "About {m} min via Hyperlane"
+msgstr "About {m} min via Hyperlane"
 
 #: packages/wallet/src/screens/Bridge.tsx
 msgctxt "bridge.explorer"
@@ -877,6 +887,11 @@ msgstr "Interchain gas"
 msgctxt "bridge.fee.tx"
 msgid "Network fee"
 msgstr "Network fee"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.flip"
+msgid "Swap direction"
+msgstr "Swap direction"
 
 #: packages/wallet/src/screens/Bridge.tsx
 msgctxt "bridge.flow.done"
@@ -895,6 +910,11 @@ msgstr "Bridging"
 
 #: packages/wallet/src/screens/Bridge.tsx
 msgctxt "bridge.from"
+msgid "From"
+msgstr "From"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.from.title"
 msgid "From"
 msgstr "From"
 
@@ -922,6 +942,11 @@ msgstr "No Hyperlane corridor starts on this chain. USDC moves between Electrone
 msgctxt "bridge.off"
 msgid "This corridor is switched off: {reason}."
 msgstr "This corridor is switched off: {reason}."
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.pick"
+msgid "Pick a chain"
+msgstr "Pick a chain"
 
 #: packages/wallet/src/screens/Bridge.tsx
 msgctxt "bridge.recipient"
@@ -979,9 +1004,14 @@ msgid "To"
 msgstr "To"
 
 #: packages/wallet/src/screens/Bridge.tsx
-msgctxt "bridge.transfer"
-msgid "{a} {s} · {from} → {to}"
-msgstr "{a} {s} · {from} → {to}"
+msgctxt "bridge.to.title"
+msgid "To"
+msgstr "To"
+
+#: packages/wallet/src/screens/Bridge.tsx
+msgctxt "bridge.transfer.short"
+msgid "{a} {s}"
+msgstr "{a} {s}"
 
 #: packages/wallet/src/screens/Browser.tsx
 msgctxt "browser.go"
@@ -1007,6 +1037,11 @@ msgstr "Browser"
 msgctxt "browser.web"
 msgid "The in-app browser is a phone feature. In the browser extension, BoltVault is already in every tab — open the site and connect from there."
 msgstr "The in-app browser is a phone feature. In the browser extension, BoltVault is already in every tab — open the site and connect from there."
+
+#: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.alert"
+msgid "Alert me"
+msgstr "Alert me"
 
 #: packages/wallet/src/screens/Campaign.tsx
 msgctxt "campaign.amount"
@@ -1080,8 +1115,8 @@ msgstr "Launched — the token is trading"
 
 #: packages/wallet/src/screens/Campaign.tsx
 msgctxt "campaign.live"
-msgid "Live — taking contributions until {d}"
-msgstr "Live — taking contributions until {d}"
+msgid "Until {d}"
+msgstr "Until {d}"
 
 #: packages/wallet/src/screens/Campaign.tsx
 msgctxt "campaign.max"
@@ -1099,6 +1134,11 @@ msgid "No limit"
 msgstr "No limit"
 
 #: packages/wallet/src/screens/Campaign.tsx
+msgctxt "campaign.raised.unit"
+msgid "ETN raised"
+msgstr "ETN raised"
+
+#: packages/wallet/src/screens/Campaign.tsx
 msgctxt "campaign.range"
 msgid "Between {a} and {b} ETN per wallet"
 msgstr "Between {a} and {b} ETN per wallet"
@@ -1113,8 +1153,8 @@ msgctxt "campaign.refEarned"
 msgid "{a} ETN in referral rewards to claim"
 msgstr "{a} ETN in referral rewards to claim"
 
-#: packages/wallet/src/screens/Campaign.tsx
-msgctxt "campaign.star"
+#: packages/wallet/src/components/cards/CampaignCard.tsx
+msgctxt "campaign.star.short"
 msgid "Tell me when it goes live"
 msgstr "Tell me when it goes live"
 
@@ -1619,16 +1659,6 @@ msgid "{v} ETN today"
 msgstr "{v} ETN today"
 
 #: packages/wallet/src/screens/Farm.tsx
-msgctxt "farm.apy"
-msgid "APY {a}%"
-msgstr "APY {a}%"
-
-#: packages/wallet/src/screens/Farm.tsx
-msgctxt "farm.apy.none"
-msgid "APY from ElectroSwap when reachable"
-msgstr "APY from ElectroSwap when reachable"
-
-#: packages/wallet/src/screens/Farm.tsx
 msgctxt "farm.apy3"
 msgid "+{a}% {s}"
 msgstr "+{a}% {s}"
@@ -1653,7 +1683,7 @@ msgctxt "farm.boost.none"
 msgid "No BOLT boost yet"
 msgstr "No BOLT boost yet"
 
-#: packages/wallet/src/screens/Explore.tsx
+#: packages/wallet/src/components/cards/FarmCard.tsx
 msgctxt "farm.card.collect"
 msgid "{d} DYNO to collect"
 msgstr "{d} DYNO to collect"
@@ -1672,6 +1702,21 @@ msgstr "Swap DYNO for BOLT"
 msgctxt "farm.cb.title"
 msgid "Collect & boost"
 msgstr "Collect & boost"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.closed"
+msgid "Closed"
+msgstr "Closed"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.closed.body"
+msgid "This farm no longer takes deposits."
+msgstr "This farm no longer takes deposits."
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.closed.position"
+msgid "This farm no longer takes deposits. Your position still earns what is left; you can collect and withdraw."
+msgstr "This farm no longer takes deposits. Your position still earns what is left; you can collect and withdraw."
 
 #: packages/wallet/src/screens/Farm.tsx
 msgctxt "farm.collect"
@@ -1702,11 +1747,6 @@ msgstr "Deposited"
 msgctxt "farm.dilution"
 msgid "A second deposit re-weights your duration bonus: {a}× today → {b}× after this deposit. It climbs again from there."
 msgstr "A second deposit re-weights your duration bonus: {a}× today → {b}× after this deposit. It climbs again from there."
-
-#: packages/wallet/src/screens/Farm.tsx
-msgctxt "farm.farmers"
-msgid "{n} farmers"
-msgstr "{n} farmers"
 
 #: packages/wallet/src/screens/Farm.tsx
 msgctxt "farm.max"
@@ -1749,6 +1789,36 @@ msgid "Lands on the {b} BOLT stair · {m}×"
 msgstr "Lands on the {b} BOLT stair · {m}×"
 
 #: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.stat.apy"
+msgid "APY"
+msgstr "APY"
+
+#: packages/wallet/src/components/cards/FarmCard.tsx
+msgctxt "farm.stat.bolt"
+msgid "BOLT {m}×"
+msgstr "BOLT {m}×"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.stat.farmers"
+msgid "Farmers"
+msgstr "Farmers"
+
+#: packages/wallet/src/components/cards/FarmCard.tsx
+msgctxt "farm.stat.multiplier"
+msgid "Multiplier"
+msgstr "Multiplier"
+
+#: packages/wallet/src/components/cards/FarmCard.tsx
+msgctxt "farm.stat.start"
+msgid "None yet"
+msgstr "None yet"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.stat.tvl"
+msgid "TVL"
+msgstr "TVL"
+
+#: packages/wallet/src/screens/Farm.tsx
 msgctxt "farm.steps"
 msgid "{n} signature{s}: the farm is allowed to pull each token once, then the deposit."
 msgstr "{n} signature{s}: the farm is allowed to pull each token once, then the deposit."
@@ -1767,11 +1837,6 @@ msgstr "2.0× on {d}"
 msgctxt "farm.to25"
 msgid "2.5× on {d}"
 msgstr "2.5× on {d}"
-
-#: packages/wallet/src/screens/Farm.tsx
-msgctxt "farm.tvl"
-msgid "TVL {v}"
-msgstr "TVL {v}"
 
 #: packages/wallet/src/screens/Farm.tsx
 msgctxt "farm.w.bolt"
@@ -3088,6 +3153,36 @@ msgctxt "offers.yours"
 msgid "{p} WETN · until {d}"
 msgstr "{p} WETN · until {d}"
 
+#: packages/wallet/src/components/cards/CampaignCard.tsx
+msgctxt "phase.cancelled"
+msgid "Cancelled"
+msgstr "Cancelled"
+
+#: packages/wallet/src/components/cards/CampaignCard.tsx
+msgctxt "phase.failed"
+msgid "Failed"
+msgstr "Failed"
+
+#: packages/wallet/src/components/cards/CampaignCard.tsx
+msgctxt "phase.finalizing"
+msgid "Finalizing"
+msgstr "Finalizing"
+
+#: packages/wallet/src/components/cards/CampaignCard.tsx
+msgctxt "phase.launched"
+msgid "Launched"
+msgstr "Launched"
+
+#: packages/wallet/src/components/cards/CampaignCard.tsx
+msgctxt "phase.live"
+msgid "Live"
+msgstr "Live"
+
+#: packages/wallet/src/components/cards/CampaignCard.tsx
+msgctxt "phase.upcoming"
+msgid "Upcoming"
+msgstr "Upcoming"
+
 #: packages/wallet/src/screens/Piece.tsx
 msgctxt "piece.accept"
 msgid "Accept offer"
@@ -3848,12 +3943,12 @@ msgctxt "sites.title"
 msgid "Connected sites"
 msgstr "Connected sites"
 
-#: packages/wallet/src/screens/Explore.tsx
+#: packages/wallet/src/components/cards/CampaignCard.tsx
 msgctxt "sky.cancelled"
 msgid "Cancelled"
 msgstr "Cancelled"
 
-#: packages/wallet/src/screens/Explore.tsx
+#: packages/wallet/src/components/cards/CampaignCard.tsx
 msgctxt "sky.days"
 msgid "{d}d {h}h"
 msgstr "{d}d {h}h"
@@ -3863,40 +3958,50 @@ msgctxt "sky.empty"
 msgid "No campaigns right now. Star one from a share link to be told when it goes live."
 msgstr "No campaigns right now. Star one from a share link to be told when it goes live."
 
-#: packages/wallet/src/screens/Explore.tsx
+#: packages/wallet/src/components/cards/CampaignCard.tsx
 msgctxt "sky.failed"
 msgid "Did not reach its target"
 msgstr "Did not reach its target"
 
-#: packages/wallet/src/screens/Explore.tsx
+#: packages/wallet/src/screens/Campaign.tsx
 msgctxt "sky.finalizing"
 msgid "Waiting for the team to finalize"
 msgstr "Waiting for the team to finalize"
 
-#: packages/wallet/src/screens/Explore.tsx
+#: packages/wallet/src/components/cards/CampaignCard.tsx
 msgctxt "sky.hours"
 msgid "{h}h {m}m"
 msgstr "{h}h {m}m"
 
-#: packages/wallet/src/screens/Explore.tsx
+#: packages/wallet/src/components/cards/CampaignCard.tsx
 msgctxt "sky.launched"
 msgid "Launched"
 msgstr "Launched"
 
-#: packages/wallet/src/screens/Explore.tsx
+#: packages/wallet/src/components/cards/CampaignCard.tsx
 msgctxt "sky.live"
 msgid "Live · ends in {t}"
 msgstr "Live · ends in {t}"
 
-#: packages/wallet/src/screens/Explore.tsx
+#: packages/wallet/src/components/cards/CampaignCard.tsx
+msgctxt "sky.live.now"
+msgid "Live now"
+msgstr "Live now"
+
+#: packages/wallet/src/components/cards/CampaignCard.tsx
 msgctxt "sky.raised"
 msgid "{r} / {t} ETN"
 msgstr "{r} / {t} ETN"
 
-#: packages/wallet/src/screens/Explore.tsx
+#: packages/wallet/src/components/cards/CampaignCard.tsx
 msgctxt "sky.upcoming"
 msgid "Starts in {t}"
 msgstr "Starts in {t}"
+
+#: packages/wallet/src/components/cards/CampaignCard.tsx
+msgctxt "sky.upcoming.soon"
+msgid "Starting soon"
+msgstr "Starting soon"
 
 #: packages/wallet/src/screens/Spending.tsx
 msgctxt "spending.exact"
@@ -4498,12 +4603,7 @@ msgctxt "update.title"
 msgid "Update BoltVault to keep going"
 msgstr "Update BoltVault to keep going"
 
-#: packages/wallet/src/screens/Explore.tsx
-msgctxt "watch.alerts.off"
-msgid "Stop alerts"
-msgstr "Stop alerts"
-
-#: packages/wallet/src/screens/Explore.tsx
+#: packages/wallet/src/screens/Collection.tsx
 msgctxt "watch.alerts.on"
 msgid "Alert me"
 msgstr "Alert me"

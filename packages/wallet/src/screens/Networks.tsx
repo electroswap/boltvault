@@ -3,7 +3,7 @@
  * disable (Electroneum is always on), the testnet toggle, and a custom RPC
  * per chain validated by `eth_chainId` before it is kept.
  */
-import { Body, Chip, Column, Input, Key, Plate, Row, ScrollView, Toggle, metrics } from '@boltvault/ui'
+import { Body, ChainMark, Chip, Column, Input, Key, Plate, Row, ScrollView, Toggle, metrics } from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
 import type { ChainView, Settings } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
@@ -81,6 +81,7 @@ export function Networks({ body }: { body: 'extension-popup' | 'extension-tab' |
               <Row justifyContent="space-between" alignItems="center">
                 <Column gap={2} flex={1}>
                   <Row gap="$2" alignItems="center">
+                    <ChainMark chainId={c.chainId} size={22} />
                     <Body size="title">{c.name}</Body>
                     {home ? (
                       <Chip>

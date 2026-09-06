@@ -9,7 +9,7 @@ import { serveFixture, startMockRpc, type FixtureServer, type MockRpc } from '@b
 import { expect, test, type Page } from '@playwright/test'
 import { verifyMessage, verifyTypedData, type Hex } from 'viem'
 import { collectErrors, FAKE_METAMASK_DIR, launchWithExtension, type LoadedExtension } from './extension'
-import { boltRequest, createVault, dappRequest, engineCall, nextSignWindow } from './flows'
+import { boltRequest, createVault, dappRequest, decide, engineCall, nextSignWindow } from './flows'
 
 const TESTNET_HEX = '0x4f5e0c'
 
@@ -53,7 +53,7 @@ test('injection, connect, sign, send, reject, per-origin chain, blocked drainers
       const { page, result } = await nextSignWindow(ext, () => dappRequest(dapp, 'eth_requestAccounts'))
       await expect(page.getByTestId('approval-host')).toHaveText(new URL(site.url).host)
       await expect(page.getByTestId('approval-primary')).toBeEnabled({ timeout: 5_000 })
-      await page.getByTestId('approval-primary').click()
+      await decide(page, 'approve')
       expect(((await result) as { result?: string[] }).result).toEqual([address])
     }
     expect((await dappRequest(dapp, 'eth_accounts')).result).toEqual([address])
@@ -67,7 +67,7 @@ test('injection, connect, sign, send, reject, per-origin chain, blocked drainers
       const { page, result } = await nextSignWindow(ext, () => dapp.getByTestId('btn-personal-sign').click().then(() => undefined))
       await expect(page.getByTestId('approval-statement-0')).toHaveText('BoltVault fixture: hello')
       await expect(page.getByTestId('approval-primary')).toBeEnabled({ timeout: 5_000 })
-      await page.getByTestId('approval-primary').click()
+      await decide(page, 'approve')
       await result
       await expect(dapp.getByTestId('result')).toContainText('"method": "personal_sign"')
       const out = JSON.parse((await dapp.getByTestId('result').textContent()) ?? '{}') as { result: Hex }
@@ -81,7 +81,7 @@ test('injection, connect, sign, send, reject, per-origin chain, blocked drainers
       await expect(page.getByTestId('approval-primary')).toBeDisabled()
       await page.getByTestId('approval-typed').fill(new URL(site.url).hostname)
       await expect(page.getByTestId('approval-primary')).toBeEnabled({ timeout: 5_000 })
-      await page.getByTestId('approval-primary').click()
+      await decide(page, 'approve')
       await result
       await expect(dapp.getByTestId('result')).toContainText('"method": "eth_signTypedData_v4"')
       const out = JSON.parse((await dapp.getByTestId('result').textContent()) ?? '{}') as { result: Hex }
@@ -101,7 +101,7 @@ test('injection, connect, sign, send, reject, per-origin chain, blocked drainers
       const { page, result } = await nextSignWindow(ext, () => dapp.getByTestId('btn-send').click().then(() => undefined))
       await expect(page.getByTestId('approval-fee')).toBeVisible()
       await expect(page.getByTestId('approval-primary')).toBeEnabled({ timeout: 5_000 })
-      await page.getByTestId('approval-primary').click()
+      await decide(page, 'approve')
       await result
       await expect(dapp.getByTestId('result')).toContainText('"method": "eth_sendTransaction"')
       const out = JSON.parse((await dapp.getByTestId('result').textContent()) ?? '{}') as { result: string }
@@ -113,7 +113,7 @@ test('injection, connect, sign, send, reject, per-origin chain, blocked drainers
     // Reject → 4001.
     {
       const { page, result } = await nextSignWindow(ext, () => dapp.getByTestId('btn-personal-sign').click().then(() => undefined))
-      await page.getByTestId('approval-reject').click()
+      await decide(page, 'reject')
       await result
       await expect(dapp.getByTestId('result')).toContainText('4001')
     }
@@ -130,7 +130,7 @@ test('injection, connect, sign, send, reject, per-origin chain, blocked drainers
       await expect(page.getByTestId('approval-rule-PERMIT2_SIGNATURE_TRANSFER')).toBeVisible()
       await expect(page.getByTestId('approval-blocked')).toBeVisible()
       await expect(page.getByTestId('approval-primary')).toHaveCount(0)
-      await page.getByTestId('approval-reject').click()
+      await decide(page, 'reject')
       const out = (await result) as { error?: { code: number; data?: { rules?: string[] } } }
       expect(out.error?.code).toBe(4001)
       expect(out.error?.data?.rules).toContain('PERMIT2_SIGNATURE_TRANSFER')
@@ -141,7 +141,7 @@ test('injection, connect, sign, send, reject, per-origin chain, blocked drainers
       const { page, result } = await nextSignWindow(ext, () => dappRequest(dapp, 'eth_sendTransaction', [{ from: address, to: '0x3333333333333333333333333333333333333333', data }]))
       await expect(page.getByTestId('approval-rule-APPROVAL_FOR_ALL')).toBeVisible()
       await expect(page.getByTestId('approval-typed')).toBeVisible()
-      await page.getByTestId('approval-reject').click()
+      await decide(page, 'reject')
       expect(((await result) as { error?: { code: number } }).error?.code).toBe(4001)
     }
 
@@ -204,7 +204,7 @@ test('coexists with a MetaMask-style wallet: 6963 lists both, window.ethereum st
     expect((await boltRequest(dapp, 'eth_chainId')).result).toBe('0xcb2e')
     const { page, result } = await nextSignWindow(ext, () => boltRequest(dapp, 'eth_requestAccounts'))
     await expect(page.getByTestId('approval-primary')).toBeEnabled({ timeout: 5_000 })
-    await page.getByTestId('approval-primary').click()
+    await decide(page, 'approve')
     expect(((await result) as { result?: string[] }).result).toEqual([address])
   } finally {
     await ext.context.close()

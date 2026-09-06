@@ -31,6 +31,8 @@ const CASES: Array<{ screen: string; scenario: string; sizes: Array<keyof typeof
   { screen: 'swap', scenario: 'unlocked', sizes: ['popup'] },
   { screen: 'explore', scenario: 'funded', sizes: ['popup'] },
   { screen: 'explore', scenario: 'funded', sizes: ['popup'], query: 'segment=collectibles', name: 'explore-collectibles' },
+  { screen: 'explore', scenario: 'funded', sizes: ['popup'], query: 'segment=launch', name: 'explore-launch' },
+  { screen: 'explore', scenario: 'funded', sizes: ['popup'], query: 'segment=farms', name: 'explore-farms' },
   { screen: 'portfolio', scenario: 'funded', sizes: ['popup', 'tab'] },
   { screen: 'activity', scenario: 'funded', sizes: ['popup'] },
   { screen: 'settings', scenario: 'funded', sizes: ['popup'] },

@@ -5,6 +5,14 @@ export function formatFiat(value: number, currency: 'USD' | 'ETN'): string {
   return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
+/** A compact fiat amount for stat cells: $6,100 · $12.4K · $1.2M. */
+export function formatCompactFiat(value: number, currency: 'USD' | 'ETN'): string {
+  const abs = Math.abs(value)
+  const short = (n: number, unit: string): string => `${Number(n.toFixed(1))}${unit}`
+  const body = abs >= 1e9 ? short(value / 1e9, 'B') : abs >= 1e6 ? short(value / 1e6, 'M') : abs >= 1e4 ? short(value / 1e3, 'K') : Math.round(value).toLocaleString('en-US')
+  return currency === 'USD' ? `$${body}` : `${body} ETN`
+}
+
 /** A unit price: two decimals from $1 up, four significant digits below (ETN at $0.00296, not "$0.00"). */
 export function formatPrice(value: number | null, currency: 'USD' | 'ETN'): string {
   if (value === null || !Number.isFinite(value)) return '—'

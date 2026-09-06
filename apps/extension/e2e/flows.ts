@@ -108,3 +108,20 @@ export async function nextSignWindow(ext: LoadedExtension, trigger: () => Promis
   await expect(page.getByTestId('approval')).toBeVisible({ timeout: 15_000 })
   return { page, result }
 }
+
+/**
+ * Presses an approval key in a sign window. The window closes itself the moment the decision
+ * lands (Approval's finish() plus the background's windows.remove) — with Chromium 1243 that can
+ * beat the input ack, so Playwright's click may report the target as closed mid-action. The
+ * close event is the proof the press landed; any other click error is still a failure.
+ */
+export async function decide(page: Page, key: 'approve' | 'reject'): Promise<void> {
+  const closed = page.waitForEvent('close', { timeout: 15_000 })
+  await page
+    .getByTestId(key === 'approve' ? 'approval-primary' : 'approval-reject')
+    .click()
+    .catch((err: unknown) => {
+      if (!/has been closed/.test(err instanceof Error ? err.message : String(err))) throw err
+    })
+  await closed
+}

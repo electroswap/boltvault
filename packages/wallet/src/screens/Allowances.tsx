@@ -89,7 +89,7 @@ export function Allowances({ body }: { body: 'extension-popup' | 'extension-tab'
           {rows.length ? t({ id: 'allow.summary.body', message: '{n} contracts can move tokens from this account.', values: { n: rows.length } }) : t({ id: 'allow.summary.empty', message: 'Nothing can move your tokens without a signature.' })}
         </Body>
         <Row gap="$2" alignItems="center">
-          <Key label={scanning ? t({ id: 'allow.scanning', message: 'Checking…' }) : t({ id: 'allow.rescan', message: 'Check again' })} kind="secondary" disabled={scanning} onPress={scan} testID="allow-scan" />
+          <Key label={scanning ? t({ id: 'allow.scanning', message: 'Checking…' }) : t({ id: 'allow.rescan', message: 'Check again' })} kind="secondary" size="compact" disabled={scanning} onPress={scan} testID="allow-scan" />
           {at ? (
             <Body tone="mute" size="caption">
               {new Date(at).toLocaleTimeString()}
@@ -102,7 +102,7 @@ export function Allowances({ body }: { body: 'extension-popup' | 'extension-tab'
           <Body size="title">{list[0]?.tokenSymbol ?? shortAddress(token)}</Body>
           {list.map((r) => (
             <Column key={`${r.spender}:${r.standard}`} gap={4}>
-              <Row justifyContent="space-between" alignItems="center">
+              <Row justifyContent="space-between" alignItems="center" gap="$2">
                 <Column flex={1}>
                   <Row gap="$2" alignItems="center">
                     <Body numberOfLines={1}>{r.spenderName ?? shortAddress(r.spender)}</Body>
@@ -122,9 +122,7 @@ export function Allowances({ body }: { body: 'extension-popup' | 'extension-tab'
                 <Body tone={r.amount === 'unlimited' || r.amount === 'all' ? 'burn' : 'ink'} size="caption" testID={`allow-amount-${r.spender}`}>
                   {r.amount === 'unlimited' ? t({ id: 'allow.unlimited', message: 'Unlimited' }) : r.amount === 'all' ? t({ id: 'allow.all', message: 'Every item' }) : formatQuantity(r.amount)}
                 </Body>
-              </Row>
-              <Row>
-                <Key label={t({ id: 'allow.revoke', message: 'Revoke' })} kind="danger" onPress={() => revoke(r)} testID={`allow-revoke-${r.spender}`} />
+                <Key label={t({ id: 'allow.revoke', message: 'Revoke' })} kind="danger" size="compact" onPress={() => revoke(r)} testID={`allow-revoke-${r.spender}`} />
               </Row>
             </Column>
           ))}

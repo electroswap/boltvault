@@ -68,7 +68,8 @@ export class PositionsService {
       d.launchpad.list(chainId, accountId).catch(() => []),
     ])
     const farms = farmsAll.filter((f) => f.position !== null)
-    const campaigns = campaignsAll.filter((c) => BigInt(c.contributedWei) > 0n || BigInt(c.claimableTokensRaw) > 0n || BigInt(c.referralClaimableWei) > 0n)
+    // A campaign is a position while there is something left to do: claim tokens or a refund, referral rewards, or a contribution to a campaign still in flight (plan C1, owner item L1).
+    const campaigns = campaignsAll.filter((c) => c.keys.includes('claim_tokens') || c.keys.includes('claim_refund') || BigInt(c.referralClaimableWei) > 0n || ((c.phase === 'live' || c.phase === 'upcoming' || c.phase === 'awaiting_finalize') && BigInt(c.contributedWei) > 0n))
     let accessory: Positions['accessory'] = null
     const claimable = legends ? BigInt(legends.claimableWei) : 0n
     if (claimable > 0n) accessory = { kind: 'dividends', text: `${trim(Number(formatUnits(claimable, 18)).toFixed(2))} ETN in dividends to claim`, target: 'legends' }
