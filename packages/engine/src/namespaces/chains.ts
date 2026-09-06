@@ -89,7 +89,24 @@ export class ChainsService implements HeadSource {
     const def = this.def(chainId)
     const override = this.overrides[String(chainId)]
     const urls = override ? [override.url] : [...def.rpcUrls]
-    const client = createPublicClient({ transport: fallback(urls.map((u) => http(u, { timeout: 10_000, batch: false })), { retryCount: 0 }) })
+    // Two kinds of batching, both previously off, which is why one popup open
+    // fired 19 separate eth_calls:
+    //   - http({ batch }) coalesces requests made in the same tick into one
+    //     JSON-RPC array, so a multicall chunked into N pieces is one POST.
+    //   - batch.multicall aggregates independent readContract calls into
+    //     Multicall3 automatically, so code paths that never learned to use
+    //     readMany stop paying a round trip each.
+    // Both default to wait: 0 — they coalesce whatever is scheduled in the
+    // same tick, which is exactly the chunked-multicall and parallel-read
+    // case, and add no latency. An explicit wait window would: an 8 ms one
+    // was enough to lose a race in the remote-signing test.
+    const client = createPublicClient({
+      transport: fallback(
+        urls.map((u) => http(u, { timeout: 10_000, batch: true })),
+        { retryCount: 0 },
+      ),
+      batch: { multicall: true },
+    })
     this.clients.set(chainId, client)
     return client
   }

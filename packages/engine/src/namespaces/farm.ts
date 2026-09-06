@@ -36,6 +36,8 @@ export interface FarmDeps {
   readonly cache?: DocCache
 }
 
+/** A farm list is good for a minute. */
+const LIST_TTL_MS = 60_000
 const listSpec = (chainId: number, accountId: string | undefined) => ({ key: cacheKey('farm', 'list', chainId, accountId ?? '-'), schema: z.array(FarmViewSchema) })
 
 interface FarmTuple {
@@ -237,18 +239,23 @@ export class FarmService {
       const owner = accountId ? (await this.account(accountId)).address : null
       const farms = await this.farms(chainId, owner)
       const block = await this.head(chainId)
-      const out: FarmView[] = []
-      for (const f of farms) {
-        if (!f.tuple.active && !owner) continue
-        const v = await this.view(chainId, f.tuple, f.index, owner, block)
-        if (v.active || v.position !== null) out.push(v)
-      }
+      // Across farms, not one after another. This was a sequential loop, and
+      // each `view` makes two dependent reads (the pool's state, then the
+      // position), so N farms cost 2N round trips one behind the other.
+      // Fanning out means every farm's pool read is in flight at the same
+      // moment, and the multicall coalescer folds them into a single
+      // aggregate — then does the same for the position reads. 2N becomes 2.
+      // Promise.all keeps the order, and the sort below owns the ordering.
+      const views = await Promise.all(farms.filter((f) => f.tuple.active || owner).map((f) => this.view(chainId, f.tuple, f.index, owner, block)))
+      const out = views.filter((v) => v.active || v.position !== null)
       const rank = (f: FarmView): number => (f.position && f.active ? 0 : f.active ? 1 : 2)
       out.sort((a, b) => rank(a) - rank(b) || (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0))
       return out
     }
     if (!this.deps.cache) return build()
-    return (await this.deps.cache.refresh(listSpec(chainId, accountId), build)).value
+    // Same as launchpad: no TTL meant every Explore mount and every
+    // positions.snapshot re-ran YieldFarms and its multicall batches.
+    return (await this.deps.cache.through(listSpec(chainId, accountId), LIST_TTL_MS, build)).value
   }
 
   async cachedList(chainId: number, accountId?: string): Promise<Cached<FarmView[]> | null> {

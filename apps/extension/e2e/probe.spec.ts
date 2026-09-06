@@ -27,7 +27,10 @@ interface Tally {
   rpc: Record<string, number>
   graphql: Record<string, number>
   static: number
+  /** JSON-RPC methods asked for. */
   rpcTotal: number
+  /** HTTP POSTs actually sent — what devtools shows, and what batching cuts. */
+  rpcPosts: number
   graphqlTotal: number
 }
 
@@ -38,7 +41,7 @@ interface Snapshot extends Tally {
 }
 
 function emptyTally(): Tally {
-  return { rpc: {}, graphql: {}, static: 0, rpcTotal: 0, graphqlTotal: 0 }
+  return { rpc: {}, graphql: {}, static: 0, rpcTotal: 0, rpcPosts: 0, graphqlTotal: 0 }
 }
 
 /** Classify by body shape, not URL — RPC hosts vary with the failover pool. */
@@ -55,6 +58,7 @@ function classify(tally: Tally, url: string, body: string | null): void {
     return
   }
   const calls = Array.isArray(parsed) ? parsed : [parsed]
+  let isRpc = false
   for (const call of calls) {
     if (typeof call !== 'object' || call === null) continue
     const rec = call as Record<string, unknown>
@@ -62,6 +66,7 @@ function classify(tally: Tally, url: string, body: string | null): void {
     if (typeof method === 'string' && 'jsonrpc' in rec) {
       tally.rpc[method] = (tally.rpc[method] ?? 0) + 1
       tally.rpcTotal += 1
+      isRpc = true
       continue
     }
     const query = rec['query']
@@ -73,6 +78,7 @@ function classify(tally: Tally, url: string, body: string | null): void {
       tally.graphqlTotal += 1
     }
   }
+  if (isRpc) tally.rpcPosts += 1
 }
 
 test('probe', async () => {
@@ -120,6 +126,7 @@ test('probe', async () => {
     steps: snapshots,
     totals: {
       rpc: snapshots.reduce((n, s) => n + s.rpcTotal, 0),
+      rpcPosts: snapshots.reduce((n, s) => n + s.rpcPosts, 0),
       graphql: snapshots.reduce((n, s) => n + s.graphqlTotal, 0),
       maxScrollWidth: Math.max(...snapshots.map((s) => s.scrollWidth)),
     },
@@ -132,7 +139,7 @@ test('probe', async () => {
     const gql = Object.entries(s.graphql)
       .map(([k, v]) => `${k}×${v}`)
       .join(' ')
-    console.log(`\n[${s.step}] width ${s.scrollWidth}/${s.clientWidth}  rpc ${s.rpcTotal}  gql ${s.graphqlTotal}`)
+    console.log(`\n[${s.step}] width ${s.scrollWidth}/${s.clientWidth}  rpc ${s.rpcTotal} in ${s.rpcPosts} posts  gql ${s.graphqlTotal}`)
     if (rpc !== '') console.log(`  rpc: ${rpc}`)
     if (gql !== '') console.log(`  gql: ${gql}`)
   }

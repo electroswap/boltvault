@@ -50,25 +50,31 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
   const [ccy, setCcy] = useState<CollectionCurrency>('ETN')
   const accountId = active?.id
 
+  // Only the visible segment fetches. This screen used to mount all four
+  // lists on every open regardless of which one was showing, so opening
+  // Explore > Tokens still issued TopCollections, Presales and YieldFarms and
+  // their multicall batches — and again on every segment tap, because the
+  // shell remounts the screen when the segment param changes.
+  // `tokens` stays live on Collectibles too: it carries the ETN price.
   const tokens = useCached<ExploreToken[]>({
-    key: cacheKey('explore', 'tokens', ETN),
+    key: segment === 'tokens' || segment === 'collectibles' ? cacheKey('explore', 'tokens', ETN) : null,
     cached: (e) => e.explore.cachedTokens({ chainId: ETN }),
     fresh: (e) => e.explore.tokens({ chainId: ETN }),
     maxAgeMs: 60_000,
   })
   const collections = useCached<CollectionView[]>({
-    key: cacheKey('explore', 'collections', ETN, accountId ?? '-', window),
+    key: segment === 'collectibles' ? cacheKey('explore', 'collections', ETN, accountId ?? '-', window) : null,
     cached: (e) => e.explore.cachedCollections({ chainId: ETN, ...(accountId ? { accountId } : {}), window }),
     fresh: (e) => e.explore.collections({ chainId: ETN, ...(accountId ? { accountId } : {}), window }),
     maxAgeMs: 60_000,
   })
   const campaigns = useCached<CampaignView[]>({
-    key: cacheKey('launchpad', 'list', ETN, accountId ?? '-'),
+    key: segment === 'launch' ? cacheKey('launchpad', 'list', ETN, accountId ?? '-') : null,
     cached: (e) => e.launchpad.cachedList({ chainId: ETN, ...(accountId ? { accountId } : {}) }),
     fresh: (e) => e.launchpad.list({ chainId: ETN, ...(accountId ? { accountId } : {}) }),
   })
   const farms = useCached<FarmView[]>({
-    key: cacheKey('farm', 'list', ETN, accountId ?? '-'),
+    key: segment === 'farms' ? cacheKey('farm', 'list', ETN, accountId ?? '-') : null,
     cached: (e) => e.farm.cachedList({ chainId: ETN, ...(accountId ? { accountId } : {}) }),
     fresh: (e) => e.farm.list({ chainId: ETN, ...(accountId ? { accountId } : {}) }),
   })

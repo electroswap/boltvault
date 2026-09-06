@@ -200,7 +200,12 @@ export async function startMockRpc(init: Partial<Pick<MockChainState, 'chainId' 
         }
         const batch = Array.isArray(parsed)
         const list = (batch ? parsed : [parsed]) as Array<{ id?: RpcRequest['id']; method: string; params?: unknown[] }>
-        const answers = await Promise.all(list.map((r) => handle({ id: r.id ?? null, method: r.method, params: r.params ?? [] })))
+        // In order, not Promise.all. This mock is stateful — nonces, the block
+        // number, the transaction pool — and once the engine enabled JSON-RPC
+        // batching, handling a batch concurrently let those mutations race
+        // against each other in a way separate HTTP requests never did.
+        const answers: Array<Awaited<ReturnType<typeof handle>>> = []
+        for (const r of list) answers.push(await handle({ id: r.id ?? null, method: r.method, params: r.params ?? [] }))
         res.writeHead(200, { 'content-type': 'application/json' })
         res.end(JSON.stringify(batch ? answers : answers[0]))
       })()

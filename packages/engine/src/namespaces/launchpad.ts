@@ -35,6 +35,8 @@ export interface LaunchpadDeps {
   readonly cache?: DocCache
 }
 
+/** A campaign list is good for a minute; phases move in blocks, not frames. */
+const LIST_TTL_MS = 60_000
 const listSpec = (chainId: number, accountId: string | undefined) => ({ key: cacheKey('launchpad', 'list', chainId, accountId ?? '-'), schema: z.array(CampaignViewSchema) })
 
 const REFERRAL_TTL_MS = 24 * 3_600_000
@@ -140,7 +142,10 @@ export class LaunchpadService {
     }
     // Only the unfiltered list is the cached one; a status filter is a one-off read.
     if (!d.cache || statuses) return build()
-    return (await d.cache.refresh(listSpec(chainId, accountId), build)).value
+    // `refresh` always hits the network. This list is on the Home and Explore
+    // hot paths and is also pulled by positions.snapshot, so with no TTL the
+    // same Presales query went out several times per popup open.
+    return (await d.cache.through(listSpec(chainId, accountId), LIST_TTL_MS, build)).value
   }
 
   async cachedList(chainId: number, accountId?: string): Promise<Cached<CampaignView[]> | null> {
