@@ -5,9 +5,9 @@
  * on the dock. Tapping the total opens the Portfolio. The Grid is drawn by
  * TabShell behind this screen; the holder tier warms it.
  */
-import { ActionGrid, Body, ChainMark, Column, Icon, IconButton, Ignition, Key, LiveFilament, Pill, Plate, Pressable, Row, RollingReadout, Seat, ScrollView, metrics, paint, type ActionTileBadge, type IconName } from '@boltvault/ui'
+import { ActionGrid, Body, ChainMark, Column, Icon, IconButton, Ignition, Key, LiveFilament, Pill, Plate, Pressable, Row, RollingReadout, Seat, ScrollView, Skeleton, metrics, paint, radius, type ActionTileBadge, type IconName } from '@boltvault/ui'
 import { cacheKey, type BridgeStatus, type CampaignView, type ExploreToken, type Inventory } from '@boltvault/engine'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChainScopeSheet, ScopePill, useHomeScope } from '../components/ChainScope'
 import { DappSheet, DappStrip, useDappStatus } from '../components/DappStatus'
 import { useEngine } from '../engine/EngineProvider'
@@ -24,6 +24,7 @@ import { usePositions } from '../hooks/usePositions'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { useReducedMotion } from '../state/useReducedMotion'
+import { takeIgnition } from '../state/ignition'
 import { useWalletState } from '../state/useWalletState'
 
 const ETN = 52014
@@ -63,6 +64,10 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   const [dappOpen, setDappOpen] = useState(false)
   const accountId = active?.id ?? null
   const unlocked = !!vault?.unlocked
+  // The unlock ceremony runs once per unlock, not on every mount of Home.
+  const igniteRef = useRef<boolean | null>(null)
+  if (igniteRef.current === null && !loading) igniteRef.current = takeIgnition(unlocked)
+  const ignite = igniteRef.current ?? false
   const dapp = useDappStatus(unlocked && (host.body === 'extension-popup' || host.body === 'harness'))
   const market = useCached<ExploreToken[]>({
     key: unlocked ? cacheKey('explore', 'tokens', ETN) : null,
@@ -187,7 +192,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   return (
     <Column flex={1} testID="home">
       <ScrollView contentContainerStyle={{ paddingHorizontal: inset, paddingTop: 12, paddingBottom: 12, gap: 10, ...(wide ? { maxWidth: 680, width: '100%', alignSelf: 'center' } : {}) }}>
-        <Ignition reducedMotion={reducedMotion} order={0}>
+        <Ignition active={ignite} reducedMotion={reducedMotion} order={0}>
           <Row justifyContent="space-between" alignItems="center" minHeight={metrics.header} gap="$2">
             {active ? (
               <Seat address={active.address} label={active.label} tierMark={tier && tier.tier > 0 ? t({ id: 'home.tier', message: 'Tier {t}', values: { t: tier.tier } }) : null} onPress={() => router.navigate('accounts')} onCopy={copy} copied={copied} testID="seat" />
@@ -201,8 +206,25 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
           </Row>
         </Ignition>
 
+        {/*
+          While the vault's status is still unknown, Home used to render its
+          header and nothing else — a blank body for as long as the service
+          worker took to answer, then everything at once. The style bible has
+          always required the opposite: "a first visit shows a skeleton with
+          the current sweeping through it, never a blank body." These are the
+          shapes of the console, the action grid and the strip, so nothing
+          moves when the real thing replaces them.
+        */}
+        {loading ? (
+          <Column gap={10} testID="home-loading">
+            <Skeleton height={96} radius={radius.console} />
+            <Skeleton height={216} radius={radius.recessed} />
+            <Skeleton height={44} radius={radius.recessed} />
+          </Column>
+        ) : null}
+
         {!loading && !vault?.exists ? (
-          <Ignition reducedMotion={reducedMotion} order={1}>
+          <Ignition active={ignite} reducedMotion={reducedMotion} order={1}>
             <Plate role="raised" gap="$3" testID="create-plate">
               <Body size="title">{t({ id: 'home.create.title', message: 'Your vault is not created yet' })}</Body>
               <Body tone="mute">
@@ -214,7 +236,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
         ) : null}
 
         {vault?.exists && !vault.unlocked ? (
-          <Ignition reducedMotion={reducedMotion} order={1}>
+          <Ignition active={ignite} reducedMotion={reducedMotion} order={1}>
             <Plate role="raised" gap="$3" testID="locked-plate">
               <Row gap="$2">
                 <Icon name="lock" color={paint.mute} size={18} />
@@ -229,7 +251,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
         {unlocked ? (
           <>
             {/* The balance console: the scope, the total with its day, the live filament. */}
-            <Ignition reducedMotion={reducedMotion} order={1}>
+            <Ignition active={ignite} reducedMotion={reducedMotion} order={1}>
               <Plate role="console" gap={6} padding={12} testID="home-console">
                 <Row justifyContent="space-between" alignItems="center">
                   <ScopePill scope={scope.scope} label={scope.label} onPress={() => setScopeOpen(true)} testID="home-scope" />
@@ -264,17 +286,17 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
             </Ignition>
 
             {slot ? (
-              <Ignition reducedMotion={reducedMotion} order={2}>
+              <Ignition active={ignite} reducedMotion={reducedMotion} order={2}>
                 {slot}
               </Ignition>
             ) : null}
 
-            <Ignition reducedMotion={reducedMotion} order={3}>
+            <Ignition active={ignite} reducedMotion={reducedMotion} order={3}>
               <ActionGrid items={tiles} layout={wide ? 'row' : 'stacked'} testID="keys" />
             </Ignition>
 
             {/* The status strip: the site under the popup, and ETN's price. */}
-            <Ignition reducedMotion={reducedMotion} order={4}>
+            <Ignition active={ignite} reducedMotion={reducedMotion} order={4}>
               <Plate role="card" padding={0} overflow="hidden" testID="home-strip">
                 <Row minHeight={44} alignItems="stretch">
                   {dapp !== null || host.body === 'extension-popup' || host.body === 'harness' ? (
