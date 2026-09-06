@@ -61,7 +61,7 @@ export function TokenPickerSheet({ open, onClose, title, tokens, rows, currency,
           return (
             <Pressable key={x.address} onPress={() => onPick(x.address)} accessibilityRole="button" accessibilityLabel={x.symbol} style={{ minHeight: 52, justifyContent: 'center' }} testID={`swap-pick-${x.symbol}`}>
               <Row gap="$3" alignItems="center" paddingVertical={6}>
-                <TokenAvatar chainId={ETN} address={x.address === 'native' ? '0x0000000000000000000000000000000000000000' : x.address} logoUri={x.logoUri} size={32} />
+                <TokenAvatar chainId={ETN} address={x.address} symbol={x.symbol} logoUri={x.logoUri} size={32} />
                 <Column flex={1} minWidth={0} alignItems="flex-start">
                   <Row gap="$2" alignItems="center">
                     <Body fontWeight="600">{x.symbol}</Body>

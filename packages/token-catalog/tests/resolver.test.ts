@@ -105,14 +105,25 @@ describe('resolveChainList — tier 4 (none)', () => {
 })
 
 describe('inRepoTokens / FALLBACK_CHAIN_IDS', () => {
-  it('only Unichain (130) and Linea (59144) ship in-repo fallbacks', () => {
+  it('Unichain (130), Linea (59144) and both ETN chains ship in-repo fallbacks', () => {
     expect(FALLBACK_CHAIN_IDS).toContain(130)
     expect(FALLBACK_CHAIN_IDS).toContain(59144)
-    expect(FALLBACK_CHAIN_IDS).toHaveLength(2)
+    expect(FALLBACK_CHAIN_IDS).toContain(52014)
+    expect(FALLBACK_CHAIN_IDS).toContain(5201420)
+    expect(FALLBACK_CHAIN_IDS).toHaveLength(4)
   })
   it('a chain with no fallback returns []', () => {
     expect(inRepoTokens(1)).toHaveLength(0)
-    expect(inRepoTokens(52014)).toHaveLength(0)
+  })
+  it('the ETN fallback is chain-scoped from the one shared file', () => {
+    const main = inRepoTokens(52014)
+    const test = inRepoTokens(5201420)
+    expect(main.length).toBeGreaterThan(0)
+    expect(test.length).toBeGreaterThan(0)
+    expect(main.every((t) => t.chainId === 52014)).toBe(true)
+    expect(test.every((t) => t.chainId === 5201420)).toBe(true)
+    expect(main.map((t) => t.symbol)).toContain('WETN')
+    expect(main.map((t) => t.symbol)).toContain('BOLT')
   })
   it('fallback tokens are checksummed + chain-scoped', () => {
     const linea = inRepoTokens(59144)

@@ -8,7 +8,7 @@ import type { EventBus, NamespaceSpec } from '../host'
 import { PrefsSchema, type Prefs } from '../schema'
 import { readDoc, writeDoc, type DocSpec } from '../storage'
 
-export const DEFAULT_PREFS: Prefs = { homeScope: 52014, swapCoachDismissed: false, chartDuration: '1D', collectionsShowAll: false }
+export const DEFAULT_PREFS: Prefs = { homeScope: 52014, swapCoachDismissed: false, chartDuration: '1D' }
 const DOC: DocSpec<Prefs> = { key: 'ui.prefs', version: 1, schema: PrefsSchema, defaultValue: () => DEFAULT_PREFS }
 
 export class PrefsService {

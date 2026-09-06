@@ -5,7 +5,8 @@
  * calmer than nine plates with rims; the hover and press tints live on the
  * cell. `row` lays a cell out horizontally for the wide tab body.
  */
-import { Pressable, View } from 'react-native'
+import { useState } from 'react'
+import { Pressable, View, type LayoutChangeEvent } from 'react-native'
 import Animated from 'react-native-reanimated'
 import { Badge, Glyph, type ActionTileBadge } from './ActionTile'
 import { useReducedMotionPref } from './motion/MotionContext'
@@ -29,13 +30,36 @@ export interface ActionGridProps {
   readonly testID?: string
 }
 
+/**
+ * A row cell must hold a 34 px glyph, a 12 px gap, 28 px of padding and the
+ * longest label. Below this it cannot, and the label clips — which is exactly
+ * what a narrow window used to do, because the layout was chosen from the
+ * `body` prop and never from the width actually available.
+ */
+const ROW_LAYOUT_MIN_CELL = 160
+
 export function ActionGrid({ items, columns = 3, layout = 'stacked', cellHeight, testID }: ActionGridProps) {
   const rows: ActionGridItem[][] = []
   for (let i = 0; i < items.length; i += columns) rows.push(items.slice(i, i + columns))
-  const height = cellHeight ?? (layout === 'stacked' ? 72 : 64)
   const reduced = useReducedMotionPref()
+  // Measure, then decide. `layout` is a preference, not a promise: a row
+  // layout that does not fit falls back to stacked, so a narrow browser
+  // window renders Home's actions exactly as the popup does.
+  const [width, setWidth] = useState(0)
+  const fits = width === 0 || width / columns >= ROW_LAYOUT_MIN_CELL
+  const effective = layout === 'row' && !fits ? 'stacked' : layout
+  const height = cellHeight ?? (effective === 'stacked' ? 72 : 64)
   return (
-    <Plate role="recessed" padding={0} overflow="hidden" testID={testID}>
+    <Plate
+      role="recessed"
+      padding={0}
+      overflow="hidden"
+      testID={testID}
+      onLayout={(e: LayoutChangeEvent) => {
+        const w = Math.floor(e.nativeEvent.layout.width)
+        if (w !== width) setWidth(w)
+      }}
+    >
       {rows.map((row, ri) => (
         <Row key={ri} borderBottomWidth={ri < rows.length - 1 ? 1 : 0} borderBottomColor="$edge">
           {row.map((it, ci) => (
@@ -54,7 +78,7 @@ export function ActionGrid({ items, columns = 3, layout = 'stacked', cellHeight,
             >
               {({ pressed }) => (
               <Animated.View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? paint.glassRaised : 'rgba(22, 30, 78, 0)', transitionProperty: 'backgroundColor', transitionDuration: reduced ? 0 : motion.micro, transitionTimingFunction: 'ease-out' }}>
-              {layout === 'stacked' ? (
+              {effective === 'stacked' ? (
                 <View style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', gap: 5, position: 'relative' }}>
                   {it.badge ? <Badge badge={it.badge} corner /> : null}
                   <Glyph icon={it.icon} size={32} />

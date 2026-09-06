@@ -24,6 +24,7 @@ import {
   type RawTokenList,
   type TokenEntry,
 } from './catalog'
+import electroswapFallback from '../lists/electroswap-etn.json'
 import lineaFallback from '../lists/linea-59144.json'
 import unichainFallback from '../lists/unichain-130.json'
 
@@ -50,10 +51,17 @@ interface FallbackShape {
   }>
 }
 
-/** In-repo fallbacks, keyed by chainId (only the two chains that need one). */
+/**
+ * In-repo fallbacks, keyed by chainId. The ElectroSwap list covers both ETN
+ * chains from one file (`parseTokenList` filters on the entry's own chainId),
+ * and it is vendored alongside its logos so a first run with no network still
+ * shows real names and real marks instead of placeholders.
+ */
 const IN_REPO_FALLBACKS: Readonly<Record<number, FallbackShape>> = {
   130: unichainFallback as FallbackShape,
   59144: lineaFallback as FallbackShape,
+  52014: electroswapFallback as FallbackShape,
+  5201420: electroswapFallback as FallbackShape,
 }
 
 /** Parse a bundled fallback list for `chainId` (entry-level chainId filtered). */

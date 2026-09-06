@@ -89,7 +89,23 @@ export class ChainsService implements HeadSource {
     const def = this.def(chainId)
     const override = this.overrides[String(chainId)]
     const urls = override ? [override.url] : [...def.rpcUrls]
-    const client = createPublicClient({ transport: fallback(urls.map((u) => http(u, { timeout: 10_000, batch: false })), { retryCount: 0 }) })
+    // JSON-RPC batching only. Requests scheduled in the same tick go out as
+    // one POST, at no added latency (wait defaults to 0).
+    //
+    // Not `batch: { multicall: true }`: that aggregates readContract calls
+    // through Multicall3 at the address viem reads from `chain.contracts`,
+    // and this client is deliberately built without a `chain` — the registry
+    // owns the addresses, and neither ETN chain uses the canonical
+    // deployment. Turning it on silently broke reads (a token's decimals came
+    // back empty, so adding a custom token reported "this contract does not
+    // look like a token"). The aggregation we want is explicit, in
+    // multicall.ts, where the address comes from the registry.
+    const client = createPublicClient({
+      transport: fallback(
+        urls.map((u) => http(u, { timeout: 10_000, batch: true })),
+        { retryCount: 0 },
+      ),
+    })
     this.clients.set(chainId, client)
     return client
   }

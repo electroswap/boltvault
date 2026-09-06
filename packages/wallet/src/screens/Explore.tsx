@@ -20,7 +20,6 @@ import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { useCached } from '../hooks/useCached'
 import { useNotifications } from '../hooks/useNotifications'
-import { usePrefs } from '../hooks/usePrefs'
 import { formatChange, formatFiat, formatPrice } from '../format'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
@@ -47,31 +46,35 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
   const [found, setFound] = useState<{ tokens: ExploreToken[]; collections: CollectionView[] } | null>(null)
   const [addOpen, setAddOpen] = useState(false)
   const [addCollectionOpen, setAddCollectionOpen] = useState(false)
-  const { prefs, set: setPrefs } = usePrefs()
-  const showAll = prefs.collectionsShowAll
   const [window, setWindow] = useState<CollectionWindow>('DAY')
   const [ccy, setCcy] = useState<CollectionCurrency>('ETN')
   const accountId = active?.id
 
+  // Only the visible segment fetches. This screen used to mount all four
+  // lists on every open regardless of which one was showing, so opening
+  // Explore > Tokens still issued TopCollections, Presales and YieldFarms and
+  // their multicall batches — and again on every segment tap, because the
+  // shell remounts the screen when the segment param changes.
+  // `tokens` stays live on Collectibles too: it carries the ETN price.
   const tokens = useCached<ExploreToken[]>({
-    key: cacheKey('explore', 'tokens', ETN),
+    key: segment === 'tokens' || segment === 'collectibles' ? cacheKey('explore', 'tokens', ETN) : null,
     cached: (e) => e.explore.cachedTokens({ chainId: ETN }),
     fresh: (e) => e.explore.tokens({ chainId: ETN }),
     maxAgeMs: 60_000,
   })
   const collections = useCached<CollectionView[]>({
-    key: cacheKey('explore', 'collections', ETN, accountId ?? '-', showAll ? 'all' : 'verified', window),
-    cached: (e) => e.explore.cachedCollections({ chainId: ETN, ...(accountId ? { accountId } : {}), all: showAll, window }),
-    fresh: (e) => e.explore.collections({ chainId: ETN, ...(accountId ? { accountId } : {}), all: showAll, window }),
+    key: segment === 'collectibles' ? cacheKey('explore', 'collections', ETN, accountId ?? '-', window) : null,
+    cached: (e) => e.explore.cachedCollections({ chainId: ETN, ...(accountId ? { accountId } : {}), window }),
+    fresh: (e) => e.explore.collections({ chainId: ETN, ...(accountId ? { accountId } : {}), window }),
     maxAgeMs: 60_000,
   })
   const campaigns = useCached<CampaignView[]>({
-    key: cacheKey('launchpad', 'list', ETN, accountId ?? '-'),
+    key: segment === 'launch' ? cacheKey('launchpad', 'list', ETN, accountId ?? '-') : null,
     cached: (e) => e.launchpad.cachedList({ chainId: ETN, ...(accountId ? { accountId } : {}) }),
     fresh: (e) => e.launchpad.list({ chainId: ETN, ...(accountId ? { accountId } : {}) }),
   })
   const farms = useCached<FarmView[]>({
-    key: cacheKey('farm', 'list', ETN, accountId ?? '-'),
+    key: segment === 'farms' ? cacheKey('farm', 'list', ETN, accountId ?? '-') : null,
     cached: (e) => e.farm.cachedList({ chainId: ETN, ...(accountId ? { accountId } : {}) }),
     fresh: (e) => e.farm.list({ chainId: ETN, ...(accountId ? { accountId } : {}) }),
   })
@@ -126,12 +129,7 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
         title={segment === 'tokens' ? t({ id: 'explore.tokens', message: 'Tokens' }) : segment === 'collectibles' ? t({ id: 'explore.collections.title', message: 'Collections' }) : segment === 'launch' ? t({ id: 'explore.launchpad', message: 'Launchpad' }) : t({ id: 'explore.farms', message: 'Farms' })}
         right={
           <>
-            {segment === 'collectibles' ? (
-              <>
-                <IconButton icon="filter" label={showAll ? t({ id: 'explore.collections.verified', message: 'Show verified only' }) : t({ id: 'explore.collections.everything', message: 'Show everything' })} active={showAll} onPress={() => setPrefs({ collectionsShowAll: !showAll })} testID="explore-collections-all" />
-                <IconButton icon="plus" label={t({ id: 'collection.add.pill', message: 'Add a collection' })} onPress={() => setAddCollectionOpen(true)} testID="explore-add-collection" />
-              </>
-            ) : null}
+            {segment === 'collectibles' ? <IconButton icon="plus" label={t({ id: 'collection.add.pill', message: 'Add a collection' })} onPress={() => setAddCollectionOpen(true)} testID="explore-add-collection" /> : null}
             {segment === 'tokens' && host.browser ? <IconButton icon="external" label={t({ id: 'explore.browser', message: 'Browser' })} onPress={() => router.navigate('browser')} testID="explore-browser" /> : null}
             {segment === 'tokens' || segment === 'launch' ? <IconButton icon="bell" label={t({ id: 'explore.alerts', message: 'Alerts' })} badge={unread} onPress={() => router.navigate('alerts')} testID="explore-alerts" /> : null}
           </>
@@ -212,7 +210,7 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
               <Row gap="$2" alignItems="center" justifyContent="space-between">
                 {active ? <Pill label={t({ id: 'explore.rack', message: 'Your collection' })} icon={<Icon name="nft" size={14} color={paint.arc} />} size="sm" onPress={() => router.navigate('rack')} testID="explore-rack" /> : <Row />}
                 <Body tone="mute" size="caption">
-                  {showAll ? t({ id: 'explore.collections.all', message: 'Showing everything' }) : t({ id: 'explore.collections.verifiedOnly', message: 'Verified collections' })}
+                  {t({ id: 'explore.collections.verifiedOnly', message: 'Verified collections' })}
                 </Body>
               </Row>
               <Column testID="collections-list">
@@ -263,7 +261,7 @@ export function TokenRow({ token, onPress, onPin }: { token: ExploreToken; onPre
   return (
     <Row gap="$2" alignItems="center" minHeight={52} testID={`explore-token-${token.symbol}`}>
       <Row flex={1} gap="$3" alignItems="center" onPress={onPress} cursor="pointer" minHeight={44}>
-        <TokenAvatar chainId={token.chainId} address={token.address === 'native' ? '0x0000000000000000000000000000000000000000' : token.address} logoUri={token.logoUri} size={28} />
+        <TokenAvatar chainId={token.chainId} address={token.address} symbol={token.symbol} logoUri={token.logoUri} size={28} />
         <Column flex={1}>
           <Row gap="$2" alignItems="center">
             <Body>{token.symbol}</Body>

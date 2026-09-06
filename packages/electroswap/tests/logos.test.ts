@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { getAddress } from 'viem'
 import {
   logoCandidates,
-  identiconSvg,
-  identiconDataUri,
   TWA_SLUGS,
 } from '../src'
 
@@ -61,35 +59,5 @@ describe('logoCandidates (T4.3 pipeline order)', () => {
   it('TWA_SLUGS covers the 9 supported non-ETN chains and nothing else', () => {
     expect(Object.keys(TWA_SLUGS).length).toBe(9)
     expect((TWA_SLUGS as Record<number, string>)[52014]).toBeUndefined()
-  })
-})
-
-describe('identicon (T4.3 guaranteed last frame)', () => {
-  it('is deterministic: same address → identical SVG', () => {
-    const a = identiconSvg(WETN)
-    const b = identiconSvg(WETN)
-    expect(a).toBe(b)
-  })
-
-  it('differs for different addresses', () => {
-    const a = identiconSvg(WETN)
-    const b = identiconSvg('0x' + 'cd'.repeat(20))
-    expect(a).not.toBe(b)
-  })
-
-  it('produces a valid SVG with the requested size', () => {
-    const svg = identiconSvg(WETN, 32)
-    expect(svg.startsWith('<svg')).toBe(true)
-    expect(svg).toContain('width="32"')
-    expect(svg).toContain('<rect')
-    expect(svg.endsWith('</svg>')).toBe(true)
-  })
-
-  it('identiconDataUri is a base64 data URI that decodes to the SVG', () => {
-    const uri = identiconDataUri(WETN, 32)
-    expect(uri.startsWith('data:image/svg+xml;base64,')).toBe(true)
-    const b64 = uri.slice('data:image/svg+xml;base64,'.length)
-    const decoded = atob(b64)
-    expect(decoded).toBe(identiconSvg(WETN, 32))
   })
 })

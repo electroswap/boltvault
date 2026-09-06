@@ -53,6 +53,7 @@ Glow: raised plates `rgba(60,100,255,0.22)` radius 24; the primary key `rgba(70,
 - **Text**: Sora 400/600, 13–17 px, sentence case, ≤ 70 characters a line. Labels above a number are Sora 400 13 px `mute`.
 - **Addresses and hashes**: Sora tabular 13–14 px `mute`, `0x1F90…7B63`, with their own copy control beside them. There is no monospace face in the product (2026-09-06: the IBM Plex Mono declaration was never shipped as a file and fell back to a serif; it is gone from the tokens, the config and every call site).
 - No third family. Numerals never fall back to Sora.
+- **The fonts are never seen arriving.** Both faces ship as local woff2, every weight is preloaded in every entry document, and `font-display` is `block` — never `swap`, which by definition paints fallback text first and then changes it under the reader. Every family in `tokens.ts` is a full stack ending in a generic sans; a bare `font-family: Sora` falls back to the UA default, which is a *serif*, and that is twice now that a bare declaration has put a serif on screen (the Plex Mono note above was the first). `e2e/fonts.spec.ts` holds all three of these.
 
 ## Materials and roles
 
@@ -72,6 +73,8 @@ Glow: raised plates `rgba(60,100,255,0.22)` radius 24; the primary key `rgba(70,
 | Sheet | `glassRaised` | lit rim on the top edge | 20 top | yes |
 
 Plates never carry a grey shadow. Depth comes from the rim and the glow, and from the Grid showing through the fill.
+
+**Corners nest concentrically.** A shape inside a rounded shape takes the parent's radius minus the gap between them — `innerRadius(outer, inset)` in `tokens.ts`. Equal radii make the inner corner look too round and glue the pair together; an unrelated radius reads as two designs meeting. A child that sits flush inside a clipping parent takes **no** radius of its own and lets the parent's clip shape it: two radii on one corner draw that corner twice, which is the doubled edge the owner saw on cards nested inside cards. (2026-09-06: the campaign banner drew 12 inside a 14 clip, and a dApp favicon drew 12 inside an 11 px circle.)
 
 The glow rule: `console` is a screen's one main panel; `raised` is at most one hero plate per screen; everything a `map()` produces is a `card`; the action grid is `tile`s; static information is `recessed`; inputs and stat strips are `well`s. Two glowing plates next to each other bleed into one — that is why lists are cards.
 
@@ -96,6 +99,14 @@ One fragment shader, written twice (GLSL ES 3.0 for the extension, SkSL for Skia
 
 The seat avatar remains a 40 px crop of the account's Grid, so an account is still recognisable by its light.
 
+## Token marks
+
+A token shows its logo. We ship the ElectroSwap list's marks — all fifteen, plus native ETN — inside the bundle, so the common case needs no network and cannot flicker; anything else resolves from its list `logoURI`, then the sibling extension on the static host (it serves `.svg` for most and `.png` for a few, and the wrong one 404s).
+
+A token with **no** logo is its symbol on a glass disc: `glassRaisedSolid` fill, an `edge` hairline, the symbol in `ink` at Sora 600, upper-cased, clipped to four characters and scaled so it fits. One look for every unknown token — it never competes with a real logo beside it.
+
+There are **no generated pixel patterns anywhere in the product** (2026-09-06: the 5×5 mirrored identicon behind every token avatar is gone, and so is the second copy that lived in the unused `packages/design`). A generated pattern says nothing a symbol does not say better, and it read as a broken image. The account Signature above is not one of these — it is drawn geometry, not a hash grid.
+
 ## Selected
 
 A chosen chip (a pill, a segment, a chain, a timeframe) is a **filled tint of the arc** — `arcSoft` fill, `arcEdge` hairline, ink label at 600 — never a lit rim, never a bare colour change of the label. Unchosen chips are raised glass with the edge hairline and a mute label. The fill eases in over 160 ms. This is the one selected treatment; a screen that invents another is wrong.
@@ -106,7 +117,11 @@ One component, one place. The selector is a pill — the chain's mark, its name,
 
 ## Amount well
 
-Every amount (Send, Swap, Bridge) is the same well: the label row with an optional control at its right, the amount big and bare beside the token pill, then what it is worth at the left and what you hold at the right with a MAX pill. A read-only well (what you receive) shows the amount as a readout in the same place. Fields never draw the browser's focus ring; focus is the `arcEdge` hairline.
+Every amount (Send, Swap, Bridge) is the same well: the label row with an optional control at its right, the amount big and bare beside the token pill, then what it is worth at the left and what you hold at the right with a **MAX key**. A read-only well (what you receive) shows the amount as a readout in the same place. Fields never draw the browser's focus ring; focus is the `arcEdge` hairline.
+
+**MAX is not a pill** (2026-09-06, owner). A pill is this product's shape for a *choice* — a token, a duration, a scope, a filter. MAX is a verb, and wearing the pill shape made every amount well look like it held two selectable chips. It is a small square-shouldered key: `glassRaised`, an `edge` hairline, an `arc` label, 24 px tall at radius 8 — smaller than the well's 12 that contains it, per the concentric rule below.
+
+The two wells sit close. The gap between them is 12 px with the flip control centred on the seam, not the 24 px that made one console read as two cards.
 
 ## The action grid
 
@@ -115,6 +130,8 @@ Home's verbs are cells of one recessed surface divided by hairlines — a glyph 
 ## Widths
 
 The popup is 400 × 600 (Rabby-wide): 360 px of content between 20 px insets. Every row is designed for that width first; the tab centres a 560–680 px column; nothing is designed at 360 any more.
+
+**400 × 600 is a hard edge, and motion must respect it.** Chrome sizes an action popup from the document and never shrinks it back, so a single frame of overflow leaves the popup permanently wider with a dead margin down the right. Every enter animation begins outside its own box — a push at `translateX(14)`, a tab change at `translateY(6)`, a sheet panel at `translateY(28)` — so the screen area clips, and `html`, `body` and `#root` are all sized and clipped (`overflow: hidden` on `body` alone propagates to the viewport and leaves body itself computing to `visible`, clipping nothing). `e2e/sizing.spec.ts` samples every frame across a full navigation and fails if the document ever exceeds 400 × 600; it caught this at 414 px.
 
 ## Motion
 

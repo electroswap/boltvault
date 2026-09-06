@@ -198,7 +198,7 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
           label={t({ id: 'send.amount', message: 'Amount' })}
           value={amount}
           onChange={setAmount}
-          tokenPill={<Pill label={selected?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} icon={selected ? <TokenAvatar chainId={chainId} address={selected.address === 'native' ? '0x0000000000000000000000000000000000000000' : selected.address} logoUri={selected.logoUri} size={18} /> : undefined} chevron tone="ink" onPress={() => setPickerOpen(true)} testID="send-token" />}
+          tokenPill={<Pill label={selected?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} icon={selected ? <TokenAvatar chainId={chainId} address={selected.address} symbol={selected.symbol} logoUri={selected.logoUri} size={18} /> : undefined} chevron tone="ink" onPress={() => setPickerOpen(true)} testID="send-token" />}
           fiat={formatAmountFiat(amount, row, currency)}
           balance={row ? `${formatQuantity(row.quantity)} ${row.symbol}` : null}
           onMax={quote ? () => setAmount(quote.max) : row ? () => setAmount(row.quantity) : undefined}

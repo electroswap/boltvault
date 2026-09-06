@@ -43,6 +43,7 @@ function isEtn(chainId: number): chainId is 52014 | 5201420 {
 export class HolderService {
   private readonly overrides = new Map<number, FeeAddresses>()
   private readonly tierCache = new Map<string, { at: number; value: HolderTier }>()
+  private readonly inflight = new Map<string, Promise<HolderTier>>()
 
   constructor(private readonly deps: HolderDeps) {}
 
@@ -103,6 +104,23 @@ export class HolderService {
     const now = this.deps.platform.now()
     const cached = this.tierCache.get(key)
     if (!fresh && cached && now - cached.at < TIER_CACHE_MS) return cached.value
+    // The time cache is only written *after* the read resolves, so two mounts
+    // in the same tick both missed and both did the full multicall. TabShell
+    // and Home each call useHolderTier, so that was every popup open. Every
+    // other service (chains, portfolio, positions, DocCache) already dedupes
+    // in flight; this one did not.
+    const running = this.inflight.get(key)
+    if (running && !fresh) return running
+    const run = this.readTier(accountId, chainId, key, now)
+    if (!fresh) this.inflight.set(key, run)
+    try {
+      return await run
+    } finally {
+      if (!fresh) this.inflight.delete(key)
+    }
+  }
+
+  private async readTier(accountId: string, chainId: number, key: string, now: number): Promise<HolderTier> {
     const account = (await this.deps.vault.accounts()).find((x) => x.id === accountId)
     if (!account) throw new EngineError('not_found', 'no such account')
     let value: HolderTier

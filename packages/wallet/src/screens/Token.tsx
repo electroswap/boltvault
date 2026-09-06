@@ -148,7 +148,7 @@ export function Token({ chainId, address, body }: { chainId: number; address: st
         <PageHeader
           leading={
             <Row gap="$2" alignItems="center" flexShrink={1}>
-              <TokenAvatar chainId={chainId} address={isNative ? '0x0000000000000000000000000000000000000000' : address} logoUri={token?.logoUri ?? row?.logoUri ?? d?.logoUrl ?? null} size={28} />
+              <TokenAvatar chainId={chainId} address={address} symbol={token?.symbol ?? row?.symbol ?? null} logoUri={token?.logoUri ?? row?.logoUri ?? d?.logoUrl ?? null} size={28} />
               <Column flexShrink={1} alignItems="flex-start">
                 <Body size="title" numberOfLines={1} testID="token-symbol">
                   {symbol}

@@ -13,11 +13,17 @@ export interface IgnitionProps {
   readonly reducedMotion?: boolean
   /** Stagger index: 0 for the Field, 1 filament, 2 readout, 3 plates. */
   readonly order?: number
+  /**
+   * Whether this really is an ignition. False paints the children at once —
+   * the ordinary case, because a screen you have already seen should not
+   * re-run the unlock ceremony every time you navigate back to it.
+   */
+  readonly active?: boolean
   readonly testID?: string
 }
 
-export function Ignition({ children, reducedMotion = false, order = 0, testID }: IgnitionProps) {
-  if (reducedMotion) return <>{children}</>
+export function Ignition({ children, reducedMotion = false, order = 0, active = true, testID }: IgnitionProps) {
+  if (reducedMotion || !active) return <>{children}</>
   const delay = order * 70
   return (
     <Animated.View

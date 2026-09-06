@@ -3,15 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>BoltVault</title>
-    <link rel="stylesheet" href="/fonts/fonts.css" />
     <link rel="preload" href="/fonts/sora-400.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/sora-600.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/oxanium-400.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/oxanium-600.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/fonts/fonts.css" />
+    <title>BoltVault</title>
     <style>
+      /*
+        html is sized and clipped too, not just body. With `overflow: hidden`
+        on body alone the value propagates to the viewport and body itself
+        computes to `visible`, so body never actually clipped anything — which
+        is how a 14 px slide inside the app reached the document and made
+        Chrome widen the popup for good.
+      */
       html, body { margin: 0; padding: 0; background: #060913; color-scheme: dark; }
+      html { width: 400px; height: 600px; overflow: hidden; }
       body { width: 400px; height: 600px; overflow: hidden; }
-      #root { width: 400px; height: 600px; display: flex; }
-      #root > * { flex: 1; }
+      #root { width: 400px; height: 600px; overflow: hidden; display: flex; }
+      #root > * { flex: 1; min-width: 0; }
     </style>
   </head>
   <body>

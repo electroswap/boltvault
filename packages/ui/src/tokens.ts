@@ -90,6 +90,20 @@ export const metrics = {
   popup: { width: 400, height: 600 },
 } as const
 
+/**
+ * Concentric corners: a shape inside a rounded shape takes the parent's radius
+ * minus the gap between them. Equal radii make the inner corner look too round
+ * and the pair look glued; an unrelated radius reads as two designs. Owner:
+ * "within some of those cards we have other cards that have square edges,
+ * which does not feel like a harmonious design."
+ *
+ * A child that sits flush inside a clipping parent should use `none` and let
+ * the parent's clip shape it — two radii on one corner draw it twice.
+ */
+export function innerRadius(outer: number, inset: number): number {
+  return Math.max(0, Math.round(outer - inset))
+}
+
 /** Radii by plate role — one radius on everything is the template tell. */
 export const radius = {
   recessed: 14,
@@ -115,11 +129,17 @@ export const space = {
   12: 48,
 } as const
 
+/**
+ * Families carry a real fallback stack. Declaring a bare 'Oxanium' meant that
+ * for the first frames of every load — before the woff2 was applied — the
+ * browser fell back to its *default* family, which is a serif. That is the
+ * serif "BoltVault" the owner filmed. A stack cannot happen to be a serif.
+ */
 export const fonts = {
   /** Readouts ≥ 24 px: Oxanium 600, tabular numerals, tracking −0.03em. */
-  readout: 'Oxanium',
+  readout: "'Oxanium', 'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
   /** Everything a human reads — addresses and hashes included, tabular: Sora 400/600, 13–17 px, sentence case. */
-  text: 'Sora',
+  text: "'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
 } as const
 
 export const type = {

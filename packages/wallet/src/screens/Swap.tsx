@@ -321,7 +321,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
         </Row>
 
         {/* The console: two wells in one panel, the flip control on their seam (style bible › layout). */}
-        <Plate role="console" gap="$2" padding={10} testID="swap-console">
+        <Plate role="console" gap="$1" padding={10} testID="swap-console">
           <AmountWell
             label={t({ id: 'swap.pay', message: 'You pay' })}
             value={amount}
@@ -336,7 +336,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
             balanceTestID="swap-balance-in"
           />
 
-          <Row justifyContent="center" marginVertical={-18} zIndex={2}>
+          <Row justifyContent="center" marginVertical={-20} zIndex={2}>
             <Pressable onPress={flip} accessibilityRole="button" accessibilityLabel={t({ id: 'swap.flip', message: 'Swap direction' })} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }} testID="swap-flip">
               <Chip width={36} height={36} borderRadius={18} padding={0} justifyContent="center" alignItems="center" backgroundColor="$glassRaisedSolid" borderWidth={0} overflow="hidden">
                 <Icon name="swap" color={paint.arc} size={18} />
@@ -532,5 +532,5 @@ function FeeRow({ label, value, tone, testID }: { label: string; value: string; 
 }
 
 function TokenPill({ token, onPress, testID }: { token: TokenView | null; onPress: () => void; testID: string }) {
-  return <Pill label={token?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} icon={token ? <TokenAvatar chainId={ETN} address={token.address === 'native' ? '0x0000000000000000000000000000000000000000' : token.address} logoUri={token.logoUri} size={18} /> : undefined} chevron tone="ink" onPress={onPress} accessibilityLabel={token?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} testID={testID} />
+  return <Pill label={token?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} icon={token ? <TokenAvatar chainId={ETN} address={token.address} symbol={token.symbol} logoUri={token.logoUri} size={18} /> : undefined} chevron tone="ink" onPress={onPress} accessibilityLabel={token?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} testID={testID} />
 }

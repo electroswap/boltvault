@@ -21,6 +21,21 @@ export type ReadResult = { readonly ok: true; readonly value: unknown } | { read
 const CHUNK = 50
 const verified = new Map<number, Hex | null>()
 
+/**
+ * Canonical first on mainnet, and that ordering is load-bearing.
+ *
+ * It looks like a wasted probe — ETN pins its own multicall3 in the registry,
+ * so why ask about the canonical address first? Because on chain 52014 *both*
+ * addresses hold code (canonical 3808 bytes, the pinned one 3286), and they
+ * are not the same contract. The pinned address answers eth_getCode, passes
+ * the "does it hold code" test, and then returns aggregate3 results that do
+ * not decode — a token's decimals come back empty and adding a custom token
+ * reports "this contract does not look like a token". Reordering these broke
+ * the swap e2e and nothing else, which is how it was found.
+ *
+ * The registry entry for 52014 is worth a second look; until then, canonical
+ * wins on mainnet and the pinned address is only the fallback.
+ */
 function candidates(chainId: number): Hex[] {
   if (chainId === 52014) return [CANONICAL_MULTICALL3, ELECTRONEUM_ADDRESSES[52014].multicall3 as Hex]
   if (chainId === 5201420) return [ELECTRONEUM_ADDRESSES[5201420].multicall3 as Hex, CANONICAL_MULTICALL3]
@@ -45,9 +60,69 @@ export async function multicallAddress(chains: ChainsService, chainId: number): 
 /** Tests: forget the verified addresses (a mock RPC may change between runs). */
 export function resetMulticallCache(): void {
   verified.clear()
+  queues.clear()
 }
 
-export async function readMany(chains: ChainsService, chainId: number, calls: readonly ReadCall[]): Promise<ReadResult[]> {
+interface Waiter {
+  readonly start: number
+  readonly count: number
+  readonly resolve: (results: ReadResult[]) => void
+  readonly reject: (err: unknown) => void
+}
+
+interface Queue {
+  calls: ReadCall[]
+  waiters: Waiter[]
+  timer: ReturnType<typeof setTimeout> | null
+}
+
+const queues = new Map<number, Queue>()
+
+/**
+ * How long a read waits for company before going out.
+ *
+ * Opening the popup used to fire nineteen separate eth_calls: holder,
+ * portfolio, farm, legends and launchpad each reach the chain through their
+ * own readMany, and each was its own Multicall3 aggregate. They are not in the
+ * same tick — every one arrives after its own Port round trip — so neither
+ * viem's HTTP batching nor its automatic multicall could merge them.
+ *
+ * Coalescing here does. Reads are idempotent and order-independent, so a short
+ * window costs nothing but latency, and merges the burst into one aggregate.
+ * Deliberately not applied to writes, where ordering is load-bearing.
+ */
+const COALESCE_MS = 12
+
+/** Collect the burst, then send it as one aggregate. */
+export function readMany(chains: ChainsService, chainId: number, calls: readonly ReadCall[]): Promise<ReadResult[]> {
+  if (calls.length === 0) return Promise.resolve([])
+  return new Promise<ReadResult[]>((resolve, reject) => {
+    let q = queues.get(chainId)
+    if (q === undefined) {
+      q = { calls: [], waiters: [], timer: null }
+      queues.set(chainId, q)
+    }
+    q.waiters.push({ start: q.calls.length, count: calls.length, resolve, reject })
+    q.calls.push(...calls)
+    if (q.timer === null) {
+      q.timer = setTimeout(() => {
+        const batch = queues.get(chainId)
+        queues.delete(chainId)
+        if (batch === undefined) return
+        readManyNow(chains, chainId, batch.calls).then(
+          (all) => {
+            for (const w of batch.waiters) w.resolve(all.slice(w.start, w.start + w.count))
+          },
+          (err: unknown) => {
+            for (const w of batch.waiters) w.reject(err)
+          },
+        )
+      }, COALESCE_MS)
+    }
+  })
+}
+
+async function readManyNow(chains: ChainsService, chainId: number, calls: readonly ReadCall[]): Promise<ReadResult[]> {
   if (calls.length === 0) return []
   const client = await chains.client(chainId)
   const mc = await multicallAddress(chains, chainId)

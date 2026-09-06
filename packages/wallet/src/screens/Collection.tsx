@@ -8,7 +8,7 @@
  */
 import { Artwork, Body, Column, IconButton, Key, Pill, Plate, Pressable, Row, ScrollView, Segmented, StatStrip, TileGrid, metrics, useWindowDimensions } from '@boltvault/ui'
 import type { AssetView, CollectionView, LegendsStatus, NftActivityView } from '@boltvault/engine'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { DividendsCard } from '../components/DividendsCard'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
 import { PageHeader } from '../components/PageHeader'
@@ -51,8 +51,15 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
     }
   }, [engine, chainId, address, active, flow?.status])
 
+  // `collection` is null on mount, so `collection?.custom` is undefined and the
+  // guard below does not fire — then the collection resolves, `custom` becomes
+  // false, the dependency changes and this ran a second, byte-identical
+  // NftAssets query. The guard needs the value but must not re-trigger on it,
+  // so it reads through a ref.
+  const custom = useRef<boolean | undefined>(undefined)
+  custom.current = collection?.custom
   useEffect(() => {
-    if (collection?.custom) return
+    if (custom.current === true) return
     let alive = true
     engine.nft.assets({ chainId, address, orderBy, asc: orderBy === 'PRICE', ...(listedOnly ? { listed: true } : {}), ...(active ? { accountId: active.id } : {}) }).then(
       (page) => {
@@ -65,7 +72,7 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
     return () => {
       alive = false
     }
-  }, [engine, chainId, address, orderBy, listedOnly, active, flow?.status, collection?.custom])
+  }, [engine, chainId, address, orderBy, listedOnly, active, flow?.status])
 
   // A custom collection has no indexer: its pieces are the account's own, from the Rack's inventory.
   useEffect(() => {
