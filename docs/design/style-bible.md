@@ -125,6 +125,8 @@ Home's verbs are cells of one recessed surface divided by hairlines — a glyph 
 
 The popup is 400 × 600 (Rabby-wide): 360 px of content between 20 px insets. Every row is designed for that width first; the tab centres a 560–680 px column; nothing is designed at 360 any more.
 
+**400 × 600 is a hard edge, and motion must respect it.** Chrome sizes an action popup from the document and never shrinks it back, so a single frame of overflow leaves the popup permanently wider with a dead margin down the right. Every enter animation begins outside its own box — a push at `translateX(14)`, a tab change at `translateY(6)`, a sheet panel at `translateY(28)` — so the screen area clips, and `html`, `body` and `#root` are all sized and clipped (`overflow: hidden` on `body` alone propagates to the viewport and leaves body itself computing to `visible`, clipping nothing). `e2e/sizing.spec.ts` samples every frame across a full navigation and fails if the document ever exceeds 400 × 600; it caught this at 414 px.
+
 ## Motion
 
 One ignition on unlock; everything else answers the person or the chain. The Grid's waves move at ~0.08 cycles per second; nodes pulse per block.

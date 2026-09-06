@@ -245,7 +245,17 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
         {meta.grid ? (
           <Field address={active?.address ?? NO_ACCOUNT_SEED} pulse={head?.live ? 1 : 0} warmth={tier ? Math.min(1, tier.tier / 4) : 0} intensity={current.screen === 'home' ? (body === 'extension-popup' ? 0.75 : 1) : 0.5} quiet={!vault?.unlocked} reducedMotion={reducedMotion} fps={body === 'extension-popup' ? 30 : 60} width={width} height={height} testID="field" />
         ) : null}
-        <Column flex={1} zIndex={1}>
+        {/*
+          The screen area clips. Every enter animation starts outside its own
+          box — a push from translateX(14), a tab change from translateY(6), a
+          sheet panel from translateY(28) — and without a clip here that
+          overflow reaches the document. Chrome sizes an action popup from the
+          document and never shrinks it back, so one frame of a 14 px slide
+          left the popup permanently wider with a margin down the right side.
+          Sheets are position:absolute inset-0 inside this same column, so
+          clipping it does not change what they cover.
+        */}
+        <Column flex={1} zIndex={1} overflow="hidden">
           <ScreenEnter key={enterKey} direction={direction} reducedMotion={reducedMotion}>
             {screen}
           </ScreenEnter>
