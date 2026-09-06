@@ -574,7 +574,6 @@ export const PrefsSchema = z.object({
   homeScope: z.union([z.literal('all'), z.number().int().positive()]),
   swapCoachDismissed: z.boolean(),
   chartDuration: z.enum(['1D', '1W', '1M', '1Y']),
-  collectionsShowAll: z.boolean(),
 })
 export type Prefs = z.infer<typeof PrefsSchema>
 

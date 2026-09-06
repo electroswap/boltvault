@@ -20,7 +20,6 @@ import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { useCached } from '../hooks/useCached'
 import { useNotifications } from '../hooks/useNotifications'
-import { usePrefs } from '../hooks/usePrefs'
 import { formatChange, formatFiat, formatPrice } from '../format'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
@@ -47,8 +46,6 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
   const [found, setFound] = useState<{ tokens: ExploreToken[]; collections: CollectionView[] } | null>(null)
   const [addOpen, setAddOpen] = useState(false)
   const [addCollectionOpen, setAddCollectionOpen] = useState(false)
-  const { prefs, set: setPrefs } = usePrefs()
-  const showAll = prefs.collectionsShowAll
   const [window, setWindow] = useState<CollectionWindow>('DAY')
   const [ccy, setCcy] = useState<CollectionCurrency>('ETN')
   const accountId = active?.id
@@ -60,9 +57,9 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
     maxAgeMs: 60_000,
   })
   const collections = useCached<CollectionView[]>({
-    key: cacheKey('explore', 'collections', ETN, accountId ?? '-', showAll ? 'all' : 'verified', window),
-    cached: (e) => e.explore.cachedCollections({ chainId: ETN, ...(accountId ? { accountId } : {}), all: showAll, window }),
-    fresh: (e) => e.explore.collections({ chainId: ETN, ...(accountId ? { accountId } : {}), all: showAll, window }),
+    key: cacheKey('explore', 'collections', ETN, accountId ?? '-', window),
+    cached: (e) => e.explore.cachedCollections({ chainId: ETN, ...(accountId ? { accountId } : {}), window }),
+    fresh: (e) => e.explore.collections({ chainId: ETN, ...(accountId ? { accountId } : {}), window }),
     maxAgeMs: 60_000,
   })
   const campaigns = useCached<CampaignView[]>({
@@ -126,12 +123,7 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
         title={segment === 'tokens' ? t({ id: 'explore.tokens', message: 'Tokens' }) : segment === 'collectibles' ? t({ id: 'explore.collections.title', message: 'Collections' }) : segment === 'launch' ? t({ id: 'explore.launchpad', message: 'Launchpad' }) : t({ id: 'explore.farms', message: 'Farms' })}
         right={
           <>
-            {segment === 'collectibles' ? (
-              <>
-                <IconButton icon="filter" label={showAll ? t({ id: 'explore.collections.verified', message: 'Show verified only' }) : t({ id: 'explore.collections.everything', message: 'Show everything' })} active={showAll} onPress={() => setPrefs({ collectionsShowAll: !showAll })} testID="explore-collections-all" />
-                <IconButton icon="plus" label={t({ id: 'collection.add.pill', message: 'Add a collection' })} onPress={() => setAddCollectionOpen(true)} testID="explore-add-collection" />
-              </>
-            ) : null}
+            {segment === 'collectibles' ? <IconButton icon="plus" label={t({ id: 'collection.add.pill', message: 'Add a collection' })} onPress={() => setAddCollectionOpen(true)} testID="explore-add-collection" /> : null}
             {segment === 'tokens' && host.browser ? <IconButton icon="external" label={t({ id: 'explore.browser', message: 'Browser' })} onPress={() => router.navigate('browser')} testID="explore-browser" /> : null}
             {segment === 'tokens' || segment === 'launch' ? <IconButton icon="bell" label={t({ id: 'explore.alerts', message: 'Alerts' })} badge={unread} onPress={() => router.navigate('alerts')} testID="explore-alerts" /> : null}
           </>
@@ -212,7 +204,7 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
               <Row gap="$2" alignItems="center" justifyContent="space-between">
                 {active ? <Pill label={t({ id: 'explore.rack', message: 'Your collection' })} icon={<Icon name="nft" size={14} color={paint.arc} />} size="sm" onPress={() => router.navigate('rack')} testID="explore-rack" /> : <Row />}
                 <Body tone="mute" size="caption">
-                  {showAll ? t({ id: 'explore.collections.all', message: 'Showing everything' }) : t({ id: 'explore.collections.verifiedOnly', message: 'Verified collections' })}
+                  {t({ id: 'explore.collections.verifiedOnly', message: 'Verified collections' })}
                 </Body>
               </Row>
               <Column testID="collections-list">
