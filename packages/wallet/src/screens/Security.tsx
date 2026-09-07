@@ -82,29 +82,68 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
         <Key label={t({ id: 'security.password.key', message: 'Change password' })} disabled={busy || !current || next.length < 12} onPress={() => run(async () => { await engine.vault.changePassword({ current, next }); setCurrent(''); setNext(''); setNote(t({ id: 'security.password.done', message: 'Password changed.' })) })} />
       </Plate>
 
-      <Plate gap="$3" testID="passkeys">
-        <Body size="title">{t({ id: 'security.passkeys', message: 'Passkeys' })}</Body>
-        {passkeys.length === 0 ? (
+      {/*
+        One plate, not two. Owner: "Security settings has both passkeys and
+        biometric unlock sections now and they should probably be merged."
+        They are the same idea — a second way past the password — and which of
+        them a body can offer is a detail of that body: the browser has
+        passkeys, the phone has the OS keystore. The vault already treats them
+        identically, as two more wraps of the one DEK, so the screen should
+        too.
+      */}
+      <Plate gap="$3" testID="quick-unlock">
+        <Body size="title">{t({ id: 'security.quick', message: 'Quick unlock' })}</Body>
+        <Body tone="mute" size="caption">
+          {t({
+            id: 'security.quick.body',
+            message: 'Unlock with your face or fingerprint instead of typing your password. What gets stored is a key this device will only release once you have authenticated — never your password, and never your keys. The password keeps working, and is still required to reveal or export your phrase.',
+          })}
+        </Body>
+        {passkeys.length === 0 && devices.length === 0 ? (
           <Body tone="mute" size="caption">
-            {t({ id: 'security.passkeys.none', message: 'No passkey enrolled. A passkey unlocks the vault with your face or fingerprint on this device; the password stays required for reveal and export.' })}
+            {t({ id: 'security.quick.none', message: 'Nothing enrolled yet, so the password is the only way in.' })}
           </Body>
         ) : (
-          passkeys.map((p) => (
-            <Row key={p.id} justifyContent="space-between">
-              <Body tone="mute" size="caption">
-                {t({ id: 'security.passkey.row', message: 'Passkey' })} · {p.id.slice(0, 8)}…
-              </Body>
-              <Body tone="burn" size="caption" onPress={() => run(() => engine.vault.removePasskey({ credentialId: p.id }).then(() => undefined))}>
-                {t({ id: 'remove', message: 'Remove' })}
-              </Body>
-            </Row>
-          ))
+          <Column gap="$2">
+            {passkeys.map((w) => (
+              <Row key={w.id} justifyContent="space-between" alignItems="center">
+                <Body tone="mute" size="caption">
+                  {t({ id: 'security.quick.passkey', message: 'Passkey' })} · {w.id.slice(0, 8)}…
+                </Body>
+                <Body tone="burn" size="caption" onPress={() => run(() => engine.vault.removePasskey({ credentialId: w.id }).then(() => undefined))}>
+                  {t({ id: 'remove', message: 'Remove' })}
+                </Body>
+              </Row>
+            ))}
+            {devices.map((w) => (
+              <Row key={w.id} justifyContent="space-between" alignItems="center">
+                <Body tone="mute" size="caption">
+                  {t({ id: 'security.quick.device', message: 'Fingerprint or face on this device' })}
+                </Body>
+                <Body
+                  tone="burn"
+                  size="caption"
+                  testID="quick-remove-device"
+                  onPress={() =>
+                    run(async () => {
+                      if (!host.deviceKey) return
+                      await engine.vault.removeDevice({ keyId: w.id })
+                      await host.deviceKey.remove()
+                    })
+                  }
+                >
+                  {t({ id: 'remove', message: 'Remove' })}
+                </Body>
+              </Row>
+            ))}
+          </Column>
         )}
         {passkeysSupported ? (
           <Key
             label={t({ id: 'security.passkeys.add', message: 'Add passkey' })}
             kind="secondary"
             disabled={busy}
+            testID="quick-add-passkey"
             onPress={() =>
               run(async () => {
                 if (!host.passkeys) return
@@ -113,59 +152,34 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
               })
             }
           />
-        ) : (
-          <Body tone="mute" size="caption">
-            {t({ id: 'security.passkeys.unsupported', message: 'Passkeys with the PRF feature are not available in this browser or on this device.' })}
-          </Body>
-        )}
-      </Plate>
-
-      {host.deviceKey ? (
-        <Plate gap="$3" testID="biometrics">
-          <Body size="title">{t({ id: 'security.biometrics', message: 'Biometric unlock' })}</Body>
-          <Body tone="mute" size="caption">
-            {t({
-              id: 'security.biometrics.body',
-              message: 'Your face or fingerprint unlocks the vault on this device. What is stored in the keystore is a random device key — never your password and never your keys — so this adds a way in and takes none away. The password is still required to reveal or export the phrase.',
-            })}
-          </Body>
-          {devices.length === 0 ? (
-            biometricOk ? (
-              <Key
-                label={t({ id: 'security.biometrics.add', message: 'Turn on biometric unlock' })}
-                kind="secondary"
-                disabled={busy}
-                testID="biometrics-add"
-                onPress={() =>
-                  run(async () => {
-                    if (!host.deviceKey) return
-                    const keyHex = await host.deviceKey.ensure()
-                    await engine.vault.enrolDevice({ keyId: host.deviceKey.id, keyHex })
-                  })
-                }
-              />
-            ) : (
-              <Body tone="mute" size="caption">
-                {t({ id: 'security.biometrics.none', message: 'No fingerprint or face is enrolled on this device yet. Add one in the system settings, then come back.' })}
-              </Body>
-            )
-          ) : (
+        ) : null}
+        {host.deviceKey && devices.length === 0 ? (
+          biometricOk ? (
             <Key
-              label={t({ id: 'security.biometrics.remove', message: 'Turn off biometric unlock' })}
+              label={t({ id: 'security.biometrics.add', message: 'Turn on biometric unlock' })}
               kind="secondary"
               disabled={busy}
-              testID="biometrics-remove"
+              testID="quick-add-device"
               onPress={() =>
                 run(async () => {
                   if (!host.deviceKey) return
-                  await engine.vault.removeDevice({ keyId: host.deviceKey.id })
-                  await host.deviceKey.remove()
+                  const keyHex = await host.deviceKey.ensure()
+                  await engine.vault.enrolDevice({ keyId: host.deviceKey.id, keyHex })
                 })
               }
             />
-          )}
-        </Plate>
-      ) : null}
+          ) : (
+            <Body tone="mute" size="caption">
+              {t({ id: 'security.biometrics.none', message: 'No fingerprint or face is enrolled on this device yet. Add one in the system settings, then come back.' })}
+            </Body>
+          )
+        ) : null}
+        {!passkeysSupported && !host.deviceKey ? (
+          <Body tone="mute" size="caption">
+            {t({ id: 'security.quick.unsupported', message: 'Neither passkeys nor a device keystore are available here.' })}
+          </Body>
+        ) : null}
+      </Plate>
 
       {host.secretsAllowed ? (
         <Plate gap="$3" testID="export">

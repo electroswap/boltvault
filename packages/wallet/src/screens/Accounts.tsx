@@ -108,7 +108,15 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
     void run(() => engine.accounts.reorder({ ids: next }))
     setSheet(null)
   }
-  const menuFor = (a: AccountView): MenuItem[] => [
+  /**
+   * Owner: "It doesn't appear to be possible to rename the currently selected
+   * address, only non-selected addresses." The active account is deliberately
+   * lifted out of the list into its own block, and Rename lives in a row's
+   * menu — so the one account you are using was the one you could not rename.
+   * Its block gets the same menu now, minus the two entries that make no sense
+   * for the account in use.
+   */
+  const menuFor = (a: AccountView, isActive = false): MenuItem[] => ([
     { id: 'rename', icon: 'edit', label: t({ id: 'acct.rename', message: 'Rename' }), onPress: () => setSheet({ kind: 'rename', account: a }), testID: 'menu-rename' },
     { id: 'details', icon: 'info', label: t({ id: 'acct.details', message: 'Details' }), onPress: () => setSheet({ kind: 'details', account: a }), testID: 'menu-details' },
     { id: 'up', icon: 'chevronUp', label: t({ id: 'acct.moveUp', message: 'Move up' }), onPress: () => move(a, -1), testID: 'menu-up' },
@@ -124,7 +132,7 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
       testID: 'menu-hide',
     },
     ...(a.kind !== 'hd' ? [{ id: 'remove', icon: 'trash' as const, label: t({ id: 'acct.remove', message: 'Remove' }), tone: 'burn' as const, onPress: () => setSheet({ kind: 'confirm', account: a }), testID: 'menu-remove' }] : []),
-  ]
+  ] as MenuItem[]).filter((item) => !(isActive && (item.id === 'hide' || item.id === 'remove')))
   const seedMenu = (s: SeedView): MenuItem[] => [
     { id: 'next', icon: 'plus', label: t({ id: 'acct.derive', message: 'Add the next address' }), onPress: () => { void run(() => engine.accounts.derive({ seedId: s.id })); setSheet(null) }, testID: 'seed-derive' },
     { id: 'rename', icon: 'edit', label: t({ id: 'acct.renameSeed', message: 'Rename this wallet' }), onPress: () => setSheet({ kind: 'renameSeed', seed: s }), testID: 'seed-rename' },
@@ -138,14 +146,20 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
         <PageHeader title={t({ id: 'accounts.title', message: 'Accounts' })} right={<Pill label={t({ id: 'acct.add', message: 'Add' })} icon={<Icon name="plus" size={14} color={paint.arc} />} tone="arc" onPress={() => setSheet({ kind: 'add' })} testID="add-account-open" />} />
         {active ? (
           <Plate role="raised" gap="$2" testID="current-account">
+            {/*
+              Two rows, not one. The identity and its menu sit together; the
+              money sits under them. Four things across a 320 px popup row —
+              signature, name, total, menu — do not fit, and adding the menu to
+              the old single row pushed the total over the "Active" mark.
+            */}
             <Row gap="$3" alignItems="center">
               <Signature address={active.address} size={40} />
               <Column flex={1} minWidth={0} alignItems="flex-start">
-                <Row gap="$2" alignItems="center">
+                <Row gap="$2" alignItems="center" flexShrink={1} minWidth={0}>
                   <Body size="title" numberOfLines={1} flexShrink={1}>
                     {active.label}
                   </Body>
-                  <Row gap={4} alignItems="center">
+                  <Row gap={4} alignItems="center" flexShrink={0}>
                     <Dot color={paint.arc} size={6} />
                     <Body tone="arc" size="caption">
                       {t({ id: 'acct.active', message: 'Active' })}
@@ -161,16 +175,17 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
                   </Row>
                 </Pressable>
               </Column>
-              <Column alignItems="flex-end" gap={2} flexShrink={0}>
-                {activeTotal ? (
-                  <Body fontWeight="600" fontVariant={['tabular-nums']} testID="current-total">
-                    {activeTotal}
-                  </Body>
-                ) : null}
-                <Body tone="mute" size="caption">
-                  {kindLabel(active)}
+              <IconButton icon="more" label={t({ id: 'acct.menu', message: 'Account options' })} onPress={() => setSheet({ kind: 'menu', account: active })} testID="current-menu" />
+            </Row>
+            <Row justifyContent="space-between" alignItems="center" gap="$2">
+              <Body tone="mute" size="caption" numberOfLines={1} flexShrink={1}>
+                {kindLabel(active)}
+              </Body>
+              {activeTotal ? (
+                <Body fontWeight="600" fontVariant={['tabular-nums']} flexShrink={0} testID="current-total">
+                  {activeTotal}
                 </Body>
-              </Column>
+              ) : null}
             </Row>
             {active.kind === 'ledger' ? (
               <Row gap="$2" alignItems="center" justifyContent="space-between" borderTopWidth={1} borderTopColor="$edge" paddingTop={8} minHeight={36} testID="current-hardware">
@@ -237,7 +252,7 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
         {error ? <Body tone="burn">{error}</Body> : null}
       </ScrollView>
 
-      <MenuSheet open={sheet?.kind === 'menu'} onClose={() => setSheet(null)} title={sheet?.kind === 'menu' ? sheet.account.label : ''} items={sheet?.kind === 'menu' ? menuFor(sheet.account) : []} reducedMotion={reducedMotion} testID="account-menu" />
+      <MenuSheet open={sheet?.kind === 'menu'} onClose={() => setSheet(null)} title={sheet?.kind === 'menu' ? sheet.account.label : ''} items={sheet?.kind === 'menu' ? menuFor(sheet.account, sheet.account.id === active?.id) : []} reducedMotion={reducedMotion} testID="account-menu" />
       <MenuSheet open={sheet?.kind === 'seedMenu'} onClose={() => setSheet(null)} title={sheet?.kind === 'seedMenu' ? sheet.seed.label : ''} items={sheet?.kind === 'seedMenu' ? seedMenu(sheet.seed) : []} reducedMotion={reducedMotion} testID="seed-menu" />
       <AccountDetailsSheet open={sheet?.kind === 'details'} onClose={() => setSheet(null)} account={sheet?.kind === 'details' ? sheet.account : null} seed={sheet?.kind === 'details' ? (seeds.find((s) => s.id === sheet.account.seedId) ?? null) : null} reducedMotion={reducedMotion} />
       <RenameSheet open={sheet?.kind === 'rename'} onClose={() => setSheet(null)} title={t({ id: 'acct.rename', message: 'Rename' })} value={sheet?.kind === 'rename' ? sheet.account.label : ''} onSave={async (label) => { if (sheet?.kind === 'rename') await run(() => engine.accounts.rename({ id: sheet.account.id, label })) }} reducedMotion={reducedMotion} testID="rename-account" />

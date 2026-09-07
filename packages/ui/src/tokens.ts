@@ -106,6 +106,9 @@ export const metrics = {
   keyCompact: native ? 48 : 44,
   header: native ? 48 : 44,
   tabBar: native ? 56 : 52,
+  /** Home's action cells. A popup is tight; a phone has the height to spare. */
+  actionCell: native ? 94 : 72,
+  actionCellRow: native ? 76 : 64,
   filament: 2,
   /** Rabby-wide: 400 × 600 gives every row room to breathe. */
   popup: { width: 400, height: 600 },

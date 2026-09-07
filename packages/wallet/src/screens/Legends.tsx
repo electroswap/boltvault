@@ -13,6 +13,7 @@ import { useEngine } from '../engine/EngineProvider'
 import { formatRaw } from '../format'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
+import { useScreenBusy } from '../state/useScreenBusy'
 import { useSwapFlow } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
 
@@ -30,6 +31,10 @@ export function Legends({ body, reducedMotion = false }: { body: BodyKind; reduc
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [count, setCount] = useState(1)
+  // Owner: "Clicking 'Dividends to claim' is not showing the ES wordmark loader"
+  // — this screen simply never declared itself busy, so the shell had nothing
+  // to draw one for.
+  useScreenBusy('legends', status === null && error === null)
 
   useEffect(() => {
     if (!active) return

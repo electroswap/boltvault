@@ -92,7 +92,7 @@ export const SCREENS: Record<ScreenId, ScreenMeta> = {
   backup: meta('backup', 'push', { quiet: true, secrets: true, dock: false }),
   unlock: meta('unlock', 'window', { quiet: true }),
   receive: meta('receive', 'push', { dock: false }),
-  send: meta('send', 'push', { dock: false }),
+  send: meta('send', 'push'),
   token: meta('token', 'push', { grid: true }),
   sign: meta('sign', 'window', { quiet: true }),
   onboarding: meta('onboarding', 'push', { quiet: true, secrets: true, dock: false }),
