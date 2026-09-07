@@ -146,7 +146,12 @@ export interface ChainsNamespace {
 
 export interface ApprovalsNamespace {
   list(): Promise<ApprovalRequest[]>
-  decide(input: ApprovalDecision): Promise<void>
+  /**
+   * Returns the request as it stands after the decision. A yes on something
+   * that gets signed comes back as `signing`, not `approved` — the screen uses
+   * that to keep itself up while a device is being waited on.
+   */
+  decide(input: ApprovalDecision): Promise<ApprovalRequest>
 }
 
 export interface SettingsNamespace {

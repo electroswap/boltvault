@@ -1,8 +1,26 @@
 /**
  * ApprovalStore — the human-decision queue (master plan §2.4, §3.3).
  *
- * Only the engine creates requests. Each has a random 128-bit id, expires five
- * minutes after creation, and accepts exactly one decision. Pending requests
+ * Only the engine creates requests. Each has a random 128-bit id and expires
+ * five minutes after creation.
+ *
+ * A request accepts exactly one FINAL decision — but for the kinds that end in
+ * a signature, saying yes is not yet final. Those move to `signing`, and the
+ * signer reports back through `settle`: a signature makes them `approved`, and
+ * a refusal (a Ledger's reject button, pressed by mistake) returns them to
+ * `pending`, carrying the reason, so the same request can be approved again
+ * instead of being lost. `approved` therefore means "this was signed", not "a
+ * button was pressed". Connect, switch-chain and watch-asset have no signature
+ * to wait for and are final immediately.
+ *
+ * `decide` deliberately does NOT wait for the signature. Keystone and a paired
+ * device need more of the interface after the yes — frames to scan, another
+ * machine to answer — so a decide that blocked until signed would deadlock:
+ * the signature waiting on the user, the user waiting on the decide. Screens
+ * follow the request's status instead, which works the same for a Ledger held
+ * in the hand and a laptop in the next room.
+ *
+ * Pending requests
  * are persisted in *session* storage so a service-worker restart mid-sign
  * neither loses nor duplicates them; in-memory waiters (the provider layer's
  * awaiting promise) are re-attached by id after a restart.
@@ -23,6 +41,17 @@ const PENDING_DOC: DocSpec<ApprovalRequest[]> = {
 }
 
 export const APPROVAL_TTL_MS = 5 * 60_000
+
+/**
+ * The kinds that end in a signature, and therefore the only kinds where
+ * "approved" can mean "signed".
+ *
+ * Connecting a site, switching a chain or watching an asset is finished the
+ * moment the human says yes — there is no device to wait for and nothing that
+ * can refuse afterwards. Holding those open would strand them in `signing`
+ * with no signer to settle them.
+ */
+const SIGNS: ReadonlySet<ApprovalKind> = new Set<ApprovalKind>(['sign_message', 'sign_typed_data', 'send_transaction'])
 
 export interface CreateApprovalInput {
   readonly kind: ApprovalKind
@@ -46,7 +75,12 @@ export class ApprovalStore {
   async hydrate(): Promise<void> {
     if (this.hydrated) return
     const { value } = await readDoc(this.platform.storage.session, PENDING_DOC, () => this.platform.now())
-    for (const r of value) this.byId.set(r.id, r)
+    for (const r of value) {
+      // Nobody is holding a `signing` request's promise after a restart — the
+      // signer went down with the worker — so it returns to the queue rather
+      // than sitting in a state only a live signer can leave.
+      this.byId.set(r.id, r.status === 'signing' ? { ...r, status: 'pending', expiresAt: this.platform.now() + this.ttlMs } : r)
+    }
     this.hydrated = true
     this.expireDue()
   }
@@ -55,6 +89,7 @@ export class ApprovalStore {
     const now = this.platform.now()
     let changed = false
     for (const r of this.byId.values()) {
+      // A request in the signer's hands cannot expire underneath it.
       if (r.status === 'pending' && r.expiresAt <= now) {
         this.byId.set(r.id, { ...r, status: 'expired' })
         this.resolveWaiters(r.id, false)
@@ -80,7 +115,9 @@ export class ApprovalStore {
   /** Pending requests, oldest first. Expired ones are dropped lazily. */
   list(): ApprovalRequest[] {
     this.expireDue()
-    return [...this.byId.values()].filter((r) => r.status === 'pending').sort((a, b) => a.createdAt - b.createdAt)
+    // `signing` stays in the list: the screen has to keep showing the request
+    // while the device is being asked, and a refusal puts it back to pending.
+    return [...this.byId.values()].filter((r) => r.status === 'pending' || r.status === 'signing').sort((a, b) => a.createdAt - b.createdAt)
   }
 
   get(id: string): ApprovalRequest | undefined {
@@ -125,18 +162,82 @@ export class ApprovalStore {
     return this.list().find(predicate)
   }
 
-  /** Record the one decision for a request. */
+  /**
+   * Record the decision — and, when it is a yes, wait for the signature.
+   *
+   * `approved` used to be set the instant the user pressed the key, which made
+   * it mean "a button was pressed" rather than "this is signed". A hardware
+   * wallet can still refuse after that press, and because the store accepted
+   * exactly one decision forever, a mis-tapped reject on a Ledger destroyed the
+   * transaction: the request was already `approved` and would not take another
+   * decision. Owner: "I also want to wait for the confirmation from the
+   * hardware wallet when applicable, so we can retry if rejected by mistake."
+   *
+   * So a yes moves the request to `signing` and releases the signer, then this
+   * promise stays open until `settle` reports what the signer got. A signature
+   * makes it `approved`; a refusal puts it back to `pending`, with a fresh
+   * expiry, and rethrows — so the same request can simply be approved again.
+   *
+   * A no is still final and immediate; nothing has to be waited for.
+   */
   async decide(decision: ApprovalDecision): Promise<ApprovalRequest> {
     await this.hydrate()
     const req = this.get(decision.id)
     if (!req) throw new EngineError('not_found', `no approval request ${decision.id}`)
     if (req.status === 'expired') throw new EngineError('expired', 'this request has expired')
+    if (req.status === 'signing') throw new EngineError('invalid_argument', 'this request is already being signed')
     if (req.status !== 'pending') throw new EngineError('already_decided', 'this request was already decided')
-    const decided: ApprovalRequest = { ...req, status: decision.approve ? 'approved' : 'rejected', ...(decision.data !== undefined ? { decisionData: decision.data } : {}) }
-    this.byId.set(req.id, decided)
-    this.resolveWaiters(req.id, decision.approve)
+
+    if (!decision.approve) {
+      const rejected: ApprovalRequest = { ...req, status: 'rejected', ...(decision.data !== undefined ? { decisionData: decision.data } : {}) }
+      this.byId.set(req.id, rejected)
+      this.resolveWaiters(req.id, false)
+      await this.persist()
+      return rejected
+    }
+
+    // Nothing to wait for unless a signature is coming.
+    if (!SIGNS.has(req.kind)) {
+      const approved: ApprovalRequest = { ...req, status: 'approved', ...(decision.data !== undefined ? { decisionData: decision.data } : {}) }
+      this.byId.set(req.id, approved)
+      this.resolveWaiters(req.id, true)
+      await this.persist()
+      return approved
+    }
+
+    const handed: ApprovalRequest = { ...req, status: 'signing', lastError: null, ...(decision.data !== undefined ? { decisionData: decision.data } : {}) }
+    this.byId.set(req.id, handed)
     await this.persist()
-    return decided
+    // Release the signer only once the request is recorded as in flight.
+    this.resolveWaiters(req.id, true)
+    return handed
+  }
+
+  /**
+   * What the signer got. Called by whoever performed the signing, always —
+   * an unsettled request would leave `decide` hanging and the screen with it.
+   *
+   * `retryable` separates the two ways a signature can fail to happen, and the
+   * difference is a security one. A device refusing — the wrong button on a
+   * Ledger — is the case this whole state exists for, and returns the request
+   * to `pending` so it can be approved again. BoltVault refusing is final: a
+   * blocked assessment must not come back as a request the user can approve
+   * once more, or a block becomes a prompt to keep trying.
+   */
+  async settle(id: string, ok: boolean, message?: string, retryable = true): Promise<void> {
+    const req = this.byId.get(id)
+    if (!req || req.status !== 'signing') return
+    if (ok) {
+      this.byId.set(id, { ...req, status: 'approved', lastError: null })
+    } else if (retryable) {
+      // Back to the queue, with the full window again and the reason attached:
+      // the user is about to be asked to approve it a second time and should
+      // be told why the first attempt did not take.
+      this.byId.set(id, { ...req, status: 'pending', expiresAt: this.platform.now() + this.ttlMs, lastError: message ?? 'The device refused to sign.' })
+    } else {
+      this.byId.set(id, { ...req, status: 'rejected', lastError: message ?? null })
+    }
+    await this.persist()
   }
 
   /** Reject every pending request for an origin (tab closed, site disconnected). */

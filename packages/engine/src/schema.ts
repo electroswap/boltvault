@@ -116,7 +116,13 @@ export const ApprovalKindSchema = z.enum([
 ])
 export type ApprovalKind = z.infer<typeof ApprovalKindSchema>
 
-export const ApprovalStatusSchema = z.enum(['pending', 'approved', 'rejected', 'expired'])
+/**
+ * `signing` is the gap between the human saying yes and the signature
+ * existing. It matters because a hardware wallet can still refuse in that gap,
+ * and a request that is refused there must be retryable rather than dead —
+ * `approved` now means "this was signed", not "a button was pressed".
+ */
+export const ApprovalStatusSchema = z.enum(['pending', 'signing', 'approved', 'rejected', 'expired'])
 export type ApprovalStatus = z.infer<typeof ApprovalStatusSchema>
 
 /**
@@ -139,6 +145,11 @@ export const ApprovalRequestSchema = z.object({
   status: ApprovalStatusSchema,
   /** What the deciding UI attached (e.g. the account chosen on a Connect sheet). */
   decisionData: z.unknown().optional(),
+  /**
+   * Why the last signing attempt did not produce a signature, when a request
+   * has come back to `pending` to be tried again. Null once it succeeds.
+   */
+  lastError: z.string().nullable().optional(),
 })
 export type ApprovalRequest = z.infer<typeof ApprovalRequestSchema>
 

@@ -156,8 +156,10 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   const blocked = assessment?.presentation.blocked === true
   const needsTyped = assessment?.presentation.typedConfirmation ?? null
   const typedOk = !needsTyped || typed.trim().toLowerCase() === needsTyped.toLowerCase()
-  const armed = now >= enableAt && typedOk && !busy
+  const armed = now >= enableAt && typedOk && !busy && request.status !== 'signing'
   const verb = verbFor(payload, request.origin)
+  /** True while the signer has it: a device is being waited on. */
+  const signing = request.status === 'signing'
   /** The device that has to be touched, when one does. Null for a soft key. */
   const deviceName = signer && (payload.kind === 'send_transaction' || payload.kind === 'sign_typed_data' || payload.kind === 'sign_message') ? (signer.kind === 'ledger' ? 'Ledger' : signer.kind === 'trezor' ? 'Trezor' : signer.kind === 'keystone' ? 'Keystone' : null) : null
 
@@ -166,10 +168,18 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
     setError(null)
     try {
       const data = approve && payload.kind === 'connect' && signer ? { accountId: signer.id, chainId } : undefined
-      await engine.approvals.decide({ id: request.id, approve, ...(data ? { data } : {}) })
+      const decided = await engine.approvals.decide({ id: request.id, approve, ...(data ? { data } : {}) })
       if (approve) feel.confirm()
       else feel.heavy()
-      if (pending.length <= 1) finish()
+      /*
+        A yes on something that gets signed is not the end any more: the
+        request goes to `signing` and stays on this screen until the signer
+        answers. Closing here would take the sheet away while a Ledger was
+        still waiting to be pressed, and would hide a refusal that the user
+        needs to see in order to try again. The request leaving the queue is
+        what finishes this screen.
+      */
+      if (decided.status !== 'signing' && pending.length <= 1) finish()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -367,7 +377,12 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
         {needsTyped && !blocked ? (
           <Input value={typed} onChange={setTyped} label={t({ id: 'approval.typed', message: 'Type {word} to continue', values: { word: needsTyped } })} autoCapitalize="none" testID="approval-typed" />
         ) : null}
-        {error ? <Body tone="burn">{error}</Body> : null}
+        {/*
+          `lastError` is the reason a previous attempt did not produce a
+          signature — the request came back to the queue carrying it, so the
+          user is told why before being asked again.
+        */}
+        {error ?? request.lastError ? <Body tone="burn" testID="approval-error">{error ?? request.lastError}</Body> : null}
       </ScrollView>
 
       {/* Verbs */}
@@ -379,7 +394,7 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
           to wait for the confirmation from the hardware wallet when
           applicable."
         */}
-        {busy && deviceName ? (
+        {(busy || signing) && deviceName ? (
           <Column gap="$2" testID="approval-awaiting-device">
             <BarLoader active reducedMotion={reducedMotion} />
             <Body tone="arc" size="caption">

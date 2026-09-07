@@ -296,9 +296,10 @@ export function createEngine(deps: EngineDeps): Engine {
     decide: {
       input: ApprovalDecisionSchema,
       handler: async (arg) => {
-        await approvals.decide(arg as ApprovalDecision)
+        const decided = await approvals.decide(arg as ApprovalDecision)
         // A signing decision is activity: the idle timer restarts.
         void vault.touch().catch(() => undefined)
+        return decided
       },
     },
   })

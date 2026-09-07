@@ -161,9 +161,33 @@ export class ProviderService {
     const result = (async () => {
       const outcome = await d.approvals.waitFor(request.id)
       const view = payload as { assessment: AssessmentView }
-      // Defence in depth: a blocked assessment is never signed, whatever a UI page says (§3.4).
-      if (!outcome.approved || view.assessment.presentation.blocked) throw new EngineError('rejected', 'User rejected the request.')
-      return this.execute(intent, request, outcome.data)
+      if (!outcome.approved) throw new EngineError('rejected', 'User rejected the request.')
+      /*
+        Tell the store what the signer got. `decide` is holding its promise
+        open on this, so the approving screen stays up — showing "confirm on
+        your Ledger" — until the device answers, and a refusal returns the
+        request to pending so it can simply be approved again rather than
+        being lost.
+
+        Everything after the yes sits inside this try, the blocked check
+        included: any path that does not settle leaves `decide` waiting for an
+        answer that never comes, and the screen hanging with it.
+      */
+      let blockedHere = false
+      try {
+        // Defence in depth: a blocked assessment is never signed, whatever a UI page says (§3.4).
+        if (view.assessment.presentation.blocked) {
+          blockedHere = true
+          throw new EngineError('rejected', 'User rejected the request.')
+        }
+        const done = await this.execute(intent, request, outcome.data)
+        await d.approvals.settle(request.id, true)
+        return done
+      } catch (err) {
+        // Our refusal is final; a device's is not. See ApprovalStore.settle.
+        await d.approvals.settle(request.id, false, err instanceof Error ? err.message : String(err), !blockedHere)
+        throw err
+      }
     })()
     // A broadcast failure is already recorded in Activity as failed; nobody has to await this.
     result.catch(() => undefined)
@@ -286,10 +310,20 @@ export class ProviderService {
     const payload = request.payload as { assessment?: AssessmentView } | null
     const blockedBy = payload?.assessment?.presentation.blocked ? payload.assessment.rules.filter((r) => r.severity === 'block').map((r) => r.code) : []
     // Defence in depth: a blocked assessment is never signed, whatever a UI page says (§3.4).
-    if (!outcome.approved || blockedBy.length > 0) {
-      throw new RpcError(RPC.USER_REJECTED, 'User rejected the request.', blockedBy.length ? { rules: blockedBy } : undefined)
+    if (!outcome.approved) {
+      throw new RpcError(RPC.USER_REJECTED, 'User rejected the request.', undefined)
     }
-    return this.execute(intent, request, outcome.data)
+    // The dApp path settles the same way, blocked check included; see runInternal.
+    const blockedHere = blockedBy.length > 0
+    try {
+      if (blockedHere) throw new RpcError(RPC.USER_REJECTED, 'User rejected the request.', { rules: blockedBy })
+      const done = await this.execute(intent, request, outcome.data)
+      await d.approvals.settle(request.id, true)
+      return done
+    } catch (err) {
+      await d.approvals.settle(request.id, false, err instanceof Error ? err.message : String(err), !blockedHere)
+      throw err
+    }
   }
 
   private async payloadFor(intent: ApprovalIntent): Promise<ApprovalPayload> {
