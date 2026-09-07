@@ -15,7 +15,9 @@
 # Usage: scripts/device-smoke.sh [path/to.apk] [serial]
 set -euo pipefail
 
-APK="${1:-android/app/build/outputs/apk/release/app-release.apk}"
+# ABI splits mean there is no single app-release.apk any more; arm64 is what
+# every current phone wants. Pass a path to test the 32-bit one.
+APK="${1:-android/app/build/outputs/apk/release/app-arm64-v8a-release.apk}"
 SERIAL="${2:-}"
 PKG=io.electroswap.boltvault
 ACTIVITY="$PKG/.MainActivity"
