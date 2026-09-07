@@ -6,7 +6,7 @@
  * dividends card and a mint plate only when the chain says the collection
  * mints; pieces on a grid that sizes itself to the body.
  */
-import { Artwork, Body, Column, IconButton, Key, Pill, Plate, Pressable, Row, ScrollView, Segmented, StatStrip, TileGrid, metrics, useWindowDimensions } from '@boltvault/ui'
+import { Artwork, BarLoader, Body, Column, IconButton, Key, Pill, Plate, Pressable, Row, ScrollView, Segmented, StatStrip, TileGrid, metrics, useWindowDimensions } from '@boltvault/ui'
 import type { AssetView, CollectionView, LegendsStatus, NftActivityView } from '@boltvault/engine'
 import { useEffect, useRef, useState } from 'react'
 import { DividendsCard } from '../components/DividendsCard'
@@ -42,7 +42,11 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
   const [next, setNext] = useState<string | null>(null)
   const [orderBy, setOrderBy] = useState<'PRICE' | 'RARITY'>('PRICE')
   const [listedOnly, setListedOnly] = useState(false)
-  const [legends, setLegends] = useState<LegendsStatus | null>(null)
+  const [loadedLegends, setLegends] = useState<LegendsStatus | null>(null)
+  // The dividends card is the slowest thing on this screen — legends.status is
+  // several dependent multicalls — so on a revisit it keeps the last answer
+  // rather than vanishing and sliding the page as it comes back.
+  const legends = useLastGood(`legends:${chainId}:${address}:${active?.id ?? '-'}`, loadedLegends)
   const [activity, setActivity] = useState<NftActivityView[]>([])
   const [showActivity, setShowActivity] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -195,6 +199,18 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
         </Column>
       ) : null}
 
+      {/*
+        A collection that pays dividends reserves the card's place as soon as
+        we know it does, and fills it when the chain answers. Without this the
+        card appeared late and shoved the pieces grid down the page, which is
+        the jank the owner filmed on Electric Legends.
+      */}
+      {collection?.paysDividends && active && legends === null ? (
+        <Plate role="raised" gap="$2" testID="dividends-pending">
+          <Body size="title">{t({ id: 'legends.dividends', message: 'Dividends' })}</Body>
+          <BarLoader />
+        </Plate>
+      ) : null}
       {legends && active ? <DividendsCard status={legends} busy={busy} reducedMotion={reducedMotion} onActivate={() => void run(() => engine.legends.activate({ accountId: active.id, chainId }))} onClaim={() => void run(() => engine.legends.claim({ accountId: active.id, chainId }))} onPiece={(tokenId) => router.navigate('nft', { chainId, address, tokenId })} /> : null}
 
       {/* Mint only when the chain says so (owner item N5). */}
