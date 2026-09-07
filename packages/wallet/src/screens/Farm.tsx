@@ -8,7 +8,7 @@
  * boost stair and the dilution plate before a second deposit; Withdraw is
  * a slider with a live preview; Collect discharges the coil.
  */
-import { Body, Coil, Column, Input, Key, Pill, Plate, Row, ScrollView, Sheet, SkeletonRows, Slider, StatStrip, Toggle, metrics } from '@boltvault/ui'
+import { Body, Coil, Column, Input, Key, Pill, Plate, Row, ScrollView, Sheet, PageLoader, Slider, StatStrip, Toggle, metrics } from '@boltvault/ui'
 import type { FarmDepositQuote, FarmView, FarmWithdrawQuote } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { PairAvatars } from '../components/cards/FarmCard'
@@ -222,7 +222,7 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
             ) : null}
           </>
         ) : error ? null : (
-          <SkeletonRows rows={5} avatar={false} reducedMotion={reducedMotion} testID="farm-loading" />
+          <PageLoader reducedMotion={reducedMotion} testID="farm-loading" />
         )}
       </ScrollView>
 

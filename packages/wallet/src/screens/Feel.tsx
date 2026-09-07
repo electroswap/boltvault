@@ -26,6 +26,18 @@ export function Feel({ body }: { body: 'extension-popup' | 'extension-tab' | 'mo
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="feel">
       <PageHeader title={t({ id: 'settings.feel', message: 'Appearance & feel' })} />
+      {/* The background is a choice, not a given (owner, 2026-09-06). */}
+      <Plate gap="$3" testID="feel-scene">
+        <Body size="title">{t({ id: 'feel.scene', message: 'Background' })}</Body>
+        <Body tone="mute" size="caption">
+          {t({ id: 'feel.scene.hint', message: 'Circuit is a printed board that lights a trace on every Electroneum block. Grid is the wave mesh. Off draws neither and uses the least battery.' })}
+        </Body>
+        <Row gap="$2">
+          <Pill label={t({ id: 'feel.scene.circuit', message: 'Circuit' })} selected={(settings?.scene ?? 'circuit') === 'circuit'} onPress={() => set({ scene: 'circuit' })} testID="feel-scene-circuit" />
+          <Pill label={t({ id: 'feel.scene.grid', message: 'Grid' })} selected={settings?.scene === 'grid'} onPress={() => set({ scene: 'grid' })} testID="feel-scene-grid" />
+          <Pill label={t({ id: 'feel.scene.off', message: 'Off' })} selected={settings?.scene === 'off'} onPress={() => set({ scene: 'off' })} testID="feel-scene-off" />
+        </Row>
+      </Plate>
       <Plate gap="$2" testID="feel-motion">
         <Toggle value={settings?.reducedMotion ?? false} onChange={(v) => set({ reducedMotion: v })} label={t({ id: 'feel.motion', message: 'Reduce motion' })} hint={t({ id: 'feel.motion.hint', message: 'The background holds still and digits update without rolling. Also follows your system’s reduce-motion setting.' })} testID="feel-motion-toggle" />
       </Plate>

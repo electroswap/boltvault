@@ -14,6 +14,12 @@ export interface FieldProps {
   readonly reducedMotion?: boolean
   /** Frame cap; popup 30, tab/mobile 60. */
   readonly fps?: number
+  /**
+   * Which background. 'grid' is the wave mesh from the style bible; 'circuit'
+   * is the board ported from the docs landing page. Same uniforms, so this
+   * only picks a fragment shader. 'off' draws nothing at all.
+   */
+  readonly scene?: 'grid' | 'circuit' | 'off'
   readonly width: number
   readonly height: number
   readonly testID?: string

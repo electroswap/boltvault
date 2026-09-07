@@ -6,6 +6,7 @@ import { useHost } from '../host'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { useWalletState } from '../state/useWalletState'
+import { useScene } from '../state/useScene'
 
 export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
   const engine = useEngine()
@@ -13,6 +14,7 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
   const router = useRouter()
   const { vault, refresh } = useWalletState()
   const { width, height } = useWindowDimensions()
+  const scene = useScene()
   const pending = (vault?.seeds ?? []).filter((s) => !s.backedUp)
   const [seedId, setSeedId] = useState<string | null>(pending[0]?.id ?? null)
   const [password, setPassword] = useState('')
@@ -43,7 +45,7 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
   const id = seedId ?? pending[0]?.id ?? null
   return (
     <Column flex={1} backgroundColor="$void" testID="backup">
-      <Field address="0x0000000000000000000000000000000000000e7n" quiet width={width} height={height} reducedMotion={reducedMotion} />
+      <Field scene={scene} address="0x0000000000000000000000000000000000000e7n" quiet width={width} height={height} reducedMotion={reducedMotion} />
       <ScrollView style={{ zIndex: 1 }} contentContainerStyle={{ padding: metrics.insetWide, gap: 16, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
         <Row gap="$2">
           <Icon name="lock" size={18} color={paint.mute} />

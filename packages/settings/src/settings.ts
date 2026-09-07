@@ -13,6 +13,7 @@ const AUTO_LOCKS: readonly AutoLock[] = ['5min', '15min', '60min', 'never']
 /** Pre-idle-timer values (absolute timers, every one shorter than the user meant): one notch up. */
 export const LEGACY_AUTO_LOCK: Readonly<Record<string, AutoLock>> = { immediately: '5min', '1min': '5min', '30min': '60min' }
 const CURRENCIES = ['USD', 'ETN'] as const
+const SCENES = ['circuit', 'grid', 'off'] as const
 
 /**
  * Normalize a raw stored settings object (string JSON or object) into a valid
@@ -53,6 +54,9 @@ export function normalizeSettings(
       ? (curRaw as 'USD' | 'ETN')
       : DEFAULT_SETTINGS.displayCurrency
 
+  const sceneRaw = obj['scene']
+  const scene = typeof sceneRaw === 'string' && (SCENES as readonly string[]).includes(sceneRaw) ? (sceneRaw as 'circuit' | 'grid' | 'off') : DEFAULT_SETTINGS.scene
+
   return {
     defaultWallet: bool('defaultWallet', DEFAULT_SETTINGS.defaultWallet),
     metaMaskCompat: bool('metaMaskCompat', DEFAULT_SETTINGS.metaMaskCompat),
@@ -70,6 +74,7 @@ export function normalizeSettings(
     autoLock,
     displayCurrency,
     reducedMotion: bool('reducedMotion', typeof os.reducedMotion === 'boolean' ? os.reducedMotion : DEFAULT_SETTINGS.reducedMotion),
+    scene,
   }
 }
 

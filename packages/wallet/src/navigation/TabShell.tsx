@@ -4,7 +4,7 @@
  * screens is replaced by Unlock. A pending dApp approval takes over the
  * popup and the mobile body (the sign window mounts it by route).
  */
-import { Column, Field, MotionProvider, ScreenEnter, Skeleton, TabBar, metrics, radius, useWindowDimensions, type EnterDirection } from '@boltvault/ui'
+import { Column, Field, MotionProvider, PageLoader, ScreenEnter, TabBar, useWindowDimensions, type EnterDirection } from '@boltvault/ui'
 import { Suspense, lazy, useEffect, useRef } from 'react'
 import { t } from '../i18n'
 import { Approval } from '../screens/Approval'
@@ -18,6 +18,7 @@ import { useFlowNavigation } from '../state/useSwapFlow'
 import { useLinks } from '../state/useLinks'
 import { useFeelEvents } from '../feel'
 import { useWalletState } from '../state/useWalletState'
+import { useScene } from '../state/useScene'
 import { MotionContext, useReducedMotion } from '../state/useReducedMotion'
 import { useNotifications } from '../hooks/useNotifications'
 import { useChainHead } from '../hooks/useChainHead'
@@ -107,17 +108,6 @@ export function prefetchScreens(): void {
   else setTimeout(load, 300)
 }
 
-/** What a screen looks like while its chunk is still on the way. */
-function ScreenFallback({ inset }: { inset: number }) {
-  return (
-    <Column flex={1} padding={inset} gap={10} testID="screen-loading">
-      <Skeleton height={44} radius={radius.recessed} />
-      <Skeleton height={140} radius={radius.console} />
-      <Skeleton height={96} radius={radius.recessed} />
-    </Column>
-  )
-}
-
 const NO_ACCOUNT_SEED = '0x0000000000000000000000000000000000000e7n'
 
 export interface TabShellProps {
@@ -129,6 +119,7 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   const router = useRouter()
   const { vault, loading, active } = useWalletState()
   const { width, height } = useWindowDimensions()
+  const scene = useScene()
   // The Grid (plan B2): one Field behind every `grid` screen, pulsed by the ETN head, warmed by the holder tier.
   const head = useChainHead(ETN)
   const tier = useHolderTier(active?.id ?? null)
@@ -312,7 +303,7 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
     <MotionContext.Provider value={reducedMotion}>
       <Column flex={1} backgroundColor="$void">
         {meta.grid ? (
-          <Field address={active?.address ?? NO_ACCOUNT_SEED} pulse={head?.live ? 1 : 0} warmth={tier ? Math.min(1, tier.tier / 4) : 0} intensity={current.screen === 'home' ? (body === 'extension-popup' ? 0.75 : 1) : 0.5} quiet={!vault?.unlocked} reducedMotion={reducedMotion} fps={body === 'extension-popup' ? 30 : 60} width={width} height={height} testID="field" />
+          <Field scene={scene} address={active?.address ?? NO_ACCOUNT_SEED} pulse={head?.live ? 1 : 0} warmth={tier ? Math.min(1, tier.tier / 4) : 0} intensity={current.screen === 'home' ? (body === 'extension-popup' ? 0.75 : 1) : 0.5} quiet={!vault?.unlocked} reducedMotion={reducedMotion} fps={body === 'extension-popup' ? 30 : 60} width={width} height={height} testID="field" />
         ) : null}
         {/*
           The screen area clips. Every enter animation starts outside its own
@@ -333,7 +324,7 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
               arriving does. In practice it is rarely seen — prefetchScreens
               warms every chunk once Home has painted.
             */}
-            <Suspense fallback={<ScreenFallback inset={body === 'extension-popup' ? metrics.inset : metrics.insetWide} />}>{screen}</Suspense>
+            <Suspense fallback={<PageLoader reducedMotion={reducedMotion} testID="screen-loading" />}>{screen}</Suspense>
           </ScreenEnter>
         </Column>
         {showTabs ? <TabBar items={items} activeId={state.tab} onSelect={(id) => router.setTab(id as TabId)} testID="tabs" /> : null}

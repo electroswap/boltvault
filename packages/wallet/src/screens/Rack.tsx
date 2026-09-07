@@ -7,7 +7,7 @@
  * pill in the header. The last visit's shelves paint at once and refresh
  * behind (plan A2); a first visit shows skeleton tiles.
  */
-import { Artwork, Body, Column, Icon, Key, Pill, Plate, Pressable, Row, ScrollView, Segmented, Sheet, SkeletonTiles, StatStrip, TileGrid, metrics, paint } from '@boltvault/ui'
+import { Artwork, Body, Column, Icon, Key, Pill, Plate, Pressable, Row, ScrollView, Segmented, Sheet, PageLoader, StatStrip, TileGrid, metrics, paint } from '@boltvault/ui'
 import { cacheKey, type AssetView, type Inventory } from '@boltvault/engine'
 import { useState } from 'react'
 import { AddCollectionSheet } from '../components/AddCollectionSheet'
@@ -120,7 +120,7 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
         </Column>
       ) : null}
       {inv.error && !inventory ? <Body tone="burn">{inv.error}</Body> : null}
-      {inv.freshness === 'loading' ? <SkeletonTiles count={wide ? 8 : 6} size={wide ? 140 : 100} columns={wide ? 4 : 3} reducedMotion={reducedMotion} testID="rack-loading" /> : null}
+      {inv.freshness === 'loading' ? <PageLoader reducedMotion={reducedMotion} testID="rack-loading" /> : null}
       {inventory && inventory.assets.length === 0 ? (
         <Plate gap="$2" testID="rack-empty">
           <Body tone="mute">{t({ id: 'rack.empty', message: 'Nothing on the shelves yet. Explore collections on Electroneum — buying a piece lands it here — or add a collection by address.' })}</Body>

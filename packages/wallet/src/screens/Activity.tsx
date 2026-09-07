@@ -5,7 +5,7 @@
  * inbound scan runs debounced in the engine and shows as a sweep, not a
  * blank tab (plan A2).
  */
-import { Body, Chip, Column, Icon, Key, Plate, Refreshing, Row, ScrollView, Segmented, Sheet, SkeletonRows, metrics, paint, shortAddress, type IconName } from '@boltvault/ui'
+import { Body, Chip, Column, Icon, Key, Plate, BarLoader, PageLoader, Row, ScrollView, Segmented, Sheet, metrics, paint, shortAddress, type IconName } from '@boltvault/ui'
 import { cacheKey, type ActivityEntry, type ChainView, type NotificationView, type ScanSummary } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
@@ -131,7 +131,7 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
             </Body>
           ) : null}
         </Row>
-        <Refreshing active={scan.refreshing} reducedMotion={reducedMotion} testID="activity-refreshing" />
+        <BarLoader active={scan.refreshing} reducedMotion={reducedMotion} testID="activity-refreshing" />
         {recent.length > 0 ? (
           <Column gap="$2" testID="activity-attention">
             <Body tone="mute" size="caption">
@@ -166,7 +166,7 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
           onChange={(id) => setFilter(id as Filter)}
           testID="activity-filter"
         />
-        {!loaded ? <SkeletonRows rows={4} avatar={false} reducedMotion={reducedMotion} testID="activity-loading" /> : null}
+        {!loaded ? <PageLoader reducedMotion={reducedMotion} testID="activity-loading" /> : null}
         {loaded && shown.length === 0 ? (
           <Plate gap="$2" testID="activity-empty">
             <Body tone="mute">{t({ id: 'activity.empty', message: 'Nothing yet. Sends, swaps and everything the wallet signs will appear here, with what you were shown when you signed.' })}</Body>

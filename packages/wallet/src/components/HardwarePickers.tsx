@@ -6,7 +6,7 @@
  * state, a "Show paths" pill and a "5 more" key; both derivation trees are
  * shown so nobody imports the wrong one.
  */
-import { Body, Column, Input, Key, Pill, Row, Signature, SkeletonRows, shortAddress } from '@boltvault/ui'
+import { Body, Column, Input, Key, Pill, Row, Signature, PageLoader, shortAddress } from '@boltvault/ui'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
@@ -27,7 +27,7 @@ export function schemeLabel(scheme: Scheme): string {
 export function HardwareLoading({ what, reducedMotion = false, testID }: { what: string; reducedMotion?: boolean; testID?: string }) {
   return (
     <Column gap="$2" testID={testID}>
-      <SkeletonRows rows={3} reducedMotion={reducedMotion} />
+      <PageLoader reducedMotion={reducedMotion} />
       <Body tone="mute" size="caption">
         {what}
       </Body>

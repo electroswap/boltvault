@@ -2,13 +2,14 @@
  * Unlock — password, or a passkey when one is enrolled and available here.
  * Quiet custody mode; the Field ignites on success (Ignition on Home).
  */
-import { Body, Column, Field, Icon, Input, Key, Plate, Row, metrics, paint, useWindowDimensions } from '@boltvault/ui'
+import { Body, Column, EsWordmark, Field, Icon, Input, Key, Plate, Row, metrics, paint, useWindowDimensions } from '@boltvault/ui'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { useWalletState } from '../state/useWalletState'
+import { useScene } from '../state/useScene'
 
 export function Unlock({ body, reducedMotion = false }: { body: 'extension-popup' | 'extension-tab' | 'mobile'; reducedMotion?: boolean }) {
   const engine = useEngine()
@@ -16,6 +17,7 @@ export function Unlock({ body, reducedMotion = false }: { body: 'extension-popup
   const router = useRouter()
   const { vault } = useWalletState()
   const { width, height } = useWindowDimensions()
+  const scene = useScene()
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -62,7 +64,7 @@ export function Unlock({ body, reducedMotion = false }: { body: 'extension-popup
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   return (
     <Column flex={1} backgroundColor="$void" testID="unlock">
-      <Field address="0x0000000000000000000000000000000000000e7n" quiet width={width} height={height} reducedMotion={reducedMotion} />
+      <Field scene={scene} address="0x0000000000000000000000000000000000000e7n" quiet width={width} height={height} reducedMotion={reducedMotion} />
       <Column flex={1} padding={inset} gap="$5" justifyContent="center" zIndex={1} position="relative" maxWidth={480} width="100%" alignSelf="center">
         <Row gap="$2">
           <Icon name="lock" size={18} color={paint.mute} />
@@ -76,6 +78,17 @@ export function Unlock({ body, reducedMotion = false }: { body: 'extension-popup
             {t({ id: 'unlock.help', message: 'Forgot the password? There is no reset. Restore from your recovery phrase on a fresh install instead.' })}
           </Body>
         </Plate>
+      </Column>
+      {/*
+        Whose wallet this is. Owner: "this is the flagship wallet from
+        ElectroSwap, and there's very little ElectroSwap branding anywhere. I
+        want you to feature the full ElectroSwap logo on the bottom center of
+        the unlock screen." The lock screen is the one place the product is
+        idle and looked at, so the full lock-up belongs here and nowhere it
+        would compete with a number.
+      */}
+      <Column alignItems="center" paddingBottom="$6" zIndex={1} testID="unlock-brand">
+        <EsWordmark width={168} />
       </Column>
     </Column>
   )

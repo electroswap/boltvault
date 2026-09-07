@@ -11,6 +11,7 @@ import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
+import { useScene } from '../state/useScene'
 
 type Step = 'welcome' | 'password' | 'words' | 'quiz' | 'import' | 'preview' | 'watch' | 'passkey' | 'done'
 type Path = 'create' | 'import' | 'watch'
@@ -33,6 +34,7 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
   const host = useHost()
   const router = useRouter()
   const { width, height } = useWindowDimensions()
+  const scene = useScene()
   const [path, setPath] = useState<Path>('create')
   const [step, setStep] = useState<Step>('welcome')
   const [password, setPassword] = useState('')
@@ -136,7 +138,7 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
 
   return (
     <Column flex={1} backgroundColor="$void" testID="onboarding">
-      <Field address="0x0000000000000000000000000000000000000e7n" quiet width={width} height={height} reducedMotion={reducedMotion} />
+      <Field scene={scene} address="0x0000000000000000000000000000000000000e7n" quiet width={width} height={height} reducedMotion={reducedMotion} />
       <ScrollView style={{ zIndex: 1 }} contentContainerStyle={{ padding: inset, gap: 20, maxWidth: 560, width: '100%', alignSelf: 'center', flexGrow: 1, justifyContent: 'center' }}>
         {step === 'welcome' ? (
           <Column gap="$4">

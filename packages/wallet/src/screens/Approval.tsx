@@ -14,6 +14,7 @@ import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { useApprovals } from '../state/useApprovals'
 import { useWalletState } from '../state/useWalletState'
+import { useScene } from '../state/useScene'
 
 const FOCUS_INERT_MS = 600
 
@@ -88,6 +89,7 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   const { pending, loaded } = useApprovals()
   const { accounts, active } = useWalletState()
   const { width, height } = useWindowDimensions()
+  const scene = useScene()
   const [chains, setChains] = useState<ChainView[]>([])
   const [typed, setTyped] = useState('')
   const [now, setNow] = useState(() => Date.now())
@@ -175,7 +177,7 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
 
   return (
     <Column flex={1} backgroundColor="$void" testID="approval">
-      <Field address={signer?.address ?? '0x0000000000000000000000000000000000000e7n'} quiet width={width} height={height} reducedMotion={reducedMotion} />
+      <Field scene={scene} address={signer?.address ?? '0x0000000000000000000000000000000000000e7n'} quiet width={width} height={height} reducedMotion={reducedMotion} />
       <ScrollView style={{ zIndex: 1 }} contentContainerStyle={{ padding: inset, gap: 14, paddingBottom: 120 }}>
         {/* Origin */}
         <Column gap="$1" testID="approval-origin">

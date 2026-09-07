@@ -159,6 +159,12 @@ export interface BoltVaultSettings {
   /** UI language/currency for totals display. */
   displayCurrency: 'USD' | 'ETN'
   readonly reducedMotion: boolean
+  /**
+   * The animated background. 'circuit' is the board on Home, 'grid' the
+   * original wave mesh, 'off' neither. Owner asked for the Grid to be kept but
+   * demoted to a choice.
+   */
+  readonly scene: 'circuit' | 'grid' | 'off'
 }
 
 export const DEFAULT_SETTINGS: BoltVaultSettings = {
@@ -178,6 +184,7 @@ export const DEFAULT_SETTINGS: BoltVaultSettings = {
   autoLock: '15min',
   displayCurrency: 'USD',
   reducedMotion: false,
+  scene: 'circuit',
 }
 
 /** Platform storage contract (S1) — the only way core touches OS capabilities. */

@@ -7,6 +7,7 @@
 import { useState } from 'react'
 import { Image } from 'react-native'
 import Animated from 'react-native-reanimated'
+import { useCachedImage } from './imageCache'
 import { Body, Column } from './primitives'
 import { light, motion, paint } from './tokens'
 
@@ -41,7 +42,10 @@ function initials(label: string): string {
     .toUpperCase()
 }
 
-export function Artwork({ uri, label, size, sweep = false, reducedMotion = false, badge = null, radius = 12, testID }: ArtworkProps) {
+export function Artwork({ uri: source, label, size, sweep = false, reducedMotion = false, badge = null, radius = 12, testID }: ArtworkProps) {
+  // Served from the body's disk cache when it has a copy; otherwise the
+  // network URL, with the cache filled behind this render.
+  const uri = useCachedImage(source)
   const [failedUri, setFailedUri] = useState<string | null>(null)
   // Keyed by the uri, not a bare boolean: a recycled row that swapped in a new
   // image used to stay stuck on the placeholder because `failed` never reset.

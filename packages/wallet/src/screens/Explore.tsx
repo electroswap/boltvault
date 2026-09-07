@@ -5,7 +5,7 @@
  * (plan A2); a first visit shows skeletons, never a blank body. On a token
  * list the star is the pin (plan A5).
  */
-import { Body, Column, Icon, IconButton, Input, Pill, Plate, Row, ScrollView, Segmented, SkeletonRows, TokenAvatar, metrics, paint } from '@boltvault/ui'
+import { Body, Column, Icon, IconButton, Input, Pill, Plate, Row, ScrollView, Segmented, PageLoader, TokenAvatar, metrics, paint } from '@boltvault/ui'
 import { cacheKey, type CampaignView, type CollectionView, type CollectionWindow, type ExploreToken, type FarmView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { AddCollectionSheet } from '../components/AddCollectionSheet'
@@ -165,7 +165,7 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
         <>
           <FreshnessLine freshness={current.freshness} observedAt={current.observedAt} refreshing={current.refreshing} reducedMotion={reducedMotion} testID="explore-freshness" />
           {current.freshness === 'loading' ? (
-            <SkeletonRows rows={5} reducedMotion={reducedMotion} testID="explore-loading" />
+            <PageLoader reducedMotion={reducedMotion} testID="explore-loading" />
           ) : segment === 'tokens' ? (
             <Column gap="$1" testID="explore-token-list">
               {(tokens.value ?? []).map((x) => (

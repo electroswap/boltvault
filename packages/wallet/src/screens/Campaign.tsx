@@ -8,7 +8,7 @@
  * link pills with real labels; the referral card. The alert control shows
  * only before launch, or while live and already followed.
  */
-import { Artwork, Body, Column, CurrentFill, Icon, Input, Key, Pill, Plate, Pressable, RollingReadout, Row, ScrollView, Sheet, SkeletonRows, StatStrip, TokenAvatar, metrics, paint, shortAddress, type IconName } from '@boltvault/ui'
+import { Artwork, Body, Column, CurrentFill, Icon, Input, Key, Pill, Plate, Pressable, RollingReadout, Row, ScrollView, Sheet, PageLoader, StatStrip, TokenAvatar, metrics, paint, shortAddress, type IconName } from '@boltvault/ui'
 import type { CampaignView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { alertable, PhasePill, RaiseBar } from '../components/cards/CampaignCard'
@@ -227,7 +227,7 @@ export function Campaign({ body, chainId, pool, reducedMotion = false }: { body:
             ) : null}
           </>
         ) : error ? null : (
-          <SkeletonRows rows={5} avatar={false} reducedMotion={reducedMotion} testID="campaign-loading" />
+          <PageLoader reducedMotion={reducedMotion} testID="campaign-loading" />
         )}
       </ScrollView>
 

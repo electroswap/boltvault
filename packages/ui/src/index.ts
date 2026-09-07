@@ -12,6 +12,8 @@ export { StatStrip, StatCellView, type StatCell, type StatStripProps } from './S
 export { TileGrid, tileLayout, type TileGridProps, type TileLayout } from './TileGrid'
 export { ChainMark, CHAIN_MARKS, type ChainMarkProps } from './ChainMark'
 export { Skeleton, SkeletonRows, SkeletonTiles, Stale, Refreshing, type SkeletonProps } from './Skeleton'
+export { setImageResolver, useCachedImage, resolvedImage, type ImageResolver } from './imageCache'
+export { PageLoader, BarLoader, EsWordmark, esMarkUri, esWordmarkUri, setBrandBase, type EsWordmarkProps, type PageLoaderProps, type BarLoaderProps } from './Loading'
 export { LineChart, Sparkline, smoothPath, type LineChartProps, type ChartPoint } from './LineChart'
 export { ActionTile, type ActionTileProps, type ActionTileBadge } from './ActionTile'
 export { ActionGrid, type ActionGridItem, type ActionGridProps } from './ActionGrid'

@@ -171,8 +171,16 @@ export const SettingsSchema = z.object({
   autoLock: AutoLockSchema,
   displayCurrency: z.enum(['USD', 'ETN']),
   reducedMotion: z.boolean(),
+  /**
+   * Which background the scene draws (owner, 2026-09-06): the Circuit board on
+   * Home by default, the original Grid mesh for anyone who prefers it, and off
+   * for anyone who wants neither.
+   */
+  scene: z.enum(['circuit', 'grid', 'off']),
 })
 export type Settings = z.infer<typeof SettingsSchema>
+/** Which background the scene draws. */
+export type SceneChoice = Settings['scene']
 
 /** One holding on one chain. Quantities are decimal strings; fiat is display-only. */
 export const PortfolioRowSchema = z.object({

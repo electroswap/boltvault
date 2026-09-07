@@ -5,7 +5,7 @@
  * on the dock. Tapping the total opens the Portfolio. The Grid is drawn by
  * TabShell behind this screen; the holder tier warms it.
  */
-import { ActionGrid, Body, ChainMark, Column, Icon, IconButton, Ignition, Key, LiveFilament, Pill, Plate, Pressable, Row, RollingReadout, Seat, ScrollView, Skeleton, metrics, paint, radius, type ActionTileBadge, type IconName } from '@boltvault/ui'
+import { ActionGrid, Body, ChainMark, Column, Icon, IconButton, Ignition, Key, LiveFilament, Pill, Plate, Pressable, Row, RollingReadout, PageLoader, Seat, ScrollView, metrics, paint, type ActionTileBadge, type IconName } from '@boltvault/ui'
 import { cacheKey, type BridgeStatus, type CampaignView, type ExploreToken, type Inventory } from '@boltvault/engine'
 import { useEffect, useRef, useState } from 'react'
 import { ChainScopeSheet, ScopePill, useHomeScope } from '../components/ChainScope'
@@ -216,11 +216,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
           moves when the real thing replaces them.
         */}
         {loading ? (
-          <Column gap={10} testID="home-loading">
-            <Skeleton height={96} radius={radius.console} />
-            <Skeleton height={216} radius={radius.recessed} />
-            <Skeleton height={44} radius={radius.recessed} />
-          </Column>
+          <PageLoader reducedMotion={reducedMotion} testID="home-loading" />
         ) : null}
 
         {!loading && !vault?.exists ? (
