@@ -19,7 +19,7 @@ export interface PillProps {
   readonly chevron?: boolean
   readonly selected?: boolean
   readonly tone?: 'ink' | 'mute' | 'arc' | 'ember' | 'surge' | 'burn'
-  readonly size?: 'sm' | 'md'
+  readonly size?: 'xs' | 'sm' | 'md'
   readonly disabled?: boolean
   readonly onPress?: () => void
   readonly accessibilityLabel?: string
@@ -27,14 +27,16 @@ export interface PillProps {
 }
 
 export function Pill({ label, icon, chevron = false, selected = false, tone, size = 'md', disabled = false, onPress, accessibilityLabel, testID }: PillProps) {
-  const height = size === 'sm' ? 28 : 36
+  // xs is a badge, not a control: it states a fact ('Pays dividends',
+  // 'ERC-721') and should not carry the weight of something you can press.
+  const height = size === 'xs' ? 20 : size === 'sm' ? 28 : 36
   const labelTone = selected ? 'ink' : (tone ?? 'mute')
   const reduced = useReducedMotionPref()
   const chip = (
     <Animated.View
       style={{
         height,
-        paddingHorizontal: size === 'sm' ? 10 : 12,
+        paddingHorizontal: size === 'xs' ? 7 : size === 'sm' ? 10 : 12,
         borderRadius: 999,
         borderWidth: 1,
         alignItems: 'center',
@@ -47,9 +49,9 @@ export function Pill({ label, icon, chevron = false, selected = false, tone, siz
         transitionTimingFunction: 'ease-out',
       }}
     >
-      <Row gap={6} alignItems="center">
+      <Row gap={size === 'xs' ? 4 : 6} alignItems="center">
         {icon}
-        <Body size="caption" tone={labelTone} fontWeight={selected ? '600' : '400'} numberOfLines={1}>
+        <Body size="caption" fontSize={size === 'xs' ? 11 : undefined} lineHeight={size === 'xs' ? 14 : undefined} tone={labelTone} fontWeight={selected ? '600' : '400'} numberOfLines={1}>
           {label}
         </Body>
         {chevron ? <Icon name="chevronDown" size={14} color={selected ? paint.ink : paint.mute} /> : null}

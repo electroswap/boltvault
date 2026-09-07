@@ -1,6 +1,7 @@
 import { EngineError, type PortfolioSnapshot } from '@boltvault/engine'
 import { useEffect, useRef, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
+import { useLastGood } from './useLastGood'
 
 export interface PortfolioState {
   readonly snapshot: PortfolioSnapshot | null
@@ -69,5 +70,8 @@ export function usePortfolio(accountId: string | null, _intervalMs = 5_000, chai
     }
   }, [engine, accountId, scope])
 
-  return state
+  // Scoped by account and chain selection, so switching either still starts
+  // clean rather than showing the previous account's total.
+  const remembered = useLastGood(accountId === null ? null : `portfolio:${accountId}:${scope}`, state.snapshot)
+  return remembered === state.snapshot ? state : { ...state, snapshot: remembered }
 }

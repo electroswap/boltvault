@@ -19,7 +19,7 @@
  */
 import { expect, test } from '@playwright/test'
 import { launchWithExtension } from './extension'
-import { createVault } from './flows'
+import { createVault, engineCall } from './flows'
 
 /** Anything that means "this screen has nothing to show yet". */
 const LOADERS = ['home-loading', 'screen-loading', 'rack-loading', 'approval-loading']
@@ -29,6 +29,10 @@ test('revisiting a tab never shows a loader again', async () => {
   const ext = await launchWithExtension()
   try {
     const { tab } = await createVault(ext)
+    // A funded account, or "the total is a dash" is not a bug — it is the
+    // truth. The ES Deployer is public and comes from the repo's deploy config.
+    const watched = (await engineCall(tab, 'accounts', 'addWatch', { address: '0xD6Cf49CbCF84B2cd2472a376B5f791689A0769d0', label: 'ES Deployer' })) as { id: string }
+    await engineCall(tab, 'accounts', 'setActive', { id: watched.id })
     await tab.close()
 
     const p = await ext.context.newPage()
@@ -69,6 +73,26 @@ test('revisiting a tab never shows a loader again', async () => {
         await p.waitForTimeout(1_500)
       }
     }
+
+    // Returning to Home must show the total straight away, never a dash.
+    await p.getByTestId('tab-swap').click({ timeout: 15_000 }).catch(() => undefined)
+    await p.waitForTimeout(1_200)
+    await p.evaluate(() => {
+      const w = window as unknown as { __dash: boolean }
+      w.__dash = false
+      const tick = (): void => {
+        const el = document.querySelector('[data-testid="total"]')
+        const text = (el?.textContent ?? '').trim()
+        if (el !== null && (text === '' || text === '\u2014' || text === '-')) w.__dash = true
+        requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    })
+    await p.getByTestId('tab-home').click({ timeout: 15_000 }).catch(() => undefined)
+    await p.waitForTimeout(2_500)
+    const dashed = await p.evaluate(() => (window as unknown as { __dash: boolean }).__dash)
+    console.log(`balance showed a dash on return: ${dashed}`)
+    expect(dashed, 'the total was a dash on the way back to Home').toBe(false)
 
     const seen = await p.evaluate(() => (window as unknown as { __loaders: string[] }).__loaders)
     console.log(`loaders seen on revisit: ${seen.length === 0 ? 'none' : seen.join(', ')}`)

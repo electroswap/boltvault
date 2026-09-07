@@ -6,7 +6,7 @@
  * dividends card and a mint plate only when the chain says the collection
  * mints; pieces on a grid that sizes itself to the body.
  */
-import { Artwork, BarLoader, Body, Column, IconButton, Key, Pill, Plate, Pressable, Row, ScrollView, Segmented, StatStrip, TileGrid, metrics, useWindowDimensions } from '@boltvault/ui'
+import { Artwork, Body, Column, IconButton, Key, PageLoader, Pill, Plate, Pressable, Row, ScrollView, Scrim, Segmented, StatStrip, TileGrid, metrics, useWindowDimensions } from '@boltvault/ui'
 import type { AssetView, CollectionView, LegendsStatus, NftActivityView } from '@boltvault/engine'
 import { useEffect, useRef, useState } from 'react'
 import { DividendsCard } from '../components/DividendsCard'
@@ -137,6 +137,16 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 12, ...(wide ? { maxWidth: 680, width: '100%', alignSelf: 'center' } : {}) }} testID="collection">
       <PageHeader title={collection?.name ?? ''} right={<>{star}{removeCustom}</>} />
+      {/*
+        Owner: the loader "should be displayed until all resources (collection
+        header, logo, metadata, and dividends - if applicable) have downloaded
+        and are ready to render." So the screen waits on the metadata *and*,
+        when the collection pays, on the dividends read — otherwise the card
+        arrives afterwards and moves the page, which is the jank being
+        reported. The art itself is not waited on: Artwork already holds its
+        own space and the disk cache makes a second visit instant.
+      */}
+      {collection === null || (collection.paysDividends && active !== null && legends === null) ? <PageLoader reducedMotion={reducedMotion} testID="collection-loading" /> : null}
       {collection ? (
         <Column gap="$3" testID="collection-hero">
           {/* The hero: the banner fades into the night; the avatar overlaps its edge. */}
@@ -144,7 +154,12 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
             {collection.bannerUrl ? (
               <Column position="relative">
                 <Artwork uri={collection.bannerUrl} label={collection.name} size={{ width: contentWidth, height: 104 }} />
-                <Column position="absolute" left={0} right={0} bottom={0} height={48} backgroundColor="rgba(7,10,31,0.72)" />
+                {/* Transparent at the top, solid at the bottom, the banner's
+                    full width — so the name sits on the picture rather than on
+                    a grey bar laid over it. */}
+                <Column position="absolute" left={0} right={0} bottom={0}>
+                  <Scrim width={contentWidth} height={64} />
+                </Column>
               </Column>
             ) : null}
             <Row gap="$3" alignItems="flex-end" marginTop={collection.bannerUrl ? -32 : 0} paddingHorizontal={collection.bannerUrl ? 12 : 0}>
@@ -157,9 +172,9 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
                   {collection.verified ? <Body tone="arc">✓</Body> : null}
                 </Row>
                 <Row gap="$2" flexWrap="wrap">
-                  {collection.paysDividends ? <Pill label={t({ id: 'explore.dividends', message: 'Pays dividends' })} tone="ember" size="sm" /> : null}
-                  {collection.custom ? <Pill label={t({ id: 'collection.custom', message: 'Custom' })} size="sm" /> : null}
-                  {collection.standard !== 'unknown' ? <Pill label={collection.standard === 'ERC1155' ? 'ERC-1155' : 'ERC-721'} size="sm" /> : null}
+                  {collection.paysDividends ? <Pill label={t({ id: 'explore.dividends', message: 'Pays dividends' })} tone="ember" size="xs" /> : null}
+                  {collection.custom ? <Pill label={t({ id: 'collection.custom', message: 'Custom' })} size="xs" /> : null}
+                  {collection.standard !== 'unknown' ? <Pill label={collection.standard === 'ERC1155' ? 'ERC-1155' : 'ERC-721'} size="xs" /> : null}
                 </Row>
               </Column>
             </Row>
@@ -205,12 +220,6 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
         card appeared late and shoved the pieces grid down the page, which is
         the jank the owner filmed on Electric Legends.
       */}
-      {collection?.paysDividends && active && legends === null ? (
-        <Plate role="raised" gap="$2" testID="dividends-pending">
-          <Body size="title">{t({ id: 'legends.dividends', message: 'Dividends' })}</Body>
-          <BarLoader />
-        </Plate>
-      ) : null}
       {legends && active ? <DividendsCard status={legends} busy={busy} reducedMotion={reducedMotion} onActivate={() => void run(() => engine.legends.activate({ accountId: active.id, chainId }))} onClaim={() => void run(() => engine.legends.claim({ accountId: active.id, chainId }))} onPiece={(tokenId) => router.navigate('nft', { chainId, address, tokenId })} /> : null}
 
       {/* Mint only when the chain says so (owner item N5). */}
@@ -246,8 +255,9 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
         </Row>
       ) : null}
       {error ? <Body tone="burn">{error}</Body> : null}
+      {/* Owner: at most two across in the popup; the tab may use its width. */}
       {assets.length > 0 ? (
-        <TileGrid target={wide ? 150 : 100} gap={8} minCols={2} maxCols={6} fallbackWidth={contentWidth} testID="collection-grid">
+        <TileGrid target={wide ? 150 : 160} gap={8} minCols={2} maxCols={wide ? 6 : 2} fallbackWidth={contentWidth} testID="collection-grid">
           {(layout) => (
             <Row gap={8} flexWrap="wrap">
               {assets.map((a) => (

@@ -5,12 +5,18 @@
 import type { Positions } from '@boltvault/engine'
 import { useCallback, useEffect, useState } from 'react'
 import { useEngine, useEngineEvent } from '../engine/EngineProvider'
+import { useLastGood } from './useLastGood'
 
 const ETN = 52014
 
 export function usePositions(accountId: string | null, enabled = true): { positions: Positions | null; refresh: () => void; loading: boolean } {
   const engine = useEngine()
-  const [positions, setPositions] = useState<Positions | null>(null)
+  const [loaded, setPositions] = useState<Positions | null>(null)
+  // Home is a tab, so the shell unmounts it on every switch and this hook
+  // starts empty again. Remembering the last answer per account is what stops
+  // Home coming back as a dash, an absent tier badge and a missing dividends
+  // row before everything pops in a beat later.
+  const positions = useLastGood(accountId === null ? null : `positions:${accountId}`, loaded)
   const [loading, setLoading] = useState(false)
   const onChanged = useCallback(
     (e: { positions: Positions }) => {

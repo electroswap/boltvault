@@ -109,3 +109,23 @@ export function markFontSize(chars: number): number {
   if (chars <= 0) return 12
   return Math.min(12, Math.round((19 / (0.62 * chars)) * 10) / 10)
 }
+
+/**
+ * Decode the bundled marks ahead of first use.
+ *
+ * They are local files, so this is not a download — it is getting them parsed
+ * and rasterised before a list of token rows asks for fifteen at once. Called
+ * on idle from a body's entry point; harmless if it never runs.
+ */
+export function prewarmTokenLogos(): void {
+  if (typeof Image === 'undefined') return
+  for (const file of bundledLogoFiles()) {
+    try {
+      const img = new Image()
+      img.decoding = 'async'
+      img.src = `${base}${file}`
+    } catch {
+      // Warming is best-effort; a failure here must never reach a screen.
+    }
+  }
+}

@@ -38,7 +38,12 @@ export function TokenAvatar({ chainId, address, symbol, logoUri, size = 32, test
 
   // A previously resolved winner short-circuits the walk entirely.
   const known = resolved.get(key)
-  const settled = known !== undefined && known !== null
+  // A bundled mark ships with the extension, so there is nothing to wait for
+  // and nothing that can fail. Gating it on `onLoad` like a remote URL is what
+  // made a fresh Tokens list paint a column of lettered discs and then swap
+  // them for logos one by one.
+  const bundled = candidates[0] !== undefined && !/^https?:/.test(candidates[0])
+  const settled = bundled || (known !== undefined && known !== null)
   const startAt = known === undefined ? 0 : known === null ? candidates.length : Math.max(0, candidates.indexOf(known))
 
   const [index, setIndex] = useState(startAt)

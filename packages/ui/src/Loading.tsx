@@ -39,6 +39,8 @@ export const esWordmarkUri = (): string => `${brandBase}es-wordmark.svg`
 export interface PageLoaderProps {
   /** Optional line under the mark; keep it to a few words. */
   readonly label?: string | null
+  /** Mark width in px. The default is the full-page size. */
+  readonly size?: number
   readonly reducedMotion?: boolean
   readonly testID?: string
 }
@@ -47,8 +49,10 @@ export interface PageLoaderProps {
  * A screen with nothing to show yet. Centred, so it reads as "the app is
  * working" rather than "this content is shaped like blocks".
  */
-export function PageLoader({ label = null, reducedMotion, testID }: PageLoaderProps) {
+export function PageLoader({ label = null, size = 132, reducedMotion, testID }: PageLoaderProps) {
   const reduced = useReducedMotionPref() || reducedMotion === true
+  // 477 x 296 in the source; keep the ratio.
+  const height = Math.round((size * 296.07) / 477.78)
   return (
     <Column flex={1} alignItems="center" justifyContent="center" gap="$3" testID={testID ?? 'page-loading'}>
       <Animated.View
@@ -66,7 +70,7 @@ export function PageLoader({ label = null, reducedMotion, testID }: PageLoaderPr
               }
         }
       >
-        <Image source={{ uri: esMarkUri() }} style={{ width: 72, height: 45 }} accessibilityLabel="ElectroSwap" accessibilityIgnoresInvertColors />
+        <Image source={{ uri: esMarkUri() }} style={{ width: size, height }} accessibilityLabel="ElectroSwap" accessibilityIgnoresInvertColors />
       </Animated.View>
       {label !== null && label !== '' ? (
         <Body tone="mute" size="caption">
