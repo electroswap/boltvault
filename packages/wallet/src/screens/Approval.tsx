@@ -4,7 +4,7 @@
  * → risk plates → fee → verb. Quiet custody mode. Severity drives the
  * primary: warn delays it, danger asks for a typed word, block removes it.
  */
-import { Body, Column, Field, Icon, Input, Key, Plate, Row, ScrollView, Signature, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
+import { BarLoader, Body, Column, Field, Icon, Input, Key, Plate, Row, ScrollView, Signature, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
 import { parseApprovalPayload, type AccountView, type ApprovalPayload, type ApprovalRequest, type AssessmentView, type ChainView, type StatementView } from '@boltvault/engine'
 import { useEffect, useMemo, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
@@ -158,6 +158,8 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   const typedOk = !needsTyped || typed.trim().toLowerCase() === needsTyped.toLowerCase()
   const armed = now >= enableAt && typedOk && !busy
   const verb = verbFor(payload, request.origin)
+  /** The device that has to be touched, when one does. Null for a soft key. */
+  const deviceName = signer && (payload.kind === 'send_transaction' || payload.kind === 'sign_typed_data' || payload.kind === 'sign_message') ? (signer.kind === 'ledger' ? 'Ledger' : signer.kind === 'trezor' ? 'Trezor' : signer.kind === 'keystone' ? 'Keystone' : null) : null
 
   const decide = async (approve: boolean): Promise<void> => {
     setBusy(true)
@@ -370,6 +372,21 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
 
       {/* Verbs */}
       <Column position="absolute" left={0} right={0} bottom={0} padding={inset} gap="$2" backgroundColor="$void" zIndex={2} testID="approval-verbs">
+        {/*
+          A hardware signer wants a button pressed on the device, and this
+          screen used to say nothing about that — approving simply greyed the
+          keys out while the Ledger waited to be noticed. Owner: "I also want
+          to wait for the confirmation from the hardware wallet when
+          applicable."
+        */}
+        {busy && deviceName ? (
+          <Column gap="$2" testID="approval-awaiting-device">
+            <BarLoader active reducedMotion={reducedMotion} />
+            <Body tone="arc" size="caption">
+              {t({ id: 'approval.awaitDevice', message: 'Confirm on your {d}. Check the details on its screen before you approve.', values: { d: deviceName } })}
+            </Body>
+          </Column>
+        ) : null}
         {blocked ? (
           <Body tone="burn" size="caption" testID="approval-blocked">
             {t({ id: 'approval.blocked', message: 'BoltVault will not sign this. See why above.' })}
