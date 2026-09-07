@@ -35,3 +35,35 @@ export function serial(): <T>(job: Job<T>) => Promise<T> {
     return run
   }
 }
+
+/**
+ * How long to wait for a device to finish opening.
+ *
+ * Long enough to read a permission dialog and press Allow; short enough that a
+ * dialog which never appears does not look like a hung app.
+ */
+export const OPEN_TIMEOUT_MS = 30_000
+
+/**
+ * Reject with a readable sentence instead of waiting forever.
+ *
+ * The Ledger libraries return promises that can simply never settle — a USB
+ * permission dialog that is dismissed, a peripheral that stops answering
+ * mid-handshake — and an unsettled promise upstream becomes a spinner with no
+ * end and nothing to tell the user.
+ */
+export function withTimeout<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms)
+    work.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (err: unknown) => {
+        clearTimeout(timer)
+        reject(err instanceof Error ? err : new Error(String(err)))
+      },
+    )
+  })
+}

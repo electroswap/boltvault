@@ -18,7 +18,7 @@
  * import at module scope would break the harness and the extension bundle.
  */
 import type { ApduTransport, LedgerTransportProvider } from '@boltvault/hardware'
-import { serial } from './ledger-queue'
+import { OPEN_TIMEOUT_MS, serial, withTimeout } from './ledger-queue'
 
 interface HidTransport {
   exchange(apdu: Buffer): Promise<Buffer>
@@ -91,7 +91,15 @@ export function hidLedgerProvider(): LedgerTransportProvider {
       const descriptor = seen.get(id)
       if (!descriptor) throw new Error('that Ledger is no longer attached')
       const m = await load()
-      const t = await m.default.open(descriptor)
+      /*
+        The first open of a device raises Android's USB permission dialog, and
+        that promise simply never settles if the dialog is dismissed or never
+        appears. Owner: "Reading addresses from your Ledger -> loading forever.
+        Closed the app, tried again via OTG and addresses showed up" — the
+        second run inherited the permission granted by the first. A bounded
+        wait turns a hang into a sentence the user can act on.
+      */
+      const t = await withTimeout(m.default.open(descriptor), OPEN_TIMEOUT_MS, 'The Ledger did not respond. Allow the USB permission when Android asks, then try again.')
       // Ledger's Transport allows one exchange at a time and throws
       // TransportRaceCondition otherwise; callers are legitimately concurrent,
       // so the queue lives here. See ledger-queue.ts.

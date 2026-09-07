@@ -15,7 +15,7 @@
  * they are found, which is bounded here so `list()` can keep its shape.
  */
 import type { ApduTransport, LedgerDeviceInfo, LedgerTransportProvider } from '@boltvault/hardware'
-import { serial } from './ledger-queue'
+import { OPEN_TIMEOUT_MS, serial, withTimeout } from './ledger-queue'
 
 interface BleTransport {
   exchange(apdu: Buffer): Promise<Buffer>
@@ -62,6 +62,18 @@ export function bleLedgerProvider(): LedgerTransportProvider {
   return {
     kind: 'ble',
     async list() {
+      /*
+        Never scan while we are connected to something.
+
+        HardwareService.app() re-lists on every call, and the picker derives
+        two address schemes at once, so a scan was starting on top of a live
+        GATT connection — which is a well-known way to have Android drop it.
+        Owner: "Got 'reading addresses from Ledger' -> 'DisconnectedDevice'."
+
+        An open transport already answers the question a scan would ask, so
+        answer from it and leave the radio alone.
+      */
+      if (open.size > 0) return [...open.keys()].map((id) => ({ id, model: modelFromName(names.get(id)) }))
       const m = await load()
       return new Promise<LedgerDeviceInfo[]>((resolve) => {
         const found = new Map<string, string>()
@@ -110,7 +122,7 @@ export function bleLedgerProvider(): LedgerTransportProvider {
       const existing = open.get(id)
       if (existing) return existing
       const m = await load()
-      const t = await m.default.open(id)
+      const t = await withTimeout(m.default.open(id), OPEN_TIMEOUT_MS, 'The Ledger did not finish connecting. Wake it, open the Ethereum app and try again.')
       // One exchange at a time; see ledger-queue.ts.
       const queue = serial()
       const transport = {
