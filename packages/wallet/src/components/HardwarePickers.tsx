@@ -27,7 +27,7 @@ export function schemeLabel(scheme: Scheme): string {
 export function HardwareLoading({ what, reducedMotion = false, testID }: { what: string; reducedMotion?: boolean; testID?: string }) {
   return (
     <Column gap="$2" testID={testID}>
-      <PageLoader reducedMotion={reducedMotion} />
+      <PageLoader overlay reducedMotion={reducedMotion} />
       <Body tone="mute" size="caption">
         {what}
       </Body>

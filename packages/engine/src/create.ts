@@ -165,7 +165,9 @@ export function createEngine(deps: EngineDeps): Engine {
   // Everything account-scoped lives in a DEK-sealed blob rather than a plaintext
   // document per account (at-rest audit 2026-09-06; master plan §3.2).
   const sealed = createSealedStores(deps.platform, dek)
-  const notifications = new NotificationsService(deps.platform, host.events, sealed.notifications)
+  // The active account is read at call time, not now: `vault` is constructed
+  // below, and an inbox entry is only ever attributed when it is pushed or read.
+  const notifications = new NotificationsService(deps.platform, host.events, sealed.notifications, async () => (await vault.active())?.id ?? null)
   const prefs = new PrefsService(deps.platform, host.events)
   // Every OS notification the watcher sends is also an inbox entry (plan A6): the tag says what it was about.
   const notifyingPlatform: Platform = {

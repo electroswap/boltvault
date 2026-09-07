@@ -7,7 +7,7 @@
  * pill in the header. The last visit's shelves paint at once and refresh
  * behind (plan A2); a first visit shows skeleton tiles.
  */
-import { Artwork, Body, Column, Icon, Key, Pill, Plate, Pressable, Row, ScrollView, Segmented, Sheet, PageLoader, StatStrip, TileGrid, metrics, paint } from '@boltvault/ui'
+import { Artwork, Body, Column, Icon, Key, Pill, Plate, Pressable, Row, ScrollView, Segmented, Sheet, StatStrip, TileGrid, metrics, paint } from '@boltvault/ui'
 import { cacheKey, type AssetView, type Inventory } from '@boltvault/engine'
 import { useState } from 'react'
 import { AddCollectionSheet } from '../components/AddCollectionSheet'
@@ -18,6 +18,7 @@ import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { useReducedMotion } from '../state/useReducedMotion'
 import { useWalletState } from '../state/useWalletState'
+import { useScreenBusy } from '../state/useScreenBusy'
 
 type BodyKind = 'extension-popup' | 'extension-tab' | 'mobile'
 type Filter = 'all' | 'listed' | 'unlisted' | 'offers'
@@ -35,6 +36,7 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
   const router = useRouter()
   const reducedMotion = useReducedMotion()
   const { active } = useWalletState()
+
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const wide = body === 'extension-tab'
   const [filter, setFilter] = useState<Filter>('all')
@@ -48,6 +50,8 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
     cached: (e) => (accountId ? e.nft.cachedInventory({ accountId, chainId: ETN }) : Promise.resolve(null)),
     fresh: (e) => (accountId ? e.nft.inventory({ accountId, chainId: ETN }) : Promise.reject(new Error('no account'))),
   })
+  // The shell draws one loader over the whole screen while this is true.
+  useScreenBusy('rack', inv.freshness === 'loading')
   const inventory = inv.value
   const all = inventory?.assets ?? []
   const pieces = sortPieces(
@@ -120,7 +124,6 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
         </Column>
       ) : null}
       {inv.error && !inventory ? <Body tone="burn">{inv.error}</Body> : null}
-      {inv.freshness === 'loading' ? <PageLoader reducedMotion={reducedMotion} testID="rack-loading" /> : null}
       {inventory && inventory.assets.length === 0 ? (
         <Plate gap="$2" testID="rack-empty">
           <Body tone="mute">{t({ id: 'rack.empty', message: 'Nothing on the shelves yet. Explore collections on Electroneum — buying a piece lands it here — or add a collection by address.' })}</Body>

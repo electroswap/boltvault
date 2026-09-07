@@ -1,28 +1,38 @@
 /**
  * How the wallet waits.
  *
- * Owner: "I also don't like the skeleton style loader that's used throughout.
- * I prefer a centered pulsing ES logo (mobile logo from ../interface) for full
- * page loading, and the progress bar style loader for smaller components (like
- * the homepage under the balance)."
+ *   PageLoader   a screen has nothing to show yet — the ES mark on the
+ *                current, with an arc travelling around it. Use `overlay` so
+ *                it covers the screen and centres against the screen rather
+ *                than against whatever content happens to exist.
+ *   BarLoader    one part of a screen is behind — a sweep on a track that is
+ *                always drawn, so nothing moves when it stops.
  *
- * So there are exactly two, and the choice is about scale, not taste:
- *
- *   PageLoader   a whole screen has nothing yet — the ES mark, centred,
- *                breathing. It is the brand doing the waiting, which also
- *                answers "there's very little ElectroSwap branding anywhere".
- *   BarLoader    one part of a screen is behind — a 2 px indeterminate sweep
- *                on a track that is always there, so nothing moves when it
- *                stops.
- *
- * Grey block skeletons are gone. They imitate content that is not there and
- * they were the loudest thing on screen.
+ * Owner notes this answers:
+ *  - "a centered pulsing ES logo for full page loading, and the progress bar
+ *    style loader for smaller components"
+ *  - "The ES loader should be centered both horizontally and vertically
+ *    everywhere, it starts centered ... then ends up flashing and moving
+ *    toward the top" — because a flex child centres inside whatever height it
+ *    is given, and inside a scroll view's content that is the content's
+ *    height. `overlay` takes it out of flow entirely.
+ *  - "it should be displayed until all resources have downloaded and are ready
+ *    to render ... it's almost as if the loader should actually be an overlay
+ *    until the rest of the page is rendered" — exactly so; the screen mounts
+ *    and lays out underneath while this covers it, which is also why nothing
+ *    jumps when it lifts.
+ *  - "Make the loader look premium" — so: no opacity blink (a mark fading to
+ *    half looks like a broken image). The mark holds steady on a breathing
+ *    glow while a gradient arc travels around it. Calm, brand-first, and the
+ *    only moving part is light.
  */
 import { Image, View } from 'react-native'
 import Animated from 'react-native-reanimated'
+import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg'
+import { useId } from 'react'
 import { useReducedMotionPref } from './motion/MotionContext'
 import { Body, Column } from './primitives'
-import { current, edge, metrics, motion, paint } from './tokens'
+import { current, edge, glow, metrics, motion, paint } from './tokens'
 
 /** Where the vendored brand files live; the extension serves its public dir. */
 let brandBase = '/brand/'
@@ -41,43 +51,95 @@ export interface PageLoaderProps {
   readonly label?: string | null
   /** Mark width in px. The default is the full-page size. */
   readonly size?: number
+  /**
+   * Cover the screen instead of taking part in the layout. This is the form
+   * to use on a screen: it centres against the viewport, hides the half-built
+   * page underneath, and lifts without moving anything.
+   */
+  readonly overlay?: boolean
   readonly reducedMotion?: boolean
   readonly testID?: string
 }
 
-/**
- * A screen with nothing to show yet. Centred, so it reads as "the app is
- * working" rather than "this content is shaped like blocks".
- */
-export function PageLoader({ label = null, size = 132, reducedMotion, testID }: PageLoaderProps) {
+/** The travelling arc: one gradient stroke with a gap, turning slowly. */
+function Halo({ size, reduced }: { size: number; reduced: boolean }) {
+  const id = `halo-${useId().replace(/:/g, '')}`
+  const box = Math.round(size * 1.55)
+  const r = box / 2 - 3
+  const circumference = 2 * Math.PI * r
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        { position: 'absolute', width: box, height: box, alignItems: 'center', justifyContent: 'center' },
+        reduced
+          ? { opacity: 0.5 }
+          : {
+              animationName: { from: { transform: [{ rotate: '0deg' }] }, to: { transform: [{ rotate: '360deg' }] } },
+              animationDuration: '2600ms',
+              animationTimingFunction: 'linear',
+              animationIterationCount: 'infinite',
+            },
+      ]}
+    >
+      <Svg width={box} height={box}>
+        <Defs>
+          <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor={current.from} stopOpacity={0} />
+            <Stop offset="0.55" stopColor={current.from} stopOpacity={0.9} />
+            <Stop offset="1" stopColor={current.to} stopOpacity={1} />
+          </LinearGradient>
+        </Defs>
+        {/* The track keeps the ring's shape whether or not the arc is over it. */}
+        <Circle cx={box / 2} cy={box / 2} r={r} stroke={edge} strokeWidth={2} fill="none" />
+        <Circle cx={box / 2} cy={box / 2} r={r} stroke={`url(#${id})`} strokeWidth={2} strokeLinecap="round" fill="none" strokeDasharray={`${circumference * 0.28} ${circumference}`} />
+      </Svg>
+    </Animated.View>
+  )
+}
+
+export function PageLoader({ label = null, size = 108, overlay = false, reducedMotion, testID }: PageLoaderProps) {
   const reduced = useReducedMotionPref() || reducedMotion === true
   // 477 x 296 in the source; keep the ratio.
   const height = Math.round((size * 296.07) / 477.78)
-  return (
-    <Column flex={1} alignItems="center" justifyContent="center" gap="$3" testID={testID ?? 'page-loading'}>
-      <Animated.View
-        style={
-          reduced
-            ? { opacity: 0.75 }
-            : {
-                // Breathing, not spinning: a spinner says "this may fail",
-                // a slow pulse says "this is coming".
-                animationName: { from: { opacity: 0.45, transform: [{ scale: 0.97 }] }, to: { opacity: 1, transform: [{ scale: 1.03 }] } },
-                animationDuration: '1400ms',
-                animationDirection: 'alternate',
-                animationIterationCount: 'infinite',
-                animationTimingFunction: 'ease-in-out',
-              }
-        }
-      >
+  const body = (
+    <Column alignItems="center" justifyContent="center" gap="$4">
+      <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            {
+              position: 'absolute',
+              width: size * 1.6,
+              height: size * 1.6,
+              borderRadius: size,
+              backgroundColor: glow.plate,
+            },
+            reduced ? { opacity: 0.5 } : { animationName: { from: { opacity: 0.28 }, to: { opacity: 0.7 } }, animationDuration: '1800ms', animationDirection: 'alternate', animationIterationCount: 'infinite', animationTimingFunction: 'ease-in-out' },
+          ]}
+        />
+        <Halo size={size} reduced={reduced} />
+        {/* The mark itself never blinks; only the light around it moves. */}
         <Image source={{ uri: esMarkUri() }} style={{ width: size, height }} accessibilityLabel="ElectroSwap" accessibilityIgnoresInvertColors />
-      </Animated.View>
+      </View>
       {label !== null && label !== '' ? (
         <Body tone="mute" size="caption">
           {label}
         </Body>
       ) : null}
     </Column>
+  )
+  if (!overlay) {
+    return (
+      <Column flex={1} alignItems="center" justifyContent="center" testID={testID ?? 'page-loading'}>
+        {body}
+      </Column>
+    )
+  }
+  return (
+    <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: paint.void, zIndex: 20 }} testID={testID ?? 'page-loading'}>
+      {body}
+    </View>
   )
 }
 

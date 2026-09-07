@@ -19,6 +19,7 @@ import { useLinks } from '../state/useLinks'
 import { useFeelEvents } from '../feel'
 import { useWalletState } from '../state/useWalletState'
 import { useScene } from '../state/useScene'
+import { useAnyScreenBusy } from '../state/useScreenBusy'
 import { MotionContext, useReducedMotion } from '../state/useReducedMotion'
 import { useNotifications } from '../hooks/useNotifications'
 import { useChainHead } from '../hooks/useChainHead'
@@ -120,6 +121,9 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   const { vault, loading, active } = useWalletState()
   const { width, height } = useWindowDimensions()
   const scene = useScene()
+  // One loader for the whole app, drawn here where it can cover the screen and
+  // centre against the viewport rather than against a screen's scroll content.
+  const busy = useAnyScreenBusy()
   // The Grid (plan B2): one Field behind every `grid` screen, pulsed by the ETN head, warmed by the holder tier.
   const head = useChainHead(ETN)
   const tier = useHolderTier(active?.id ?? null)
@@ -324,8 +328,10 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
               arriving does. In practice it is rarely seen — prefetchScreens
               warms every chunk once Home has painted.
             */}
-            <Suspense fallback={<PageLoader reducedMotion={reducedMotion} testID="screen-loading" />}>{screen}</Suspense>
+            <Suspense fallback={<PageLoader overlay reducedMotion={reducedMotion} testID="screen-loading" />}>{screen}</Suspense>
           </ScreenEnter>
+          {/* Over the screen, under the tab bar: the page assembles beneath it. */}
+          {busy ? <PageLoader overlay reducedMotion={reducedMotion} testID="page-loading" /> : null}
         </Column>
         {showTabs ? <TabBar items={items} activeId={state.tab} onSelect={(id) => router.setTab(id as TabId)} testID="tabs" /> : null}
         {/* Last child, so a device round trip sheet paints above the tab bar (§7.5). */}

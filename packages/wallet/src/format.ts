@@ -83,3 +83,44 @@ export function formatRate(rate: number | null, symbolIn: string, symbolOut: str
   const r = rate >= 1 ? rate.toLocaleString('en-US', { maximumFractionDigits: 4 }) : rate.toLocaleString('en-US', { maximumSignificantDigits: 4 })
   return `1 ${symbolIn} = ${r} ${symbolOut}`
 }
+
+/**
+ * A token amount at a length a person can read.
+ *
+ * Owner, on the farm position card: "better rounding logic". `formatRaw` is
+ * exact, which is right for a receipt and wrong for a card — it produced
+ * "0.00003429 DYNO" and "0.000005505 DYNO to collect" side by side, where the
+ * digits carry no meaning and the eye cannot compare them.
+ *
+ * Four significant figures, never scientific notation, and anything smaller
+ * than the shown precision says so rather than rounding to a bare zero.
+ */
+export function formatAmount(raw: string, decimals: number, significant = 4): string {
+  let n = 0n
+  try {
+    n = BigInt(raw)
+  } catch {
+    return raw
+  }
+  if (n === 0n) return '0'
+  const neg = n < 0n
+  if (neg) n = -n
+  const base = 10n ** BigInt(decimals)
+  const whole = n / base
+  const sign = neg ? '−' : ''
+  // Big enough to read whole: group it and stop.
+  if (whole > 0n) {
+    const value = Number(n) / Number(base)
+    const places = whole >= 1000n ? 0 : whole >= 100n ? 1 : whole >= 10n ? 2 : significant - 1
+    return `${sign}${formatQuantity(value.toFixed(places))}`
+  }
+  // Below one: keep `significant` digits from the first that is not a zero.
+  const frac = (n % base).toString().padStart(decimals, '0')
+  const firstDigit = frac.search(/[1-9]/)
+  if (firstDigit === -1) return '0'
+  const places = firstDigit + significant
+  if (places > decimals) return `${sign}0.${frac.slice(0, decimals).replace(/0+$/, '')}`
+  const cut = `0.${frac.slice(0, places)}`
+  const rounded = Number(cut).toFixed(places).replace(/0+$/, '').replace(/\.$/, '')
+  return `${sign}${rounded}`
+}

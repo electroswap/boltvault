@@ -5,7 +5,7 @@
  * (plan A2); a first visit shows skeletons, never a blank body. On a token
  * list the star is the pin (plan A5).
  */
-import { Body, Column, Icon, IconButton, Input, Pill, Plate, Row, ScrollView, Segmented, PageLoader, TokenAvatar, metrics, paint } from '@boltvault/ui'
+import { Body, Column, Icon, IconButton, Input, Pill, Plate, Row, ScrollView, Segmented, TokenAvatar, metrics, paint } from '@boltvault/ui'
 import { cacheKey, type CampaignView, type CollectionView, type CollectionWindow, type ExploreToken, type FarmView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { AddCollectionSheet } from '../components/AddCollectionSheet'
@@ -26,6 +26,7 @@ import { useRouter } from '../navigation/router'
 import { useReducedMotion } from '../state/useReducedMotion'
 import { useSwapFlow } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
+import { useScreenBusy } from '../state/useScreenBusy'
 
 const ETN = 52014
 type Segment = 'tokens' | 'collectibles' | 'launch' | 'farms'
@@ -79,6 +80,7 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
     fresh: (e) => e.farm.list({ chainId: ETN, ...(accountId ? { accountId } : {}) }),
   })
 
+
   useEffect(() => {
     engine.explore.available().then(setAvailable, () => undefined)
   }, [engine])
@@ -121,6 +123,9 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
   }
 
   const current = segment === 'tokens' ? tokens : segment === 'collectibles' ? collections : segment === 'launch' ? campaigns : farms
+
+  // The shell draws one loader over the whole screen while this is true.
+  useScreenBusy('explore', current.freshness === 'loading')
   const etnUsd = (tokens.value ?? []).find((x) => x.address === 'native' || x.symbol === 'ETN')?.price ?? null
   return (
     <Column flex={1}>
@@ -165,7 +170,7 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
         <>
           <FreshnessLine freshness={current.freshness} observedAt={current.observedAt} refreshing={current.refreshing} reducedMotion={reducedMotion} testID="explore-freshness" />
           {current.freshness === 'loading' ? (
-            <PageLoader reducedMotion={reducedMotion} testID="explore-loading" />
+            null
           ) : segment === 'tokens' ? (
             <Column gap="$1" testID="explore-token-list">
               {(tokens.value ?? []).map((x) => (

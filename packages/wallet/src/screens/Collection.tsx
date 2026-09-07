@@ -6,7 +6,7 @@
  * dividends card and a mint plate only when the chain says the collection
  * mints; pieces on a grid that sizes itself to the body.
  */
-import { Artwork, Body, Column, IconButton, Key, PageLoader, Pill, Plate, Pressable, Row, ScrollView, Scrim, Segmented, StatStrip, TileGrid, metrics, useWindowDimensions } from '@boltvault/ui'
+import { Artwork, Body, Column, IconButton, Key, Pill, Plate, Pressable, Row, ScrollView, Scrim, Segmented, StatStrip, TileGrid, metrics, useWindowDimensions } from '@boltvault/ui'
 import type { AssetView, CollectionView, LegendsStatus, NftActivityView } from '@boltvault/engine'
 import { useEffect, useRef, useState } from 'react'
 import { DividendsCard } from '../components/DividendsCard'
@@ -19,6 +19,7 @@ import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { useSwapFlow } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
+import { useScreenBusy } from '../state/useScreenBusy'
 
 type BodyKind = 'extension-popup' | 'extension-tab' | 'mobile'
 
@@ -52,6 +53,10 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
   const [expanded, setExpanded] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+
+  // The shell draws one loader over the whole screen while this is true.
+  useScreenBusy('collection', collection === null || (collection.paysDividends && active !== null && legends === null))
 
   useEffect(() => {
     let alive = true
@@ -146,7 +151,6 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
         reported. The art itself is not waited on: Artwork already holds its
         own space and the disk cache makes a second visit instant.
       */}
-      {collection === null || (collection.paysDividends && active !== null && legends === null) ? <PageLoader reducedMotion={reducedMotion} testID="collection-loading" /> : null}
       {collection ? (
         <Column gap="$3" testID="collection-hero">
           {/* The hero: the banner fades into the night; the avatar overlaps its edge. */}

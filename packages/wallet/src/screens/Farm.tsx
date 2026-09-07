@@ -8,7 +8,7 @@
  * boost stair and the dilution plate before a second deposit; Withdraw is
  * a slider with a live preview; Collect discharges the coil.
  */
-import { Body, Coil, Column, Input, Key, Pill, Plate, Row, ScrollView, Sheet, PageLoader, Slider, StatStrip, Toggle, metrics } from '@boltvault/ui'
+import { Body, Coil, Column, Input, Key, Pill, Plate, Row, ScrollView, Sheet, Slider, StatStrip, Toggle, metrics } from '@boltvault/ui'
 import type { FarmDepositQuote, FarmView, FarmWithdrawQuote } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { PairAvatars } from '../components/cards/FarmCard'
@@ -17,11 +17,12 @@ import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
 import { useLastGood } from '../hooks/useLastGood'
 import { useChainHead } from '../hooks/useChainHead'
-import { formatFiat, formatRaw } from '../format'
+import { formatAmount, formatFiat, formatRaw } from '../format'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { useSwapFlow } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
+import { useScreenBusy } from '../state/useScreenBusy'
 
 type BodyKind = 'extension-popup' | 'extension-tab' | 'mobile'
 type SheetKind = 'deposit' | 'withdraw' | null
@@ -42,6 +43,7 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
   const wide = body === 'extension-tab'
   const [loadedFarm, setFarm] = useState<FarmView | null>(null)
   const farm = useLastGood(`farm:${chainId}:${farmId}`, loadedFarm)
+  // The shell draws one loader over the whole screen while this is true.
   const [sheet, setSheet] = useState<SheetKind>(null)
   const [amount0, setAmount0] = useState('')
   const [amount1, setAmount1] = useState('')
@@ -53,6 +55,7 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
   const [wq, setWq] = useState<FarmWithdrawQuote | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  useScreenBusy('farm', loadedFarm === null && error === null)
 
   // The position ticks with the head: rewards really do accrue per block (§8.8).
   useEffect(() => {
@@ -119,6 +122,10 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
   }
 
   const p = farm?.position ?? null
+  // What this farm pays you: base times your combined multiplier (duration x
+  // BOLT, both stored scaled by 10,000).
+  const combined = p ? (p.durationMultiplier / 10_000) * (p.boltMultiplier / 10_000) : null
+  const yourApy = farm?.baseApy != null && combined !== null ? farm.baseApy * combined : null
   const hasNative = farm ? [farm.symbol0, farm.symbol1].includes('ETN') || [farm.symbol0, farm.symbol1].includes('WETN') : false
   const glow = p ? Math.min(1, Number(BigInt(p.pendingRewards) / 10n ** 18n) / 100) : 0
 
@@ -129,17 +136,8 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
         {farm ? (
           <>
             <Row justifyContent="center">
-              <Coil durationMultiplier={p?.durationMultiplier ?? 10_000} boltMultiplier={p?.boltMultiplier ?? 10_000} glow={glow} size={body === 'extension-popup' ? 190 : 240} at2x={p ? dateLabel(p.at2x) : null} at25x={p ? dateLabel(p.at25x) : null} reducedMotion={reducedMotion} testID="coil" />
+              <Coil durationMultiplier={p?.durationMultiplier ?? 10_000} boltMultiplier={p?.boltMultiplier ?? 10_000} glow={glow} size={body === 'extension-popup' ? 190 : 240} reducedMotion={reducedMotion} testID="coil" />
             </Row>
-            <StatStrip
-              small
-              cells={[
-                { label: t({ id: 'farm.stat.apy', message: 'APY' }), value: farm.baseApy !== null ? `${farm.baseApy.toFixed(1)}%` : '—', ...(farm.thirdPartyApy !== null && farm.thirdParty ? { caption: t({ id: 'farm.apy3', message: '+{a}% {s}', values: { a: farm.thirdPartyApy.toFixed(1), s: farm.thirdParty.symbol } }) } : {}) },
-                { label: t({ id: 'farm.stat.tvl', message: 'TVL' }), value: farm.tvlUsd !== null ? formatFiat(farm.tvlUsd, 'USD') : '—' },
-                { label: t({ id: 'farm.stat.farmers', message: 'Farmers' }), value: String(farm.farmerCount) },
-              ]}
-              testID="farm-stats"
-            />
             {!farm.active ? (
               <Plate gap={2} testID="farm-closed">
                 <Body tone="ember" size="caption">
@@ -148,41 +146,44 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
               </Plate>
             ) : null}
             {p ? (
-              <Plate role="raised" gap="$2" testID="farm-position">
-                <Row justifyContent="space-between">
-                  <Body fontWeight="600">{t({ id: 'farm.yours', message: 'Your position' })}</Body>
-                  <Body tone="mute" size="caption">
-                    {t({ id: 'farm.share', message: '{p}% of the farm', values: { p: (p.shareOfFarm * 100).toFixed(2) } })}
-                  </Body>
-                </Row>
-                <Body tone="mute" size="caption">
-                  {`${formatRaw(p.amount0, farm.decimals0)} ${farm.symbol0} · ${formatRaw(p.amount1, farm.decimals1)} ${farm.symbol1}`}
-                </Body>
+              <Plate role="raised" gap="$3" testID="farm-position">
                 <Row justifyContent="space-between" alignItems="center">
-                  <Body tone="surge" testID="farm-pending">
-                    {t({ id: 'farm.pending', message: '{d} DYNO to collect', values: { d: formatRaw(p.pendingRewards, 18) } })}
-                  </Body>
-                  {farm.thirdParty && BigInt(p.pendingThirdParty) > 0n ? (
-                    <Body tone="ember" size="caption">
-                      {`+${formatRaw(p.pendingThirdParty, 18)} ${farm.thirdParty.symbol}`}
-                    </Body>
-                  ) : null}
+                  <Body fontWeight="600">{t({ id: 'farm.yours', message: 'Your position' })}</Body>
+                  <Pill label={t({ id: 'farm.share', message: '{p}% of farm', values: { p: (p.shareOfFarm * 100).toFixed(2) } })} size="xs" />
                 </Row>
-                <Body tone="mute" size="caption">
-                  {BigInt(p.boltDeposited) > 0n ? t({ id: 'farm.boost', message: '{b} BOLT boosting at {m}×', values: { b: formatRaw(p.boltDeposited, 18), m: (p.boltMultiplier / 10_000).toFixed(2) } }) : t({ id: 'farm.boost.none', message: 'No BOLT boost yet' })}
-                  {p.nextStair ? ` · ${t({ id: 'farm.nextStair', message: '{b} more BOLT for {m}×', values: { b: formatRaw(p.nextStair.more, 18), m: (p.nextStair.multiplier / 10_000).toFixed(2) } })}` : ''}
-                </Body>
-                {p.at25x !== null || p.at2x !== null ? (
+                {/*
+                  The three numbers a farmer reads, in one shape and at a
+                  length a person can compare. `formatRaw` is exact, which is
+                  right for a receipt and wrong here — it put "0.00003429 DYNO"
+                  beside "0.000005505 DYNO" where neither can be read.
+                */}
+                <StatStrip
+                  bare
+                  small
+                  cells={[
+                    { label: farm.symbol0, value: formatAmount(p.amount0, farm.decimals0) },
+                    { label: farm.symbol1, value: formatAmount(p.amount1, farm.decimals1) },
+                    { label: t({ id: 'farm.stat.collect', message: 'To collect' }), value: `${formatAmount(p.pendingRewards, 18)} DYNO`, tone: 'surge' as const, ...(farm.thirdParty && BigInt(p.pendingThirdParty) > 0n ? { caption: `+${formatAmount(p.pendingThirdParty, 18)} ${farm.thirdParty.symbol}` } : {}) },
+                  ]}
+                  testID="farm-position-stats"
+                />
+                <Column gap={2}>
                   <Body tone="mute" size="caption">
-                    {p.at2x !== null ? t({ id: 'farm.to2', message: '2.0× on {d}', values: { d: dateLabel(p.at2x) ?? '' } }) : ''}
-                    {p.at2x !== null && p.at25x !== null ? ' · ' : ''}
-                    {p.at25x !== null ? t({ id: 'farm.to25', message: '2.5× on {d}', values: { d: dateLabel(p.at25x) ?? '' } }) : ''}
+                    {BigInt(p.boltDeposited) > 0n ? t({ id: 'farm.boost', message: '{b} BOLT boosting at {m}×', values: { b: formatAmount(p.boltDeposited, 18), m: (p.boltMultiplier / 10_000).toFixed(2) } }) : t({ id: 'farm.boost.none', message: 'No BOLT boost yet' })}
+                    {p.nextStair ? ` · ${t({ id: 'farm.nextStair', message: '{b} more BOLT for {m}×', values: { b: formatAmount(p.nextStair.more, 18), m: (p.nextStair.multiplier / 10_000).toFixed(2) } })}` : ''}
                   </Body>
-                ) : (
-                  <Body tone="arc" size="caption">
-                    {t({ id: 'farm.max', message: 'Full 2.5× duration bonus' })}
-                  </Body>
-                )}
+                  {p.at25x !== null || p.at2x !== null ? (
+                    <Body tone="mute" size="caption">
+                      {p.at2x !== null ? t({ id: 'farm.to2', message: '2.0× on {d}', values: { d: dateLabel(p.at2x) ?? '' } }) : ''}
+                      {p.at2x !== null && p.at25x !== null ? ' · ' : ''}
+                      {p.at25x !== null ? t({ id: 'farm.to25', message: '2.5× on {d}', values: { d: dateLabel(p.at25x) ?? '' } }) : ''}
+                    </Body>
+                  ) : (
+                    <Body tone="arc" size="caption">
+                      {t({ id: 'farm.max', message: 'Full 2.5× duration bonus' })}
+                    </Body>
+                  )}
+                </Column>
               </Plate>
             ) : farm.active ? (
               <Plate gap="$1" testID="farm-none">
@@ -211,6 +212,23 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
                 ) : null}
               </Row>
             ) : null}
+            {/*
+              The farm's own numbers sit below what you can do with it. Owner:
+              "I'd like the deposit, withdraw and collect buttons to be higher
+              up on the page, the farm level stats can move down a bit to make
+              room." So the order is: the coil, your position, your actions,
+              then the farm.
+            */}
+            <StatStrip
+              small
+              cells={[
+                { label: t({ id: 'farm.stat.apy.base', message: 'Base APY' }), value: farm.baseApy !== null ? `${farm.baseApy.toFixed(1)}%` : '—', ...(farm.thirdPartyApy !== null && farm.thirdParty ? { caption: t({ id: 'farm.apy3', message: '+{a}% {s}', values: { a: farm.thirdPartyApy.toFixed(1), s: farm.thirdParty.symbol } }) } : {}) },
+                { label: t({ id: 'farm.stat.apy.yours', message: 'Your APY' }), value: yourApy !== null ? `${yourApy.toFixed(1)}%` : '—', ...(p ? { tone: 'arc' as const } : {}) },
+                { label: t({ id: 'farm.stat.tvl', message: 'TVL' }), value: farm.tvlUsd !== null ? formatFiat(farm.tvlUsd, 'USD') : '—' },
+                { label: t({ id: 'farm.stat.farmers', message: 'Farmers' }), value: String(farm.farmerCount) },
+              ]}
+              testID="farm-stats"
+            />
             {p && BigInt(p.pendingRewards) > 0n && p.nextStair && farm.active ? (
               <Plate role="card" gap="$1" testID="farm-boost-plate">
                 <Body fontWeight="600">{t({ id: 'farm.cb.title', message: 'Collect & boost' })}</Body>
@@ -221,9 +239,7 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
               </Plate>
             ) : null}
           </>
-        ) : error ? null : (
-          <PageLoader reducedMotion={reducedMotion} testID="farm-loading" />
-        )}
+        ) : null}
       </ScrollView>
 
       <Sheet open={sheet === 'deposit'} onClose={() => setSheet(null)} title={t({ id: 'farm.deposit.title', message: 'Deposit' })} reducedMotion={reducedMotion} footer={<Key label={t({ id: 'farm.deposit', message: 'Deposit' })} disabled={busy || !quote?.ok} onPress={() => void run(() => engine.farm.deposit({ accountId: active?.id ?? '', chainId, farmId, ...(lastEdited === 0 ? { amount0 } : { amount1 }), ...(bolt.trim() ? { bolt } : {}) }))} testID="farm-deposit-go" />} testID="farm-deposit-sheet">

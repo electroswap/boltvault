@@ -24,6 +24,13 @@ export class NotificationsService {
     private readonly bus: EventBus,
     /** Sealed under the DEK; empty while locked, so a locked wallet shows no inbox. */
     private readonly inbox: SealedMap<NotificationView[]>,
+    /**
+     * Whose wallet is in front. Notes about holdings belong to one account, and
+     * without this the inbox was one shared list: a "dividends to claim" notice
+     * raised for one account appeared under every other account, including
+     * accounts holding none of that collection.
+     */
+    private readonly activeAccountId: () => Promise<string | null> = async () => null,
   ) {}
 
   /** Drop the decrypted inbox on lock, so unlocking re-reads it. */
@@ -33,8 +40,17 @@ export class NotificationsService {
 
   private async hydrate(): Promise<NotificationView[]> {
     if (this.items) return this.items
-    this.items = (await this.inbox.get(INBOX_ID)) ?? []
+    const stored = (await this.inbox.get(INBOX_ID)) ?? []
+    // Entries written before notes carried an account cannot be attributed, and
+    // the whole reason for this change is that unattributed notes were shown to
+    // the wrong wallet. Drop them once; they are re-raised by the next scan.
+    this.items = stored.filter((n) => n.accountId !== undefined)
     return this.items
+  }
+
+  /** Notes for this account, plus the ones that belong to the wallet itself. */
+  private mine(items: readonly NotificationView[], accountId: string | null): NotificationView[] {
+    return items.filter((n) => n.accountId === null || n.accountId === accountId)
   }
 
   private async persist(items: NotificationView[]): Promise<void> {
@@ -44,18 +60,22 @@ export class NotificationsService {
   }
 
   async list(): Promise<NotificationView[]> {
-    return [...(await this.hydrate())]
+    return this.mine(await this.hydrate(), await this.activeAccountId())
   }
 
   async unread(): Promise<number> {
-    return (await this.hydrate()).filter((n) => !n.read).length
+    return this.mine(await this.hydrate(), await this.activeAccountId()).filter((n) => !n.read).length
   }
 
   /** Append once per id (a repeat is a no-op, read or not). Newest first. */
-  async push(input: { id: string; kind: NotificationView['kind']; title: string; body: string; target?: string | null }): Promise<boolean> {
+  async push(input: { id: string; kind: NotificationView['kind']; title: string; body: string; target?: string | null; accountId?: string | null }): Promise<boolean> {
     const items = await this.hydrate()
-    if (items.some((n) => n.id === input.id)) return false
-    await this.persist([{ id: input.id, kind: input.kind, title: input.title, body: input.body, target: input.target ?? null, at: this.platform.now(), read: false }, ...items])
+    // Ids are scoped too: the same dividends notice for two accounts is two
+    // notes, not one that the second account silently swallows as a duplicate.
+    const accountId = input.accountId !== undefined ? input.accountId : await this.activeAccountId()
+    const id = accountId === null ? input.id : `${accountId}:${input.id}`
+    if (items.some((n) => n.id === id)) return false
+    await this.persist([{ id, kind: input.kind, title: input.title, body: input.body, target: input.target ?? null, at: this.platform.now(), read: false, accountId }, ...items])
     return true
   }
 
@@ -67,8 +87,11 @@ export class NotificationsService {
     await this.persist(items.map((n) => (!set || set.has(n.id) ? { ...n, read: true } : n)))
   }
 
+  /** Clears only what this account can see; another account's inbox is not ours to empty. */
   async clear(): Promise<void> {
-    await this.persist([])
+    const accountId = await this.activeAccountId()
+    const items = await this.hydrate()
+    await this.persist(items.filter((n) => !(n.accountId === null || n.accountId === accountId)))
   }
 }
 

@@ -5,7 +5,7 @@
  * inbound scan runs debounced in the engine and shows as a sweep, not a
  * blank tab (plan A2).
  */
-import { Body, Chip, Column, Icon, Key, Plate, BarLoader, PageLoader, Row, ScrollView, Segmented, Sheet, metrics, paint, shortAddress, type IconName } from '@boltvault/ui'
+import { Body, Chip, Column, Icon, Key, Plate, BarLoader, Row, ScrollView, Segmented, Sheet, metrics, paint, shortAddress, type IconName } from '@boltvault/ui'
 import { cacheKey, type ActivityEntry, type ChainView, type NotificationView, type ScanSummary } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
@@ -17,6 +17,7 @@ import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { useReducedMotion } from '../state/useReducedMotion'
 import { useWalletState } from '../state/useWalletState'
+import { useScreenBusy } from '../state/useScreenBusy'
 
 type Filter = 'all' | 'sent' | 'received' | 'approvals'
 const ETN = 52014
@@ -71,6 +72,10 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
   const [chains, setChains] = useState<ChainView[]>([])
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const accountId = active?.id ?? null
+
+
+  // The shell draws one loader over the whole screen while this is true.
+  useScreenBusy('activity', !loaded)
 
   useEffect(() => {
     engine.chains.list().then(setChains, () => undefined)
@@ -166,7 +171,6 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
           onChange={(id) => setFilter(id as Filter)}
           testID="activity-filter"
         />
-        {!loaded ? <PageLoader reducedMotion={reducedMotion} testID="activity-loading" /> : null}
         {loaded && shown.length === 0 ? (
           <Plate gap="$2" testID="activity-empty">
             <Body tone="mute">{t({ id: 'activity.empty', message: 'Nothing yet. Sends, swaps and everything the wallet signs will appear here, with what you were shown when you signed.' })}</Body>
@@ -176,7 +180,11 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
           <Plate key={e.id} role="card" gap={4} onPress={() => setOpen(e)} cursor="pointer" testID={`activity-${e.id}`}>
             <Row gap="$3" alignItems="center">
               <Icon name={iconFor(e)} size={18} color={e.status === 'failed' ? paint.burn : e.category === 'RECEIVE' ? paint.arc : paint.mute} />
-              <Column flex={1}>
+              {/* minWidth 0 or the text column refuses to shrink and the status
+                  chip eats the line — react-native-web's View is flexShrink: 0,
+                  so "Received CLUB from …" was cut short by a badge that only
+                  ever says one of four words. */}
+              <Column flex={1} minWidth={0}>
                 <Body numberOfLines={1}>{e.statements[0] ?? e.category}</Body>
                 <Row gap="$2">
                   {originOf(e.origin) ? (
@@ -189,8 +197,10 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
                   </Body>
                 </Row>
               </Column>
-              <Chip borderColor={e.status === 'pending' ? paint.arc : e.status === 'failed' ? paint.burn : undefined}>
-                <Body tone={e.status === 'pending' ? 'arc' : e.status === 'failed' ? 'burn' : e.status === 'confirmed' ? 'surge' : 'mute'} size="caption" testID={`activity-status-${e.id}`}>
+              {/* A status is a state, not a control: small, and never the
+                  reason a line of text is cut. */}
+              <Chip flexShrink={0} height={20} paddingHorizontal={7} borderColor={e.status === 'pending' ? paint.arc : e.status === 'failed' ? paint.burn : undefined}>
+                <Body tone={e.status === 'pending' ? 'arc' : e.status === 'failed' ? 'burn' : e.status === 'confirmed' ? 'surge' : 'mute'} size="caption" fontSize={11} lineHeight={14} testID={`activity-status-${e.id}`}>
                   {e.status === 'pending' ? t({ id: 'activity.pending', message: 'Pending' }) : e.status === 'failed' ? t({ id: 'activity.failed', message: 'Failed' }) : e.status === 'replaced' ? t({ id: 'activity.replaced', message: 'Replaced' }) : t({ id: 'activity.confirmed', message: 'Confirmed' })}
                 </Body>
               </Chip>

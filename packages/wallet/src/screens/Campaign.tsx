@@ -8,7 +8,7 @@
  * link pills with real labels; the referral card. The alert control shows
  * only before launch, or while live and already followed.
  */
-import { Artwork, Body, Column, CurrentFill, Icon, Input, Key, Pill, Plate, Pressable, RollingReadout, Row, ScrollView, Sheet, PageLoader, StatStrip, TokenAvatar, metrics, paint, shortAddress, type IconName } from '@boltvault/ui'
+import { Artwork, Body, Column, CurrentFill, Icon, Input, Key, Pill, Plate, Pressable, RollingReadout, Row, ScrollView, Sheet, StatStrip, TokenAvatar, metrics, paint, shortAddress, type IconName } from '@boltvault/ui'
 import type { CampaignView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { alertable, PhasePill, RaiseBar } from '../components/cards/CampaignCard'
@@ -21,6 +21,7 @@ import { useHost } from '../host'
 import { t } from '../i18n'
 import { useSwapFlow } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
+import { useScreenBusy } from '../state/useScreenBusy'
 
 type BodyKind = 'extension-popup' | 'extension-tab' | 'mobile'
 const LINKS: Array<{ key: 'website' | 'twitter' | 'telegram' | 'discord'; icon: IconName; label: () => string }> = [
@@ -46,6 +47,10 @@ export function Campaign({ body, chainId, pool, reducedMotion = false }: { body:
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+
+
+  // The shell draws one loader over the whole screen while this is true.
+  useScreenBusy('campaign', c === null && error === null)
 
   useEffect(() => {
     let alive = true
@@ -227,7 +232,7 @@ export function Campaign({ body, chainId, pool, reducedMotion = false }: { body:
             ) : null}
           </>
         ) : error ? null : (
-          <PageLoader reducedMotion={reducedMotion} testID="campaign-loading" />
+          null
         )}
       </ScrollView>
 

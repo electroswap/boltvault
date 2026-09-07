@@ -5,7 +5,7 @@
  * on the dock. Tapping the total opens the Portfolio. The Grid is drawn by
  * TabShell behind this screen; the holder tier warms it.
  */
-import { ActionGrid, Body, ChainMark, Column, Icon, IconButton, Ignition, Key, LiveFilament, Pill, Plate, Pressable, Row, RollingReadout, PageLoader, Seat, ScrollView, metrics, paint, type ActionTileBadge, type IconName } from '@boltvault/ui'
+import { ActionGrid, Body, ChainMark, Column, Icon, IconButton, Ignition, Key, LiveFilament, Pill, Plate, Pressable, Row, RollingReadout, Seat, ScrollView, metrics, paint, type ActionTileBadge, type IconName } from '@boltvault/ui'
 import { cacheKey, type BridgeStatus, type CampaignView, type ExploreToken, type Inventory } from '@boltvault/engine'
 import { useEffect, useRef, useState } from 'react'
 import { ChainScopeSheet, ScopePill, useHomeScope } from '../components/ChainScope'
@@ -26,6 +26,7 @@ import { useRouter } from '../navigation/router'
 import { useReducedMotion } from '../state/useReducedMotion'
 import { takeIgnition } from '../state/ignition'
 import { useWalletState } from '../state/useWalletState'
+import { useScreenBusy } from '../state/useScreenBusy'
 
 const ETN = 52014
 
@@ -92,6 +93,10 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   })
 
   // The home-screen widget reads what Home shows (§7.13); never more.
+
+  // The shell draws one loader over the whole screen while this is true.
+  useScreenBusy('home', loading)
+
   useEffect(() => {
     if (!host.widget || !active || !portfolio.snapshot) return
     void host.widget.publish({ address: active.address, label: active.label, tier: tier?.tier ?? 0, total: portfolio.snapshot.total, change24h: portfolio.snapshot.change24h, currency: portfolio.snapshot.currency, at: Date.now() })
@@ -216,7 +221,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
           moves when the real thing replaces them.
         */}
         {loading ? (
-          <PageLoader reducedMotion={reducedMotion} testID="home-loading" />
+          null
         ) : null}
 
         {!loading && !vault?.exists ? (

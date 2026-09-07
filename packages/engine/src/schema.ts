@@ -574,6 +574,16 @@ export const NotificationViewSchema = z.object({
   target: z.string().nullable(),
   at: z.number().int().nonnegative(),
   read: z.boolean(),
+  /**
+   * Whose note this is. Null means it applies to the wallet as a whole (an
+   * update, a system message); anything about holdings — dividends to claim,
+   * rewards to collect, an offer on a piece — names its account.
+   *
+   * Absent on entries written before this existed; those are dropped on read
+   * rather than shown, because the reason this field exists is that one
+   * account's dividends notice was appearing under every other account.
+   */
+  accountId: z.string().nullable().optional(),
 })
 export type NotificationView = z.infer<typeof NotificationViewSchema>
 
