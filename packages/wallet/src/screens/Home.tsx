@@ -6,7 +6,7 @@
  * TabShell behind this screen; the holder tier warms it.
  */
 import { ActionGrid, Body, ChainMark, Column, Icon, IconButton, Ignition, Key, LiveFilament, Pill, Plate, Pressable, Row, RollingReadout, Seat, ScrollView, metrics, paint, type ActionTileBadge, type IconName } from '@boltvault/ui'
-import { cacheKey, type BridgeStatus, type CampaignView, type ExploreToken, type Inventory } from '@boltvault/engine'
+import { cacheKey, type BridgeStatus, type CampaignView, type Inventory, type TokenDetailView } from '@boltvault/engine'
 import { useEffect, useRef, useState } from 'react'
 import { ChainScopeSheet, ScopePill, useHomeScope } from '../components/ChainScope'
 import { DappSheet, DappStrip, useDappStatus } from '../components/DappStatus'
@@ -70,12 +70,6 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   if (igniteRef.current === null && !loading) igniteRef.current = takeIgnition(unlocked)
   const ignite = igniteRef.current ?? false
   const dapp = useDappStatus(unlocked && (host.body === 'extension-popup' || host.body === 'harness'))
-  const market = useCached<ExploreToken[]>({
-    key: unlocked ? cacheKey('explore', 'tokens', ETN) : null,
-    cached: (e) => e.explore.cachedTokens({ chainId: ETN }),
-    fresh: (e) => e.explore.tokens({ chainId: ETN }),
-    maxAgeMs: 60_000,
-  })
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   // The tab lays tiles out as rows and centres the column; the popup and the phone stack them (plan B3).
   const wide = body === 'extension-tab'
@@ -149,7 +143,27 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     { id: 'search', icon: 'search', label: t({ id: 'key.search', message: 'Search' }), badge: null, onPress: () => router.navigate('explore', { search: true }) },
     { id: 'alerts', icon: 'bell', label: t({ id: 'key.alerts', message: 'Alerts' }), badge: unread > 0 ? { text: String(unread), tone: 'ember' } : null, onPress: () => router.navigate('alerts') },
   ]
-  const etn = (market.value ?? []).find((x) => x.address === 'native' || x.symbol === 'ETN') ?? null
+  /*
+    ETN's own price does not come from the market list.
+
+    `topTokens` is the traded-token table, and on mainnet it returns nine rows —
+    BOLT, PDY, DYNO, FUGAZI, CLUB, CORE, USDC, USDT, DCNT — with neither ETN nor
+    WETN among them. Scanning it for the coin therefore always found nothing and
+    printed a dash beside a portfolio that plainly had prices. The extension
+    looked right only because its fixtures carry a literal ETN row; the phone,
+    on live data, showed the truth.
+
+    The API answers for the coin under the NATIVE sentinel
+    (`token(address: "NATIVE")` → ETN, 0.0011571 at the time of writing), which
+    is exactly what `explore.tokenDetail` asks for when given 'native'.
+  */
+  const etnDetail = useCached<TokenDetailView | null>({
+    key: unlocked ? cacheKey('explore', 'detail', ETN, 'native') : null,
+    cached: (e) => e.explore.cachedTokenDetail({ chainId: ETN, address: 'native' }),
+    fresh: (e) => e.explore.tokenDetail({ chainId: ETN, address: 'native' }),
+    maxAgeMs: 60_000,
+  })
+  const etn = etnDetail.value ?? null
   const etnChange = etn && etn.change24h !== null ? formatChange(etn.change24h / 100) : null
   const copy = host.copy && active ? () => void host.copy?.(active.address).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }, () => undefined) : undefined
 
