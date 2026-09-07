@@ -5,7 +5,7 @@
  * "Deposit to start" — and, when there is DYNO waiting, a surge line with
  * a Collect pill that runs the collect in place.
  */
-import { Body, Column, Pill, Plate, Row, StatStrip, TokenAvatar } from '@boltvault/ui'
+import { Body, Column, Key, Pill, Plate, Row, StatStrip, TokenAvatar } from '@boltvault/ui'
 import type { FarmView } from '@boltvault/engine'
 import { formatAmount, formatCompactFiat } from '../../format'
 import { t } from '../../i18n'
@@ -37,8 +37,10 @@ export function FarmCard({ farm, onPress, onCollect, busy = false }: { farm: Far
         <Body fontWeight="600" numberOfLines={1} flexShrink={1}>
           {farm.name || `${farm.symbol0}/${farm.symbol1}`}
         </Body>
-        <Pill label={farm.version === 3 ? 'V3' : 'V2'} size="sm" />
-        {!farm.active ? <Pill label={t({ id: 'farm.closed', message: 'Closed' })} tone="ember" size="sm" /> : null}
+        {/* Owner: the version sits in the top right, the same on every list. */}
+        <Column flex={1} minWidth={0} />
+        {!farm.active ? <Pill label={t({ id: 'farm.closed', message: 'Closed' })} tone="ember" size="xs" /> : null}
+        <Pill label={farm.version === 3 ? 'V3' : 'V2'} size="xs" />
       </Row>
       {/* Combined multiplier: duration and BOLT are both scaled by 10,000. */}
       <StatStrip
@@ -64,7 +66,7 @@ export function FarmCard({ farm, onPress, onCollect, busy = false }: { farm: Far
           <Body tone="surge" size="caption" testID={`farm-card-${farm.id}-pending`}>
             {t({ id: 'farm.card.collect', message: '{d} DYNO to collect', values: { d: formatAmount(p.pendingRewards, 18) } })}
           </Body>
-          {onCollect ? <Pill label={t({ id: 'farm.collect', message: 'Collect' })} tone="surge" size="sm" disabled={busy} onPress={onCollect} testID={`farm-card-${farm.id}-collect`} /> : null}
+          {onCollect ? <Key label={t({ id: 'farm.collect', message: 'Collect' })} kind="secondary" size="compact" disabled={busy} onPress={onCollect} testID={`farm-card-${farm.id}-collect`} /> : null}
         </Row>
       ) : null}
     </Plate>

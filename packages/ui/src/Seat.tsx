@@ -6,9 +6,7 @@
  * so the seat never fights the controls at the header's right.
  */
 import { Pressable } from 'react-native'
-import Animated from 'react-native-reanimated'
 import { Icon } from './Icon'
-import { useReducedMotionPref } from './motion/MotionContext'
 import { Body, Column, Row } from './primitives'
 import { Signature } from './Signature'
 import { metrics, paint } from './tokens'
@@ -31,47 +29,53 @@ export function shortAddress(address: string): string {
 
 export function Seat({ address, label, name, onPress, tierMark, onCopy, copied = false, testID }: SeatProps) {
   const title = name ?? label
-  const reduced = useReducedMotionPref()
+  // The icon now lives in its own control beside this, so the line is text only.
   const addressLine = (
-    <Row gap={4} alignItems="center">
-      <Body tone={copied ? 'arc' : 'mute'} size="caption" fontVariant={['tabular-nums']} numberOfLines={1}>
-        {copied ? 'Copied' : shortAddress(address)}
-      </Body>
-      {onCopy ? (
-        copied && !reduced ? (
-          <Animated.View style={{ animationName: { from: { opacity: 0, transform: [{ scale: 0.5 }] }, to: { opacity: 1, transform: [{ scale: 1 }] } }, animationDuration: '160ms', animationTimingFunction: 'ease-out', animationFillMode: 'both' }}>
-            <Icon name="check" size={12} color={paint.arc} />
-          </Animated.View>
-        ) : (
-          <Icon name={copied ? 'check' : 'copy'} size={12} color={copied ? paint.arc : paint.mute} />
-        )
-      ) : null}
-    </Row>
+    <Body tone={copied ? 'arc' : 'mute'} size="caption" fontVariant={['tabular-nums']} numberOfLines={1}>
+      {copied ? 'Copied' : shortAddress(address)}
+    </Body>
   )
   return (
     <Row gap="$3" alignItems="center" flexShrink={1} minWidth={0}>
       <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`Account ${title}`} testID={testID} style={{ minHeight: metrics.hit, minWidth: metrics.hit, alignItems: 'center', justifyContent: 'center', marginHorizontal: -2, flexShrink: 0 }}>
         <Signature address={address} size={40} />
       </Pressable>
+      {/*
+        Owner: "clicking even on the lower half of the wallet name triggers the
+        address being copied ... Only the copy icon should trigger that, and the
+        rest should nav to account management."
+        The two controls used to be stacked 44 px targets pulled together with
+        negative margins, so they overlapped and the copy target reached up over
+        the name. Now the name *and* the address text are one tall target that
+        opens accounts, and copy is only the icon.
+      */}
       <Column alignItems="flex-start" flexShrink={1} minWidth={0}>
-        <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`Account ${title}`} testID={testID ? `${testID}-name` : undefined} style={{ minHeight: metrics.hit, justifyContent: 'center', marginVertical: onCopy ? -10 : 0 }}>
-          <Row gap={6} alignItems="center">
-            <Body size="title" numberOfLines={1} flexShrink={1}>
-              {title}
-            </Body>
-            {tierMark ? (
-              <Body tone="ember" size="caption" numberOfLines={1} flexShrink={0}>
-                {tierMark}
-              </Body>
-            ) : null}
-            <Icon name="chevronDown" size={16} color={paint.mute} />
-          </Row>
-        </Pressable>
-        {onCopy ? (
-          <Pressable onPress={onCopy} accessibilityRole="button" accessibilityLabel={`Copy address ${address}`} testID={testID ? `${testID}-copy` : undefined} style={{ minHeight: metrics.hit, marginVertical: -13, justifyContent: 'center' }}>
-            {addressLine}
+        <Row gap={4} alignItems="center" flexShrink={1} minWidth={0}>
+          <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`Account ${title}`} testID={testID ? `${testID}-name` : undefined} style={{ minHeight: metrics.hit, justifyContent: 'center', flexShrink: 1, minWidth: 0 }}>
+            <Column alignItems="flex-start" gap={1}>
+              <Row gap={6} alignItems="center">
+                <Body size="title" numberOfLines={1} flexShrink={1}>
+                  {title}
+                </Body>
+                {tierMark ? (
+                  <Body tone="ember" size="caption" numberOfLines={1} flexShrink={0}>
+                    {tierMark}
+                  </Body>
+                ) : null}
+                <Icon name="chevronDown" size={16} color={paint.mute} />
+              </Row>
+              {onCopy ? addressLine : null}
+            </Column>
           </Pressable>
-        ) : null}
+          {onCopy ? (
+            <Pressable onPress={onCopy} accessibilityRole="button" accessibilityLabel={`Copy address ${address}`} testID={testID ? `${testID}-copy` : undefined} style={{ minHeight: metrics.hit, minWidth: metrics.hit, alignItems: 'flex-start', justifyContent: 'flex-end', paddingBottom: 4, flexShrink: 0 }}>
+              {/* 44×44 to satisfy the hit-target law (§7.5); the glyph hugs the
+                left so the slack falls into the header's empty middle and copy
+                still reads as sitting beside the address. */}
+            <Icon name={copied ? 'check' : 'copy'} size={14} color={copied ? paint.arc : paint.mute} />
+            </Pressable>
+          ) : null}
+        </Row>
       </Column>
     </Row>
   )

@@ -18,6 +18,7 @@ import { usePositions } from '../hooks/usePositions'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { useReducedMotion } from '../state/useReducedMotion'
+import { useSwapFlow } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
 import { FarmCard } from '../components/cards/FarmCard'
 import { Rack } from './Rack'
@@ -39,6 +40,23 @@ export function Portfolio({ body }: { body: BodyKind }) {
   const portfolio = usePortfolio(accountId, 5_000, scope.chainIds)
   const { positions } = usePositions(accountId, !!vault?.unlocked)
   const [segment, setSegment] = useState<Segment>('tokens')
+  // Collecting is offered wherever a position is shown, so the card reads the
+  // same on Portfolio as it does on Home > Farms (owner: "rendered
+  // consistently across the portfolio farm positions and the home -> farm list").
+  const { setActive: setFlow } = useSwapFlow()
+  const [collecting, setCollecting] = useState<number | null>(null)
+  const collect = async (farmId: number): Promise<void> => {
+    if (!active) return
+    setCollecting(farmId)
+    try {
+      const r = await engine.farm.collect({ accountId: active.id, chainId: ETN, farmId, asNative: true })
+      setFlow(r.flowId)
+    } catch {
+      // The farm page shows the reason; the card stays quiet.
+    } finally {
+      setCollecting(null)
+    }
+  }
   const [sinceLook, setSinceLook] = useState<{ at: number; total: number | null } | null>(null)
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const wide = body !== 'extension-popup'
@@ -152,7 +170,7 @@ export function Portfolio({ body }: { body: BodyKind }) {
           <Column gap="$2" testID="positions">
             {positions.legends && positions.legends.ownedTokenIds.length > 0 ? <DividendsCard status={positions.legends} compact reducedMotion={reducedMotion} onOpen={() => router.navigate('legends')} testID="home-legends" /> : null}
             {positions.farms.map((f) => (
-              <FarmCard key={f.id} farm={f} onPress={() => router.navigate('farm', { chainId: ETN, farmId: f.id })} />
+              <FarmCard key={f.id} farm={f} onPress={() => router.navigate('farm', { chainId: ETN, farmId: f.id })} onCollect={active && f.position ? () => void collect(f.id) : undefined} busy={collecting === f.id} />
             ))}
             {positions.orders.map((o) => (
               <Plate key={o.orderId} role="card" gap={2} onPress={() => router.setTab('swap')} cursor="pointer" testID={`position-order-${o.orderId}`}>

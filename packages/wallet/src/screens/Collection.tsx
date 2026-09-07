@@ -56,7 +56,34 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
 
 
   // The shell draws one loader over the whole screen while this is true.
-  useScreenBusy('collection', collection === null || (collection.paysDividends && active !== null && legends === null))
+  /**
+   * Hold the loader until the header has actually painted.
+   *
+   * Owner: "Loading the NFT collections I'm still seeing those flicker after
+   * the loader disappears, keep the loader spinning until all the header
+   * images are finished rendering." Metadata arriving is not the same as the
+   * banner and the avatar being on screen, which is why the page still moved
+   * underneath after the loader lifted.
+   *
+   * The timeout is the safety valve: an image that never resolves must not
+   * leave the wallet stuck behind a loader.
+   */
+  const [artReady, setArtReady] = useState(false)
+  const wantsBanner = collection?.bannerUrl != null && collection.bannerUrl !== ''
+  const wantsLogo = collection?.imageUrl != null && collection.imageUrl !== ''
+  const settled = useRef({ banner: false, logo: false })
+  const markSettled = (which: 'banner' | 'logo'): void => {
+    settled.current[which] = true
+    if ((!wantsBanner || settled.current.banner) && (!wantsLogo || settled.current.logo)) setArtReady(true)
+  }
+  useEffect(() => {
+    settled.current = { banner: false, logo: false }
+    setArtReady(false)
+    const give = setTimeout(() => setArtReady(true), 5_000)
+    return () => clearTimeout(give)
+  }, [chainId, address, collection?.bannerUrl, collection?.imageUrl])
+
+  useScreenBusy('collection', collection === null || (collection.paysDividends && active !== null && legends === null) || ((wantsBanner || wantsLogo) && !artReady))
 
   useEffect(() => {
     let alive = true
@@ -157,7 +184,7 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
           <Column>
             {collection.bannerUrl ? (
               <Column position="relative">
-                <Artwork uri={collection.bannerUrl} label={collection.name} size={{ width: contentWidth, height: 104 }} />
+                <Artwork uri={collection.bannerUrl} label={collection.name} size={{ width: contentWidth, height: 104 }} onSettled={() => markSettled('banner')} />
                 {/* Transparent at the top, solid at the bottom, the banner's
                     full width — so the name sits on the picture rather than on
                     a grey bar laid over it. */}
@@ -167,7 +194,7 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
               </Column>
             ) : null}
             <Row gap="$3" alignItems="flex-end" marginTop={collection.bannerUrl ? -32 : 0} paddingHorizontal={collection.bannerUrl ? 12 : 0}>
-              <Artwork uri={collection.imageUrl} label={collection.name} size={64} />
+              <Artwork uri={collection.imageUrl} label={collection.name} size={64} onSettled={() => markSettled('logo')} />
               <Column flex={1} alignItems="flex-start" paddingBottom={4}>
                 <Row gap="$2" alignItems="center">
                   <Body size="title" numberOfLines={1} flexShrink={1}>

@@ -23,6 +23,13 @@ export interface InputProps {
   readonly bare?: boolean
   /** Readout numerals (Oxanium 28) for amounts. */
   readonly big?: boolean
+  /**
+   * An amount field. Rejects anything that is not a number as it is typed —
+   * owner: "Swap input is accepting non digit chars" — and asks the phone for
+   * a decimal keypad. Kept as sanitising rather than a pattern check so a
+   * paste of "1,234.5 ETN" becomes "1234.5" instead of being refused whole.
+   */
+  readonly numeric?: boolean
   readonly error?: string | null
   readonly hint?: string | null
   readonly autoFocus?: boolean
@@ -32,8 +39,19 @@ export interface InputProps {
   readonly disabled?: boolean
 }
 
-export const Input = forwardRef<TextInput, InputProps>(function Input({ value, onChange, label, placeholder, secure, multiline, bare, big, error, hint, autoFocus, onSubmit, testID, autoCapitalize = 'none', disabled }, ref) {
+export const Input = forwardRef<TextInput, InputProps>(function Input({ value, onChange, label, placeholder, secure, multiline, bare, big, numeric, error, hint, autoFocus, onSubmit, testID, autoCapitalize = 'none', disabled }, ref) {
   const [focused, setFocused] = useState(false)
+  const handleChange = (next: string): void => {
+    if (!numeric) {
+      onChange(next)
+      return
+    }
+    // Digits and at most one separator; a leading dot becomes "0.".
+    const cleaned = next.replace(/[^0-9.,]/g, '').replace(/,/g, '.')
+    const [head = '', ...rest] = cleaned.split('.')
+    const joined = rest.length > 0 ? `${head}.${rest.join('')}` : head
+    onChange(joined === '.' ? '0.' : joined)
+  }
   return (
     <Column gap="$1">
       {label ? (
@@ -44,13 +62,14 @@ export const Input = forwardRef<TextInput, InputProps>(function Input({ value, o
       <TextInput
         ref={ref}
         value={value}
-        onChangeText={onChange}
+        onChangeText={handleChange}
         placeholder={placeholder}
         placeholderTextColor={paint.mute}
         secureTextEntry={secure}
         multiline={multiline}
         autoFocus={autoFocus}
         autoCapitalize={autoCapitalize}
+        {...(numeric ? { inputMode: 'decimal' as const, keyboardType: 'decimal-pad' as const } : {})}
         autoCorrect={false}
         spellCheck={false}
         editable={!disabled}

@@ -50,7 +50,7 @@ export function AmountWell({ label, value, onChange, readOnly = false, tokenPill
               {value || '0'}
             </Body>
           ) : (
-            <Input value={value} onChange={onChange} placeholder="0" bare big autoFocus={autoFocus} testID={inputTestID} />
+            <Input value={value} onChange={onChange} placeholder="0" bare big numeric autoFocus={autoFocus} testID={inputTestID} />
           )}
         </Column>
         {tokenPill ?? null}

@@ -30,21 +30,18 @@ import { Image, View } from 'react-native'
 import Animated from 'react-native-reanimated'
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg'
 import { useId } from 'react'
+import { ES_MARK_URI, ES_WORDMARK_URI } from './brand'
 import { useReducedMotionPref } from './motion/MotionContext'
 import { Body, Column } from './primitives'
 import { current, edge, glow, metrics, motion, paint } from './tokens'
 
-/** Where the vendored brand files live; the extension serves its public dir. */
-let brandBase = '/brand/'
-
-export function setBrandBase(next: string): void {
-  brandBase = next.endsWith('/') ? next : `${next}/`
-}
-
-/** The compact mark. */
-export const esMarkUri = (): string => `${brandBase}es-mark.svg`
-/** The full lock-up, mark and wordmark. */
-export const esWordmarkUri = (): string => `${brandBase}es-wordmark.svg`
+/**
+ * The marks come from the bundle, not from a file the page has to fetch — a
+ * loader whose logo arrives after its animation has started is not a loader,
+ * it is two things happening. See brand.ts.
+ */
+export const esMarkUri = (): string => ES_MARK_URI
+export const esWordmarkUri = (): string => ES_WORDMARK_URI
 
 export interface PageLoaderProps {
   /** Optional line under the mark; keep it to a few words. */
@@ -98,7 +95,7 @@ function Halo({ size, reduced }: { size: number; reduced: boolean }) {
   )
 }
 
-export function PageLoader({ label = null, size = 108, overlay = false, reducedMotion, testID }: PageLoaderProps) {
+export function PageLoader({ label = null, size = 130, overlay = false, reducedMotion, testID }: PageLoaderProps) {
   const reduced = useReducedMotionPref() || reducedMotion === true
   // 477 x 296 in the source; keep the ratio.
   const height = Math.round((size * 296.07) / 477.78)
@@ -153,7 +150,7 @@ export interface EsWordmarkProps {
  * The full ElectroSwap lock-up. Kept here rather than exposing `Image` to
  * packages/wallet, which composes ui primitives and never react-native.
  */
-export function EsWordmark({ width = 168, opacity = 0.9, testID }: EsWordmarkProps) {
+export function EsWordmark({ width = 202, opacity = 0.9, testID }: EsWordmarkProps) {
   // 629 x 155.5 in the source; keep the ratio so it never distorts.
   const height = Math.round((width * 155.5) / 629.64)
   return <Image source={{ uri: esWordmarkUri() }} style={{ width, height, opacity }} accessibilityLabel="ElectroSwap" accessibilityIgnoresInvertColors testID={testID} />

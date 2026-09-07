@@ -88,7 +88,7 @@ export function Unlock({ body, reducedMotion = false }: { body: 'extension-popup
         would compete with a number.
       */}
       <Column alignItems="center" paddingBottom="$6" zIndex={1} testID="unlock-brand">
-        <EsWordmark width={168} />
+        <EsWordmark />
       </Column>
     </Column>
   )

@@ -4,7 +4,7 @@
  * opens. Images only (mp4 arrives with the mobile media host, M9); a
  * failed image falls back to an engraved placeholder, never a blank.
  */
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Image } from 'react-native'
 import Animated from 'react-native-reanimated'
 import { useCachedImage } from './imageCache'
@@ -20,6 +20,12 @@ export interface ArtworkProps {
   readonly reducedMotion?: boolean
   /** A listed piece's price tag glows `arc`; a piece with an offer carries an `ember` mark (§8.10). */
   readonly badge?: { readonly text: string; readonly tone: 'arc' | 'ember' } | null
+  /**
+   * Fires once this slot has settled — the image painted, or it failed and the
+   * placeholder is what you get. Either way it will not change again, which is
+   * what a screen needs to know before it stops showing a loader over itself.
+   */
+  readonly onSettled?: () => void
   /**
    * Corner radius. Pass 0 when a parent already clips this to its own shape:
    * two radii on one corner draw it twice, which is the doubled edge the
@@ -42,11 +48,22 @@ function initials(label: string): string {
     .toUpperCase()
 }
 
-export function Artwork({ uri: source, label, size, sweep = false, reducedMotion = false, badge = null, radius = 12, testID }: ArtworkProps) {
+export function Artwork({ uri: source, label, size, sweep = false, reducedMotion = false, badge = null, radius = 12, onSettled, testID }: ArtworkProps) {
   // Served from the body's disk cache when it has a copy; otherwise the
   // network URL, with the cache filled behind this render.
   const uri = useCachedImage(source)
   const [failedUri, setFailedUri] = useState<string | null>(null)
+  const settled = useRef(false)
+  const settle = (): void => {
+    if (settled.current) return
+    settled.current = true
+    onSettled?.()
+  }
+  // Nothing to wait for: no image means this slot is already final.
+  useEffect(() => {
+    if (source === null || source === undefined || source === '') settle()
+    // `settle` is idempotent and reads a ref, so the source is the only input.
+  }, [source])
   // Keyed by the uri, not a bare boolean: a recycled row that swapped in a new
   // image used to stay stuck on the placeholder because `failed` never reset.
   const failed = uri !== undefined && uri !== null && uri === failedUri
@@ -58,7 +75,7 @@ export function Artwork({ uri: source, label, size, sweep = false, reducedMotion
   return (
     <Column width={width} height={height} borderRadius={radius} overflow="hidden" backgroundColor="$glass" borderWidth={1} borderColor="rgba(95,216,255,0.12)" testID={testID}>
       {show ? (
-        <Image source={{ uri: uri ?? '' }} onError={() => setFailedUri(uri ?? null)} style={{ width, height }} resizeMode="cover" accessibilityLabel={label} />
+        <Image source={{ uri: uri ?? '' }} onLoad={settle} onError={() => { setFailedUri(uri ?? null); settle() }} style={{ width, height }} resizeMode="cover" accessibilityLabel={label} />
       ) : (
         <Column flex={1} alignItems="center" justifyContent="center" padding={small ? 2 : 8}>
           {small ? (

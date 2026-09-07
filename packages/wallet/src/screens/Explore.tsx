@@ -47,7 +47,8 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
   const [found, setFound] = useState<{ tokens: ExploreToken[]; collections: CollectionView[] } | null>(null)
   const [addOpen, setAddOpen] = useState(false)
   const [addCollectionOpen, setAddCollectionOpen] = useState(false)
-  const [window, setWindow] = useState<CollectionWindow>('DAY')
+  // Owner: Collectibles opens on All, not on the last day.
+  const [window, setWindow] = useState<CollectionWindow>('MAX')
   const [ccy, setCcy] = useState<CollectionCurrency>('ETN')
   const accountId = active?.id
 
