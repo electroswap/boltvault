@@ -62,6 +62,7 @@ const Legends = lazy(() => import('../screens/Legends').then((m) => ({ default: 
 const Alerts = lazy(() => import('../screens/Alerts').then((m) => ({ default: m.Alerts })))
 const Bridge = lazy(() => import('../screens/Bridge').then((m) => ({ default: m.Bridge })))
 const Networks = lazy(() => import('../screens/Networks').then((m) => ({ default: m.Networks })))
+const AddressBook = lazy(() => import('../screens/AddressBook').then((m) => ({ default: m.AddressBook })))
 const Browser = lazy(() => import('../screens/Browser').then((m) => ({ default: m.Browser })))
 const Feel = lazy(() => import('../screens/Feel').then((m) => ({ default: m.Feel })))
 const About = lazy(() => import('../screens/About').then((m) => ({ default: m.About })))
@@ -96,6 +97,7 @@ export function prefetchScreens(): void {
       import('../screens/Alerts'),
       import('../screens/Bridge'),
       import('../screens/Networks'),
+      import('../screens/AddressBook'),
       import('../screens/Browser'),
       import('../screens/Feel'),
       import('../screens/About'),
@@ -232,6 +234,9 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
     }
     case 'networks':
       screen = <Networks body={body} />
+      break
+    case 'addressBook':
+      screen = <AddressBook body={body} />
       break
     case 'browser': {
       const p = current.params as { url?: string } | undefined

@@ -35,6 +35,7 @@ export function SettingsShell({ body }: { body: Body_ }) {
     { id: 'approvals', title: t({ id: 'settings.approvals', message: 'Approvals' }), rows: [t({ id: 'settings.approvals.rows', message: 'What contracts can move your tokens; revoke' })] },
     { id: 'sites', title: t({ id: 'settings.sites', message: 'Connected sites' }), rows: [t({ id: 'settings.sites.rows', message: 'Per-site chain and account' })] },
     { id: 'networks', title: t({ id: 'settings.networks', message: 'Networks' }), rows: [t({ id: 'settings.networks.rows', message: 'Which chains show, custom RPCs, testnet' })] },
+    { id: 'addressBook', title: t({ id: 'settings.book', message: 'Address book' }), rows: [t({ id: 'settings.book.rows', message: 'Names for the addresses you send to' })] },
     { id: 'devices', title: t({ id: 'settings.devices', message: 'Devices & sync' }), rows: [t({ id: 'settings.devices.rows', message: 'Pair a phone or browser; move your vault' })] },
     { id: 'notifications', title: t({ id: 'settings.notifications', message: 'Notifications' }), rows: [t({ id: 'settings.notifications.rows', message: 'Watchlist alerts, campaigns going live, rewards and dividends' })] },
     { id: 'feel', title: t({ id: 'settings.feel', message: 'Appearance & feel' }), rows: [t({ id: 'settings.feel.rows', message: 'Motion, haptics, sound, currency' })] },
@@ -55,7 +56,7 @@ export function SettingsShell({ body }: { body: Body_ }) {
         </Plate>
       ) : null}
       {groups.map((g) => {
-        const target = g.id === 'accounts' ? 'accounts' : g.id === 'security' ? 'security' : g.id === 'devices' ? 'devices' : g.id === 'sites' ? 'sites' : g.id === 'approvals' ? 'allowances' : g.id === 'spending' ? 'spending' : g.id === 'notifications' ? 'alerts' : g.id === 'networks' ? 'networks' : g.id === 'feel' ? 'feel' : g.id === 'about' ? 'about' : null
+        const target = g.id === 'accounts' ? 'accounts' : g.id === 'security' ? 'security' : g.id === 'devices' ? 'devices' : g.id === 'sites' ? 'sites' : g.id === 'approvals' ? 'allowances' : g.id === 'spending' ? 'spending' : g.id === 'notifications' ? 'alerts' : g.id === 'networks' ? 'networks' : g.id === 'addressBook' ? 'addressBook' : g.id === 'feel' ? 'feel' : g.id === 'about' ? 'about' : null
         return (
           <Plate key={g.id} gap="$1" testID={`settings-${g.id}`} onPress={target ? () => router.navigate(target) : undefined} cursor={target ? 'pointer' : undefined}>
             <Row justifyContent="space-between">

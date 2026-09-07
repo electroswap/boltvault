@@ -23,6 +23,7 @@ export interface ScreenParams {
   alerts: undefined
   bridge: { chainId?: number; token?: string } | undefined
   networks: undefined
+  addressBook: undefined
   browser: { url?: string } | undefined
   feel: undefined
   about: undefined
@@ -85,6 +86,7 @@ export const SCREENS: Record<ScreenId, ScreenMeta> = {
   alerts: meta('alerts', 'push'),
   bridge: meta('bridge', 'push'),
   networks: meta('networks', 'push'),
+  addressBook: meta('addressBook', 'push'),
   browser: meta('browser', 'push', { dock: false }),
   feel: meta('feel', 'push'),
   about: meta('about', 'push'),
