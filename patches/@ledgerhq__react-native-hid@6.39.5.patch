@@ -1,0 +1,38 @@
+diff --git a/android/src/main/java/com/ledgerwallet/hid/ReactHIDModule.java b/android/src/main/java/com/ledgerwallet/hid/ReactHIDModule.java
+index 349bf3982c88ace9f58d51fcaaab7eacae86d050..cd82be139a6f35d14ec34d5303190b6a43434da4 100644
+--- a/android/src/main/java/com/ledgerwallet/hid/ReactHIDModule.java
++++ b/android/src/main/java/com/ledgerwallet/hid/ReactHIDModule.java
+@@ -58,7 +58,7 @@ public class ReactHIDModule extends ReactContextBaseJavaModule {
+                         .emit(event, buildMapFromDevice(device));
+             }
+         };
+-        getReactApplicationContext().registerReceiver(receiver, filter);
++        registerReceiverCompat(receiver, filter);
+     }
+ 
+     private WritableMap buildMapFromDevice(UsbDevice device) {
+@@ -213,7 +213,23 @@ public class ReactHIDModule extends ReactContextBaseJavaModule {
+                 unregisterReceiver(this);
+             }
+         };
+-        getReactApplicationContext().registerReceiver(receiver, intFilter);
++        registerReceiverCompat(receiver, intFilter);
++    }
++
++    /**
++     * Android 13 (API 33) requires every dynamically registered receiver to
++     * say whether other apps may broadcast to it, and throws otherwise:
++     * "One of RECEIVER_EXPORTED or RECEIVER_NOT_EXPORTED should be specified
++     * when a receiver isn't being registered exclusively for system
++     * broadcasts." These two listen for this app's own USB permission reply
++     * and for USB attach/detach, so nothing outside the app should reach them.
++     */
++    private void registerReceiverCompat(BroadcastReceiver receiver, IntentFilter filter) {
++        if (android.os.Build.VERSION.SDK_INT >= 33) {
++            getReactApplicationContext().registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
++        } else {
++            getReactApplicationContext().registerReceiver(receiver, filter);
++        }
+     }
+ 
+     private void unregisterReceiver(BroadcastReceiver receiver) {

@@ -18,6 +18,7 @@
  * import at module scope would break the harness and the extension bundle.
  */
 import type { ApduTransport, LedgerTransportProvider } from '@boltvault/hardware'
+import { serial } from './ledger-queue'
 
 interface HidTransport {
   exchange(apdu: Buffer): Promise<Buffer>
@@ -91,19 +92,24 @@ export function hidLedgerProvider(): LedgerTransportProvider {
       if (!descriptor) throw new Error('that Ledger is no longer attached')
       const m = await load()
       const t = await m.default.open(descriptor)
+      // Ledger's Transport allows one exchange at a time and throws
+      // TransportRaceCondition otherwise; callers are legitimately concurrent,
+      // so the queue lives here. See ledger-queue.ts.
+      const queue = serial()
       const transport = {
         model: modelFromProduct(descriptor.productId, descriptor.deviceName ?? descriptor.name),
-        exchange: async (apdu: Uint8Array): Promise<Uint8Array> => {
-          try {
-            const out = await t.exchange(Buffer.from(apdu))
-            return new Uint8Array(out)
-          } catch (err) {
-            // A pulled cable must not leave a dead handle cached.
-            open.delete(id)
-            await t.close().catch(() => undefined)
-            throw err
-          }
-        },
+        exchange: (apdu: Uint8Array): Promise<Uint8Array> =>
+          queue(async () => {
+            try {
+              const out = await t.exchange(Buffer.from(apdu))
+              return new Uint8Array(out)
+            } catch (err) {
+              // A pulled cable must not leave a dead handle cached.
+              open.delete(id)
+              await t.close().catch(() => undefined)
+              throw err
+            }
+          }),
       }
       open.set(id, transport)
       return transport

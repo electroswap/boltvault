@@ -11,6 +11,11 @@ overrides:
   browserslist: '>=4.28.7'
   react-router: '>=7.18.2'
 
+patchedDependencies:
+  '@ledgerhq/react-native-hid@6.39.5':
+    hash: ac848306f21365c99b0300f303a8f1454ceb259bbec5fde48748576d399273b2
+    path: patches/@ledgerhq__react-native-hid@6.39.5.patch
+
 importers:
 
   .:
@@ -186,7 +191,7 @@ importers:
         version: 0.4.2
       '@ledgerhq/react-native-hid':
         specifier: 6.39.5
-        version: 6.39.5(react-native@0.86.3(@babel/core@7.29.0)(@react-native/metro-config@0.86.3(@babel/core@7.29.0))(@types/react@19.2.18)(react@19.2.3))
+        version: 6.39.5(patch_hash=ac848306f21365c99b0300f303a8f1454ceb259bbec5fde48748576d399273b2)(react-native@0.86.3(@babel/core@7.29.0)(@react-native/metro-config@0.86.3(@babel/core@7.29.0))(@types/react@19.2.18)(react@19.2.3))
       '@ledgerhq/react-native-hw-transport-ble':
         specifier: 6.41.0
         version: 6.41.0(react-native@0.86.3(@babel/core@7.29.0)(@react-native/metro-config@0.86.3(@babel/core@7.29.0))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
@@ -8274,7 +8279,7 @@ snapshots:
 
   '@ledgerhq/logs@6.19.0': {}
 
-  '@ledgerhq/react-native-hid@6.39.5(react-native@0.86.3(@babel/core@7.29.0)(@react-native/metro-config@0.86.3(@babel/core@7.29.0))(@types/react@19.2.18)(react@19.2.3))':
+  '@ledgerhq/react-native-hid@6.39.5(patch_hash=ac848306f21365c99b0300f303a8f1454ceb259bbec5fde48748576d399273b2)(react-native@0.86.3(@babel/core@7.29.0)(@react-native/metro-config@0.86.3(@babel/core@7.29.0))(@types/react@19.2.18)(react@19.2.3))':
     dependencies:
       '@ledgerhq/devices': 8.16.0
       '@ledgerhq/errors': 6.37.0

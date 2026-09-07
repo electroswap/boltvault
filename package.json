@@ -2,7 +2,7 @@
   "name": "bolt-vault",
   "private": true,
   "version": "0.0.0",
-  "description": "BoltVault \u2014 Electroneum wallet & ElectroSwap uber-app (one brain, two bodies, one face)",
+  "description": "BoltVault — Electroneum wallet & ElectroSwap uber-app (one brain, two bodies, one face)",
   "scripts": {
     "typecheck": "pnpm -r --no-bail typecheck",
     "test": "vitest run --passWithNoTests",
@@ -52,6 +52,9 @@
       "toml": ">=4.2.0",
       "browserslist": ">=4.28.7",
       "react-router": ">=7.18.2"
+    },
+    "patchedDependencies": {
+      "@ledgerhq/react-native-hid@6.39.5": "patches/@ledgerhq__react-native-hid@6.39.5.patch"
     }
   }
 }

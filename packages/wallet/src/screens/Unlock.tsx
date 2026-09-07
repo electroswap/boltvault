@@ -3,7 +3,7 @@
  * Quiet custody mode; the Field ignites on success (Ignition on Home).
  */
 import { Body, Column, EsWordmark, Field, Icon, Input, Key, Plate, Row, metrics, paint, useWindowDimensions } from '@boltvault/ui'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
@@ -44,6 +44,22 @@ export function Unlock({ body, reducedMotion = false }: { body: 'extension-popup
       alive = false
     }
   }, [host.deviceKey, deviceWrapped])
+
+  /*
+    Owner: "when enrolled you skip the step that makes me click 'unlock with
+    biometrics' and just prompt me for the biometrics."
+
+    So the prompt opens itself the moment we know one is enrolled and usable.
+    Once only — `prompted` is a ref, not state, so a re-render cannot re-open
+    it, and cancelling leaves the password field focused with the key still
+    there to try again rather than looping the prompt.
+  */
+  const prompted = useRef(false)
+  useEffect(() => {
+    if (!biometricOk || prompted.current) return
+    prompted.current = true
+    void unlockWithBiometric()
+  }, [biometricOk])
 
   const unlock = async (): Promise<void> => {
     setBusy(true)
