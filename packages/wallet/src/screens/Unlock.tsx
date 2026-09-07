@@ -23,6 +23,11 @@ export function Unlock({ body, reducedMotion = false }: { body: 'extension-popup
   const [error, setError] = useState<string | null>(null)
   const [passkeyOk, setPasskeyOk] = useState(false)
   const passkeyIds = (vault?.wraps ?? []).filter((w) => w.by === 'prf').map((w) => w.id)
+  // Biometric unlock is offered only when this vault actually carries a device
+  // wrap AND the phone still has a biometric enrolled — changing the enrolled
+  // set invalidates the keystore entry, so the wrap can outlive the key.
+  const [biometricOk, setBiometricOk] = useState(false)
+  const deviceWrapped = (vault?.wraps ?? []).some((w) => w.by === 'device')
 
   useEffect(() => {
     let alive = true
@@ -31,6 +36,14 @@ export function Unlock({ body, reducedMotion = false }: { body: 'extension-popup
       alive = false
     }
   }, [host.passkeys, passkeyIds.length])
+
+  useEffect(() => {
+    let alive = true
+    if (deviceWrapped && host.deviceKey) host.deviceKey.available().then((ok) => alive && setBiometricOk(ok), () => undefined)
+    return () => {
+      alive = false
+    }
+  }, [host.deviceKey, deviceWrapped])
 
   const unlock = async (): Promise<void> => {
     setBusy(true)
@@ -61,6 +74,24 @@ export function Unlock({ body, reducedMotion = false }: { body: 'extension-popup
     }
   }
 
+  const unlockWithBiometric = async (): Promise<void> => {
+    if (!host.deviceKey) return
+    setBusy(true)
+    setError(null)
+    try {
+      const keyHex = await host.deviceKey.read(t({ id: 'unlock.biometric.reason', message: 'Unlock BoltVault' }))
+      // A cancelled prompt is not a failure worth shouting about; the password
+      // field is right there.
+      if (keyHex === null) return
+      await engine.vault.unlockWithDevice({ keyId: host.deviceKey.id, keyHex })
+      router.reset()
+    } catch {
+      setError(t({ id: 'unlock.biometric.fail', message: 'That did not unlock the vault. Use your password.' }))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   return (
     <Column flex={1} backgroundColor="$void" testID="unlock">
@@ -73,6 +104,7 @@ export function Unlock({ body, reducedMotion = false }: { body: 'extension-popup
         <Input value={password} onChange={setPassword} secure autoFocus placeholder={t({ id: 'unlock.ph', message: 'Password' })} onSubmit={unlock} error={error} testID="unlock-password" />
         <Key label={t({ id: 'unlock.key', message: 'Unlock' })} onPress={unlock} disabled={busy || !password} testID="unlock-submit" />
         {passkeyOk ? <Key label={t({ id: 'unlock.passkey', message: 'Unlock with passkey' })} kind="secondary" onPress={unlockWithPasskey} disabled={busy} testID="unlock-passkey" /> : null}
+        {biometricOk ? <Key label={t({ id: 'unlock.biometric', message: 'Unlock with biometrics' })} kind="secondary" onPress={unlockWithBiometric} disabled={busy} testID="unlock-biometric" /> : null}
         <Plate gap="$1">
           <Body tone="mute" size="caption">
             {t({ id: 'unlock.help', message: 'Forgot the password? There is no reset. Restore from your recovery phrase on a fresh install instead.' })}

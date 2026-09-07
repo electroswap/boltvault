@@ -4,7 +4,7 @@
  * screens is replaced by Unlock. A pending dApp approval takes over the
  * popup and the mobile body (the sign window mounts it by route).
  */
-import { Column, Field, MotionProvider, PageLoader, ScreenEnter, TabBar, useWindowDimensions, type EnterDirection } from '@boltvault/ui'
+import { Column, Field, MotionProvider, PageLoader, ScreenEnter, TabBar, useInsets, useWindowDimensions, type EnterDirection } from '@boltvault/ui'
 import { Suspense, lazy, useEffect, useRef } from 'react'
 import { t } from '../i18n'
 import { Approval } from '../screens/Approval'
@@ -25,6 +25,7 @@ import { useNotifications } from '../hooks/useNotifications'
 import { useChainHead } from '../hooks/useChainHead'
 import { useHolderTier } from '../hooks/useHolderTier'
 import { SCREENS, TABS, TAB_ORDER, type TabId } from './registry'
+import { useAndroidBack } from '../state/useAndroidBack'
 import { useRouter } from './router'
 
 const ETN = 52014
@@ -118,6 +119,8 @@ export interface TabShellProps {
 
 export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   const router = useRouter()
+  const insets = useInsets()
+  useAndroidBack()
   const { vault, loading, active } = useWalletState()
   const { width, height } = useWindowDimensions()
   const scene = useScene()
@@ -319,7 +322,12 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
           Sheets are position:absolute inset-0 inside this same column, so
           clipping it does not change what they cover.
         */}
-        <Column flex={1} zIndex={1} overflow="hidden">
+        {/*
+          Top inset only here, so the scene still paints edge to edge behind the
+          status bar while nothing readable sits under it. The dock takes the
+          bottom inset itself.
+        */}
+        <Column flex={1} zIndex={1} overflow="hidden" paddingTop={insets.top}>
           <ScreenEnter key={enterKey} direction={direction} reducedMotion={reducedMotion}>
             {/*
               The fallback is a plate-shaped skeleton, not a spinner and not a

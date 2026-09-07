@@ -53,7 +53,8 @@ Glow: raised plates `rgba(60,100,255,0.22)` radius 24; the primary key `rgba(70,
 - **Text**: Sora 400/600, 13–17 px, sentence case, ≤ 70 characters a line. Labels above a number are Sora 400 13 px `mute`.
 - **Addresses and hashes**: Sora tabular 13–14 px `mute`, `0x1F90…7B63`, with their own copy control beside them. There is no monospace face in the product (2026-09-06: the IBM Plex Mono declaration was never shipped as a file and fell back to a serif; it is gone from the tokens, the config and every call site).
 - No third family. Numerals never fall back to Sora.
-- **The fonts are never seen arriving.** Both faces ship as local woff2, every weight is preloaded in every entry document, and `font-display` is `block` — never `swap`, which by definition paints fallback text first and then changes it under the reader. Every family in `tokens.ts` is a full stack ending in a generic sans; a bare `font-family: Sora` falls back to the UA default, which is a *serif*, and that is twice now that a bare declaration has put a serif on screen (the Plex Mono note above was the first). `e2e/fonts.spec.ts` holds all three of these.
+- **The fonts are never seen arriving.** Both faces ship as local woff2, every weight is preloaded in every entry document, and `font-display` is `block` — never `swap`, which by definition paints fallback text first and then changes it under the reader. `e2e/fonts.spec.ts` holds these.
+- **The family rule is per body, and the two are opposites.** *On the web*, every family in `tokens.ts` is a full stack ending in a generic sans; a bare `font-family: Sora` falls back to the UA default, which is a *serif*, and that has twice put a serif on screen (the Plex Mono note above was the first). *On native*, the family is the bare registered name and nothing else — React Native's `fontFamily` takes one registered family, so a comma-separated CSS stack matches nothing and Android silently draws Roboto. The names are whatever `ReactFontManager.addCustomFont` registered in `MainApplication.kt`: `Sora` and `Oxanium`. `tokens.ts` switches on `Platform.OS`; changing one half without the other breaks the other body, which is exactly how 2026-09-06's web-only fix shipped Roboto to the phone.
 
 ## Materials and roles
 
@@ -82,7 +83,23 @@ Chrome: one header per pushed screen (`ScreenHeader` / `PageHeader`): a 44 px ro
 
 ## Layout
 
-Left-aligned, 20 px inset in the popup, 24 px on the phone and in the tab. The hero readout sits directly on the Grid (no plate) so the mesh is seen beneath it; everything below it sits on glass. Four keys as glass tiles in the thumb zone; four tabs. Minimum hit 44 px, bus bars 52 px, keys 56 px — unchanged from the master plan.
+Left-aligned, 20 px inset in the popup, 24 px on the phone and in the tab. The hero readout sits directly on the Grid (no plate) so the mesh is seen beneath it; everything below it sits on glass. Four keys as glass tiles in the thumb zone; four tabs.
+
+**The scale differs by body.** The popup numbers were used verbatim on a 448 dp phone for a long time, which is why the product read small in the hand; a thumb is not a cursor. `tokens.ts` carries both, switched on `Platform.OS`:
+
+| | popup / tab | phone |
+|---|---|---|
+| body | 15 | 16 |
+| caption | 13 | 14 |
+| title | 17 | 18 |
+| readout | 24 | 28 |
+| hero | 40 | 48 |
+| minimum hit | 44 | 48 |
+| bus bar | 52 | 58 |
+| key | 56 | 60 |
+| tab bar | 52 | 56 + bottom inset |
+
+**The phone clears the system bars.** The Android window is edge-to-edge on purpose, so the scene paints behind the status and gesture bars while nothing readable does: the screen area takes the top inset, the dock's height is `tabBar + bottom inset`, and sheets add the bottom inset to their last row. Insets arrive as context from the body (`InsetsProvider`); every other body supplies none and gets zeros.
 
 The swap card follows the concept: two terminals stacked inside one console, each a well with the label top-left, the amount large, the token pill right, the balance line beneath; the flip control is a lit-rim circle sitting on the seam; the rate line is a recessed plate; the Swap key is the full-width gradient.
 

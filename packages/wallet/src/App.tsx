@@ -1,5 +1,5 @@
 import type { WalletEngine } from '@boltvault/engine'
-import { TamaguiProvider, tamaguiConfig } from '@boltvault/ui'
+import { InsetsProvider, TamaguiProvider, tamaguiConfig, type Insets } from '@boltvault/ui'
 import { I18nProvider } from '@lingui/react'
 import { useMemo } from 'react'
 import { EngineProvider } from './engine/EngineProvider'
@@ -22,10 +22,16 @@ export interface AppProps {
   readonly reducedMotion?: boolean
   /** Body capabilities; defaults to "secrets allowed, no passkeys" (the harness). */
   readonly host?: Partial<UiHost>
+  /**
+   * Safe-area insets, when the body has any. The phone draws edge to edge, so
+   * without these the header lands under the status bar and the dock under the
+   * gesture bar. Extension bodies pass nothing and get zeros.
+   */
+  readonly insets?: Insets | null
 }
 
 /** The shared root for every body. */
-export function App({ engine, body, initialTab, initialScreen, initialParams, reducedMotion, host }: AppProps) {
+export function App({ engine, body, initialTab, initialScreen, initialParams, reducedMotion, host, insets }: AppProps) {
   const router = useMemo(() => {
     setupI18n()
     const store = new RouterStore({ tab: initialTab ?? 'home' })
@@ -42,6 +48,7 @@ export function App({ engine, body, initialTab, initialScreen, initialParams, re
   )
   return (
     <TamaguiProvider config={tamaguiConfig} defaultTheme="dark">
+      <InsetsProvider insets={insets}>
       <I18nProvider i18n={i18n}>
         <EngineProvider engine={engine}>
           <HostProvider host={uiHost}>
@@ -51,6 +58,7 @@ export function App({ engine, body, initialTab, initialScreen, initialParams, re
           </HostProvider>
         </EngineProvider>
       </I18nProvider>
+      </InsetsProvider>
     </TamaguiProvider>
   )
 }

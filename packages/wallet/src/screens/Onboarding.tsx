@@ -5,7 +5,7 @@
  *
  * Quiet custody mode throughout: the Field dims, nothing pulses.
  */
-import { Body, Column, Field, Icon, Input, Key, Plate, Row, ScrollView, WordGrid, metrics, paint, useWindowDimensions } from '@boltvault/ui'
+import { Body, Column, EsWordmark, Field, Icon, Input, Key, Plate, Row, ScrollView, WordGrid, metrics, paint, useWindowDimensions } from '@boltvault/ui'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
@@ -49,14 +49,18 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
   const [preview, setPreview] = useState<{ bip44: string[]; ledgerLive: string[] } | null>(null)
   const [watchAddress, setWatchAddress] = useState('')
   const [passkeysSupported, setPasskeysSupported] = useState(false)
+  // The phone has no passkey provider, so the offer step was dead there. A
+  // keystore-backed device key is the same trade in the same place.
+  const [biometricsSupported, setBiometricsSupported] = useState(false)
 
   useEffect(() => {
     let alive = true
     host.passkeys?.supported().then((ok) => alive && setPasskeysSupported(ok), () => undefined)
+    host.deviceKey?.available().then((ok) => alive && setBiometricsSupported(ok), () => undefined)
     return () => {
       alive = false
     }
-  }, [host.passkeys])
+  }, [host.passkeys, host.deviceKey])
 
   // The popup never renders secrets (§3.2): its welcome keys hand the flow to tab.html.
   const begin = (next: Path): void => {
@@ -108,21 +112,29 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
         return
       }
       setMnemonic([])
-      setStep(passkeysSupported ? 'passkey' : 'done')
+      setStep(passkeysSupported || biometricsSupported ? 'passkey' : 'done')
     })
 
   const doImport = (): Promise<void> =>
     run(async () => {
       const r = await engine.vault.import({ mnemonic: phrase, password, ...(passphrase ? { passphrase } : {}) })
       setSeedId(r.seedId)
-      setStep(passkeysSupported ? 'passkey' : 'done')
+      setStep(passkeysSupported || biometricsSupported ? 'passkey' : 'done')
     })
 
   const doWatch = (): Promise<void> =>
     run(async () => {
       await engine.vault.createEmpty({ password })
       await engine.accounts.addWatch({ address: watchAddress.trim(), label: t({ id: 'watch.label', message: 'Watch address' }) })
-      setStep(passkeysSupported ? 'passkey' : 'done')
+      setStep(passkeysSupported || biometricsSupported ? 'passkey' : 'done')
+    })
+
+  const enrolBiometrics = (): Promise<void> =>
+    run(async () => {
+      if (!host.deviceKey) return
+      const keyHex = await host.deviceKey.ensure()
+      await engine.vault.enrolDevice({ keyId: host.deviceKey.id, keyHex })
+      setStep('done')
     })
 
   const enrolPasskey = (): Promise<void> =>
@@ -171,7 +183,7 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
               onPress={() => (path === 'create' ? startCreate() : setStep(path === 'import' ? 'import' : 'watch'))}
               testID="ob-password-continue"
             />
-            <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" size="compact" onPress={() => setStep('welcome')} />
+            <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => setStep('welcome')} />
           </Column>
         ) : null}
 
@@ -204,6 +216,7 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
             ))}
             {error ? <Body tone="burn">{error}</Body> : null}
             <Key label={t({ id: 'ob.quiz.confirm', message: 'Confirm backup' })} onPress={submitQuiz} disabled={busy || quiz.positions.some((p) => !(quiz.answers[p] ?? '').trim())} testID="ob-quiz-confirm" />
+            <Key label={t({ id: 'ob.quiz.back', message: 'Show the words again' })} kind="secondary" disabled={busy} onPress={() => setStep('words')} testID="ob-quiz-back" />
           </Column>
         ) : null}
 
@@ -249,7 +262,7 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
             </Plate>
             {error ? <Body tone="burn">{error}</Body> : null}
             <Key label={t({ id: 'ob.import.key', message: 'Import' })} onPress={doImport} disabled={busy} testID="ob-import-confirm" />
-            <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" size="compact" onPress={() => setStep('import')} />
+            <Key label={t({ id: 'back', message: 'Back' })} kind="secondary" onPress={() => setStep('import')} />
           </Column>
         ) : null}
 
@@ -265,10 +278,11 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
 
         {step === 'passkey' ? (
           <Column gap="$4" testID="ob-passkey">
-            <Body size="title">{t({ id: 'ob.passkey.title', message: 'Unlock with a passkey?' })}</Body>
+            <Body size="title">{passkeysSupported ? t({ id: 'ob.passkey.title', message: 'Unlock with a passkey?' }) : t({ id: 'ob.biometric.title', message: 'Unlock with your fingerprint?' })}</Body>
             <Body tone="mute">{t({ id: 'ob.passkey.body', message: 'Your face or fingerprint unlocks the vault on this device. Your password still works, and it is still needed to reveal or export the phrase.' })}</Body>
             {error ? <Body tone="burn">{error === 'prf-unsupported' ? t({ id: 'ob.passkey.noprf', message: 'This browser created a passkey without the PRF feature, so it cannot unlock the vault on its own. Use your password.' }) : error}</Body> : null}
-            <Key label={t({ id: 'ob.passkey.yes', message: 'Add passkey' })} onPress={enrolPasskey} disabled={busy} testID="ob-passkey-add" />
+            {passkeysSupported ? <Key label={t({ id: 'ob.passkey.yes', message: 'Add passkey' })} onPress={enrolPasskey} disabled={busy} testID="ob-passkey-add" /> : null}
+            {biometricsSupported ? <Key label={t({ id: 'ob.biometric.yes', message: 'Turn on biometric unlock' })} onPress={enrolBiometrics} disabled={busy} testID="ob-biometric-add" /> : null}
             <Key label={t({ id: 'ob.passkey.skip', message: 'Not now' })} kind="secondary" onPress={() => setStep('done')} testID="ob-passkey-skip" />
           </Column>
         ) : null}
@@ -281,6 +295,14 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
           </Column>
         ) : null}
       </ScrollView>
+      {/*
+        Whose wallet this is, on every step — the same lock-up and the same
+        placement as Unlock.tsx, which was the only screen in the product
+        carrying it.
+      */}
+      <Column alignItems="center" paddingBottom="$6" zIndex={1} testID="ob-brand">
+        <EsWordmark />
+      </Column>
     </Column>
   )
 }

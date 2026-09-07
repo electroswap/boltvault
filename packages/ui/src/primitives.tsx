@@ -8,7 +8,7 @@
 import { styled, Text as TText, View as TView } from '@tamagui/core'
 import type { ComponentProps, ReactNode } from 'react'
 import { Rim } from './Rim'
-import { glow, radius } from './tokens'
+import { current, glow, radius } from './tokens'
 
 /** Full-bleed screen background. The Grid renders behind it. */
 export const Screen = styled(TView, {
@@ -163,7 +163,10 @@ export const KeyFrame = styled(TView, {
   overflow: 'hidden',
   variants: {
     kind: {
-      primary: { backgroundColor: 'transparent', shadowColor: glow.key, shadowRadius: 14, shadowOpacity: 1, shadowOffset: { width: 0, height: 5 } },
+      // The gradient measures its box before it can paint (see Rim.tsx), so the
+      // frame carries the current's first stop underneath it. Without that a
+      // primary key would show one transparent frame on mount.
+      primary: { backgroundColor: current.from, shadowColor: glow.key, shadowRadius: 14, shadowOpacity: 1, shadowOffset: { width: 0, height: 5 } },
       secondary: { backgroundColor: '$glassRaised', borderWidth: 0 },
       danger: { backgroundColor: '$burn' },
     },

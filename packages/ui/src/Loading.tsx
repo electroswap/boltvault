@@ -26,11 +26,12 @@
  *    glow while a gradient arc travels around it. Calm, brand-first, and the
  *    only moving part is light.
  */
-import { Image, View } from 'react-native'
+import { View } from 'react-native'
 import Animated from 'react-native-reanimated'
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg'
+import { SvgImage } from './SvgImage'
 import { useId } from 'react'
-import { ES_MARK_URI, ES_WORDMARK_URI } from './brand'
+import { ES_MARK_SVG, ES_MARK_URI, ES_WORDMARK_SVG, ES_WORDMARK_URI } from './brand'
 import { useReducedMotionPref } from './motion/MotionContext'
 import { Body, Column } from './primitives'
 import { current, edge, glow, metrics, motion, paint } from './tokens'
@@ -39,6 +40,12 @@ import { current, edge, glow, metrics, motion, paint } from './tokens'
  * The marks come from the bundle, not from a file the page has to fetch — a
  * loader whose logo arrives after its animation has started is not a loader,
  * it is two things happening. See brand.ts.
+ *
+ * They are drawn through SvgImage, which splits by body: React Native has no
+ * SVG decoder on Android and fails silently, which is why the owner saw no ES
+ * logo anywhere on the phone. react-native-svg is already a dependency of ui,
+ * the extension and the mobile app — and this file already used it for the
+ * Halo — so one path serves both bodies.
  */
 export const esMarkUri = (): string => ES_MARK_URI
 export const esWordmarkUri = (): string => ES_WORDMARK_URI
@@ -117,7 +124,7 @@ export function PageLoader({ label = null, size = 130, overlay = false, reducedM
         />
         <Halo size={size} reduced={reduced} />
         {/* The mark itself never blinks; only the light around it moves. */}
-        <Image source={{ uri: esMarkUri() }} style={{ width: size, height }} accessibilityLabel="ElectroSwap" accessibilityIgnoresInvertColors />
+        <SvgImage xml={ES_MARK_SVG} uri={ES_MARK_URI} width={size} height={height} label="ElectroSwap" />
       </View>
       {label !== null && label !== '' ? (
         <Body tone="mute" size="caption">
@@ -153,7 +160,11 @@ export interface EsWordmarkProps {
 export function EsWordmark({ width = 202, opacity = 0.9, testID }: EsWordmarkProps) {
   // 629 x 155.5 in the source; keep the ratio so it never distorts.
   const height = Math.round((width * 155.5) / 629.64)
-  return <Image source={{ uri: esWordmarkUri() }} style={{ width, height, opacity }} accessibilityLabel="ElectroSwap" accessibilityIgnoresInvertColors testID={testID} />
+  return (
+    <View style={{ opacity }} testID={testID}>
+      <SvgImage xml={ES_WORDMARK_SVG} uri={ES_WORDMARK_URI} width={width} height={height} label="ElectroSwap" />
+    </View>
+  )
 }
 
 export interface BarLoaderProps {

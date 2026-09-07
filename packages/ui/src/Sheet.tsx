@@ -11,12 +11,14 @@
  * it. A Sheet must be a sibling of its screen's ScrollView, never a child,
  * and callers never nest their own ScrollView.
  */
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
 import Animated, { cubicBezier } from 'react-native-reanimated'
 import { Icon } from './Icon'
 import { Body, Column, Row } from './primitives'
 import { CurrentFill } from './Rim'
+import { useInsets } from './Insets'
+import { registerOverlay } from './overlays'
 import { glow, motion, paint, radius } from './tokens'
 
 export interface SheetProps {
@@ -38,10 +40,20 @@ export interface SheetProps {
 }
 
 export function Sheet({ open, onClose, title, children, header, footer, scroll = true, quiet = false, reducedMotion = false, testID }: SheetProps) {
+  const insets = useInsets()
+  // Android's back button dismisses the newest thing on screen, and that is a
+  // sheet more often than it is a route. Registering here covers every sheet
+  // in the product without each screen reporting its own state.
+  useEffect(() => {
+    if (!open) return
+    return registerOverlay(onClose)
+  }, [open, onClose])
   if (!open) return null
   const still = quiet || reducedMotion
   const topPad = title || header ? 12 : 20
-  const bottomPad = footer ? 12 : 20
+  // A sheet rises from the bottom edge, so on a gesture-bar phone its last row
+  // would otherwise sit under the system's own handle.
+  const bottomPad = (footer ? 12 : 20) + insets.bottom
   return (
     <Animated.View
       style={[

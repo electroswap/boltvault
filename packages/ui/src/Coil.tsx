@@ -8,7 +8,7 @@
  */
 import Svg, { Circle, Defs, RadialGradient, Stop, Text as SvgText } from 'react-native-svg'
 import { Column } from './primitives'
-import { light, paint } from './tokens'
+import { fonts, light, paint } from './tokens'
 
 export interface CoilProps {
   /** 10000..25000 */
@@ -69,19 +69,19 @@ export function Coil({ durationMultiplier, boltMultiplier, glow, size = 200, at2
         {/* Inner ring: the BOLT stair, three steps. */}
         <Circle cx={cx} cy={cy} r={innerR} stroke="rgba(167,139,255,0.16)" strokeWidth={4} fill="none" />
         <Circle cx={cx} cy={cy} r={innerR} stroke={light.plasma} strokeWidth={4} fill="none" strokeLinecap="round" strokeDasharray={`${arcLength(innerR, stair)} ${innerC}`} transform={`rotate(-90 ${cx} ${cy})`} />
-        <SvgText x={cx} y={cy + 8} fill={paint.ink} fontSize={size * 0.16} fontWeight="600" textAnchor="middle" fontFamily="Oxanium, Sora, sans-serif">
+        <SvgText x={cx} y={cy + 8} fill={paint.ink} fontSize={size * 0.16} fontWeight="600" textAnchor="middle" fontFamily={fonts.readout}>
           {multiplierText}
         </SvgText>
-        <SvgText x={cx} y={cy + 8 + size * 0.11} fill={paint.mute} fontSize={size * 0.06} textAnchor="middle" fontFamily="Sora, sans-serif">
+        <SvgText x={cx} y={cy + 8 + size * 0.11} fill={paint.mute} fontSize={size * 0.06} textAnchor="middle" fontFamily={fonts.text}>
           {`BOLT ${(boltMultiplier / 10_000).toFixed(2)}×`}
         </SvgText>
         {at2x ? (
-          <SvgText x={t2.x + 6} y={t2.y + 4} fill={paint.mute} fontSize={size * 0.05} textAnchor="start" fontFamily="Sora, sans-serif">
+          <SvgText x={t2.x + 6} y={t2.y + 4} fill={paint.mute} fontSize={size * 0.05} textAnchor="start" fontFamily={fonts.text}>
             {`2.0× ${at2x}`}
           </SvgText>
         ) : null}
         {at25x ? (
-          <SvgText x={t25.x} y={t25.y - 8} fill={paint.mute} fontSize={size * 0.05} textAnchor="middle" fontFamily="Sora, sans-serif">
+          <SvgText x={t25.x} y={t25.y - 8} fill={paint.mute} fontSize={size * 0.05} textAnchor="middle" fontFamily={fonts.text}>
             {`2.5× ${at25x}`}
           </SvgText>
         ) : null}

@@ -169,7 +169,12 @@ export function LedgerPicker({ onAdded, reducedMotion = false }: { onAdded: () =
   return (
     <Column gap="$3" testID="ledger-picker">
       <Body tone="mute" size="caption">
-        {t({ id: 'ledger.body', message: 'Plug in your Ledger, unlock it and open the Ethereum app. Your keys never leave the device; BoltVault only shows you what it will sign.' })}
+        {host.body === 'mobile'
+          ? t({
+              id: 'ledger.body.mobile',
+              message: 'Connect your Ledger with an OTG cable, unlock it and open the Ethereum app — or wake a Nano X, Stax or Flex to pair over Bluetooth. Your keys never leave the device; BoltVault only shows you what it will sign.',
+            })
+          : t({ id: 'ledger.body', message: 'Plug in your Ledger, unlock it and open the Ethereum app. Your keys never leave the device; BoltVault only shows you what it will sign.' })}
       </Body>
       <Row gap="$2" flexWrap="wrap" alignItems="center">
         {host.requestHid ? <Key label={t({ id: 'ledger.pair', message: 'Pair Ledger' })} kind="secondary" size="compact" disabled={loading} onPress={() => void pair()} testID="ledger-pair" /> : null}
@@ -182,7 +187,12 @@ export function LedgerPicker({ onAdded, reducedMotion = false }: { onAdded: () =
         </Body>
       ) : status && !loading ? (
         <Body tone="mute" size="caption">
-          {t({ id: 'ledger.none', message: 'No Ledger paired yet. Press Pair Ledger, then pick your Ledger in the browser’s device list.' })}
+          {host.body === 'mobile'
+            ? t({
+                id: 'ledger.none.mobile',
+                message: 'No Ledger found yet. Check the cable is an OTG one and the device is unlocked with the Ethereum app open, then press Refresh. For Bluetooth models, allow the Bluetooth prompt.',
+              })
+            : t({ id: 'ledger.none', message: 'No Ledger paired yet. Press Pair Ledger, then pick your Ledger in the browser’s device list.' })}
         </Body>
       ) : null}
       {status?.app && !status.app.blindSigning ? (

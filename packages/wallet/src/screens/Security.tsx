@@ -48,6 +48,16 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
   }
 
   const passkeys = (vault?.wraps ?? []).filter((w) => w.by === 'prf')
+  // Device wraps were returned by the engine all along; no screen read them.
+  const devices = (vault?.wraps ?? []).filter((w) => w.by === 'device')
+  const [biometricOk, setBiometricOk] = useState(false)
+  useEffect(() => {
+    let alive = true
+    if (host.deviceKey) host.deviceKey.available().then((ok) => alive && setBiometricOk(ok), () => undefined)
+    return () => {
+      alive = false
+    }
+  }, [host.deviceKey])
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 16 }} testID="security">
@@ -109,6 +119,53 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
           </Body>
         )}
       </Plate>
+
+      {host.deviceKey ? (
+        <Plate gap="$3" testID="biometrics">
+          <Body size="title">{t({ id: 'security.biometrics', message: 'Biometric unlock' })}</Body>
+          <Body tone="mute" size="caption">
+            {t({
+              id: 'security.biometrics.body',
+              message: 'Your face or fingerprint unlocks the vault on this device. What is stored in the keystore is a random device key — never your password and never your keys — so this adds a way in and takes none away. The password is still required to reveal or export the phrase.',
+            })}
+          </Body>
+          {devices.length === 0 ? (
+            biometricOk ? (
+              <Key
+                label={t({ id: 'security.biometrics.add', message: 'Turn on biometric unlock' })}
+                kind="secondary"
+                disabled={busy}
+                testID="biometrics-add"
+                onPress={() =>
+                  run(async () => {
+                    if (!host.deviceKey) return
+                    const keyHex = await host.deviceKey.ensure()
+                    await engine.vault.enrolDevice({ keyId: host.deviceKey.id, keyHex })
+                  })
+                }
+              />
+            ) : (
+              <Body tone="mute" size="caption">
+                {t({ id: 'security.biometrics.none', message: 'No fingerprint or face is enrolled on this device yet. Add one in the system settings, then come back.' })}
+              </Body>
+            )
+          ) : (
+            <Key
+              label={t({ id: 'security.biometrics.remove', message: 'Turn off biometric unlock' })}
+              kind="secondary"
+              disabled={busy}
+              testID="biometrics-remove"
+              onPress={() =>
+                run(async () => {
+                  if (!host.deviceKey) return
+                  await engine.vault.removeDevice({ keyId: host.deviceKey.id })
+                  await host.deviceKey.remove()
+                })
+              }
+            />
+          )}
+        </Plate>
+      ) : null}
 
       {host.secretsAllowed ? (
         <Plate gap="$3" testID="export">

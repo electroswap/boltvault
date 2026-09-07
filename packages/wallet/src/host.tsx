@@ -45,6 +45,23 @@ export interface UiHost {
   onWindowFocus?(listener: () => void): () => void
   /** Pair a Ledger over WebHID — needs a user gesture, so only a full page offers it (§2.7 S7). Resolves true when a device was granted. */
   requestHid?(): Promise<boolean>
+  /**
+   * Biometric unlock (master plan §3.2, KEK_dev). What the OS keystore holds
+   * is a random 32-byte device key — never the password and never the DEK. It
+   * is one more wrap of the same DEK the password wraps, so enrolling adds a
+   * way in and removes nothing. Only a body with a keystore offers this.
+   */
+  readonly deviceKey?: {
+    /** Hardware present and a biometric actually enrolled. */
+    available(): Promise<boolean>
+    /** Mint or return the key, prompting the user to confirm. */
+    ensure(): Promise<string>
+    /** Read it behind a biometric prompt; null when cancelled or absent. */
+    read(reason: string): Promise<string | null>
+    remove(): Promise<void>
+    /** The wrap's keyId, so the engine can find and drop it. */
+    readonly id: string
+  }
   /** The in-app browser (§5.3): the provider script injected before every page, and where the browser lives. */
   readonly browser?: { readonly providerScript: string }
   /** Deep and universal links (§5.3): the URL the app was opened with, and later ones. */
