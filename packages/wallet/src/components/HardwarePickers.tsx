@@ -6,7 +6,7 @@
  * state, a "Show paths" pill and a "5 more" key; both derivation trees are
  * shown so nobody imports the wrong one.
  */
-import { Body, Column, Input, Key, Pill, Row, Signature, PageLoader, shortAddress } from '@boltvault/ui'
+import { Body, Column, Input, Key, Pill, Row, Signature, BarLoader, shortAddress } from '@boltvault/ui'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
@@ -24,10 +24,19 @@ export function schemeLabel(scheme: Scheme): string {
 }
 
 /** Skeleton rows while a device answers (owner item A2). */
+/**
+ * Scanning for a device is a component doing work, not a page arriving.
+ *
+ * Owner: "when refreshing, the circular ES wordmark loader is rendering which
+ * is not the right style for this use case." It was `PageLoader overlay` — the
+ * full-page mark that takes the whole screen — fired for a four-second radio
+ * scan inside a sheet. The owner's own rule from the loader pass: the centred
+ * mark is for a full page, a progress bar is for a smaller component.
+ */
 export function HardwareLoading({ what, reducedMotion = false, testID }: { what: string; reducedMotion?: boolean; testID?: string }) {
   return (
     <Column gap="$2" testID={testID}>
-      <PageLoader overlay reducedMotion={reducedMotion} />
+      <BarLoader active reducedMotion={reducedMotion} />
       <Body tone="mute" size="caption">
         {what}
       </Body>

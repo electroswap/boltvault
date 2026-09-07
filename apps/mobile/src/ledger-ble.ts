@@ -77,6 +77,16 @@ export function bleLedgerProvider(): LedgerTransportProvider {
             // Tearing down a scan must never be what fails the call.
           }
           for (const [id, name] of found) names.set(id, name)
+          /*
+            A BLE peripheral stops advertising once it is connected, so the
+            device we are already talking to is exactly the one a fresh scan
+            cannot see. Owner: "it seems to detect now showing Ethereum app
+            1.22.1 but then also gives an error 'No Ledger is connected'" —
+            the first scan found it, the second came back empty, and the engine
+            reported it gone while an open transport was sitting right there.
+            Anything we hold open is connected by definition.
+          */
+          for (const id of open.keys()) if (!found.has(id)) found.set(id, names.get(id) ?? '')
           resolve([...found].map(([id, name]) => ({ id, model: modelFromName(name) })))
         }
         const timer = setTimeout(finish, SCAN_MS)
