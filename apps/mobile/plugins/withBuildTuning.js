@@ -108,8 +108,48 @@ function withAbiSplits(config) {
   })
 }
 
+/**
+ * Never let the JS bundle claim to be up to date.
+ *
+ * This shipped three stale APKs before it was noticed. Gradle decides whether
+ * to re-run `createBundleReleaseJsAndAssets` from the inputs it knows about,
+ * and in a pnpm workspace the screens live in packages/wallet and packages/ui
+ * — symlinked in from outside apps/mobile, and invisible to that check. So a
+ * build after changing a shared screen printed
+ *
+ *     > Task :app:createBundleReleaseJsAndAssets UP-TO-DATE
+ *
+ * packaged the previous bundle, installed happily, and ran the OLD JavaScript.
+ * Every signal was green: the build succeeded, the app launched, no exception
+ * was thrown. The only symptom was the fix not being there, which reads exactly
+ * like the fix not working — and cost a debugging round on a bug that had
+ * already been fixed.
+ *
+ * The honest trade is to rebundle every release build. It costs about a minute.
+ * A wallet that silently ships last week's signing code is not worth a minute.
+ *
+ * If this is ever narrowed to a real input check, it must cover every workspace
+ * package the app imports, not just apps/mobile.
+ */
+const ALWAYS_BUNDLE = `
+tasks.configureEach { task ->
+    if (task.name == 'createBundleReleaseJsAndAssets') {
+        task.outputs.upToDateWhen { false }
+    }
+}
+`
+
+function withAlwaysBundle(config) {
+  return withAppBuildGradle(config, (c) => {
+    if (c.modResults.contents.includes('createBundleReleaseJsAndAssets')) return c
+    c.modResults.contents = c.modResults.contents + ALWAYS_BUNDLE
+    return c
+  })
+}
+
 module.exports = function withBuildTuning(config) {
   config = withProguardRules(config)
+  config = withAlwaysBundle(config)
   config = withAbiSplits(config)
   return withGradleProperties(config, (c) => {
     for (const [key, value] of Object.entries(PROPERTIES)) {
