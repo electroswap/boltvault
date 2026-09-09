@@ -23,6 +23,7 @@ export interface ScreenParams {
   alerts: undefined
   bridge: { chainId?: number; token?: string } | undefined
   networks: undefined
+  addressBook: undefined
   browser: { url?: string } | undefined
   feel: undefined
   about: undefined
@@ -85,6 +86,7 @@ export const SCREENS: Record<ScreenId, ScreenMeta> = {
   alerts: meta('alerts', 'push'),
   bridge: meta('bridge', 'push'),
   networks: meta('networks', 'push'),
+  addressBook: meta('addressBook', 'push'),
   browser: meta('browser', 'push', { dock: false }),
   feel: meta('feel', 'push'),
   about: meta('about', 'push'),
@@ -92,7 +94,7 @@ export const SCREENS: Record<ScreenId, ScreenMeta> = {
   backup: meta('backup', 'push', { quiet: true, secrets: true, dock: false }),
   unlock: meta('unlock', 'window', { quiet: true }),
   receive: meta('receive', 'push', { dock: false }),
-  send: meta('send', 'push', { dock: false }),
+  send: meta('send', 'push'),
   token: meta('token', 'push', { grid: true }),
   sign: meta('sign', 'window', { quiet: true }),
   onboarding: meta('onboarding', 'push', { quiet: true, secrets: true, dock: false }),

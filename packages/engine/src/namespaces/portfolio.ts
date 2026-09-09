@@ -104,7 +104,13 @@ export class PortfolioService {
         if (!keep) continue
         const quantityNum = Number(formatUnits(raw, t.decimals))
         const price = prices.get(t.address === 'native' ? 'native' : t.address.toLowerCase()) ?? null
-        let fiat: number | null = null
+        // A balance of zero is worth zero whatever the price is, and needs no
+        // price to say so. `prices()` is owner-scoped, so an empty wallet gets
+        // no rows back at all — which used to leave fiat null, count the token
+        // as "without price", and drop the whole total to null. Owner: "an
+        // empty wallet is showing '1 token - 1 without price' ... I know it's
+        // got a price because a wallet with ETN in it shows the value."
+        let fiat: number | null = raw === 0n ? 0 : null
         let change24h: number | null = null
         if (price && Number.isFinite(price.price)) {
           const diverged = price.apiQuantity !== null && quantityNum > 0 && Math.abs(price.apiQuantity - quantityNum) / Math.max(price.apiQuantity, quantityNum) > DIVERGENCE
@@ -128,7 +134,7 @@ export class PortfolioService {
           share: 0,
           pinned: t.pinned,
           custom: t.source === 'user' || t.source === 'dapp',
-          hidden: t.hidden || spam || (fiat !== null && fiat < DUST_FIAT && !t.pinned && t.address !== 'native'),
+          hidden: t.hidden || spam || (raw > 0n && fiat !== null && fiat < DUST_FIAT && !t.pinned && t.address !== 'native'),
         })
       }
     }

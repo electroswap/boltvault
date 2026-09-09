@@ -277,7 +277,7 @@ describe('activity', () => {
 })
 
 describe('approvals', () => {
-  it('one decision per id, expiry, persistence across a host restart', async () => {
+  it('a yes on a signing request is not final until the signature is, and a refusal can be retried', async () => {
     const { platform, approvals, engine, ready } = boot()
     await ready
     const req = await approvals.create({ kind: 'sign_message', origin: 'https://app.electroswap.io', accountId: null, chainId: 52014, payload: { hex: '0x00' } })
@@ -285,10 +285,42 @@ describe('approvals', () => {
     const again = createEngine({ platform, heads, kdf: FAST })
     await again.ready
     expect((await again.engine.approvals.list()).map((r) => r.id)).toEqual([req.id])
+
+    // Saying yes releases the signer, but does not finish the request: a
+    // hardware wallet can still refuse, and `approved` means "signed".
     const waited = approvals.waitFor(req.id)
     await engine.approvals.decide({ id: req.id, approve: true })
     expect((await waited).approved).toBe(true)
+    expect(approvals.get(req.id)?.status).toBe('signing')
+    // While it is with the signer it cannot be decided again.
+    await expectError(engine.approvals.decide({ id: req.id, approve: false }), 'invalid_argument')
+
+    // The device refuses — the wrong button, pressed by mistake. The request
+    // comes back to the queue carrying the reason, rather than being lost.
+    await approvals.settle(req.id, false, 'Rejected on the device.')
+    expect(approvals.get(req.id)?.status).toBe('pending')
+    expect(approvals.get(req.id)?.lastError).toBe('Rejected on the device.')
+    expect(await engine.approvals.list()).toHaveLength(1)
+
+    // So it can simply be approved again, and this time it signs.
+    await engine.approvals.decide({ id: req.id, approve: true })
+    await approvals.settle(req.id, true)
+    expect(approvals.get(req.id)?.status).toBe('approved')
     await expectError(engine.approvals.decide({ id: req.id, approve: false }), 'already_decided')
+
+    // BoltVault's own refusal is final: a blocked request must not come back
+    // as something the user can approve one more time.
+    const blocked = await approvals.create({ kind: 'send_transaction', origin: 'https://app.electroswap.io', accountId: null, chainId: 52014, payload: { hex: '0x00' } })
+    await engine.approvals.decide({ id: blocked.id, approve: true })
+    await approvals.settle(blocked.id, false, 'blocked', false)
+    expect(approvals.get(blocked.id)?.status).toBe('rejected')
+    await expectError(engine.approvals.decide({ id: blocked.id, approve: true }), 'already_decided')
+
+    // A connect has no signature to wait for and is done on the yes.
+    const c = await approvals.create({ kind: 'connect', origin: 'https://y.example', accountId: null, chainId: null, payload: null })
+    await engine.approvals.decide({ id: c.id, approve: true })
+    expect(approvals.get(c.id)?.status).toBe('approved')
+
     const r2 = await approvals.create({ kind: 'connect', origin: 'https://x.example', accountId: null, chainId: null, payload: null })
     await platform.clock.advance(5 * 60_000 + 1)
     expect(await engine.approvals.list()).toEqual([])

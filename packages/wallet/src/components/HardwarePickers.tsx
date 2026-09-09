@@ -6,7 +6,7 @@
  * state, a "Show paths" pill and a "5 more" key; both derivation trees are
  * shown so nobody imports the wrong one.
  */
-import { Body, Column, Input, Key, Pill, Row, Signature, PageLoader, shortAddress } from '@boltvault/ui'
+import { Body, Column, Input, Key, Pill, Row, Signature, BarLoader, shortAddress } from '@boltvault/ui'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
@@ -24,10 +24,19 @@ export function schemeLabel(scheme: Scheme): string {
 }
 
 /** Skeleton rows while a device answers (owner item A2). */
+/**
+ * Scanning for a device is a component doing work, not a page arriving.
+ *
+ * Owner: "when refreshing, the circular ES wordmark loader is rendering which
+ * is not the right style for this use case." It was `PageLoader overlay` — the
+ * full-page mark that takes the whole screen — fired for a four-second radio
+ * scan inside a sheet. The owner's own rule from the loader pass: the centred
+ * mark is for a full page, a progress bar is for a smaller component.
+ */
 export function HardwareLoading({ what, reducedMotion = false, testID }: { what: string; reducedMotion?: boolean; testID?: string }) {
   return (
     <Column gap="$2" testID={testID}>
-      <PageLoader overlay reducedMotion={reducedMotion} />
+      <BarLoader active reducedMotion={reducedMotion} />
       <Body tone="mute" size="caption">
         {what}
       </Body>
@@ -169,7 +178,12 @@ export function LedgerPicker({ onAdded, reducedMotion = false }: { onAdded: () =
   return (
     <Column gap="$3" testID="ledger-picker">
       <Body tone="mute" size="caption">
-        {t({ id: 'ledger.body', message: 'Plug in your Ledger, unlock it and open the Ethereum app. Your keys never leave the device; BoltVault only shows you what it will sign.' })}
+        {host.body === 'mobile'
+          ? t({
+              id: 'ledger.body.mobile',
+              message: 'Connect your Ledger with an OTG cable, unlock it and open the Ethereum app — or wake a Nano X, Stax or Flex to pair over Bluetooth. Your keys never leave the device; BoltVault only shows you what it will sign.',
+            })
+          : t({ id: 'ledger.body', message: 'Plug in your Ledger, unlock it and open the Ethereum app. Your keys never leave the device; BoltVault only shows you what it will sign.' })}
       </Body>
       <Row gap="$2" flexWrap="wrap" alignItems="center">
         {host.requestHid ? <Key label={t({ id: 'ledger.pair', message: 'Pair Ledger' })} kind="secondary" size="compact" disabled={loading} onPress={() => void pair()} testID="ledger-pair" /> : null}
@@ -182,7 +196,12 @@ export function LedgerPicker({ onAdded, reducedMotion = false }: { onAdded: () =
         </Body>
       ) : status && !loading ? (
         <Body tone="mute" size="caption">
-          {t({ id: 'ledger.none', message: 'No Ledger paired yet. Press Pair Ledger, then pick your Ledger in the browser’s device list.' })}
+          {host.body === 'mobile'
+            ? t({
+                id: 'ledger.none.mobile',
+                message: 'No Ledger found yet. Check the cable is an OTG one and the device is unlocked with the Ethereum app open, then press Refresh. For Bluetooth models, allow the Bluetooth prompt.',
+              })
+            : t({ id: 'ledger.none', message: 'No Ledger paired yet. Press Pair Ledger, then pick your Ledger in the browser’s device list.' })}
         </Body>
       ) : null}
       {status?.app && !status.app.blindSigning ? (

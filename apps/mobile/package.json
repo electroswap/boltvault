@@ -5,11 +5,12 @@
   "private": true,
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
-    "bundle": "expo export --platform android --output-dir .expo-export"
+    "bundle": "expo export --platform android --output-dir .expo-export",
+    "smoke:device": "bash scripts/device-smoke.sh"
   },
   "dependencies": {
     "@boltvault/connect": "workspace:*",
@@ -20,6 +21,7 @@
     "@boltvault/wallet": "workspace:*",
     "@expo-google-fonts/oxanium": "^0.4.2",
     "@expo-google-fonts/sora": "^0.4.2",
+    "@ledgerhq/react-native-hid": "6.39.5",
     "@ledgerhq/react-native-hw-transport-ble": "6.41.0",
     "@noble/hashes": "1.8.0",
     "@react-native-async-storage/async-storage": "2.2.0",

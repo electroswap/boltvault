@@ -1,5 +1,5 @@
 /** Backup quiz for a seed that was created but not confirmed (the gate, §8.1). */
-import { Body, Column, Field, Icon, Input, Key, Plate, Row, ScrollView, WordGrid, metrics, paint, useWindowDimensions } from '@boltvault/ui'
+import { Body, Column, EsWordmark, Field, Icon, Input, Key, Plate, Row, ScrollView, WordGrid, metrics, paint, useWindowDimensions } from '@boltvault/ui'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
@@ -76,7 +76,14 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
             <Plate role="raised">
               <WordGrid words={words} />
             </Plate>
-            <Key label={t({ id: 'ob.words.done', message: 'I wrote them down' })} onPress={() => run(async () => { const q = await engine.vault.backupQuiz({ seedId: id }); setQuiz({ positions: q.positions, answers: {} }); setWords(null) })} testID="backup-written" />
+            {/*
+              The phrase stays in state until the check passes. It used to be
+              dropped here, which made "show the words again" impossible
+              without re-entering the password and revealing the seed a second
+              time — a worse trade than holding it for the length of a quiz it
+              is already being compared against.
+            */}
+            <Key label={t({ id: 'ob.words.done', message: 'I wrote them down' })} onPress={() => run(async () => { const q = await engine.vault.backupQuiz({ seedId: id }); setQuiz({ positions: q.positions, answers: {} }) })} testID="backup-written" />
           </Column>
         ) : (
           <Column gap="$3">
@@ -95,14 +102,19 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
                     return
                   }
                   refresh()
+                  setWords(null)
                   setDone(true)
                 })
               }
               testID="backup-confirm"
             />
+            <Key label={t({ id: 'ob.quiz.back', message: 'Show the words again' })} kind="secondary" disabled={busy} onPress={() => setQuiz(null)} testID="backup-quiz-back" />
           </Column>
         )}
       </ScrollView>
+      <Column alignItems="center" paddingBottom="$6" zIndex={1} testID="backup-brand">
+        <EsWordmark />
+      </Column>
     </Column>
   )
 }

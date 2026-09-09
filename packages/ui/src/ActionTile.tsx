@@ -8,8 +8,8 @@
 import { Pressable, View } from 'react-native'
 import { Icon, type IconName } from './Icon'
 import { Body, Column, Plate, Row } from './primitives'
-import { Rim } from './Rim'
-import { paint } from './tokens'
+import { CurrentFill, Rim } from './Rim'
+import { metrics, paint, type as typeScale } from './tokens'
 
 export interface ActionTileBadge {
   readonly text: string
@@ -26,7 +26,6 @@ export interface ActionTileProps {
 }
 
 const BADGE_BG: Record<ActionTileBadge['tone'], string> = { arc: 'rgba(79, 195, 255, 0.18)', surge: 'rgba(62, 230, 165, 0.18)', ember: 'rgba(245, 198, 107, 0.2)', burn: 'rgba(255, 92, 122, 0.2)' }
-const DISC = 'rgba(95, 216, 255, 0.10)'
 
 export function Badge({ badge, corner = false }: { badge: ActionTileBadge; corner?: boolean }) {
   return (
@@ -38,12 +37,24 @@ export function Badge({ badge, corner = false }: { badge: ActionTileBadge; corne
   )
 }
 
-/** The glyph in its disc: a soft arc tint, a faint rim, the icon at 20 px with the stroke the style bible sets. */
+/**
+ * The glyph in its disc.
+ *
+ * Owner: "they look a bit boring and I'm not crazy about the way those icons
+ * are styled." It was a flat 10%-cyan wash with a cyan glyph on it — one hue,
+ * one plane, nothing catching light. It carries the brand's own current now,
+ * dimmed so it reads as material rather than as a button, with the lit rim
+ * over it and the glyph in ink so it separates from the colour instead of
+ * dissolving into it. The glyph scales with the disc rather than sitting at a
+ * fixed 20 px, so a bigger disc reads as a bigger icon and not as more
+ * padding.
+ */
 export function Glyph({ icon, size = 34 }: { icon: IconName; size?: number }) {
   return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: DISC, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative' }}>
-      <Icon name={icon} size={20} color={paint.arc} strokeWidth={2} />
-      <Rim radius={size / 2} opacity={0.35} />
+    <View style={{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative', backgroundColor: paint.glassRaisedSolid }}>
+      <CurrentFill radius={size / 2} opacity={0.5} />
+      <Icon name={icon} size={Math.round(size * 0.56)} color={paint.ink} strokeWidth={1.9} />
+      <Rim radius={size / 2} opacity={0.5} />
     </View>
   )
 }
@@ -53,17 +64,17 @@ export function ActionTile({ icon, label, badge = null, onPress, layout = 'stack
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={badge ? `${label}, ${badge.text}` : label} testID={testID} style={{ flex: stacked ? 1 : undefined, minHeight: 44 }}>
       {stacked ? (
-        <Plate role="tile" height={68} paddingVertical={8} paddingHorizontal={8} alignItems="center" justifyContent="center" gap={5} position="relative">
+        <Plate role="tile" height={metrics.actionCell} paddingVertical={8} paddingHorizontal={8} alignItems="center" justifyContent="center" gap={5} position="relative">
           {badge ? <Badge badge={badge} corner /> : null}
-          <Glyph icon={icon} size={32} />
-          <Body size="caption" fontWeight="600" fontSize={12} lineHeight={15} numberOfLines={1} textAlign="center">
+          <Glyph icon={icon} size={38} />
+          <Body size="caption" fontWeight="600" fontSize={typeScale.caption.size} lineHeight={typeScale.caption.size + 3} numberOfLines={1} textAlign="center">
             {label}
           </Body>
         </Plate>
       ) : (
-        <Plate role="tile" height={72} paddingHorizontal="$3" justifyContent="center">
+        <Plate role="tile" height={metrics.actionCellRow} paddingHorizontal="$3" justifyContent="center">
           <Row gap="$3" alignItems="center">
-            <Glyph icon={icon} size={36} />
+            <Glyph icon={icon} size={40} />
             <Column flex={1} gap={3} alignItems="flex-start">
               <Body fontWeight="600" numberOfLines={1} textAlign="left">
                 {label}

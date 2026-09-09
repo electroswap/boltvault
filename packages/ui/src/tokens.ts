@@ -8,6 +8,27 @@
  * face gate fails) the DOM fallback — it is the one source of truth.
  */
 
+import { Platform } from 'react-native'
+
+/**
+ * The web bodies and the phone want different numbers, and one of the two
+ * differences is not cosmetic.
+ *
+ * FAMILIES. The browser needs a full fallback stack: a bare `font-family:
+ * Sora` falls back to the UA default, which is a serif, and that put a serif
+ * "BoltVault" on screen twice. React Native needs the opposite — `fontFamily`
+ * takes ONE registered family name, and a comma-separated CSS stack matches
+ * nothing, so Android silently drew everything in Roboto. Both rules are
+ * right; they just are not the same rule.
+ *
+ * SCALE. `type` and `metrics` were calibrated for the 400 x 600 popup and then
+ * used verbatim on a 448 dp phone, which is why the owner reported everything
+ * feeling "a tad too small". The bible already asks for a phone scale (line 52
+ * puts the hero at 48, line 85 the inset at 24); only the inset was ever
+ * implemented. These finish that rule.
+ */
+const native = Platform.OS !== 'web'
+
 export const paint = {
   /** Base: a deep navy night, never black. Always under the Grid. */
   void: '#070A1F',
@@ -77,14 +98,17 @@ export const metrics = {
   /** Popup inset; mobile/tab use insetWide. */
   inset: 20,
   insetWide: 24,
-  /** Minimum hit target. A PR that shrinks one fails CI. */
-  hit: 44,
-  busBar: 52,
-  key: 56,
-  /** Compact keys, icon buttons, headers: a 44 px frame (the hit target) with a smaller visual inside. */
-  keyCompact: 44,
-  header: 44,
-  tabBar: 52,
+  /** Minimum hit target. A PR that shrinks one fails CI. Thumbs are not cursors, so the phone asks for more. */
+  hit: native ? 48 : 44,
+  busBar: native ? 58 : 52,
+  key: native ? 60 : 56,
+  /** Compact keys, icon buttons, headers: a hit-target frame with a smaller visual inside — it tracks `hit`. */
+  keyCompact: native ? 48 : 44,
+  header: native ? 48 : 44,
+  tabBar: native ? 56 : 52,
+  /** Home's action cells. A popup is tight; a phone has the height to spare. */
+  actionCell: native ? 94 : 72,
+  actionCellRow: native ? 76 : 64,
   filament: 2,
   /** Rabby-wide: 400 × 600 gives every row room to breathe. */
   popup: { width: 400, height: 600 },
@@ -130,24 +154,23 @@ export const space = {
 } as const
 
 /**
- * Families carry a real fallback stack. Declaring a bare 'Oxanium' meant that
- * for the first frames of every load — before the woff2 was applied — the
- * browser fell back to its *default* family, which is a serif. That is the
- * serif "BoltVault" the owner filmed. A stack cannot happen to be a serif.
+ * On the web a full stack, because a bare family falls back to the UA serif.
+ * On native the bare name, because that is what `ReactFontManager.addCustomFont`
+ * registered in MainApplication.kt — `Sora` and `Oxanium`, nothing else.
  */
 export const fonts = {
   /** Readouts ≥ 24 px: Oxanium 600, tabular numerals, tracking −0.03em. */
-  readout: "'Oxanium', 'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+  readout: native ? 'Oxanium' : "'Oxanium', 'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
   /** Everything a human reads — addresses and hashes included, tabular: Sora 400/600, 13–17 px, sentence case. */
-  text: "'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+  text: native ? 'Sora' : "'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
 } as const
 
 export const type = {
-  readoutHero: { size: 40, weight: '600', tracking: -1.3 },
-  readout: { size: 24, weight: '600', tracking: -0.7 },
-  title: { size: 17, weight: '600' },
-  body: { size: 15, weight: '400' },
-  caption: { size: 13, weight: '400' },
+  readoutHero: { size: native ? 48 : 40, weight: '600', tracking: -1.3 },
+  readout: { size: native ? 28 : 24, weight: '600', tracking: -0.7 },
+  title: { size: native ? 18 : 17, weight: '600' },
+  body: { size: native ? 16 : 15, weight: '400' },
+  caption: { size: native ? 14 : 13, weight: '400' },
   address: { size: 14, weight: '400' },
 } as const
 

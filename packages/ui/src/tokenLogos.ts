@@ -21,6 +21,26 @@ export function setTokenLogoBase(next: string): void {
   base = next.endsWith('/') ? next : `${next}/`
 }
 
+/**
+ * How a body can actually draw a bundled mark.
+ *
+ * The extension serves the files from its own origin, so a URI is enough. The
+ * phone has no origin and React Native cannot decode SVG through `Image` at
+ * all, so mobile hands back markup for the SVGs and a Metro asset module for
+ * the PNGs. Same seam the extension already uses for its disk image cache
+ * (`setImageResolver`), so ui stays free of platform branches.
+ */
+export type LogoSource = { readonly kind: 'uri'; readonly uri: string } | { readonly kind: 'svg'; readonly xml: string } | { readonly kind: 'asset'; readonly module: number }
+
+type LogoResolver = (chainId: number, address: string) => LogoSource | null
+
+let resolver: LogoResolver | null = null
+
+/** A body that ships the marks itself registers how to reach them. */
+export function setTokenLogoResolver(next: LogoResolver | null): void {
+  resolver = next
+}
+
 /** The native coin has no address of its own, so it gets the sentinel key. */
 export const NATIVE_KEY = 'native'
 
@@ -74,6 +94,29 @@ export function siblingExtension(uri: string): string | null {
   if (uri.endsWith('.png')) return `${uri.slice(0, -4)}.svg`
   if (uri.endsWith('.svg')) return `${uri.slice(0, -4)}.png`
   return null
+}
+
+/**
+ * Ordered sources to try for a token, best first — the same order as
+ * `tokenLogoCandidates`, but able to carry markup and asset modules as well as
+ * URLs. A bundled source never needs a load event; a remote one does.
+ */
+export function tokenLogoSources(chainId: number, address: string, logoUri?: string | null): LogoSource[] {
+  const out: LogoSource[] = []
+  const key = normaliseTokenAddress(address)
+  const bundled = resolver !== null ? resolver(chainId, key) : null
+  if (bundled !== null) {
+    out.push(bundled)
+  } else {
+    const file = bundledLogo(chainId, key)
+    if (file !== null) out.push({ kind: 'uri', uri: file })
+  }
+  for (const uri of tokenLogoCandidates(chainId, address, logoUri)) {
+    // The bundled URI is already represented above, in whichever form this
+    // body can draw.
+    if (/^https?:/.test(uri)) out.push({ kind: 'uri', uri })
+  }
+  return out
 }
 
 /** Ordered logo URLs to try for a token, best first. */

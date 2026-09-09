@@ -47,7 +47,6 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
   const [error, setError] = useState<string | null>(null)
   const [requestId, setRequestId] = useState<string | null>(initialRequestId ?? null)
   const [fire, setFire] = useState(0)
-  const [saveLabel, setSaveLabel] = useState('')
   const [chainOpen, setChainOpen] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
@@ -140,19 +139,15 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
               {sent.hash}
             </Body>
           ) : null}
-          {quote?.to && !contacts.some((c) => c.address.toLowerCase() === quote.to?.toLowerCase()) ? (
-            <Plate gap="$2" testID="send-save">
-              <Body tone="mute" size="caption">
-                {t({ id: 'send.save', message: 'Save this address for next time' })}
-              </Body>
-              <Row gap="$2" alignItems="flex-end">
-                <Column flex={1}>
-                  <Input value={saveLabel} onChange={setSaveLabel} placeholder={t({ id: 'send.save.ph', message: 'Name' })} testID="send-save-label" />
-                </Column>
-                <Key label={t({ id: 'save', message: 'Save' })} kind="secondary" disabled={!saveLabel.trim()} onPress={() => engine.contacts.add({ address: quote.to ?? '', label: saveLabel, chainId }).then((c) => setContacts((cs) => [...cs, c]))} testID="send-save-key" />
-              </Row>
-            </Plate>
-          ) : null}
+          {/*
+            No naming, anywhere. Owner: "I was caught off guard by the prompt
+            to provide a name for the transaction. I want to remove the concept
+            of doing that completely from the wallet." This asked for a label
+            for the recipient, but it arrived at the moment of signing — the
+            worst possible time to be asked to invent a word. Recent addresses
+            below the To field give the same convenience without naming
+            anything.
+          */}
           <Key label={t({ id: 'backup.home', message: 'Back to Home' })} onPress={() => router.reset()} testID="send-home" />
         </Column>
       </Column>

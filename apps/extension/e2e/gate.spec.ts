@@ -9,7 +9,20 @@ import { join } from 'node:path'
 import { gzipSync } from 'node:zlib'
 import { EXTENSION_DIR, launchWithExtension } from './extension'
 
-const POPUP_GZ_BUDGET = 900 * 1024
+/**
+ * 900 KB held for the whole UX programme and caught real regressions — an
+ * inlined base64 logo, an XML parser pulled in for a body that did not need
+ * one. It moved once, on 2026-09-07, to pay for Settings › Address book, which
+ * the owner asked for after transaction naming was taken out of the signing
+ * flow. Roughly 1.5 KB gzipped, and every non-background file counts here, so a
+ * lazily loaded screen is not free.
+ *
+ * Deduplicating the ES mark was tried first and bought nothing: the export
+ * carried a stacked duplicate layer, 20% of the source, which gzip was already
+ * collapsing to almost nothing. Worth knowing before anyone optimises bytes
+ * that the compressor has handled.
+ */
+const POPUP_GZ_BUDGET = 910 * 1024
 const INTERACTIVE_BUDGET_MS = 300
 
 async function walk(dir: string): Promise<string[]> {
@@ -22,7 +35,7 @@ async function walk(dir: string): Promise<string[]> {
   return out
 }
 
-test('bundle: popup ≤ 900 KB gzip, no eval / new Function anywhere', async () => {
+test('bundle: popup ≤ 910 KB gzip, no eval / new Function anywhere', async () => {
   const files = (await walk(EXTENSION_DIR)).filter((f) => /\.(js|css|html)$/.test(f))
   let popupGz = 0
   const evals: string[] = []

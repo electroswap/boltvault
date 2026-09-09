@@ -37,6 +37,12 @@ export interface Router {
   setTab(tab: TabId, params?: ScreenParams[ScreenId]): void
   /** Pop everything back to the tab. */
   reset(): void
+  /**
+   * Return to the tab visited before this one. False when there is no earlier
+   * tab — Android's back button uses that to decide whether to close the app
+   * rather than swallowing the press.
+   */
+  backTab(): boolean
 }
 
 type Listener = () => void
@@ -50,6 +56,13 @@ export function currentRoute(state: RouterState): Route {
 export class RouterStore {
   private state: RouterState
   private readonly listeners = new Set<Listener>()
+  /**
+   * Tabs visited before the current one, oldest first. RouterState deliberately
+   * has no history — a tab switch clears the stack — but the hardware back
+   * button has to answer "the prior tab", so the store keeps it beside the
+   * state rather than inside it.
+   */
+  private readonly tabHistory: TabId[] = []
 
   constructor(initial: Partial<RouterState> = {}) {
     this.state = { tab: initial.tab ?? 'home', stack: initial.stack ?? [], roots: initial.roots ?? {} }
@@ -87,7 +100,20 @@ export class RouterStore {
 
   setTab(tab: TabId, params?: ScreenParams[ScreenId]): void {
     const roots = params === undefined ? this.state.roots : { ...this.state.roots, [tab]: { screen: TABS[tab].screen, params } as Route }
+    if (tab !== this.state.tab) {
+      // Keep it shallow: this is a "go back one" trail, not a full journey.
+      this.tabHistory.push(this.state.tab)
+      if (this.tabHistory.length > 8) this.tabHistory.shift()
+    }
     this.set({ tab, stack: [], roots })
+  }
+
+  backTab(): boolean {
+    const previous = this.tabHistory.pop()
+    if (previous === undefined) return false
+    const roots = this.state.roots
+    this.set({ tab: previous, stack: [], roots })
+    return true
   }
 
   reset(): void {
@@ -118,6 +144,7 @@ export function useRouter(): Router {
       back: () => store.back(),
       setTab: (tab, params) => store.setTab(tab, params),
       reset: () => store.reset(),
+      backTab: () => store.backTab(),
     }),
     [state, store],
   )

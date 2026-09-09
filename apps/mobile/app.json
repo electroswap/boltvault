@@ -169,7 +169,9 @@
         }
       ],
       "expo-audio",
-      "./plugins/withWidgets.js"
+      "./plugins/withWidgets.js",
+      "./plugins/withUsbHost.js",
+      "./plugins/withBuildTuning.js"
     ],
     "extra": {
       "eas": {

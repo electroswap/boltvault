@@ -12,7 +12,7 @@ import { Badge, Glyph, type ActionTileBadge } from './ActionTile'
 import { useReducedMotionPref } from './motion/MotionContext'
 import type { IconName } from './Icon'
 import { Body, Column, Plate, Row } from './primitives'
-import { edge, motion, paint } from './tokens'
+import { edge, metrics, motion, paint, type as typeScale } from './tokens'
 
 export interface ActionGridItem {
   readonly id: string
@@ -48,7 +48,7 @@ export function ActionGrid({ items, columns = 3, layout = 'stacked', cellHeight,
   const [width, setWidth] = useState(0)
   const fits = width === 0 || width / columns >= ROW_LAYOUT_MIN_CELL
   const effective = layout === 'row' && !fits ? 'stacked' : layout
-  const height = cellHeight ?? (effective === 'stacked' ? 72 : 64)
+  const height = cellHeight ?? (effective === 'stacked' ? metrics.actionCell : metrics.actionCellRow)
   return (
     <Plate
       role="recessed"
@@ -79,16 +79,16 @@ export function ActionGrid({ items, columns = 3, layout = 'stacked', cellHeight,
               {({ pressed }) => (
               <Animated.View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? paint.glassRaised : 'rgba(22, 30, 78, 0)', transitionProperty: 'backgroundColor', transitionDuration: reduced ? 0 : motion.micro, transitionTimingFunction: 'ease-out' }}>
               {effective === 'stacked' ? (
-                <View style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', gap: 5, position: 'relative' }}>
+                <View style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', gap: 7, position: 'relative' }}>
                   {it.badge ? <Badge badge={it.badge} corner /> : null}
-                  <Glyph icon={it.icon} size={32} />
-                  <Body size="caption" fontWeight="600" fontSize={12} lineHeight={15} numberOfLines={1} textAlign="center">
+                  <Glyph icon={it.icon} size={38} />
+                  <Body size="caption" fontWeight="600" fontSize={typeScale.caption.size} lineHeight={typeScale.caption.size + 3} numberOfLines={1} textAlign="center">
                     {it.label}
                   </Body>
                 </View>
               ) : (
                 <Row gap="$3" alignItems="center" paddingHorizontal={14} width="100%">
-                  <Glyph icon={it.icon} size={34} />
+                  <Glyph icon={it.icon} size={40} />
                   <Column flex={1} gap={3} alignItems="flex-start">
                     <Body fontWeight="600" numberOfLines={1} textAlign="left">
                       {it.label}

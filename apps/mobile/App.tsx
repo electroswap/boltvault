@@ -3,14 +3,17 @@ import { createEngine, type Engine } from '@boltvault/engine'
 import { App as WalletApp, type UiHost } from '@boltvault/wallet'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useState } from 'react'
-import { Linking, SafeAreaView, Share, StyleSheet, Text } from 'react-native'
+import { Linking, Share, StyleSheet, Text, View } from 'react-native'
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { haptic, sound } from './src/feel'
-import { bleLedgerProvider } from './src/ledger-ble'
+import { mobileLedgerProvider } from './src/ledger'
 import { links } from './src/links'
 import { PAGE_PROVIDER_SCRIPT } from './src/page-provider.generated'
+import { DEVICE_KEY_ID, ensureDeviceKey, readDeviceKey, removeDeviceKey } from './src/device-key'
 import { createMobilePlatform } from './src/platform'
 import { pushStatus, registerPush, unregisterPush } from './src/push'
 import { ScanHost, scanQr } from './src/scan'
+import { registerTokenLogos } from './src/token-logos'
 import { createWalletKit } from './src/walletkit'
 import { publishWidgetSnapshot } from './src/widget'
 
@@ -18,9 +21,25 @@ import { publishWidgetSnapshot } from './src/widget'
 const host: Partial<UiHost> = {
   body: 'mobile',
   secretsAllowed: true,
-  // Passkeys on mobile (platform authenticators via react-native-passkeys) and the
-  // biometric device-wrap flow land with the v1.1 native-secret module; the password unlocks.
+  // Passkeys on mobile (platform authenticators via react-native-passkeys) land
+  // with the v1.1 native-secret module; the password unlocks.
   passkeys: null,
+  /*
+    Biometric unlock. Every piece below this line already existed and was
+    tested — the device wrap in core, enrolDevice/unlockWithDevice in the
+    engine, and src/device-key.ts itself — but nothing imported any of it, so
+    the feature was fully built and completely unreachable. This is the wire.
+  */
+  deviceKey: {
+    id: DEVICE_KEY_ID,
+    available: async () => {
+      const LocalAuthentication = await import('expo-local-authentication')
+      return (await LocalAuthentication.hasHardwareAsync()) && (await LocalAuthentication.isEnrolledAsync())
+    },
+    ensure: ensureDeviceKey,
+    read: readDeviceKey,
+    remove: removeDeviceKey,
+  },
   copy: async (text) => {
     const { setStringAsync } = await import('expo-clipboard')
     await setStringAsync(text)
@@ -46,13 +65,21 @@ const host: Partial<UiHost> = {
   buildHash: process.env['EXPO_PUBLIC_BUILD_HASH'] ?? null,
 }
 
+registerTokenLogos()
+
+/** Inside SafeAreaProvider, so the insets are real by the time the shell lays out. */
+function Shell({ engine }: { engine: Engine['engine'] }) {
+  const insets = useSafeAreaInsets()
+  return <WalletApp engine={engine} body="mobile" host={host} insets={insets} />
+}
+
 export default function App() {
   const [engine, setEngine] = useState<Engine | null>(null)
   useEffect(() => {
     let alive = true
     Promise.all([createMobilePlatform(), createWalletKit().catch(() => null)])
       .then(([platform, walletKit]) => {
-        if (alive) setEngine(createEngine({ platform, ledger: bleLedgerProvider(), walletKit, body: 'mobile', clientVersion: `BoltVault/${process.env['EXPO_PUBLIC_APP_VERSION'] ?? '0.1.0'}`, ...(process.env['EXPO_PUBLIC_BOLTVAULT_API'] ? { apiOrigin: process.env['EXPO_PUBLIC_BOLTVAULT_API'] } : {}), features: { limitOrders: process.env['EXPO_PUBLIC_BOLTVAULT_LIMIT_ORDERS'] === '1' } }))
+        if (alive) setEngine(createEngine({ platform, ledger: mobileLedgerProvider(), walletKit, body: 'mobile', clientVersion: `BoltVault/${process.env['EXPO_PUBLIC_APP_VERSION'] ?? '0.1.0'}`, ...(process.env['EXPO_PUBLIC_BOLTVAULT_API'] ? { apiOrigin: process.env['EXPO_PUBLIC_BOLTVAULT_API'] } : {}), features: { limitOrders: process.env['EXPO_PUBLIC_BOLTVAULT_LIMIT_ORDERS'] === '1' } }))
       })
       .catch((err: unknown) => console.error('platform failed', err))
     return () => {
@@ -60,11 +87,20 @@ export default function App() {
     }
   }, [])
   return (
-    <SafeAreaView style={styles.root}>
-      <StatusBar style="light" />
-      {engine ? <WalletApp engine={engine.engine} body="mobile" host={host} /> : <Text style={styles.boot}>BoltVault</Text>}
-      <ScanHost />
-    </SafeAreaView>
+    /*
+      SafeAreaProvider, not react-native's SafeAreaView: that component is
+      iOS-only and lays out as a plain View on Android, which is why the header
+      sat under the status bar and the dock under the gesture bar. The window
+      is deliberately edge-to-edge (android/gradle.properties), so the shell
+      pads itself from these insets instead.
+    */
+    <SafeAreaProvider>
+      <View style={styles.root}>
+        <StatusBar style="light" />
+        {engine ? <Shell engine={engine.engine} /> : <Text style={styles.boot}>BoltVault</Text>}
+        <ScanHost />
+      </View>
+    </SafeAreaProvider>
   )
 }
 

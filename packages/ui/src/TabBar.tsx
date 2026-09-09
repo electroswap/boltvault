@@ -11,6 +11,7 @@ import { Icon, type IconName } from './Icon'
 import { useReducedMotionPref } from './motion/MotionContext'
 import { Body, Row } from './primitives'
 import { CurrentFill } from './Rim'
+import { useInsets } from './Insets'
 import { glow, metrics, motion, paint } from './tokens'
 
 export interface TabItem {
@@ -30,10 +31,13 @@ export interface TabBarProps {
 export function TabBar({ items, activeId, onSelect, testID }: TabBarProps) {
   const reduced = useReducedMotionPref()
   const [width, setWidth] = useState(0)
+  const insets = useInsets()
   const index = Math.max(0, items.findIndex((i) => i.id === activeId))
   const cell = items.length ? width / items.length : 0
+  // The dock keeps its own height and stands the gesture bar off beneath it,
+  // so the tabs never share pixels with the system's back/home/recents.
   return (
-    <Row backgroundColor="rgba(9, 13, 38, 0.9)" height={metrics.tabBar} testID={testID} onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}>
+    <Row backgroundColor="rgba(9, 13, 38, 0.9)" height={metrics.tabBar + insets.bottom} paddingBottom={insets.bottom} testID={testID} onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}>
       <View style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 1, opacity: 0.55 }} pointerEvents="none">
         <CurrentFill />
       </View>
