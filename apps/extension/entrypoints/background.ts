@@ -44,7 +44,14 @@ export default defineBackground(() => {
         // Chrome refuses bounds that fall off the visible screen (small displays, headless): open unanchored.
         w = await create({})
       }
-      if (w?.id !== undefined) signWindows.set(request.id, w.id)
+      if (w?.id === undefined) return
+      // Opening is asynchronous, so the request can be decided while the window
+      // is still on its way. A decision that lands first finds nothing in the
+      // map to close and would leave the window orphaned on screen, so ask once
+      // more, now that there is a window to close.
+      // `engine.approvals` is the store, whose list is synchronous; `engine.engine` is the client, whose list is a promise.
+      if (engine.approvals.list().some((r) => r.id === request.id)) signWindows.set(request.id, w.id)
+      else void browser.windows.remove(w.id).catch(() => undefined)
     })()
   }
 

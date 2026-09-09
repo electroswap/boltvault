@@ -87,7 +87,7 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   const feel = useFeel()
   const router = useRouter()
   const { pending, loaded } = useApprovals()
-  const { accounts, active } = useWalletState()
+  const { accounts, active, vault, loading: vaultLoading } = useWalletState()
   const { width, height } = useWindowDimensions()
   const scene = useScene()
   const [chains, setChains] = useState<ChainView[]>([])
@@ -125,12 +125,29 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
     return () => clearTimeout(id)
   }, [now, enableAt])
 
-  // An already-permitted site only needed the unlock: decide without asking again.
+  /*
+    An already-permitted site only needed the unlock: decide without asking again.
+
+    "Needed the unlock" is the whole condition, and it used to go unchecked.
+    This screen is reachable for a moment before the vault status has arrived —
+    TabShell cannot replace it with Unlock until it knows the vault is locked —
+    and in that moment the effect approved a reconnect for a LOCKED vault. The
+    decision closed the sign window (owner: "the extension pop-up flickers open
+    and then immediately closes"), and the connect then failed 4100 in the
+    engine, because a locked vault lists no accounts. The site was left holding
+    an error for a request it could no longer answer, and unlocking afterwards
+    could not revive it: the request had already been spent.
+
+    So the unlock is waited for, here and in the engine (`approvals.decide`
+    refuses a yes while locked). Unlocking re-runs this effect and the
+    reconnect completes then, which is what the site is waiting for.
+  */
   useEffect(() => {
+    if (vaultLoading || !vault?.unlocked) return
     if (payload?.kind === 'connect' && payload.reconnect && request) {
       void engine.approvals.decide({ id: request.id, approve: true })
     }
-  }, [payload, request, engine])
+  }, [payload, request, engine, vault?.unlocked, vaultLoading])
 
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const finish = (): void => {

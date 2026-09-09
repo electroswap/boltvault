@@ -296,7 +296,27 @@ export function createEngine(deps: EngineDeps): Engine {
     decide: {
       input: ApprovalDecisionSchema,
       handler: async (arg) => {
-        const decided = await approvals.decide(arg as ApprovalDecision)
+        const decision = arg as ApprovalDecision
+        /*
+          A yes needs an unlocked vault, and not only because the signing keys
+          are behind it: a request accepts exactly one final decision, so a yes
+          taken while locked SPENDS the request on something that cannot be
+          carried out — a locked vault lists no accounts, so even a connect
+          fails 4100 — and leaves the site holding an error it can never
+          resolve, however many times the person unlocks afterwards.
+
+          A no is always allowed: closing the sign window is a rejection, and it
+          has to keep working whatever state the vault is in. So is a yes with
+          no vault at all — there is no unlock to wait for, and whatever the
+          request needed a key for will fail on its own.
+        */
+        if (decision.approve) {
+          const status = await vault.status()
+          if (status.exists && !status.unlocked) {
+            throw new EngineError('locked', 'Unlock BoltVault before approving this request.')
+          }
+        }
+        const decided = await approvals.decide(decision)
         // A signing decision is activity: the idle timer restarts.
         void vault.touch().catch(() => undefined)
         return decided
