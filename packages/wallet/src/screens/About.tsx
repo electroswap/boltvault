@@ -1,6 +1,6 @@
 /**
  * Settings › About (master plan §8.14, §7.10): the version and build hash,
- * the one place the encryption is named, the fee sink and schedule
+ * the one place the encryption is named, the fee recipient
  * addresses, the signed-flags state, crash reports (off by default), and
  * where the audit, the SBOM and the security policy live.
  */
@@ -65,10 +65,10 @@ export function About({ body }: { body: 'extension-popup' | 'extension-tab' | 'm
       <Plate gap={4} testID="about-fee">
         <Body size="title">{t({ id: 'about.fee', message: 'Wallet fee' })}</Body>
         <Body tone="mute" size="caption">
-          {t({ id: 'about.fee.body', message: 'In-wallet swaps pay 0.5% of the output, less by BOLT/DYNO tier, to the fee sink on Electroneum. Fees fund the wallet; the sink’s sweeps are on the explorer.' })}
+          {t({ id: 'about.fee.body.v2', message: 'In-wallet swaps pay 0.5% of the output, less by BOLT/DYNO tier, to the address below on Electroneum. Fees fund the wallet, and every payment is on the explorer.' })}
         </Body>
         <Body tone="mute" size="caption">
-          {fee?.sink ? `${t({ id: 'about.sink', message: 'Sink' })} ${shortAddress(fee.sink)} · ${t({ id: 'about.schedule', message: 'Schedule' })} ${fee.schedule ? shortAddress(fee.schedule) : '—'}` : t({ id: 'about.fee.none', message: 'Not configured in this build — in-wallet swaps stay off until it is.' })}
+          {fee?.sink ? `${t({ id: 'about.recipient', message: 'Fees go to' })} ${shortAddress(fee.sink)}` : t({ id: 'about.fee.none', message: 'Not configured in this build — in-wallet swaps stay off until it is.' })}
         </Body>
       </Plate>
 

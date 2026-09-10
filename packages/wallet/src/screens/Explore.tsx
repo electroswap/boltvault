@@ -221,7 +221,7 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
               </Row>
               <Column testID="collections-list">
                 {(collections.value ?? []).map((c, i, arr) => (
-                  <CollectionRankRow key={c.address} rank={i + 1} collection={c} currency={ccy} etnUsd={etnUsd} onPress={() => router.navigate('collection', { chainId: ETN, address: c.address })} last={i === arr.length - 1} />
+                  <CollectionRankRow key={c.address} collection={c} currency={ccy} etnUsd={etnUsd} onPress={() => router.navigate('collection', { chainId: ETN, address: c.address })} last={i === arr.length - 1} />
                 ))}
               </Column>
               {(collections.value ?? []).length === 0 ? (

@@ -1,9 +1,10 @@
 /**
  * Simulation (master plan §3.4 step 2). On Electroneum the source is a
- * `debug_traceCall` (callTracer, withLog) against the ElectroSwap trace node;
- * elsewhere `eth_simulateV1` where it exists; everywhere `eth_estimateGas`
- * as the revert check. This module turns a trace into balance deltas — it
- * never talks to the network itself.
+ * `debug_traceCall` (callTracer, withLog) against the ElectroSwap trace node,
+ * reached through `POST /api/wallet/trace` because that node is not on the
+ * public internet; elsewhere `eth_simulateV1` where it exists; everywhere
+ * `eth_estimateGas` as the revert check. This module turns a trace into
+ * balance deltas — it never talks to the network itself.
  */
 import { decodeAbiParameters, parseAbiParameters, type Hex } from 'viem'
 import { TOPICS } from './abis'
@@ -138,6 +139,7 @@ export function mergeDeltas(deltas: readonly AssetDelta[]): AssetDelta[] {
 
 export const NO_SIMULATION: Simulation = { mode: 'none', ok: true, deltas: [], approvals: [] }
 
-export function estimateSimulation(gas: bigint | null, revertReason: string | null): Simulation {
-  return revertReason === null ? { mode: 'estimate', ok: true, ...(gas !== null ? { gas } : {}), deltas: [], approvals: [] } : { mode: 'estimate', ok: false, revertReason, deltas: [], approvals: [] }
+export function estimateSimulation(gas: bigint | null, revertReason: string | null, note?: string | null): Simulation {
+  const why = note ? { note } : {}
+  return revertReason === null ? { mode: 'estimate', ok: true, ...(gas !== null ? { gas } : {}), deltas: [], approvals: [], ...why } : { mode: 'estimate', ok: false, revertReason, deltas: [], approvals: [], ...why }
 }

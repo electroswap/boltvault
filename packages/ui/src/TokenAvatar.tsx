@@ -6,7 +6,12 @@
  *   2. the list/custom logoUri the engine handed us
  *   3. the sibling extension on the ElectroSwap static host — it serves .svg
  *      for most tokens and .png for a few, and asking for the wrong one 404s
- *   4. TokenMark: the symbol on a glass disc
+ *   4. the coin mark, for a chain's own currency and its wrapped form
+ *   5. TokenMark: the symbol on a glass disc
+ *
+ * The coin mark is the resting frame rather than a last resort: it needs no
+ * network, so a native row paints its real mark on the first frame and a
+ * remote logo, if there is one, replaces it when it arrives.
  *
  * The winner is remembered in a module-level map, so scrolling a list or
  * reopening the popup never re-walks the candidates.
@@ -22,6 +27,8 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Image, View } from 'react-native'
+import { ChainMark } from './ChainMark'
+import { coinMarkChain } from './coinMarks'
 import { SvgImage } from './SvgImage'
 import { TokenMark } from './TokenMark'
 import { normaliseTokenAddress, tokenLogoSources, type LogoSource } from './tokenLogos'
@@ -48,6 +55,7 @@ function isLocal(source: LogoSource | undefined): boolean {
 export function TokenAvatar({ chainId, address, symbol, logoUri, size = 32, testID }: TokenAvatarProps) {
   const key = `${chainId}:${normaliseTokenAddress(address)}`
   const sources = useMemo(() => tokenLogoSources(chainId, address, logoUri), [chainId, address, logoUri])
+  const coin = coinMarkChain(chainId, address)
 
   // A previously resolved winner short-circuits the walk entirely.
   const known = resolved.get(key)
@@ -74,9 +82,7 @@ export function TokenAvatar({ chainId, address, symbol, logoUri, size = 32, test
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: paint.glassRaisedSolid }} testID={testID}>
       {loaded ? null : (
-        <View style={{ position: 'absolute' }}>
-          <TokenMark symbol={symbol} size={size} />
-        </View>
+        <View style={{ position: 'absolute' }}>{coin === null ? <TokenMark symbol={symbol} size={size} /> : <ChainMark chainId={coin} size={size} />}</View>
       )}
       {source === undefined ? null : source.kind === 'svg' ? (
         <SvgImage xml={source.xml} uri="" width={size} height={size} />

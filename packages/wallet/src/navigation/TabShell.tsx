@@ -4,12 +4,13 @@
  * screens is replaced by Unlock. A pending dApp approval takes over the
  * popup and the mobile body (the sign window mounts it by route).
  */
-import { Column, Field, MotionProvider, PageLoader, ScreenEnter, TabBar, useInsets, useWindowDimensions, type EnterDirection } from '@boltvault/ui'
+import { Column, Field, MotionProvider, PageLoader, Scrim, ScreenEnter, TabBar, metrics, useInsets, useWindowDimensions, type EnterDirection } from '@boltvault/ui'
 import { Suspense, lazy, useEffect, useRef } from 'react'
 import { t } from '../i18n'
 import { Approval } from '../screens/Approval'
 import { Home, type HomeProps } from '../screens/Home'
 import { Onboarding } from '../screens/Onboarding'
+import { Splash } from '../screens/Splash'
 import { UpdateRequired } from '../components/UpdateRequired'
 import { Unlock } from '../screens/Unlock'
 import { useApprovals } from '../state/useApprovals'
@@ -149,7 +150,19 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   }, [])
   const items = TAB_ORDER.map((id) => ({ id, label: t({ id: TABS[id].labelId, message: TABS[id].labelMessage }), icon: TABS[id].icon, ...(id === 'activity' && unread > 0 ? { badge: unread } : {}) }))
   const meta = SCREENS[current.screen]
-  const showTabs = meta.dock
+  /*
+    The full tab is not a big phone.
+
+    The dock is a phone's answer to "no room for anything else", and in a
+    browser tab there is room for everything else — so it goes, and Swap and
+    Activity move onto Home where they read as places rather than as a strip of
+    icons pinned to the bottom of a monitor. What must not go with it is the
+    way back: with no dock, a screen reached from Home has to offer Home, so
+    the rail below does, everywhere except Home itself and the ceremonies
+    (onboarding, unlock, signing) that must not offer a way out mid-flow.
+  */
+  const wide = body === 'extension-tab'
+  const showTabs = meta.dock && !wide
   // How the view arrives (style bible › motion): a push from the right, a pop from the left, a tab change rising in place; the same route never re-animates.
   const depth = state.stack.length
   const prev = useRef({ depth, tab: state.tab, screen: current.screen })
@@ -285,6 +298,9 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
     case 'onboarding':
       screen = <Onboarding reducedMotion={reducedMotion} />
       break
+    case 'splash':
+      screen = <Splash reducedMotion={reducedMotion} />
+      break
     case 'moments':
       screen = <Moments reducedMotion={reducedMotion} />
       break
@@ -315,7 +331,25 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
     <MotionContext.Provider value={reducedMotion}>
       <Column flex={1} backgroundColor="$void">
         {meta.grid ? (
-          <Field scene={scene} address={active?.address ?? NO_ACCOUNT_SEED} pulse={head?.live ? 1 : 0} warmth={tier ? Math.min(1, tier.tier / 4) : 0} intensity={current.screen === 'home' ? (body === 'extension-popup' ? 0.75 : 1) : 0.5} quiet={!vault?.unlocked} reducedMotion={reducedMotion} fps={body === 'extension-popup' ? 30 : 60} width={width} height={height} testID="field" />
+          <>
+            <Field scene={scene} address={active?.address ?? NO_ACCOUNT_SEED} pulse={head?.live ? 1 : 0} warmth={tier ? Math.min(1, tier.tier / 4) : 0} intensity={current.screen === 'home' ? (body === 'extension-popup' ? 0.75 : 1) : 0.5} quiet={!vault?.unlocked} reducedMotion={reducedMotion} fps={body === 'extension-popup' ? 30 : 60} width={width} height={height} testID="field" />
+            {/*
+              Dark at the top, the circuit emerging downward — the Unlock
+              screen's look, which the owner asked for everywhere the scene
+              runs. It is also the style bible's own rule: "the top third of the
+              frame carries only the aurora and grain", and "nothing above 40 %
+              luminance under a readout". The grid screens ran the scene at full
+              strength from the very first pixel, so the busiest part of the
+              frame sat directly behind the balance.
+
+              A scrim rather than a shader change, because the scene is two
+              hand-written implementations (WebGL and Skia) of one spec and this
+              is a composition choice, not a change to what the scene is.
+            */}
+            <Column position="absolute" left={0} top={0} zIndex={0} pointerEvents="none">
+              <Scrim width={width} height={height} edge="top" strength={0.78} testID="field-fade" />
+            </Column>
+          </>
         ) : null}
         {/*
           The screen area clips. Every enter animation starts outside its own
@@ -333,7 +367,16 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
           bottom inset itself.
         */}
         <Column flex={1} zIndex={1} overflow="hidden" paddingTop={insets.top}>
-          <ScreenEnter key={enterKey} direction={direction} reducedMotion={reducedMotion}>
+          {/*
+            One width for every screen, applied here rather than in each of
+            thirty. Home, Portfolio, Swap, the Rack and a handful of others had
+            said it for themselves; Send, Receive, Explore, the Launchpad and
+            the rest had not, so they ran the width of the display. A screen
+            that wants to be narrower still says so — a narrower child inside
+            this is exactly what it looks like.
+          */}
+          <Column flex={1} width="100%" {...(wide ? { maxWidth: metrics.page, alignSelf: 'center' } : {})}>
+            <ScreenEnter key={enterKey} direction={direction} reducedMotion={reducedMotion}>
             {/*
               The fallback is a plate-shaped skeleton, not a spinner and not a
               blank: a screen whose chunk is still arriving should look like
@@ -341,8 +384,9 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
               arriving does. In practice it is rarely seen — prefetchScreens
               warms every chunk once Home has painted.
             */}
-            <Suspense fallback={<PageLoader overlay reducedMotion={reducedMotion} testID="screen-loading" />}>{screen}</Suspense>
-          </ScreenEnter>
+              <Suspense fallback={<PageLoader overlay reducedMotion={reducedMotion} testID="screen-loading" />}>{screen}</Suspense>
+            </ScreenEnter>
+          </Column>
           {/* Over the screen, under the tab bar: the page assembles beneath it. */}
           {busy ? <PageLoader overlay reducedMotion={reducedMotion} testID="page-loading" /> : null}
         </Column>

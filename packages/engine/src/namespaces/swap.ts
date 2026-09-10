@@ -118,7 +118,7 @@ export class SwapService {
       priceImpactPct: null,
       slippageBips: input.slippageBips ?? DEFAULT_SLIPPAGE_BIPS,
       taxBips: 0,
-      fee: { bips: 0, tier: 0, amountRaw: '0', sink: null, source: 'fallback', nextTierAt: null, nextTierBips: null },
+      fee: { bips: 0, tier: 0, name: '', amountRaw: '0', sink: null, source: 'fallback', nextTierAt: null, nextTierBips: null },
       route: { label: '', hops: [] },
       gasEstimate: '0',
       steps: [],
@@ -179,7 +179,7 @@ export class SwapService {
     const nowS = Math.floor(d.platform.now() / 1000)
 
     const base = this.skeleton(input, inView, outView, problems)
-    const withState: SwapQuote = { ...base, amountInRaw: amountIn.toString(), balanceInRaw: balanceIn.toString(), slippageBips, fee: { ...base.fee, bips: tier.bips, tier: tier.tier, sink: tier.sink, source: tier.source, nextTierAt: tier.nextTierAt, nextTierBips: tier.nextTierBips } }
+    const withState: SwapQuote = { ...base, amountInRaw: amountIn.toString(), balanceInRaw: balanceIn.toString(), slippageBips, fee: { ...base.fee, bips: tier.bips, tier: tier.tier, name: tier.name, sink: tier.sink, source: tier.source, nextTierAt: tier.nextTierAt, nextTierBips: tier.nextTierBips } }
     if (problems.length > 0 || amountIn <= 0n) return withState
 
     // Route, spot (for impact) and taxes in as few batches as the reader allows.
@@ -200,7 +200,9 @@ export class SwapService {
     const amountOut = best.best.amountOut
     const bips = tier.bips
     const sink = tier.sink
-    if (bips > 0 && !sink) problems.push('The wallet fee sink for this network is not configured. In-wallet swaps stay off until it is.')
+    // There is no sink contract any more: the fee goes to an address named in
+    // `fees.json`, and a chain that names none has in-wallet swap switched off.
+    if (bips > 0 && !sink) problems.push('In-wallet swaps are off on this network — no fee address is set for it in this build.')
     const effectiveSlippage = slippageBips + taxBips
     const receive = netAfterFee(amountOut, bips)
     const minOut = minimumOut(amountOut, bips, effectiveSlippage)
@@ -307,7 +309,7 @@ export class SwapService {
         }
         const bips = quote.fee.bips
         const sink = (quote.fee.sink ?? null) as Hex | null
-        if (bips > 0 && !sink) throw new EngineError('invalid_argument', 'The wallet fee sink for this network is not configured.')
+        if (bips > 0 && !sink) throw new EngineError('invalid_argument', 'In-wallet swaps are off on this network — no fee address is set for it in this build.')
         const nowS = Math.floor(d.platform.now() / 1000)
         const enc = encodeSwap({
           route: { hops: quote.route.hops.map((h) => (h.kind === 'v3' ? { kind: 'v3' as const, tokenIn: h.tokenIn as Hex, tokenOut: h.tokenOut as Hex, fee: h.fee ?? 3000 } : { kind: 'v2' as const, tokenIn: h.tokenIn as Hex, tokenOut: h.tokenOut as Hex })) },

@@ -148,6 +148,16 @@ export interface Simulation {
   readonly gas?: bigint
   readonly deltas: readonly AssetDelta[]
   readonly approvals: readonly ApprovalDelta[]
+  /**
+   * Why there are no deltas, when something specific went wrong.
+   *
+   * Absent means the plain case: nothing here can trace, so only the revert
+   * check ran. Present means a tracer was asked and answered with a problem —
+   * busy, timed out, the node refused — and that is worth repeating verbatim
+   * rather than flattening into "this network cannot preview what moves",
+   * which would be a lie about a network that can.
+   */
+  readonly note?: string
 }
 
 export interface Presentation {

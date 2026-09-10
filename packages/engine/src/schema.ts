@@ -371,11 +371,15 @@ export const HolderTierSchema = z.object({
   chainId: z.number().int().positive(),
   bips: z.number().int().nonnegative(),
   tier: z.number().int().nonnegative(),
+  /** What this rung is called — 'Static', 'Charge', 'Magneto', 'Turbine', 'Reactor'. */
+  name: z.string(),
   score: z.string(),
   nextTierAt: z.string().nullable(),
   nextTierBips: z.number().int().nonnegative().nullable(),
-  /** 'chain' when the schedule contract answered; 'fallback' is the base fee, never lower. */
-  source: z.enum(['chain', 'fallback']),
+  /** The rung above, when there is one. */
+  nextTierName: z.string().nullable(),
+  /** 'config' when this chain has a fee config; 'fallback' is the published ladder. */
+  source: z.enum(['config', 'fallback']),
   sink: z.string().nullable(),
   schedule: z.string().nullable(),
   /** Where the score comes from, for the fee sheet. */
@@ -386,11 +390,13 @@ export type HolderTier = z.infer<typeof HolderTierSchema>
 export const FeeScheduleViewSchema = z.object({
   chainId: z.number().int().positive(),
   baseBips: z.number().int().nonnegative(),
-  tiers: z.array(z.object({ minScore: z.string(), bips: z.number().int().nonnegative() })),
+  baseName: z.string(),
+  tiers: z.array(z.object({ name: z.string(), minScore: z.string(), bips: z.number().int().nonnegative() })),
   dynoWeight: z.string(),
+  /** 'average' when it is the measured week's BOLT/DYNO ratio, 'config' when it is the committed anchor. */
+  dynoWeightSource: z.enum(['config', 'average']),
   countFarmBolt: z.boolean(),
-  boltPayDiscountBips: z.number().int().nonnegative(),
-  source: z.enum(['chain', 'fallback']),
+  source: z.enum(['config', 'fallback']),
   sink: z.string().nullable(),
   address: z.string().nullable(),
 })
@@ -425,9 +431,11 @@ export const SwapQuoteSchema = z.object({
   fee: z.object({
     bips: z.number().int().nonnegative(),
     tier: z.number().int().nonnegative(),
+    /** The tier's name, so the swap sheet can say "Magneto" rather than "tier 2". */
+    name: z.string(),
     amountRaw: z.string(),
     sink: z.string().nullable(),
-    source: z.enum(['chain', 'fallback']),
+    source: z.enum(['config', 'fallback']),
     nextTierAt: z.string().nullable(),
     nextTierBips: z.number().int().nonnegative().nullable(),
   }),
@@ -603,6 +611,17 @@ export const PrefsSchema = z.object({
   homeScope: z.union([z.literal('all'), z.number().int().positive()]),
   swapCoachDismissed: z.boolean(),
   chartDuration: z.enum(['1D', '1W', '1M', '1Y']),
+  /*
+    `.default(false)`, not a bare boolean, and the difference is not cosmetic.
+
+    `readDoc` validates the stored document and, when it does not parse,
+    quarantines it and hands back `defaultValue()`. A required key would
+    therefore fail every document written before this line existed — so adding
+    the intro flag would have silently reset every install's home scope and
+    chart timeframe. With a default, zod fills it in on read, the old document
+    still parses, and the inferred type stays `boolean`.
+  */
+  introSeen: z.boolean().default(false),
 })
 export type Prefs = z.infer<typeof PrefsSchema>
 
@@ -900,8 +919,17 @@ export const PositionsSchema = z.object({
   legends: LegendsStatusSchema.nullable(),
   orders: z.array(LimitOrderViewSchema),
   campaigns: z.array(CampaignViewSchema),
-  /** The one accessory Home shows for positions, if any: rewards to collect or dividends to claim. */
-  accessory: z.object({ kind: z.enum(['collect', 'dividends', 'claim_tokens', 'claim_refund']), text: z.string(), target: z.string() }).nullable(),
+  /**
+   * Everything about these positions that is standing and unfinished — rewards
+   * to collect, dividends to claim, a token or refund waiting.
+   *
+   * A list, not the one that mattered most. It was singular while Home had a
+   * single slot to put it in, and the cascade that picked a winner meant a
+   * holder with both dividends and farm rewards was told about one of them and
+   * never the other. Home's rotor shows them all in turn; the one caller that
+   * still wants a single line (the background watch) takes the first.
+   */
+  accessories: z.array(z.object({ kind: z.enum(['collect', 'dividends', 'claim_tokens', 'claim_refund']), text: z.string(), target: z.string() })),
   observedAt: z.number().int().nonnegative(),
 })
 export type Positions = z.infer<typeof PositionsSchema>

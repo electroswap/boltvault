@@ -81,7 +81,12 @@ test('home balances, send to a broadcast, receive, allowances revoke', async () 
     await expect(popup.getByTestId('approval-primary')).toHaveText('Send')
     await expect(popup.getByTestId('approval-primary')).toBeEnabled({ timeout: 5_000 })
     await popup.getByTestId('approval-primary').click()
-    await expect(popup.getByTestId('send-done')).toBeVisible({ timeout: 15_000 })
+    /*
+      A broadcast send has no receipt page: the sheet closes, Home comes back,
+      and the pending transaction is the accessory there. That is the whole
+      outcome the user sees, so it is what this asserts.
+    */
+    await expect(popup.getByTestId('accessory-pending')).toBeVisible({ timeout: 15_000 })
     await expect.poll(() => rpc.state.transactions.size, { timeout: 15_000 }).toBe(1)
     const [sent] = [...rpc.state.transactions.values()]
     const tx = parseTransaction(sent?.raw as Hex)
@@ -89,8 +94,8 @@ test('home balances, send to a broadcast, receive, allowances revoke', async () 
     expect(decoded.functionName).toBe('transfer')
     expect(decoded.args).toEqual([FRIEND, 2_500_000n])
     rpc.advanceBlocks()
-    await expect(popup.getByTestId('send-done')).toContainText('Sent', { timeout: 20_000 })
-    await popup.getByTestId('send-home').click()
+    // Confirmed: the pending accessory clears itself.
+    await expect(popup.getByTestId('accessory-pending')).toBeHidden({ timeout: 20_000 })
 
     // Activity lists it as confirmed.
     await popup.getByTestId('tabs').getByText('Activity').click()

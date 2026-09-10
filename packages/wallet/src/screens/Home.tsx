@@ -1,17 +1,18 @@
 /**
  * Home (master plan §8.2; plan B3): the seat, a mini-portfolio console — the
- * total for the chosen chains, how many tokens, the live filament — one slot
- * for whatever needs attention, and the action grid: everything that is not
+ * total for the chosen chains, how many tokens, the live filament — the rotor
+ * of whatever needs attention, and the action grid: everything that is not
  * on the dock. Tapping the total opens the Portfolio. The Grid is drawn by
  * TabShell behind this screen; the holder tier warms it.
  */
-import { ActionGrid, Body, ChainMark, Column, Icon, IconButton, Ignition, Key, LiveFilament, Pill, Plate, Pressable, Row, RollingReadout, Seat, ScrollView, metrics, paint, type ActionTileBadge, type IconName } from '@boltvault/ui'
+import { ActionGrid, Body, ChainMark, Column, Icon, IconButton, Ignition, Key, LiveFilament, Pill, Plate, Pressable, Rotor, Row, RollingReadout, Seat, ScrollView, metrics, paint, type ActionTileBadge, type IconName, type RotorItem } from '@boltvault/ui'
 import { cacheKey, type BridgeStatus, type CampaignView, type Inventory, type TokenDetailView } from '@boltvault/engine'
 import { useEffect, useRef, useState } from 'react'
 import { ChainScopeSheet, ScopePill, useHomeScope } from '../components/ChainScope'
 import { DappSheet, DappStrip, useDappStatus } from '../components/DappStatus'
 import { useEngine } from '../engine/EngineProvider'
-import { formatChange, formatFiat, formatPrice } from '../format'
+import { FeeScheduleSheet } from './FeeScheduleSheet'
+import { formatBolt, formatChange, formatFiat, formatPct, formatPrice, formatRaw } from '../format'
 import { useHost } from '../host'
 import { useActivity } from '../hooks/useActivity'
 import { useCached } from '../hooks/useCached'
@@ -53,7 +54,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   const tier = useHolderTier(active?.id ?? null)
   const scope = useHomeScope()
   const [scopeOpen, setScopeOpen] = useState(false)
-  const portfolio = usePortfolio(active?.id ?? null, 5_000, scope.chainIds)
+  const portfolio = usePortfolio(active?.id ?? null, 5_000, scope.loaded ? scope.chainIds : null)
   const { entries } = useActivity(active?.id ?? null)
   const { positions } = usePositions(active?.id ?? null, !!vault?.unlocked)
   const { unread } = useNotifications()
@@ -63,6 +64,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   const [unlimited, setUnlimited] = useState(0)
   const [copied, setCopied] = useState(false)
   const [dappOpen, setDappOpen] = useState(false)
+  const [feeOpen, setFeeOpen] = useState(false)
   const accountId = active?.id ?? null
   const unlocked = !!vault?.unlocked
   // The unlock ceremony runs once per unlock, not on every mount of Home.
@@ -133,6 +135,20 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   const unpriced = portfolio.snapshot?.unpricedCount ?? 0
 
   const tiles: readonly Tile[] = [
+    /*
+      Swap and Activity are dock tabs on a phone and tiles here.
+
+      The full tab has no dock (see TabShell), so without this they would have
+      no door at all — and a tile is the better shape for them anyway: at this
+      size "Swap" beside Send and Receive reads as one of the things you came
+      to do, rather than a third of a strip of icons along the bottom edge.
+    */
+    ...(wide
+      ? ([
+          { id: 'swap', icon: 'swap', label: t({ id: 'tab.swap', message: 'Swap' }), badge: null, onPress: () => router.setTab('swap') },
+          { id: 'activity', icon: 'activity', label: t({ id: 'tab.activity', message: 'Activity' }), badge: pendingTx > 0 ? { text: t({ id: 'home.badge.pending', message: '{n} pending', values: { n: pendingTx } }), tone: 'arc' } : null, onPress: () => router.setTab('activity') },
+        ] as Tile[])
+      : []),
     { id: 'send', icon: 'send', label: t({ id: 'key.send', message: 'Send' }), badge: null, onPress: () => router.navigate('send') },
     { id: 'receive', icon: 'receive', label: t({ id: 'key.receive', message: 'Receive' }), badge: null, onPress: () => router.navigate('receive') },
     { id: 'bridge', icon: 'bridge', label: t({ id: 'key.bridge', message: 'Bridge' }), badge: bridgeInFlight ? { text: t({ id: 'home.badge.arriving', message: 'Arriving' }), tone: 'arc' } : null, onPress: () => router.navigate('bridge', scope.scope !== 'all' && scope.scope !== ETN ? { chainId: scope.scope } : undefined) },
@@ -158,7 +174,11 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     is exactly what `explore.tokenDetail` asks for when given 'native'.
   */
   const etnDetail = useCached<TokenDetailView | null>({
-    key: unlocked ? cacheKey('explore', 'detail', ETN, 'native') : null,
+    // `tokendetail`, not `detail`: the key has to be the one the engine writes
+    // (`DETAIL_SPEC`), or the `cache.changed` event for this resource names a
+    // key nothing here is listening for and the tile never picks the new price
+    // up — it sits on whatever the last `fresh()` returned.
+    key: unlocked ? cacheKey('explore', 'tokendetail', ETN, 'native') : null,
     cached: (e) => e.explore.cachedTokenDetail({ chainId: ETN, address: 'native' }),
     fresh: (e) => e.explore.tokenDetail({ chainId: ETN, address: 'native' }),
     maxAgeMs: 60_000,
@@ -167,10 +187,23 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   const etnChange = etn && etn.change24h !== null ? formatChange(etn.change24h / 100) : null
   const copy = host.copy && active ? () => void host.copy?.(active.address).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }, () => undefined) : undefined
 
-  // One slot (plan B3): the backup gate, else a signed notice, else the accessory that matters most.
-  let slot: React.ReactNode = null
+  /*
+    The strip under the console (plan B3).
+
+    It used to be one slot and a cascade — the backup gate, else a notice, else
+    the single most urgent thing — so anything below the winner was invisible
+    until the winner was dealt with, and the holder tier, which is always true,
+    had nowhere to go and rode beside the address instead.
+
+    The gate is still exclusive, because it is a gate: while it stands, swapping
+    and signing are off and there is nothing else worth reading. Everything else
+    turns in the `Rotor`, with the tier as its constant last entry — the one
+    that is an invitation rather than a chore, and the one that pays for itself
+    if it is ever acted on.
+  */
+  let gate: React.ReactNode = null
   if (vault?.unlocked && !vault.backupComplete && vault.seeds.length > 0) {
-    slot = (
+    gate = (
       <Plate role="raised" paddingVertical={6} paddingHorizontal={12} minHeight={44} justifyContent="center" testID="backup-gate">
         <Row gap="$2" alignItems="center">
           <Icon name="shield" size={16} color={paint.ember} />
@@ -186,35 +219,72 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
         </Row>
       </Plate>
     )
-  } else if (notice) {
-    slot = (
-      <Plate gap={2} testID="home-notice">
-        <Row gap="$2" alignItems="center">
-          <Icon name="warn" size={16} color={paint.ember} />
-          <Body size="caption" flexShrink={1}>
-            {notice}
-          </Body>
-        </Row>
-      </Plate>
-    )
-  } else if (bridgeInFlight) {
-    slot = <Accessory icon="bridge" tone={paint.arc} text={t({ id: 'home.acc.bridge', message: '{s} arriving on {c} in about {m} min', values: { s: bridgeInFlight.symbol, c: scope.chains.find((c) => c.chainId === bridgeInFlight.toChainId)?.name ?? `chain ${bridgeInFlight.toChainId}`, m: bridgeInFlight.toChainId === 1 || bridgeInFlight.fromChainId === 1 ? 20 : 5 } })} onPress={() => router.navigate('bridge')} testID="accessory-bridge" />
-  } else if (pendingTx > 0) {
-    slot = <Accessory icon="clock" tone={paint.arc} text={t({ id: 'home.acc.pending', message: '{n} transaction pending', values: { n: pendingTx } })} onPress={() => router.setTab('activity')} testID="accessory-pending" />
-  } else if (positions?.accessory) {
-    const a = positions.accessory
-    slot = <Accessory icon={a.kind === 'dividends' ? 'star' : a.kind === 'collect' ? 'farm' : 'bolt'} tone={paint.ember} text={a.text} onPress={() => (a.target === 'legends' ? router.navigate('legends') : a.target.startsWith('farm:') ? router.navigate('farm', { chainId: ETN, farmId: Number(a.target.slice(5)) }) : router.navigate('campaign', { chainId: ETN, pool: a.target.slice(9) }))} testID="accessory-positions" />
-  } else if (unlimited > 0) {
-    slot = <Accessory icon="approvals" tone={paint.burn} text={t({ id: 'home.acc.unlimited', message: '{n} unlimited approvals', values: { n: unlimited } })} onPress={() => router.navigate('allowances')} testID="accessory-approvals" />
+  }
+
+  const rotor: RotorItem[] = []
+  if (notice) rotor.push({ id: 'notice', icon: 'warn', tone: paint.ember, text: notice, testID: 'home-notice' })
+  if (bridgeInFlight) rotor.push({ id: 'bridge', icon: 'bridge', tone: paint.arc, text: t({ id: 'home.acc.bridge', message: '{s} arriving on {c} in about {m} min', values: { s: bridgeInFlight.symbol, c: scope.chains.find((c) => c.chainId === bridgeInFlight.toChainId)?.name ?? `chain ${bridgeInFlight.toChainId}`, m: bridgeInFlight.toChainId === 1 || bridgeInFlight.fromChainId === 1 ? 20 : 5 } }), onPress: () => router.navigate('bridge'), testID: 'accessory-bridge' })
+  if (pendingTx > 0) rotor.push({ id: 'pending', icon: 'clock', tone: paint.arc, text: t({ id: 'home.acc.pending', message: '{n} transaction pending', values: { n: pendingTx } }), onPress: () => router.setTab('activity'), testID: 'accessory-pending' })
+  /*
+    The second line, built here rather than in the engine.
+
+    `text` says what is waiting; `sub` says where it came from, which is the
+    part that makes it worth opening. Both could be built beside each other in
+    `PositionsService`, and the engine's are the strings that are not
+    translated — so the new one is built where `t()` is, off the same snapshot
+    the entry came from.
+  */
+  const earning = (positions?.farms ?? []).filter((f) => BigInt(f.position?.pendingRewards ?? '0') > 0n)
+  const bestApy = earning.reduce<number | null>((best, f) => (f.baseApy !== null && (best === null || f.baseApy > best) ? f.baseApy : best), null)
+  const legends = positions?.legends ?? null
+  const subFor = (kind: string): string | null => {
+    if (kind === 'dividends' && legends) {
+      const paid = BigInt(legends.lifetimePaidWei)
+      const pieces = legends.activeTokenCount === 1 ? t({ id: 'home.acc.div.one', message: '1 Legends piece' }) : t({ id: 'home.acc.div.many', message: '{n} Legends pieces', values: { n: legends.activeTokenCount } })
+      // Only once there is a lifetime to speak of: "0 ETN paid so far" is a discouragement, not a fact worth the line.
+      return paid > 0n ? t({ id: 'home.acc.div.sub', message: '{pieces} · {p} ETN paid so far', values: { pieces, p: formatRaw(legends.lifetimePaidWei, 18) } }) : pieces
+    }
+    if (kind === 'collect' && earning.length > 0) {
+      const where = earning.length === 1 ? (earning[0]?.name ?? '') : t({ id: 'home.acc.collect.many', message: 'across {n} farms', values: { n: earning.length } })
+      return bestApy !== null ? t({ id: 'home.acc.collect.sub', message: '{where} · {a}% APY, still earning', values: { where, a: bestApy.toFixed(1) } }) : where
+    }
+    return null
+  }
+  for (const a of positions?.accessories ?? []) {
+    rotor.push({
+      id: `pos:${a.kind}:${a.target}`,
+      icon: a.kind === 'dividends' ? 'star' : a.kind === 'collect' ? 'farm' : 'bolt',
+      tone: paint.ember,
+      text: a.text,
+      sub: subFor(a.kind),
+      onPress: () => (a.target === 'legends' ? router.navigate('legends') : a.target.startsWith('farm:') ? router.navigate('farm', { chainId: ETN, farmId: Number(a.target.slice(5)) }) : router.navigate('campaign', { chainId: ETN, pool: a.target.slice(9) })),
+      testID: `accessory-${a.kind}`,
+    })
+  }
+  if (unlimited > 0) rotor.push({ id: 'approvals', icon: 'approvals', tone: paint.burn, text: t({ id: 'home.acc.unlimited', message: '{n} unlimited approvals', values: { n: unlimited } }), onPress: () => router.navigate('allowances'), testID: 'accessory-approvals' })
+  if (tier) {
+    rotor.push({
+      id: 'tier',
+      icon: 'bolt',
+      tone: paint.ember,
+      text: t({ id: 'home.acc.tier', message: '{name} tier · {p} wallet fee', values: { name: tier.name, p: formatPct(tier.bips) } }),
+      // The nudge is the point: a rung you can name, and what it costs to reach it.
+      sub:
+        tier.nextTierAt && tier.nextTierName && tier.nextTierBips !== null
+          ? t({ id: 'home.acc.tier.next', message: '{n} more BOLT-eq for {next} at {p}', values: { n: formatBolt((BigInt(tier.nextTierAt) - BigInt(tier.score)).toString()), next: tier.nextTierName, p: formatPct(tier.nextTierBips) } })
+          : t({ id: 'home.acc.tier.top', message: 'Top tier — the lowest fee there is.' }),
+      onPress: () => setFeeOpen(true),
+      testID: 'accessory-tier',
+    })
   }
 
   return (
     <Column flex={1} testID="home">
-      <ScrollView contentContainerStyle={{ paddingHorizontal: inset, paddingTop: 12, paddingBottom: 12, gap: 10, ...(wide ? { maxWidth: 680, width: '100%', alignSelf: 'center' } : {}) }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: inset, paddingTop: 12, paddingBottom: 12, gap: 10 }}>
         <Ignition active={ignite} reducedMotion={reducedMotion} order={0}>
           <Row justifyContent="space-between" alignItems="center" minHeight={metrics.header} gap="$2">
             {active ? (
-              <Seat address={active.address} label={active.label} tierMark={tier && tier.tier > 0 ? t({ id: 'home.tier', message: 'Tier {t}', values: { t: tier.tier } }) : null} onPress={() => router.navigate('accounts')} onCopy={copy} copied={copied} testID="seat" />
+              <Seat address={active.address} label={active.label} onPress={() => router.navigate('accounts')} onCopy={copy} copied={copied} testID="seat" />
             ) : (
               <Body size="title">BoltVault</Body>
             )}
@@ -300,9 +370,13 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
               </Plate>
             </Ignition>
 
-            {slot ? (
+            {gate ? (
               <Ignition active={ignite} reducedMotion={reducedMotion} order={2}>
-                {slot}
+                {gate}
+              </Ignition>
+            ) : rotor.length > 0 ? (
+              <Ignition active={ignite} reducedMotion={reducedMotion} order={2}>
+                <Rotor items={rotor} reducedMotion={reducedMotion} testID="home-rotor" />
               </Ignition>
             ) : null}
 
@@ -346,7 +420,16 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
         enabled={scope.enabled}
         chains={scope.chains}
         accountId={accountId}
-        total={total === null ? null : totalText}
+        total={
+          /*
+            The figure on the "All chains" row has to be the all-chains figure.
+            This passed whatever the *current* scope totalled, so viewing one
+            chain and opening the sheet labelled that chain's total as every
+            chain's — right beside a per-chain row, from `useChainBalances`,
+            that disagreed with it. Nothing is better than a wrong caption.
+          */
+          scope.scope === 'all' && total !== null ? totalText : null
+        }
         onSelect={(s) => {
           scope.setScope(s)
           setScopeOpen(false)
@@ -358,19 +441,19 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
         reducedMotion={reducedMotion}
       />
       <DappSheet open={dappOpen} onClose={() => setDappOpen(false)} state={dapp} reducedMotion={reducedMotion} />
+      {/* The tier entry's door. Get BOLT hands over to Swap with BOLT on the receiving side. */}
+      <FeeScheduleSheet
+        open={feeOpen}
+        onClose={() => setFeeOpen(false)}
+        accountId={accountId}
+        chainId={ETN}
+        reducedMotion={reducedMotion}
+        onGetBolt={() => {
+          setFeeOpen(false)
+          router.setTab('swap')
+        }}
+      />
     </Column>
   )
 }
 
-function Accessory({ icon, tone, text, onPress, testID }: { icon: IconName; tone: string; text: string; onPress: () => void; testID: string }) {
-  return (
-    <Plate role="card" gap={2} paddingVertical={8} onPress={onPress} cursor="pointer" minHeight={44} justifyContent="center" testID={testID}>
-      <Row gap="$2" alignItems="center">
-        <Icon name={icon} size={16} color={tone} />
-        <Body size="caption" flexShrink={1} numberOfLines={1}>
-          {text}
-        </Body>
-      </Row>
-    </Plate>
-  )
-}

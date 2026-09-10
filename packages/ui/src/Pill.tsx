@@ -11,7 +11,7 @@ import Animated from 'react-native-reanimated'
 import { Icon } from './Icon'
 import { useReducedMotionPref } from './motion/MotionContext'
 import { Body, Row } from './primitives'
-import { edge, metrics, motion, paint } from './tokens'
+import { edge, glow, metrics, motion, paint } from './tokens'
 
 export interface PillProps {
   readonly label: string
@@ -20,13 +20,19 @@ export interface PillProps {
   readonly selected?: boolean
   readonly tone?: 'ink' | 'mute' | 'arc' | 'ember' | 'surge' | 'burn'
   readonly size?: 'xs' | 'sm' | 'md'
+  /**
+   * Bold the label. For a pill whose label is a *name* rather than a setting —
+   * the token in a swap or send selector, where the symbol is the subject of
+   * the row and everything around it is chrome.
+   */
+  readonly strong?: boolean
   readonly disabled?: boolean
   readonly onPress?: () => void
   readonly accessibilityLabel?: string
   readonly testID?: string
 }
 
-export function Pill({ label, icon, chevron = false, selected = false, tone, size = 'md', disabled = false, onPress, accessibilityLabel, testID }: PillProps) {
+export function Pill({ label, icon, chevron = false, selected = false, tone, size = 'md', strong = false, disabled = false, onPress, accessibilityLabel, testID }: PillProps) {
   // xs is a badge, not a control: it states a fact ('Pays dividends',
   // 'ERC-721') and should not carry the weight of something you can press.
   const height = size === 'xs' ? 20 : size === 'sm' ? 28 : 36
@@ -42,8 +48,23 @@ export function Pill({ label, icon, chevron = false, selected = false, tone, siz
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: selected ? paint.arcSoft : paint.glassRaised,
-        borderColor: selected ? paint.arcEdge : edge,
+        borderColor: selected ? paint.arcEdge : strong ? paint.arcEdge : edge,
         opacity: disabled ? 0.5 : 1,
+        /*
+          A token selector carries light. `strong` already marks exactly these —
+          the swap and send selectors, where the symbol is the subject of the row
+          — and on the swap card they were the same flat chip as a filter pill,
+          which is what made the screen read as chrome all the way down. Owner:
+          "the token selectors have a glow".
+
+          The glow, not a lit rim: two rimmed things inside a rimmed console is
+          the "template tell" the bible warns about, and a rim would also fight
+          the `selected` treatment, which the bible says is the one and only
+          selected style.
+        */
+        ...(strong && !disabled
+          ? { shadowColor: glow.tab, shadowRadius: 12, shadowOpacity: 1, shadowOffset: { width: 0, height: 0 } }
+          : {}),
         transitionProperty: ['backgroundColor', 'borderColor'],
         transitionDuration: reduced ? 0 : motion.micro,
         transitionTimingFunction: 'ease-out',
@@ -51,7 +72,7 @@ export function Pill({ label, icon, chevron = false, selected = false, tone, siz
     >
       <Row gap={size === 'xs' ? 4 : 6} alignItems="center">
         {icon}
-        <Body size="caption" fontSize={size === 'xs' ? 11 : undefined} lineHeight={size === 'xs' ? 14 : undefined} tone={labelTone} fontWeight={selected ? '600' : '400'} numberOfLines={1}>
+        <Body size="caption" fontSize={size === 'xs' ? 11 : undefined} lineHeight={size === 'xs' ? 14 : undefined} tone={labelTone} fontWeight={strong ? '700' : selected ? '600' : '400'} numberOfLines={1}>
           {label}
         </Body>
         {chevron ? <Icon name="chevronDown" size={14} color={selected ? paint.ink : paint.mute} /> : null}

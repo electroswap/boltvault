@@ -3,16 +3,11 @@
  * through the real service-worker engine, with the words shown only in
  * tab.html and the popup handing off to it.
  */
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 import { collectErrors, launchWithExtension } from './extension'
+import { walkOnboarding } from './flows'
 
 const PASSWORD = 'correct horse battery staple 42'
-
-async function readWords(page: Page): Promise<string[]> {
-  const words: string[] = []
-  for (let i = 1; i <= 12; i++) words.push((await page.getByTestId(`word-${i}`).textContent())?.trim() ?? '')
-  return words
-}
 
 test('create in the tab, lock and unlock from the popup, session survives a reopen', async () => {
   test.setTimeout(180_000)
@@ -25,7 +20,11 @@ test('create in the tab, lock and unlock from the popup, session survives a reop
     await popup.goto(ext.url('popup.html'))
     await popup.getByTestId('create-vault').click()
     await expect(popup.getByTestId('onboarding')).toBeVisible()
+    // Whatever else the popup shows, it never shows a recovery phrase (§3.2).
     await expect(popup.getByTestId('word-grid')).toHaveCount(0)
+    // The intro comes first on a fresh install; the fork is behind it.
+    const introSkip = popup.getByTestId('ob-intro-skip')
+    if (await introSkip.waitFor({ state: 'visible', timeout: 5_000 }).then(() => true).catch(() => false)) await introSkip.click()
     const tabPromise = ext.context.waitForEvent('page')
     await popup.getByTestId('ob-create').click()
     const tab = await tabPromise
@@ -33,27 +32,12 @@ test('create in the tab, lock and unlock from the popup, session survives a reop
     await tab.waitForLoadState()
     expect(new URL(tab.url()).pathname).toBe('/tab.html')
 
-    // Password → words → quiz.
+    // The steps themselves, in whatever order this build runs them (see `walkOnboarding`).
     await expect(tab.getByTestId('onboarding')).toBeVisible({ timeout: 15_000 })
-    await tab.getByTestId('ob-create').click()
-    await tab.getByTestId('ob-password').fill(PASSWORD)
-    await tab.getByTestId('ob-confirm').fill(PASSWORD)
-    await tab.getByTestId('ob-password-continue').click()
-    await expect(tab.getByTestId('ob-words')).toBeVisible({ timeout: 30_000 }) // argon2id in the worker
-    const words = await readWords(tab)
+    const words = await walkOnboarding(tab, PASSWORD)
+    // The phrase this screen showed is a real BIP-39 phrase, not placeholder text.
+    expect(words).toHaveLength(12)
     expect(words.every((w) => /^[a-z]+$/.test(w))).toBe(true)
-    await tab.getByTestId('ob-words-done').click()
-    await expect(tab.getByTestId('ob-quiz')).toBeVisible()
-    for (const input of await tab.locator('[data-testid^="quiz-"]').all()) {
-      const id = await input.getAttribute('data-testid')
-      const position = Number(id?.replace('quiz-', ''))
-      await input.fill(words[position - 1] ?? '')
-    }
-    await tab.getByTestId('ob-quiz-confirm').click()
-    // Headless Chromium has no platform authenticator; the passkey offer is skipped or skippable.
-    const skip = tab.getByTestId('ob-passkey-skip')
-    if (await skip.isVisible({ timeout: 2_000 }).catch(() => false)) await skip.click()
-    await expect(tab.getByTestId('ob-done')).toBeVisible()
     await tab.getByTestId('ob-open').click()
     await expect(tab.getByTestId('home')).toBeVisible()
     await expect(tab.getByTestId('backup-gate')).toHaveCount(0)

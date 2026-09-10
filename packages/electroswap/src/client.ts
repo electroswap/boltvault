@@ -82,10 +82,18 @@ export interface TokenMarketBundle extends TokenMarketData {
 export interface PortfolioToken {
   readonly id: string
   readonly quantity: string
-  readonly denominatedValue: { readonly id: string; readonly currency: string; readonly value: number }
+  readonly denominatedValue: {
+    readonly id: string
+    readonly currency: string
+    readonly value: number
+  }
   readonly tokenProjectMarket: {
     readonly pricePercentChange: { readonly id: string; readonly value: number }
-    readonly tokenProject: { readonly id: string; readonly logoUrl: string | null; readonly isSpam: boolean | null }
+    readonly tokenProject: {
+      readonly id: string
+      readonly logoUrl: string | null
+      readonly isSpam: boolean | null
+    }
   }
   readonly token: {
     readonly id: string
@@ -111,8 +119,15 @@ export interface Portfolio {
 export interface ElectroSwapClientOptions {
   /** Override endpoint (tests / local). Default https://electroswap.io/graphql */
   readonly url?: string
-  /** X-BoltVault-Key header (optional; many reads work keyless). */
-  readonly apiKey?: string
+  /**
+   * Auth headers for one request, or nothing for a keyless caller.
+   *
+   * A function rather than the key itself: the key must not travel (§9.1), what
+   * travels is a per-request MAC, and the code that computes it lives in the
+   * engine. Handing this package the key would either drag a crypto dependency
+   * into a deliberately dependency-free client or duplicate the algorithm.
+   */
+  readonly authHeaders?: (method: string, url: string, body: string) => Record<string, string>
   /** Referer sent to the ElectroSwap endpoint. */
   readonly referer?: string
   /** Injectable fetch (tests). */
@@ -131,32 +146,33 @@ export class ElectroSwapError extends Error {
 
 export class ElectroSwapClient {
   readonly url: string
-  private readonly apiKey: string | undefined
+  private readonly authHeaders:
+    ((method: string, url: string, body: string) => Record<string, string>) | undefined
   private readonly referer: string
   private readonly doFetch: typeof fetch
 
   constructor(opts: ElectroSwapClientOptions = {}) {
     this.url = opts.url ?? DEFAULT_GRAPHQL_URL
-    this.apiKey = opts.apiKey
+    this.authHeaders = opts.authHeaders
     this.referer = opts.referer ?? INTERFACE_REFERER
     this.doFetch = opts.fetchImpl ?? fetch
   }
 
-  private headers(): Record<string, string> {
+  private headers(method: string, url: string, body: string): Record<string, string> {
     const h: Record<string, string> = { 'Content-Type': 'application/json' }
     // The URL is a build constant (ElectroSwap's API, or a developer's own services/api), so the
-    // interface Referer and the client key always travel with the request.
+    // interface Referer always travels with the request. The credential is signed per request.
     h['Referer'] = this.referer
-    if (this.apiKey) h['X-BoltVault-Key'] = this.apiKey
-    return h
+    return { ...h, ...(this.authHeaders?.(method, url, body) ?? {}) }
   }
 
   /** Raw GraphQL POST. Throws ElectroSwapError on !ok or body.errors. */
   async query<T>(query: string, variables: Record<string, unknown>): Promise<T> {
+    const payload = JSON.stringify({ query, variables })
     const res = await this.doFetch(this.url, {
       method: 'POST',
-      headers: this.headers(),
-      body: JSON.stringify({ query, variables }),
+      headers: this.headers('POST', this.url, payload),
+      body: payload,
     })
     if (!res.ok) throw new ElectroSwapError(`GraphQL request failed: ${res.status}`, res.status)
     const body = (await res.json()) as { data?: T; errors?: { message?: string }[] }
@@ -173,8 +189,16 @@ export class ElectroSwapClient {
   }
 
   /** `POST /api/nfts/order` — the marketplace's Seaport order intake (§8.10). Answers `{ code: 200 }` on success. */
-  async postOrder(body: Record<string, unknown>): Promise<{ ok: boolean; status: number; message: string | null }> {
-    const res = await this.doFetch(`${this.restBase}/api/nfts/order`, { method: 'POST', headers: this.headers(), body: JSON.stringify(body) })
+  async postOrder(
+    body: Record<string, unknown>,
+  ): Promise<{ ok: boolean; status: number; message: string | null }> {
+    const url = `${this.restBase}/api/nfts/order`
+    const payload = JSON.stringify(body)
+    const res = await this.doFetch(url, {
+      method: 'POST',
+      headers: this.headers('POST', url, payload),
+      body: payload,
+    })
     let message: string | null = null
     try {
       const j = (await res.json()) as { code?: number; message?: string }
@@ -271,7 +295,10 @@ export class ElectroSwapClient {
   }
 
   /** Active liquidity locks for a token + aggregated locked %. */
-  async liquidityLocks(chainId: number, tokenAddress: string): Promise<{
+  async liquidityLocks(
+    chainId: number,
+    tokenAddress: string,
+  ): Promise<{
     locks: LiquidityLock[]
     totalPercent: number
   }> {

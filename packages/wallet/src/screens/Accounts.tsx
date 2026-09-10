@@ -35,7 +35,6 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [ledger, setLedger] = useState<{ available: boolean; devices: ReadonlyArray<{ deviceId: string; model: string }> } | null>(null)
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
-  const wide = body === 'extension-tab'
   const seeds = vault?.seeds ?? []
   const activeTotal = useAccountTotal(active?.id ?? '')
 
@@ -142,7 +141,7 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
 
   return (
     <Column flex={1}>
-      <ScrollView contentContainerStyle={{ padding: inset, gap: 12, ...(wide ? { maxWidth: 640, width: '100%', alignSelf: 'center' } : {}) }} testID="accounts">
+      <ScrollView contentContainerStyle={{ padding: inset, gap: 12 }} testID="accounts">
         <PageHeader title={t({ id: 'accounts.title', message: 'Accounts' })} right={<Pill label={t({ id: 'acct.add', message: 'Add' })} icon={<Icon name="plus" size={14} color={paint.arc} />} tone="arc" onPress={() => setSheet({ kind: 'add' })} testID="add-account-open" />} />
         {active ? (
           <Plate role="raised" gap="$2" testID="current-account">

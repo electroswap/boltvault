@@ -4,6 +4,7 @@
  * the current. 52 px tall, tap selects; never drag.
  */
 import { Pressable, View } from 'react-native'
+import { ChainMark } from './ChainMark'
 import { Body, Column, Row } from './primitives'
 import { CurrentFill } from './Rim'
 import { TokenAvatar } from './TokenAvatar'
@@ -22,13 +23,22 @@ export interface BusBarProps {
   readonly logoUri?: string | null
   readonly selected?: boolean
   readonly mark?: string | null
+  /**
+   * Mark which chain this holding is on.
+   *
+   * Only worth showing when the list spans chains — with one chain in scope
+   * the answer is the same on every row and the badge is noise. With "All
+   * chains" it is the difference between two rows that read identically:
+   * USDC on Base and USDC on Arbitrum are not the same money.
+   */
+  readonly chainBadge?: boolean
   /** `card`: on glass with an edge, for a list over the moving Grid (the Portfolio). */
   readonly variant?: 'bar' | 'card'
   readonly onPress?: () => void
   readonly testID?: string
 }
 
-export function BusBar({ chainId, address, symbol, amount, value, change, share, logoUri, selected, mark, variant = 'bar', onPress, testID }: BusBarProps) {
+export function BusBar({ chainId, address, symbol, amount, value, change, share, logoUri, selected, mark, chainBadge = false, variant = 'bar', onPress, testID }: BusBarProps) {
   const card = variant === 'card'
   const up = change?.startsWith('+')
   const down = change?.startsWith('-') || change?.startsWith('−')
@@ -45,11 +55,20 @@ export function BusBar({ chainId, address, symbol, amount, value, change, share,
         backgroundColor={selected || card ? '$glass' : 'transparent'}
       >
         <Row gap="$3">
-          <TokenAvatar chainId={chainId} address={address} symbol={symbol} logoUri={logoUri} size={32} />
+          {/* The chain rides on the token's own mark rather than taking a column:
+              it qualifies the logo, and a row this size has no width to spare. */}
+          <View>
+            <TokenAvatar chainId={chainId} address={address} symbol={symbol} logoUri={logoUri} size={32} />
+            {chainBadge ? (
+              <View style={{ position: 'absolute', right: -3, bottom: -3 }} pointerEvents="none">
+                <ChainMark chainId={chainId} size={15} ring />
+              </View>
+            ) : null}
+          </View>
           <Column flex={1} gap={2}>
             <Row justifyContent="space-between">
               <Row gap="$2">
-                <Body size="body" fontWeight="600">
+                <Body size="body" fontWeight="700">
                   {symbol}
                 </Body>
                 {mark ? (

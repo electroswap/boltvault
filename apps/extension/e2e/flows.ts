@@ -15,27 +15,115 @@ declare const chrome: {
 
 export const E2E_PASSWORD = 'correct horse battery staple 42'
 
+/**
+ * Visible within `ms`, without throwing when it never appears.
+ *
+ * NOT `locator.isVisible()`, which does not retry: on a slow first paint it
+ * answers `false` for something that is about to exist, and the caller then
+ * clicks a control that has not rendered.
+ */
+async function appears(locator: ReturnType<Page['getByTestId']>, ms = 1_000): Promise<boolean> {
+  return locator
+    .first()
+    .waitFor({ state: 'visible', timeout: ms })
+    .then(() => true)
+    .catch(() => false)
+}
+
+/**
+ * Create a vault through tab.html, whatever order the steps come in.
+ *
+ * This used to be a fixed script — create, password, words, quiz, done — which
+ * made it a second definition of the flow's order, in a file nine other specs
+ * depend on. It now answers whichever step is on screen, so the onboarding
+ * sequence can gain an intro and swap password with the backup check without a
+ * flag day across the suite.
+ *
+ * Bounded rather than `while (true)`: a flow that stops progressing should fail
+ * as a timeout on `ob-done`, naming the step it got stuck on, not spin.
+ */
+/**
+ * Walk onboarding on an already-open tab, whatever order the steps come in, and
+ * return the recovery phrase it showed.
+ *
+ * The order used to be written out twice — here and in `custody.spec.ts` — which
+ * made two specs a second and third definition of the flow. It is defined once,
+ * here, and answers whichever step is on screen, so onboarding can gain an intro
+ * and swap password with the backup check without a flag day across the suite.
+ *
+ * Bounded rather than `while (true)`: a flow that stops progressing should fail
+ * as a timeout naming the step it stalled on, not spin.
+ */
+export async function walkOnboarding(tab: Page, password = E2E_PASSWORD): Promise<string[]> {
+  // The intro carousel, when this build has one.
+  const intro = tab.getByTestId('ob-intro-skip')
+  if (await appears(intro, 2_000)) await intro.click()
+
+  await tab.getByTestId('ob-create').click()
+
+  const words: string[] = []
+  let seen = ''
+  for (let i = 0; i < 16; i++) {
+    if (await appears(tab.getByTestId('ob-done'), 500)) break
+
+    if (await appears(tab.getByTestId('ob-words'), 500)) {
+      // Argon2id runs on the way in under the password-first order; be patient.
+      await expect(tab.getByTestId('word-12')).toBeVisible({ timeout: 30_000 })
+      words.length = 0
+      for (let w = 1; w <= 12; w++) words.push((await tab.getByTestId(`word-${w}`).textContent())?.trim() ?? '')
+      seen = 'words'
+      await tab.getByTestId('ob-words-done').click()
+      continue
+    }
+
+    if (await appears(tab.getByTestId('ob-quiz'), 500)) {
+      for (const input of await tab.locator('[data-testid^="quiz-"]').all()) {
+        const position = Number((await input.getAttribute('data-testid'))?.replace('quiz-', ''))
+        await input.fill(words[position - 1] ?? '')
+      }
+      seen = 'quiz'
+      await tab.getByTestId('ob-quiz-confirm').click()
+      continue
+    }
+
+    if (await appears(tab.getByTestId('ob-password'), 500)) {
+      await tab.getByTestId('ob-password').fill(password)
+      await tab.getByTestId('ob-confirm').fill(password)
+      seen = 'password'
+      await tab.getByTestId('ob-password-continue').click()
+      /*
+        Argon2id runs here under either order, so this is the long wait — but
+        wait for whatever comes NEXT, not for `ob-done`. Password-first lands on
+        `words`, and watching only for `ob-done` there burned the full timeout on
+        every run before continuing anyway.
+      */
+      await tab
+        .getByTestId('ob-words')
+        .or(tab.getByTestId('ob-quiz'))
+        .or(tab.getByTestId('ob-passkey'))
+        .or(tab.getByTestId('ob-done'))
+        .first()
+        .waitFor({ state: 'visible', timeout: 30_000 })
+        .catch(() => undefined)
+      continue
+    }
+
+    if (await appears(tab.getByTestId('ob-passkey-skip'), 500)) {
+      seen = 'passkey'
+      await tab.getByTestId('ob-passkey-skip').click()
+      continue
+    }
+  }
+
+  await expect(tab.getByTestId('ob-done'), `onboarding stalled after "${seen || 'welcome'}"`).toBeVisible({ timeout: 30_000 })
+  return words
+}
+
 export async function createVault(ext: LoadedExtension): Promise<{ address: string; tab: Page }> {
   const tab = await ext.context.newPage()
   await tab.goto(ext.url('tab.html?screen=onboarding'))
   await expect(tab.getByTestId('onboarding')).toBeVisible({ timeout: 15_000 })
-  await tab.getByTestId('ob-create').click()
-  await tab.getByTestId('ob-password').fill(E2E_PASSWORD)
-  await tab.getByTestId('ob-confirm').fill(E2E_PASSWORD)
-  await tab.getByTestId('ob-password-continue').click()
-  await expect(tab.getByTestId('ob-words')).toBeVisible({ timeout: 30_000 })
-  const words: string[] = []
-  for (let i = 1; i <= 12; i++) words.push((await tab.getByTestId(`word-${i}`).textContent())?.trim() ?? '')
-  await tab.getByTestId('ob-words-done').click()
-  await expect(tab.getByTestId('ob-quiz')).toBeVisible()
-  for (const input of await tab.locator('[data-testid^="quiz-"]').all()) {
-    const position = Number((await input.getAttribute('data-testid'))?.replace('quiz-', ''))
-    await input.fill(words[position - 1] ?? '')
-  }
-  await tab.getByTestId('ob-quiz-confirm').click()
-  const skip = tab.getByTestId('ob-passkey-skip')
-  if (await skip.isVisible({ timeout: 2_000 }).catch(() => false)) await skip.click()
-  await expect(tab.getByTestId('ob-done')).toBeVisible()
+  await walkOnboarding(tab)
   await tab.getByTestId('ob-open').click()
   await expect(tab.getByTestId('home')).toBeVisible()
   const accounts = (await engineCall(tab, 'accounts', 'list')) as Array<{ address: string }>

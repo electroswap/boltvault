@@ -103,22 +103,12 @@ export const ELECTRONEUM_ADDRESSES: Record<52014 | 5201420, ElectroSwapAddresses
   },
 }
 
-/**
- * The in-wallet swap fee sink. NOT YET DEPLOYED (PR-ES-5) — until ops deploys
- * `BoltVaultFeeSink` and gives us the address, in-wallet swaps run against
- * testnet with a dev sink. Mismatch between this constant and the configured
- * sink at runtime must disable in-wallet swap ("do not swap"), per design.
- */
-export const BOLTVAULT_FEE_SINK: Record<52014 | 5201420, string | null> = {
-  52014: null, // mainnet sink: deployed at M10 (backend B10)
-  5201420: null, // testnet sink: contracts/ ready, deployment is an ops action (backend B5)
-}
-
-/** BoltVaultFeeSchedule (§8.18) per chain; null until deployed — the base fee applies. */
-export const BOLTVAULT_FEE_SCHEDULE: Record<52014 | 5201420, string | null> = {
-  52014: null,
-  5201420: null,
-}
+/*
+  The fee sink and schedule contracts are gone from the wallet's path — the fee
+  recipient and the holder ladder are configuration now (`fees.json`, read
+  through `./fees.ts`). The Solidity in contracts/ still exists and the deployed
+  instances are still owned; nothing here reads them. See fees.ts for why.
+*/
 
 export const GRAPHQL_URL = 'https://electroswap.io/graphql'
 export const TOKEN_LIST_URL = 'https://static.electroswap.io/tokens/tokenlist.json'

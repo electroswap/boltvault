@@ -4,9 +4,33 @@
  * → risk plates → fee → verb. Quiet custody mode. Severity drives the
  * primary: warn delays it, danger asks for a typed word, block removes it.
  */
-import { BarLoader, Body, Column, Field, Icon, Input, Key, Plate, Row, ScrollView, Signature, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
-import { parseApprovalPayload, type AccountView, type ApprovalPayload, type ApprovalRequest, type AssessmentView, type ChainView, type StatementView } from '@boltvault/engine'
-import { useEffect, useMemo, useState } from 'react'
+import {
+  BarLoader,
+  Body,
+  Column,
+  Field,
+  Icon,
+  Input,
+  Key,
+  Plate,
+  Row,
+  ScrollView,
+  Signature,
+  metrics,
+  paint,
+  shortAddress,
+  useWindowDimensions,
+} from '@boltvault/ui'
+import {
+  parseApprovalPayload,
+  type AccountView,
+  type ApprovalPayload,
+  type ApprovalRequest,
+  type AssessmentView,
+  type ChainView,
+  type StatementView,
+} from '@boltvault/engine'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { useFeel } from '../feel'
@@ -40,7 +64,11 @@ function toneOf(tone: StatementView['tone']): BodyTone {
 }
 
 function severityTone(severity: AssessmentView['severity']): BodyTone {
-  return severity === 'block' || severity === 'danger' ? 'burn' : severity === 'warn' ? 'ember' : 'mute'
+  return severity === 'block' || severity === 'danger'
+    ? 'burn'
+    : severity === 'warn'
+      ? 'ember'
+      : 'mute'
 }
 
 function verbFor(payload: ApprovalPayload, origin: string): string {
@@ -60,10 +88,12 @@ function verbFor(payload: ApprovalPayload, origin: string): string {
   if (origin === 'internal:farm:deposit') return t({ id: 'farm.deposit', message: 'Deposit' })
   if (origin === 'internal:farm:withdraw') return t({ id: 'farm.withdraw', message: 'Withdraw' })
   if (origin === 'internal:farm:collect') return t({ id: 'farm.collect', message: 'Collect' })
-  if (origin === 'internal:launchpad:contribute') return t({ id: 'campaign.contribute', message: 'Contribute' })
+  if (origin === 'internal:launchpad:contribute')
+    return t({ id: 'campaign.contribute', message: 'Contribute' })
   if (origin.startsWith('internal:launchpad:')) return t({ id: 'flow.claim', message: 'Claim' })
   if (origin === 'internal:legends:claim') return t({ id: 'flow.claim', message: 'Claim' })
-  if (origin === 'internal:legends:register') return t({ id: 'legends.activateVerb', message: 'Activate' })
+  if (origin === 'internal:legends:register')
+    return t({ id: 'legends.activateVerb', message: 'Activate' })
   switch (payload.kind) {
     case 'connect':
       return t({ id: 'approval.connect', message: 'Connect' })
@@ -99,7 +129,9 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   const [pickedAccount, setPickedAccount] = useState<string | null>(null)
   const [showRaw, setShowRaw] = useState(false)
 
-  const request: ApprovalRequest | undefined = requestId ? pending.find((r) => r.id === requestId) : pending[0]
+  const request: ApprovalRequest | undefined = requestId
+    ? pending.find((r) => r.id === requestId)
+    : pending[0]
   const payload = useMemo(() => (request ? parseApprovalPayload(request.payload) : null), [request])
   const assessment = payload ? assessmentOf(payload) : null
 
@@ -117,7 +149,10 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
     setTyped('')
     setShowRaw(false)
   }, [request?.id])
-  const delayMs = Math.max(assessment?.presentation.delayMs ?? 0, host.onWindowFocus ? FOCUS_INERT_MS : 0)
+  const delayMs = Math.max(
+    assessment?.presentation.delayMs ?? 0,
+    host.onWindowFocus ? FOCUS_INERT_MS : 0,
+  )
   const enableAt = armedAt + delayMs
   useEffect(() => {
     if (now >= enableAt) return
@@ -150,42 +185,198 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   }, [payload, request, engine, vault?.unlocked, vaultLoading])
 
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
-  const finish = (): void => {
+  const finish = useCallback((): void => {
     if (host.body === 'extension-sign') host.closeWindow?.()
     else if (router.current.screen === 'sign') router.back()
-  }
+  }, [host, router])
+
+  /*
+    A request that leaves the queue while this screen is showing it has been
+    answered — signed, rejected, or decided on another surface — and this sheet
+    is finished.
+
+    `decide` closes the sheet itself for everything that ends the moment the
+    key is pressed, but not for the kinds that go to `signing`: those stay here
+    on purpose while the device is asked. Nothing then closed the screen when
+    the signature finally landed, so the sheet stayed up and re-rendered as
+    "Nothing to sign" — the empty state meant for an expired request, shown at
+    the exact moment the send had in fact succeeded.
+  */
+  /*
+    Who signs, and on what — needed above the early returns because the Ledger
+    preflight below is a hook and hooks cannot live behind a `return`.
+  */
+  const signer: AccountView | undefined =
+    !payload || !request
+      ? undefined
+      : payload.kind === 'connect'
+        ? (accounts.find((a) => a.id === (pickedAccount ?? active?.id)) ?? active ?? accounts[0])
+        : (accounts.find((a) => a.id === request.accountId) ?? active ?? undefined)
+  /** The device that has to be touched, when one does. Null for a soft key. */
+  const deviceName =
+    signer &&
+    payload &&
+    (payload.kind === 'send_transaction' ||
+      payload.kind === 'sign_typed_data' ||
+      payload.kind === 'sign_message')
+      ? signer.kind === 'ledger'
+        ? 'Ledger'
+        : signer.kind === 'trezor'
+          ? 'Trezor'
+          : signer.kind === 'keystone'
+            ? 'Keystone'
+            : null
+      : null
+  const signing = request?.status === 'signing'
+
+  /*
+    Ask the Ledger whether it can sign before the user commits to finding out.
+
+    On the dashboard the Ethereum app's APDU class belongs to nothing running,
+    and some firmware answers by not answering — so pressing the verb used to
+    buy a minute of spinner. The engine now refuses that send quickly
+    (`signerFor`), but a refusal after the press is still a wasted press: this
+    asks while the sheet is being read, and says the one sentence that fixes
+    it. The probe is bounded, shows nothing on the device, and stops the moment
+    the device is ready or the signer has it.
+  */
+  const [ledger, setLedger] = useState<{ ready: boolean; message: string | null } | null>(null)
+  const probeLedger = deviceName === 'Ledger' && !busy && !signing && ledger?.ready !== true
+  useEffect(() => {
+    if (deviceName !== 'Ledger') {
+      setLedger(null)
+      return
+    }
+    if (!probeLedger) return
+    let alive = true
+    const check = (): void => {
+      void engine.hardware.ledgerPreflight().then(
+        (r) => alive && setLedger({ ready: r.state === 'ready', message: r.message }),
+        () => undefined,
+      )
+    }
+    check()
+    // Plugging it in or opening the app should clear the notice by itself.
+    const timer = setInterval(check, 4_000)
+    return () => {
+      alive = false
+      clearInterval(timer)
+    }
+  }, [engine, deviceName, probeLedger])
+
+  /*
+    Leaving without deciding is a rejection.
+
+    Android's back gesture pops this sheet like any other screen, and the
+    request it was asking about stayed in the queue — undecided, for its full
+    five minutes — with the flow behind it still waiting. Owner, after backing
+    out of a bridge: "going back into Bridge from the home screen shows
+    'Bridging', 'Place order' and 'Waiting for you', but there are no actions
+    for me to perform."
+
+    A sheet that offers Reject has no third answer. Dismissing it IS the
+    reject, and saying so releases the flow — which already reads a rejection
+    as a rejection (`flows.ts`) — and lets the screen or the site ask again.
+
+    Only a request still `pending`, and only when we did not decide it
+    ourselves: one that reached `signing` is in the device's hands, and this
+    screen is no longer the one answering for it.
+
+    And only when the user is the one leaving. The shell replaces every screen
+    with Unlock the moment the vault locks (`TabShell`), which unmounts this one
+    — so treating that as a dismissal answered the request on the user's behalf,
+    closed the sign window and left the site holding a rejection it never asked
+    for. That is the "flickers open and then immediately closes" report, exactly,
+    reintroduced from the other side: a locked vault must PARK the request until
+    the password arrives, which is what `locked-connect.spec.ts` pins.
+  */
+  const decided = useRef(false)
+  const undecided = useRef<string | null>(null)
+  undecided.current = request?.status === 'pending' && !decided.current ? request.id : null
+  // Read at cleanup, so it reflects the state that caused the unmount.
+  const lockedOut = useRef(false)
+  lockedOut.current = vaultLoading || !vault?.unlocked
+  useEffect(
+    () => () => {
+      const id = undecided.current
+      if (id === null || lockedOut.current) return
+      void engine.approvals.decide({ id, approve: false }).catch(() => undefined)
+    },
+    [engine],
+  )
+
+  const shown = useRef<string | null>(null)
+  useEffect(() => {
+    if (!loaded) return
+    if (request) {
+      shown.current = request.id
+      return
+    }
+    if (shown.current === null) return
+    shown.current = null
+    finish()
+  }, [request, loaded, finish])
 
   if (!loaded) return <Column flex={1} backgroundColor="$void" testID="approval-loading" />
   if (!request || !payload) {
     return (
-      <Column flex={1} backgroundColor="$void" padding={inset} gap="$4" justifyContent="center" testID="approval-empty">
+      <Column
+        flex={1}
+        backgroundColor="$void"
+        padding={inset}
+        gap="$4"
+        justifyContent="center"
+        testID="approval-empty"
+      >
         <Body size="title">{t({ id: 'approval.none', message: 'Nothing to sign' })}</Body>
-        <Body tone="mute">{t({ id: 'approval.none.body', message: 'This request was already decided or has expired.' })}</Body>
-        <Key label={t({ id: 'close', message: 'Close' })} kind="secondary" onPress={finish} testID="approval-close" />
+        <Body tone="mute">
+          {t({
+            id: 'approval.none.body',
+            message: 'This request was already decided or has expired.',
+          })}
+        </Body>
+        <Key
+          label={t({ id: 'close', message: 'Close' })}
+          kind="secondary"
+          onPress={finish}
+          testID="approval-close"
+        />
       </Column>
     )
   }
 
   const site = siteOf(request.origin)
-  const chainId = payload.kind === 'connect' ? payload.requestedChainId : payload.kind === 'switch_chain' || payload.kind === 'add_chain' ? payload.chainId : (request.chainId ?? 52014)
+  const chainId =
+    payload.kind === 'connect'
+      ? payload.requestedChainId
+      : payload.kind === 'switch_chain' || payload.kind === 'add_chain'
+        ? payload.chainId
+        : (request.chainId ?? 52014)
   const chain = chains.find((c) => c.chainId === chainId)
-  const signer: AccountView | undefined = payload.kind === 'connect' ? (accounts.find((a) => a.id === (pickedAccount ?? active?.id)) ?? active ?? accounts[0]) : (accounts.find((a) => a.id === request.accountId) ?? active ?? undefined)
   const blocked = assessment?.presentation.blocked === true
   const needsTyped = assessment?.presentation.typedConfirmation ?? null
   const typedOk = !needsTyped || typed.trim().toLowerCase() === needsTyped.toLowerCase()
-  const armed = now >= enableAt && typedOk && !busy && request.status !== 'signing'
+  // A device that has told us it cannot sign holds the verb: pressing it would
+  // only spend a round trip to be told the same thing.
+  const armed = now >= enableAt && typedOk && !busy && !signing && ledger?.ready !== false
   const verb = verbFor(payload, request.origin)
-  /** True while the signer has it: a device is being waited on. */
-  const signing = request.status === 'signing'
-  /** The device that has to be touched, when one does. Null for a soft key. */
-  const deviceName = signer && (payload.kind === 'send_transaction' || payload.kind === 'sign_typed_data' || payload.kind === 'sign_message') ? (signer.kind === 'ledger' ? 'Ledger' : signer.kind === 'trezor' ? 'Trezor' : signer.kind === 'keystone' ? 'Keystone' : null) : null
 
   const decide = async (approve: boolean): Promise<void> => {
     setBusy(true)
     setError(null)
     try {
-      const data = approve && payload.kind === 'connect' && signer ? { accountId: signer.id, chainId } : undefined
-      const decided = await engine.approvals.decide({ id: request.id, approve, ...(data ? { data } : {}) })
+      const data =
+        approve && payload.kind === 'connect' && signer
+          ? { accountId: signer.id, chainId }
+          : undefined
+      const outcome = await engine.approvals.decide({
+        id: request.id,
+        approve,
+        ...(data ? { data } : {}),
+      })
+      // Ours now: the unmount above must not reject it a second time. Left
+      // false when `decide` throws, so abandoning a failed attempt still does.
+      decided.current = true
       if (approve) feel.confirm()
       else feel.heavy()
       /*
@@ -196,7 +387,7 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
         needs to see in order to try again. The request leaving the queue is
         what finishes this screen.
       */
-      if (decided.status !== 'signing' && pending.length <= 1) finish()
+      if (outcome.status !== 'signing' && pending.length <= 1) finish()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -206,8 +397,18 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
 
   return (
     <Column flex={1} backgroundColor="$void" testID="approval">
-      <Field scene={scene} address={signer?.address ?? '0x0000000000000000000000000000000000000e7n'} quiet width={width} height={height} reducedMotion={reducedMotion} />
-      <ScrollView style={{ zIndex: 1 }} contentContainerStyle={{ padding: inset, gap: 14, paddingBottom: 120 }}>
+      <Field
+        scene={scene}
+        address={signer?.address ?? '0x0000000000000000000000000000000000000e7n'}
+        quiet
+        width={width}
+        height={height}
+        reducedMotion={reducedMotion}
+      />
+      <ScrollView
+        style={{ zIndex: 1 }}
+        contentContainerStyle={{ padding: inset, gap: 14, paddingBottom: 120 }}
+      >
         {/* Origin */}
         <Column gap="$1" testID="approval-origin">
           <Row gap="$2">
@@ -237,7 +438,14 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
             {accounts
               .filter((a) => !a.hidden)
               .map((a) => (
-                <Row key={a.id} gap="$3" minHeight={44} onPress={() => setPickedAccount(a.id)} cursor="pointer" testID={`approval-account-${a.id}`}>
+                <Row
+                  key={a.id}
+                  gap="$3"
+                  minHeight={44}
+                  onPress={() => setPickedAccount(a.id)}
+                  cursor="pointer"
+                  testID={`approval-account-${a.id}`}
+                >
                   <Signature address={a.address} size={28} />
                   <Column flex={1}>
                     <Body numberOfLines={1}>{a.label}</Body>
@@ -253,7 +461,11 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
                 </Row>
               ))}
             <Body tone="mute" size="caption">
-              {t({ id: 'approval.connect.body', message: 'The site will see this address and can ask you to sign. It cannot move anything without a signature.' })}
+              {t({
+                id: 'approval.connect.body',
+                message:
+                  'The site will see this address and can ask you to sign. It cannot move anything without a signature.',
+              })}
             </Body>
           </Plate>
         ) : signer ? (
@@ -293,32 +505,69 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
 
         {payload.kind === 'switch_chain' || payload.kind === 'add_chain' ? (
           <Plate role="raised" gap="$1">
-            <Body>{t({ id: 'approval.switch.body', message: 'Switch this site to {chain}', values: { chain: chain?.name ?? String(payload.chainId) } })}</Body>
+            <Body>
+              {t({
+                id: 'approval.switch.body',
+                message: 'Switch this site to {chain}',
+                values: { chain: chain?.name ?? String(payload.chainId) },
+              })}
+            </Body>
           </Plate>
         ) : null}
 
         {payload.kind === 'watch_asset' ? (
           <Column gap="$2" testID="approval-watch">
             <Plate role="raised" gap={2}>
-              <Body size="title">{payload.onChain ? t({ id: 'approval.watch.title', message: 'Add {s} to your tokens', values: { s: payload.onChain.symbol } }) : t({ id: 'approval.watch.title.unknown', message: 'Add a token to your list' })}</Body>
+              <Body size="title">
+                {payload.onChain
+                  ? t({
+                      id: 'approval.watch.title',
+                      message: 'Add {s} to your tokens',
+                      values: { s: payload.onChain.symbol },
+                    })
+                  : t({ id: 'approval.watch.title.unknown', message: 'Add a token to your list' })}
+              </Body>
               <Body tone="mute" size="caption">
                 {payload.address ? shortAddress(payload.address) : '—'}
               </Body>
               {payload.onChain ? (
                 <Body tone="mute" size="caption">
-                  {t({ id: 'approval.watch.onchain', message: 'On chain: {n} · {d} decimals', values: { n: payload.onChain.name, d: payload.onChain.decimals } })}
+                  {t({
+                    id: 'approval.watch.onchain',
+                    message: 'On chain: {n} · {d} decimals',
+                    values: { n: payload.onChain.name, d: payload.onChain.decimals },
+                  })}
                 </Body>
               ) : (
                 <Body tone="ember" size="caption">
-                  {t({ id: 'approval.watch.nocode', message: 'No contract answered at that address on this chain.' })}
+                  {t({
+                    id: 'approval.watch.nocode',
+                    message: 'No contract answered at that address on this chain.',
+                  })}
                 </Body>
               )}
             </Plate>
             {payload.mismatch && payload.onChain ? (
               <Plate gap={2} borderColor={paint.burn} testID="approval-watch-mismatch">
-                <Body tone="burn">{t({ id: 'approval.watch.mismatch', message: 'The site calls it {s} with {d} decimals; the contract says {cs} with {cd}.', values: { s: payload.symbol ?? '?', d: payload.decimals ?? '?', cs: payload.onChain.symbol, cd: payload.onChain.decimals } })}</Body>
+                <Body tone="burn">
+                  {t({
+                    id: 'approval.watch.mismatch',
+                    message:
+                      'The site calls it {s} with {d} decimals; the contract says {cs} with {cd}.',
+                    values: {
+                      s: payload.symbol ?? '?',
+                      d: payload.decimals ?? '?',
+                      cs: payload.onChain.symbol,
+                      cd: payload.onChain.decimals,
+                    },
+                  })}
+                </Body>
                 <Body tone="mute" size="caption">
-                  {t({ id: 'approval.watch.mismatch.body', message: 'BoltVault shows the contract’s own name and decimals, never the site’s.' })}
+                  {t({
+                    id: 'approval.watch.mismatch.body',
+                    message:
+                      'BoltVault shows the contract’s own name and decimals, never the site’s.',
+                  })}
                 </Body>
               </Plate>
             ) : null}
@@ -329,7 +578,18 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
         {assessment?.rules
           .filter((r) => r.severity !== 'info')
           .map((r) => (
-            <Plate key={r.code} gap={4} borderColor={r.severity === 'warn' ? paint.ember : r.severity === 'info' ? paint.mute : paint.burn} testID={`approval-rule-${r.code}`}>
+            <Plate
+              key={r.code}
+              gap={4}
+              borderColor={
+                r.severity === 'warn'
+                  ? paint.ember
+                  : r.severity === 'info'
+                    ? paint.mute
+                    : paint.burn
+              }
+              testID={`approval-rule-${r.code}`}
+            >
               <Body tone={severityTone(r.severity)}>{r.title}</Body>
               <Body tone="mute" size="caption">
                 {r.detail}
@@ -340,8 +600,19 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
         {/* Details */}
         {payload.kind === 'sign_typed_data' ? (
           <Column gap="$2">
-            <Body tone="mute" size="caption" onPress={() => setShowRaw((v) => !v)} testID="approval-raw-toggle">
-              {showRaw ? t({ id: 'approval.raw.hide', message: 'Hide the raw message' }) : t({ id: 'approval.raw.show', message: 'Show the raw message ({type})', values: { type: payload.primaryType } })}
+            <Body
+              tone="mute"
+              size="caption"
+              onPress={() => setShowRaw((v) => !v)}
+              testID="approval-raw-toggle"
+            >
+              {showRaw
+                ? t({ id: 'approval.raw.hide', message: 'Hide the raw message' })
+                : t({
+                    id: 'approval.raw.show',
+                    message: 'Show the raw message ({type})',
+                    values: { type: payload.primaryType },
+                  })}
             </Body>
             {showRaw ? (
               <Plate>
@@ -360,50 +631,145 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
             <Body size="caption">{`${formatWei(payload.fee.maxTotalWei)} ${payload.fee.symbol}`}</Body>
           </Row>
         ) : null}
-        {signer && (signer.kind === 'ledger' || signer.kind === 'trezor' || signer.kind === 'keystone') && (payload.kind === 'send_transaction' || payload.kind === 'sign_typed_data' || payload.kind === 'sign_message') ? (
-          <Plate gap="$1" testID="approval-device">
-            <Body size="caption">{t({ id: 'approval.device', message: 'What your {d} shows', values: { d: signer.kind === 'ledger' ? 'Ledger' : signer.kind === 'trezor' ? 'Trezor' : 'Keystone' } })}</Body>
-            {payload.kind === 'send_transaction' ? (
-              <>
-                <DeviceRow label={t({ id: 'device.to', message: 'To' })} value={payload.tx.to ?? t({ id: 'device.deploy', message: 'new contract' })} />
-                <DeviceRow label={t({ id: 'device.amount', message: 'Amount' })} value={`${formatWei(BigInt(payload.tx.value).toString())} ${payload.fee.symbol}`} />
-                <DeviceRow label={t({ id: 'device.maxfee', message: 'Max fee' })} value={`${formatWei(payload.fee.maxTotalWei)} ${payload.fee.symbol}`} />
-                <DeviceRow label={t({ id: 'device.nonce', message: 'Nonce' })} value={String(payload.tx.nonce)} />
-                <DeviceRow label={t({ id: 'device.chain', message: 'Chain' })} value={String(request.chainId ?? '')} />
+        {/*
+          The device card and "no Ledger is connected" are one slot.
+
+          They used to be two: this card, describing what the Ledger would show,
+          and a separate plate down by the keys saying no Ledger was connected —
+          both on screen at once, telling the signer to read a screen that was
+          not there. Owner: "we have a 'What your Ledger shows' card while
+          simultaneously showing 'No Ledger is connected', which is confusing."
+
+          So the slot holds whichever is true. `ledger` is null for Trezor and
+          Keystone, which have no readiness probe, so their card shows as before.
+        */}
+        {signer &&
+        (signer.kind === 'ledger' || signer.kind === 'trezor' || signer.kind === 'keystone') &&
+        (payload.kind === 'send_transaction' ||
+          payload.kind === 'sign_typed_data' ||
+          payload.kind === 'sign_message') ? (
+          ledger && !ledger.ready && !signing ? (
+            <Plate gap={2} borderColor={paint.ember} testID="approval-device-notready">
+              <Body tone="ember" size="caption">
+                {ledger.message ??
+                  t({
+                    id: 'approval.ledger.notready',
+                    message: 'Your Ledger is not ready to sign.',
+                  })}
+              </Body>
+              <Body tone="mute" size="caption">
+                {t({
+                  id: 'approval.ledger.notready.body',
+                  message:
+                    'This clears by itself once the device is unlocked with the Ethereum app open.',
+                })}
+              </Body>
+            </Plate>
+          ) : (
+            <Plate gap="$1" testID="approval-device">
+              <Body size="caption">
+                {t({
+                  id: 'approval.device',
+                  message: 'What your {d} shows',
+                  values: {
+                    d:
+                      signer.kind === 'ledger'
+                        ? 'Ledger'
+                        : signer.kind === 'trezor'
+                          ? 'Trezor'
+                          : 'Keystone',
+                  },
+                })}
+              </Body>
+              {payload.kind === 'send_transaction' ? (
+                <>
+                  <DeviceRow
+                    label={t({ id: 'device.to', message: 'To' })}
+                    value={payload.tx.to ?? t({ id: 'device.deploy', message: 'new contract' })}
+                  />
+                  <DeviceRow
+                    label={t({ id: 'device.amount', message: 'Amount' })}
+                    value={`${formatWei(BigInt(payload.tx.value).toString())} ${payload.fee.symbol}`}
+                  />
+                  <DeviceRow
+                    label={t({ id: 'device.maxfee', message: 'Max fee' })}
+                    value={`${formatWei(payload.fee.maxTotalWei)} ${payload.fee.symbol}`}
+                  />
+                  <DeviceRow
+                    label={t({ id: 'device.nonce', message: 'Nonce' })}
+                    value={String(payload.tx.nonce)}
+                  />
+                  <DeviceRow
+                    label={t({ id: 'device.chain', message: 'Chain' })}
+                    value={String(request.chainId ?? '')}
+                  />
+                  <Body tone="mute" size="caption">
+                    {payload.tx.data && payload.tx.data !== '0x'
+                      ? t({
+                          id: 'device.blind',
+                          message:
+                            'The device shows the amount and the address; the data is a hash, so use the statements above as the truth. Blind signing must be on in the Ethereum app.',
+                        })
+                      : t({
+                          id: 'device.plain',
+                          message: 'A plain send: the device shows exactly these fields.',
+                        })}
+                  </Body>
+                </>
+              ) : payload.kind === 'sign_typed_data' ? (
                 <Body tone="mute" size="caption">
-                  {payload.tx.data && payload.tx.data !== '0x' ? t({ id: 'device.blind', message: 'The device shows the amount and the address; the data is a hash, so use the statements above as the truth. Blind signing must be on in the Ethereum app.' }) : t({ id: 'device.plain', message: 'A plain send: the device shows exactly these fields.' })}
+                  {t({
+                    id: 'device.typed',
+                    message:
+                      'The device shows two hashes (domain and message) — the statements above are what they mean.',
+                  })}
                 </Body>
-              </>
-            ) : payload.kind === 'sign_typed_data' ? (
-              <Body tone="mute" size="caption">
-                {t({ id: 'device.typed', message: 'The device shows two hashes (domain and message) — the statements above are what they mean.' })}
-              </Body>
-            ) : (
-              <Body tone="mute" size="caption">
-                {t({ id: 'device.message', message: 'The device shows the message text.' })}
-              </Body>
-            )}
-          </Plate>
-        ) : null}
-        {payload.kind === 'send_transaction' && assessment?.simulationMode !== 'trace' ? (
-          <Body tone="mute" size="caption">
-            {t({ id: 'approval.nopreview', message: 'No balance preview on this network — only the revert check ran.' })}
-          </Body>
+              ) : (
+                <Body tone="mute" size="caption">
+                  {t({ id: 'device.message', message: 'The device shows the message text.' })}
+                </Body>
+              )}
+            </Plate>
+          )
         ) : null}
 
         {needsTyped && !blocked ? (
-          <Input value={typed} onChange={setTyped} label={t({ id: 'approval.typed', message: 'Type {word} to continue', values: { word: needsTyped } })} autoCapitalize="none" testID="approval-typed" />
+          <Input
+            value={typed}
+            onChange={setTyped}
+            label={t({
+              id: 'approval.typed',
+              message: 'Type {word} to continue',
+              values: { word: needsTyped },
+            })}
+            autoCapitalize="none"
+            testID="approval-typed"
+          />
         ) : null}
         {/*
           `lastError` is the reason a previous attempt did not produce a
           signature — the request came back to the queue carrying it, so the
           user is told why before being asked again.
         */}
-        {error ?? request.lastError ? <Body tone="burn" testID="approval-error">{error ?? request.lastError}</Body> : null}
+        {(error ?? request.lastError) ? (
+          <Body tone="burn" testID="approval-error">
+            {error ?? request.lastError}
+          </Body>
+        ) : null}
       </ScrollView>
 
       {/* Verbs */}
-      <Column position="absolute" left={0} right={0} bottom={0} padding={inset} gap="$2" backgroundColor="$void" zIndex={2} testID="approval-verbs">
+      <Column
+        position="absolute"
+        left={0}
+        right={0}
+        bottom={0}
+        padding={inset}
+        gap="$2"
+        backgroundColor="$void"
+        zIndex={2}
+        testID="approval-verbs"
+      >
         {/*
           A hardware signer wants a button pressed on the device, and this
           screen used to say nothing about that — approving simply greyed the
@@ -415,7 +781,11 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
           <Column gap="$2" testID="approval-awaiting-device">
             <BarLoader active reducedMotion={reducedMotion} />
             <Body tone="arc" size="caption">
-              {t({ id: 'approval.awaitDevice', message: 'Confirm on your {d}. Check the details on its screen before you approve.', values: { d: deviceName } })}
+              {t({
+                id: 'approval.awaitDevice',
+                message: 'Confirm on your {d}. Check the details on its screen before you approve.',
+                values: { d: deviceName },
+              })}
             </Body>
           </Column>
         ) : null}
@@ -424,12 +794,27 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
             {t({ id: 'approval.blocked', message: 'BoltVault will not sign this. See why above.' })}
           </Body>
         ) : (
-          <Key label={verb} onPress={() => decide(true)} disabled={!armed} testID="approval-primary" />
+          <Key
+            label={verb}
+            onPress={() => decide(true)}
+            disabled={!armed}
+            testID="approval-primary"
+          />
         )}
-        <Key label={t({ id: 'approval.reject', message: 'Reject' })} kind="secondary" onPress={() => decide(false)} disabled={busy} testID="approval-reject" />
+        <Key
+          label={t({ id: 'approval.reject', message: 'Reject' })}
+          kind="secondary"
+          onPress={() => decide(false)}
+          disabled={busy}
+          testID="approval-reject"
+        />
         {pending.length > 1 ? (
           <Body tone="mute" size="caption">
-            {t({ id: 'approval.more', message: '{n} more waiting', values: { n: pending.length - 1 } })}
+            {t({
+              id: 'approval.more',
+              message: '{n} more waiting',
+              values: { n: pending.length - 1 },
+            })}
           </Body>
         ) : null}
       </Column>

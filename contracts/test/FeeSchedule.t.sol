@@ -148,12 +148,11 @@ contract FeeScheduleTest is Test {
     }
 
     function test_scheduleView() public view {
-        (uint16 base, BoltVaultFeeSchedule.Tier[] memory tiers, uint256 weight, bool countFarm, uint16 discount) = schedule.schedule();
+        (uint16 base, BoltVaultFeeSchedule.Tier[] memory tiers, uint256 weight, bool countFarm) = schedule.schedule();
         assertEq(base, 50);
         assertEq(tiers.length, 4);
         assertEq(weight, 0);
         assertTrue(countFarm);
-        assertEq(discount, 2_500);
     }
 
     function test_twoStepOwnership() public {

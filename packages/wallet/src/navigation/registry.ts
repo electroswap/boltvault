@@ -41,8 +41,14 @@ export interface ScreenParams {
   send: { token?: string; to?: string; requestId?: string; chainId?: number } | undefined
   token: { chainId: number; address: string }
   sign: { requestId: string } | undefined
-  onboarding: undefined
+  /**
+   * The popup renders no secrets, so it hands the whole choice to `tab.html`
+   * rather than making the user press "Create a new vault" a second time there.
+   * `clampEntryStep` in the screen decides which steps a URL may name.
+   */
+  onboarding: { path?: 'create' | 'import' | 'watch'; step?: string } | undefined
   moments: undefined
+  splash: undefined
 }
 
 export type ScreenId = keyof ScreenParams
@@ -99,6 +105,8 @@ export const SCREENS: Record<ScreenId, ScreenMeta> = {
   sign: meta('sign', 'window', { quiet: true }),
   onboarding: meta('onboarding', 'push', { quiet: true, secrets: true, dock: false }),
   moments: meta('moments', 'push', { dock: false }),
+  /* Not reachable from the product — the phone shows it while the engine boots. Registered so the screenshot harness can render it. */
+  splash: meta('splash', 'push', { dock: false, quiet: true }),
 }
 
 export const TABS: Record<TabId, { screen: ScreenId; icon: IconName; labelId: string; labelMessage: string }> = {

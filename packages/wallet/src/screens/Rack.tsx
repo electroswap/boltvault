@@ -146,7 +146,7 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
   if (embedded) return <Column gap="$3">{content}</Column>
   return (
     <Column flex={1}>
-      <ScrollView contentContainerStyle={{ padding: inset, gap: 12, ...(wide ? { maxWidth: 680, width: '100%', alignSelf: 'center' } : {}) }} testID="rack">
+      <ScrollView contentContainerStyle={{ padding: inset, gap: 12 }} testID="rack">
         {content}
       </ScrollView>
       <Sheet open={sheet === 'collection'} onClose={() => setSheet(null)} title={t({ id: 'rack.pick.collection', message: 'Collection' })} reducedMotion={reducedMotion} testID="rack-collection-sheet">

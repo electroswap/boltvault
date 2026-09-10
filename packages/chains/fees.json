@@ -1,0 +1,103 @@
+{
+  "_comment": [
+    "The in-wallet swap fee, per chain. Edited by ops, shipped in the build.",
+    "",
+    "`recipient` is where the Universal Router's PAY_PORTION sends the wallet's",
+    "share. Null disables in-wallet swap on that chain — that is the whole gate.",
+    "",
+    "Five named tiers. `baseName`/`baseBips` are tier 0, what everyone pays before",
+    "holding anything; `tiers` are the four rungs above it, in ascending order.",
+    "The ladder reads as a scale of generated power: Static, Charge, Magneto,",
+    "Turbine, Reactor. The names are disjoint from the API credit tiers",
+    "(Spark, Arc, Surge, Storm) and from the DYNO token's own name, Dynamo —",
+    "two ElectroSwap holder ladders sharing a word read as one programme.",
+    "services/api src/config/walletFeeTiers.ts is the authority; this file is",
+    "the offline fallback and the ceiling (see fees.ts).",
+    "",
+    "`minScore` is a BOLT-equivalent score, 18 decimals, as a decimal string. The",
+    "thresholds were chosen to mean roughly $25 / $250 / $1,250 / $2,500 of BOLT",
+    "at the price when they were set (2026-09), and BOLT's price moves, so the USD",
+    "meaning drifts. Recompute them here when it has drifted far enough to matter —",
+    "that is a text edit and a release, not an owner transaction.",
+    "",
+    "`dynoWeight` is BOLT-equivalent per DYNO, 18 decimals (875.68 BOLT per DYNO).",
+    "It is an anchor, not the last word: the wallet measures the real ratio as a",
+    "time-weighted average of the two prices over the past week and uses that",
+    "when it has one. This number is what it falls back to — on a build with no",
+    "indexer, on a week too thin to average, or when the last measurement has",
+    "gone stale — and it is what the measurement is clamped against.",
+    "",
+    "`dynoWeightBand` is that clamp: a measurement may be at most this many times",
+    "the anchor, and at least the anchor divided by it. It exists so a broken or",
+    "manipulated feed cannot hand somebody the top tier or stop a real holder",
+    "reaching theirs; it is a backstop, not a tuning knob. 1 or less turns the",
+    "measurement off and pins the weight to `dynoWeight`.",
+    "",
+    "`countFarmBolt` is false because counting staked BOLT needs a read the wallet",
+    "does not make: the on-chain schedule did it from its own farm-id list. Turning",
+    "it on means teaching HolderService to read the farm, not just flipping this.",
+    "",
+    "Testnet has no recipient, so in-wallet swap is off there until a dev sets one",
+    "through `holder.configure` — which the config permits precisely because this",
+    "chain names none. Its ladder is a short one for exercising the tiers; tBOLT",
+    "does not exist, so only DYNO scores, at 1 BOLT-eq each — and with no BOLT",
+    "price to divide by there is nothing to measure, hence a band of 0."
+  ],
+  "chains": {
+    "52014": {
+      "recipient": "0xD6Cf49CbCF84B2cd2472a376B5f791689A0769d0",
+      "baseName": "Static",
+      "baseBips": 50,
+      "tiers": [
+        {
+          "name": "Charge",
+          "minScore": "13600000000000000000000",
+          "bips": 40
+        },
+        {
+          "name": "Magneto",
+          "minScore": "136000000000000000000000",
+          "bips": 30
+        },
+        {
+          "name": "Turbine",
+          "minScore": "680000000000000000000000",
+          "bips": 20
+        },
+        {
+          "name": "Reactor",
+          "minScore": "1360000000000000000000000",
+          "bips": 10
+        }
+      ],
+      "dynoWeight": "875680000000000000000",
+      "dynoWeightBand": 4,
+      "countFarmBolt": false
+    },
+    "5201420": {
+      "recipient": null,
+      "baseName": "Static",
+      "baseBips": 50,
+      "tiers": [
+        {
+          "name": "Charge",
+          "minScore": "10000000000000000000000",
+          "bips": 40
+        },
+        {
+          "name": "Magneto",
+          "minScore": "20000000000000000000000",
+          "bips": 30
+        },
+        {
+          "name": "Turbine",
+          "minScore": "50000000000000000000000",
+          "bips": 20
+        }
+      ],
+      "dynoWeight": "1000000000000000000",
+      "dynoWeightBand": 0,
+      "countFarmBolt": false
+    }
+  }
+}

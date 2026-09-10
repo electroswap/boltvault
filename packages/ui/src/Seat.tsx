@@ -1,9 +1,15 @@
 /**
  * Seat — the identity plane's front door (master plan §8.1): the account's
- * signature in a ring, its name (`.etn` → label → 0x1F90…7B63) with the tier
- * mark and a chevron on the first line, and under it the short address with
- * a copy control of its own. Two lines fit a 44 px header in every body,
- * so the seat never fights the controls at the header's right.
+ * signature in a ring, its name (`.etn` → label → 0x1F90…7B63) with a chevron
+ * on the first line, and under it the short address with a copy control of its
+ * own. Two lines fit a 44 px header in every body, so the seat never fights
+ * the controls at the header's right.
+ *
+ * The holder tier used to ride here as a `tierMark`. It reads as part of the
+ * account's name in a header that is already two lines and a chevron deep, and
+ * "Tier 1" beside your address answers nothing you can act on. It is an entry
+ * in Home's rotor now, where it has room to say what the rung is called and
+ * what the next one saves.
  */
 import { Pressable } from 'react-native'
 import { Icon } from './Icon'
@@ -16,7 +22,6 @@ export interface SeatProps {
   readonly label: string
   readonly name?: string | null
   readonly onPress?: () => void
-  readonly tierMark?: string | null
   /** Copies the address; the seat shows "Copied" for a moment. */
   readonly onCopy?: () => void
   readonly copied?: boolean
@@ -27,7 +32,7 @@ export function shortAddress(address: string): string {
   return address.length > 12 ? `${address.slice(0, 6)}…${address.slice(-4)}` : address
 }
 
-export function Seat({ address, label, name, onPress, tierMark, onCopy, copied = false, testID }: SeatProps) {
+export function Seat({ address, label, name, onPress, onCopy, copied = false, testID }: SeatProps) {
   const title = name ?? label
   // The icon now lives in its own control beside this, so the line is text only.
   const addressLine = (
@@ -57,11 +62,6 @@ export function Seat({ address, label, name, onPress, tierMark, onCopy, copied =
                 <Body size="title" numberOfLines={1} flexShrink={1}>
                   {title}
                 </Body>
-                {tierMark ? (
-                  <Body tone="ember" size="caption" numberOfLines={1} flexShrink={0}>
-                    {tierMark}
-                  </Body>
-                ) : null}
                 <Icon name="chevronDown" size={16} color={paint.mute} />
               </Row>
               {onCopy ? addressLine : null}

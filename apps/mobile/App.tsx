@@ -1,9 +1,9 @@
 import 'react-native-get-random-values'
 import { createEngine, type Engine } from '@boltvault/engine'
-import { App as WalletApp, type UiHost } from '@boltvault/wallet'
+import { App as WalletApp, Splash, takeSplash, type UiHost } from '@boltvault/wallet'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useState } from 'react'
-import { Linking, Share, StyleSheet, Text, View } from 'react-native'
+import { Linking, Share, StyleSheet, View } from 'react-native'
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { haptic, sound } from './src/feel'
 import { mobileLedgerProvider } from './src/ledger'
@@ -75,11 +75,26 @@ function Shell({ engine }: { engine: Engine['engine'] }) {
 
 export default function App() {
   const [engine, setEngine] = useState<Engine | null>(null)
+  /*
+    Held for a beat so the splash is a moment rather than a flicker.
+
+    The engine builds in well under a second on a modern phone, and a mark that
+    appears and vanishes inside 200 ms reads as a glitch. `takeSplash` is spent
+    once per process, so this costs nothing on any later render — and resuming
+    from another app does not come through here at all, because `engine` is
+    already set and this component never unmounted.
+  */
+  const [splashDone, setSplashDone] = useState(!takeSplash())
+  useEffect(() => {
+    if (splashDone) return
+    const t = setTimeout(() => setSplashDone(true), 1_100)
+    return () => clearTimeout(t)
+  }, [splashDone])
   useEffect(() => {
     let alive = true
     Promise.all([createMobilePlatform(), createWalletKit().catch(() => null)])
       .then(([platform, walletKit]) => {
-        if (alive) setEngine(createEngine({ platform, ledger: mobileLedgerProvider(), walletKit, body: 'mobile', clientVersion: `BoltVault/${process.env['EXPO_PUBLIC_APP_VERSION'] ?? '0.1.0'}`, ...(process.env['EXPO_PUBLIC_BOLTVAULT_API'] ? { apiOrigin: process.env['EXPO_PUBLIC_BOLTVAULT_API'] } : {}), features: { limitOrders: process.env['EXPO_PUBLIC_BOLTVAULT_LIMIT_ORDERS'] === '1' } }))
+        if (alive) setEngine(createEngine({ platform, ledger: mobileLedgerProvider(), walletKit, body: 'mobile', clientVersion: `BoltVault/${process.env['EXPO_PUBLIC_APP_VERSION'] ?? '0.1.0'}`, ...(process.env['EXPO_PUBLIC_BOLTVAULT_API'] ? { apiOrigin: process.env['EXPO_PUBLIC_BOLTVAULT_API'] } : {}), ...(process.env['EXPO_PUBLIC_BOLTVAULT_KEY'] ? { clientKey: process.env['EXPO_PUBLIC_BOLTVAULT_KEY'] } : {}), features: { limitOrders: process.env['EXPO_PUBLIC_BOLTVAULT_LIMIT_ORDERS'] === '1' } }))
       })
       .catch((err: unknown) => console.error('platform failed', err))
     return () => {
@@ -97,7 +112,7 @@ export default function App() {
     <SafeAreaProvider>
       <View style={styles.root}>
         <StatusBar style="light" />
-        {engine ? <Shell engine={engine.engine} /> : <Text style={styles.boot}>BoltVault</Text>}
+        {engine && splashDone ? <Shell engine={engine.engine} /> : <Splash />}
         <ScanHost />
       </View>
     </SafeAreaProvider>
@@ -105,6 +120,6 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#060913' },
-  boot: { color: '#DCE5F5', padding: 24 },
+  // `paint.void`; this was the superseded #060913.
+  root: { flex: 1, backgroundColor: '#070A1F' },
 })

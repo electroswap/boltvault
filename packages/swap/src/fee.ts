@@ -6,10 +6,12 @@
  * breaker is *after* fee: `quotedOut * (1 - 0.0025) * (1 - slippage)`.
  *
  * Integer math throughout (the "±1 wei" tolerance in the decode test comes
- * from `floor`). The fee sink is a build-time constant; a sink ≠ pinned address
- * must disable in-wallet swap ("do not swap").
+ * from `floor`). The recipient is a build-time constant (`fees.json`); an
+ * address other than the configured one must disable in-wallet swap ("do not
+ * swap") — a fee destination that can move at runtime is one an attacker can
+ * move.
  */
-import { ELECTRONEUM_ADDRESSES, BOLTVAULT_FEE_SINK, isElectroneumChainId } from '@boltvault/chains'
+import { ELECTRONEUM_ADDRESSES, feeRecipient, isElectroneumChainId } from '@boltvault/chains'
 
 /** 0.25% — the in-wallet wallet fee. */
 export const WALLET_FEE_BPS = 25
@@ -52,10 +54,17 @@ export function minOutAfterFee({ quotedOut, feeBips = WALLET_FEE_BPS, slippageBi
   return minOut
 }
 
-/** The fee sink for a chain — null while the sink is pending PR-ES-5. */
+/**
+ * Where the fee goes on a chain, from `fees.json`; null turns in-wallet swap off.
+ *
+ * Still called a sink for the shape it has in a swap — the address
+ * `PAY_PORTION` pays — but there is no sink contract any more: it is whatever
+ * address the config names, and today that is the account that used to own the
+ * contract.
+ */
 export function feeSinkFor(chainId: number): string | null {
   if (!isElectroneumChainId(chainId)) return null
-  return BOLTVAULT_FEE_SINK[chainId as 52014 | 5201420]
+  return feeRecipient(chainId)
 }
 
 /**
@@ -83,7 +92,7 @@ export interface FeeBreakdown {
 /** Full fee sheet for the breaker (output / fee / user / minOut / sink). */
 export function feeBreakdown(quotedOut: bigint, chainId: number, opts: { feeBips?: number; slippageBips?: number } = {}): FeeBreakdown {
   const sink = feeSinkFor(chainId)
-  if (sink == null) throw new Error('no fee sink pinned for this chain')
+  if (sink == null) throw new Error('no fee recipient pinned for this chain')
   const fee = feeAmount(quotedOut, opts.feeBips)
   return {
     output: quotedOut,

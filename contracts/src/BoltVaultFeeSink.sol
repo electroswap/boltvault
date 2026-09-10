@@ -2,8 +2,8 @@
 pragma solidity 0.8.26;
 
 /// @title BoltVaultFeeSink
-/// @notice Receives the in-wallet swap fee (master plan §9.7). Nothing but
-///         receive and owner sweeps: the wallet pins this address and refuses
+/// @notice Receives the in-wallet swap fee. Nothing but
+///         receive and owner sweeps: the wallet pns this address and refuses
 ///         to swap when the encoded PAY_PORTION recipient differs. Ownership
 ///         is two-step so a typo cannot orphan the sink.
 contract BoltVaultFeeSink {

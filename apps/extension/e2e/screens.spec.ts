@@ -37,8 +37,21 @@ const CASES: Array<{ screen: string; scenario: string; sizes: Array<keyof typeof
   { screen: 'activity', scenario: 'funded', sizes: ['popup'] },
   { screen: 'settings', scenario: 'funded', sizes: ['popup'] },
   { screen: 'moments', scenario: 'funded', sizes: ['tab', 'mobile'] },
-  // M2 custody surfaces. Secrets-bearing steps render only in tab/mobile (§3.2).
+  /*
+    M2 custody surfaces. Secrets-bearing steps render only in tab/mobile (§3.2).
+
+    Onboarding used to have exactly one case — the first frame — so eight of its
+    nine steps could regress without anything noticing. `step` reaches the ones
+    that need no state from a previous step; `words` and `quiz` are absent on
+    purpose, because the phrase is freshly random every run and a pixel baseline
+    of it would fail every time. Those two are covered functionally instead, by
+    `custody.spec.ts` walking the real flow.
+  */
   { screen: 'onboarding', scenario: 'fresh', sizes: ['popup', 'tab', 'mobile'] },
+  { screen: 'onboarding', scenario: 'fresh', sizes: ['popup', 'mobile'], query: 'step=welcome', name: 'onboarding-welcome' },
+  { screen: 'onboarding', scenario: 'fresh', sizes: ['popup', 'mobile'], query: 'step=password&path=create', name: 'onboarding-password' },
+  { screen: 'onboarding', scenario: 'fresh', sizes: ['popup'], query: 'step=import', name: 'onboarding-import' },
+  { screen: 'onboarding', scenario: 'fresh', sizes: ['popup'], query: 'step=watch', name: 'onboarding-watch' },
   { screen: 'unlock', scenario: 'locked', sizes: ['popup', 'mobile'] },
   { screen: 'home', scenario: 'unlocked', sizes: ['popup'] },
   { screen: 'accounts', scenario: 'funded', sizes: ['popup', 'tab', 'mobile'] },

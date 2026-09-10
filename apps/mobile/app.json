@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "backgroundColor": "#060913",
+    "backgroundColor": "#070A1F",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
@@ -36,7 +36,7 @@
     "android": {
       "package": "io.electroswap.boltvault",
       "adaptiveIcon": {
-        "backgroundColor": "#060913",
+        "backgroundColor": "#070A1F",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -148,7 +148,7 @@
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
-          "color": "#5FD8FF",
+          "color": "#4FC3FF",
           "defaultChannel": "boltvault"
         }
       ],
@@ -171,6 +171,7 @@
       "expo-audio",
       "./plugins/withWidgets.js",
       "./plugins/withUsbHost.js",
+      "./plugins/withSplashColors.js",
       "./plugins/withBuildTuning.js"
     ],
     "extra": {

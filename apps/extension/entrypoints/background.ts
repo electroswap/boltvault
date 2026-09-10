@@ -58,7 +58,7 @@ export default defineBackground(() => {
   // WebHID is available to extension workers since Chrome 117; pairing happens in tab.html (§2.7 S7).
   const nav = globalThis.navigator as unknown as { hid?: { getDevices(): Promise<HidDeviceLike[]> } }
   const hid = nav.hid ? { getDevices: () => nav.hid?.getDevices() ?? Promise.resolve([]) } : null
-  const engine = createEngine({ platform, openApproval, clientVersion: `BoltVault/${browser.runtime.getManifest().version}`, hid, trezor: createTrezorConnect(), body: 'extension', apiOrigin: __API_ORIGIN__, features: { limitOrders: __LIMIT_ORDERS__ } })
+  const engine = createEngine({ platform, openApproval, clientVersion: `BoltVault/${browser.runtime.getManifest().version}`, hid, trezor: createTrezorConnect(), body: 'extension', apiOrigin: __API_ORIGIN__, ...(__WALLET_KEY__ ? { clientKey: __WALLET_KEY__ } : {}), features: { limitOrders: __LIMIT_ORDERS__ } })
   // Crash reports are off until Settings › About says otherwise (§3.7); scrubbed either way.
   installCrashReporter({ body: 'extension-worker', version: browser.runtime.getManifest().version, enabled: () => engine.engine.settings.get().then((s) => s.crashReports, () => false) })
 

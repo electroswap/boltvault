@@ -1,20 +1,36 @@
 /**
- * The BOLT/DYNO holder program (master plan §8.18): the account's fee tier
- * as the on-chain `BoltVaultFeeSchedule` sees it, and the whole schedule for
- * the fee sheet. The sink and schedule addresses are build constants per
- * chain; a chain whose constants are unset (every chain until the testnet
- * deploy) may be configured at runtime for tests and dev builds only — a
- * pinned constant can never be overridden (T10). When the schedule cannot
- * be read the fee falls back to the base bips, never lower.
+ * The BOLT/DYNO holder program (master plan §8.18): the account's fee tier,
+ * and the whole ladder for the fee sheet.
+ *
+ * There is no `BoltVaultFeeSchedule` any more. The rungs come from the service
+ * (`GET /api/wallet/fees`, `FeeLadders`) so ops can re-tune them without a
+ * release, with `fees.json` in the build behind them — as the offline fallback
+ * and as the ceiling, since a served ladder that would charge MORE than the
+ * bundled one at any score is refused outright (`applyServedLadder`). So there
+ * is still no degraded path and no "the server said otherwise": the worst a
+ * bad answer does is cost us revenue. The only thing read from the chain is
+ * what this account holds, two `balanceOf` calls that Multicall3 makes one.
+ * The fee recipient is a build constant and is never taken from the service,
+ * and a chain the config names can never be reconfigured at runtime (T10);
+ * `configure` exists only for a chain it leaves open, which today means
+ * testnet.
+ *
+ * One term of the score is a market ratio rather than a decision — what a DYNO
+ * is worth in BOLT — and that one is measured (`DynoWeight`) with the
+ * configured number as its anchor and fallback. It is still never fetched here:
+ * `scheduleFrom` reads a value already in hand, so a tier read at sign time
+ * touches the network exactly as much as it did before.
  */
-import { BOLTVAULT_FEE_SCHEDULE, BOLTVAULT_FEE_SINK, ELECTRONEUM_ADDRESSES } from '@boltvault/chains'
-import { DYNO_WEIGHT_ONE, ERC20_ABI, FALLBACK_SCHEDULE, FEE_SCHEDULE_ABI, nextTier, tierFor, type FeeSchedule } from '@boltvault/electroswap'
+import { ELECTRONEUM_ADDRESSES, feeRecipient, tierName, walletFeeConfig } from '@boltvault/chains'
+import { DYNO_WEIGHT_ONE, ERC20_ABI, FALLBACK_SCHEDULE, nextTier, tierFor, type FeeSchedule } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
 import { getAddress, isAddress, type Hex } from 'viem'
 import { z } from 'zod'
 import { EngineError } from '../errors'
 import { cacheKey, type Cached, type DocCache } from '../cache'
 import type { NamespaceSpec } from '../host'
+import type { DynoWeight } from '../dynoweight'
+import type { FeeLadders } from '../feeLadder'
 import { readMany } from '../multicall'
 import { HolderTierSchema, AccountIdSchema, type FeeScheduleView, type HolderTier } from '../schema'
 import type { ChainsService } from './chains'
@@ -30,6 +46,10 @@ export interface HolderDeps {
   readonly chains: ChainsService
   readonly vault: VaultManager
   readonly cache?: DocCache
+  /** The measured BOLT-per-DYNO ratio. Absent (tests, no indexer) means the configured constant. */
+  readonly weights?: DynoWeight
+  /** The published ladder. Absent (tests, no key) means the bundled one, which is a correct schedule. */
+  readonly ladders?: FeeLadders
 }
 
 /** A tier read is good for one block (§8.18: "cached per block"). */
@@ -47,51 +67,76 @@ export class HolderService {
 
   constructor(private readonly deps: HolderDeps) {}
 
-  /** The pinned constants for a chain, or the dev override when the build has none. */
+  /**
+   * The fee addresses for a chain: the configured recipient, or a dev override
+   * on a chain the config leaves open.
+   *
+   * `schedule` is always null now — there is no schedule contract to name. It
+   * stays in the shape because About and the fee sheet still ask, and "none"
+   * is the honest answer rather than a missing field.
+   */
   addresses(chainId: number): FeeAddresses {
-    const pinned: FeeAddresses = isEtn(chainId) ? { sink: (BOLTVAULT_FEE_SINK[chainId] as Hex | null) ?? null, schedule: (BOLTVAULT_FEE_SCHEDULE[chainId] as Hex | null) ?? null } : { sink: null, schedule: null }
+    const configured: FeeAddresses = { sink: (feeRecipient(chainId) as Hex | null) ?? null, schedule: null }
     const o = this.overrides.get(chainId)
-    if (!o) return pinned
-    return { sink: pinned.sink ?? o.sink, schedule: pinned.schedule ?? o.schedule }
+    if (!o || configured.sink) return configured
+    return { sink: o.sink, schedule: null }
   }
 
   /**
-   * Dev/test only: point an unconfigured chain at a sink and schedule. Refused
-   * for any chain whose constants are pinned in the build — the whole point
-   * of T10 is that no runtime message can move the fee.
+   * Dev/test only: give a chain a fee recipient the config leaves unset.
+   * Refused wherever the config names one — no runtime message may move the
+   * fee, which is the whole point of keeping it in the build (T10).
    */
   configure(input: { chainId: number; sink: string | null; schedule: string | null }): FeeAddresses {
-    const pinned = isEtn(input.chainId) ? { sink: BOLTVAULT_FEE_SINK[input.chainId], schedule: BOLTVAULT_FEE_SCHEDULE[input.chainId] } : { sink: null, schedule: null }
-    if (pinned.sink || pinned.schedule) throw new EngineError('unauthorized', 'the fee sink for this chain is pinned in the build')
+    if (feeRecipient(input.chainId)) throw new EngineError('unauthorized', 'the fee recipient for this chain is set in the build')
     const sink = input.sink && isAddress(input.sink) ? getAddress(input.sink) : null
-    const schedule = input.schedule && isAddress(input.schedule) ? getAddress(input.schedule) : null
-    this.overrides.set(input.chainId, { sink, schedule })
+    this.overrides.set(input.chainId, { sink, schedule: null })
     this.tierCache.clear()
     return this.addresses(input.chainId)
   }
 
-  private async scheduleFrom(chainId: number): Promise<{ schedule: FeeSchedule; source: 'chain' | 'fallback' }> {
-    const address = this.addresses(chainId).schedule
-    if (!address) return { schedule: FALLBACK_SCHEDULE, source: 'fallback' }
-    const [r] = await readMany(this.deps.chains, chainId, [{ address, abi: FEE_SCHEDULE_ABI, functionName: 'schedule', args: [] }])
-    if (!r?.ok || !Array.isArray(r.value)) return { schedule: FALLBACK_SCHEDULE, source: 'fallback' }
-    const [baseBips, tiers, dynoWeight, countFarmBolt, boltPayDiscountBips] = r.value as [number, ReadonlyArray<{ minScore: bigint; bips: number }>, bigint, boolean, number]
+  /**
+   * The ladder for a chain: the served one where we have it, `fees.json` where
+   * we do not.
+   *
+   * The ladder is whichever the service last published and this build was
+   * willing to accept, else the one in `fees.json`; `ensure` only touches the
+   * network when its copy has gone stale, so sign time does not wait on it.
+   * `dynoWeight` — the one term that is a market ratio rather than a decision
+   * — comes from memory or the document cache, with the configured constant
+   * behind it. `DynoWeight` does its measuring elsewhere, so this answers the
+   * same at sign time as it did on the last screen.
+   */
+  private async scheduleFrom(chainId: number): Promise<{ schedule: FeeSchedule; source: 'config' | 'fallback'; dynoWeightSource: 'config' | 'average' }> {
+    // Resolves at once once the ladder has been read, and never rejects, so a
+    // quote is not held up by the network on any call after the first.
+    await this.deps.ladders?.ensure(chainId)
+    const c = walletFeeConfig(chainId)
+    if (!c) return { schedule: FALLBACK_SCHEDULE, source: 'fallback', dynoWeightSource: 'config' }
+    const w = (await this.deps.weights?.weight(chainId)) ?? { value: BigInt(c.dynoWeight), measured: false }
     return {
-      schedule: { baseBips: Number(baseBips), tiers: tiers.map((t) => ({ minScore: t.minScore, bips: Number(t.bips) })), dynoWeight, countFarmBolt, boltPayDiscountBips: Number(boltPayDiscountBips) },
-      source: 'chain',
+      schedule: {
+        baseBips: c.baseBips,
+        tiers: c.tiers.map((t) => ({ minScore: BigInt(t.minScore), bips: t.bips })),
+        dynoWeight: w.value,
+        countFarmBolt: c.countFarmBolt,
+      },
+      source: 'config',
+      dynoWeightSource: w.measured ? 'average' : 'config',
     }
   }
 
   async schedule(chainId: number): Promise<FeeScheduleView> {
     const a = this.addresses(chainId)
-    const { schedule, source } = await this.scheduleFrom(chainId)
+    const { schedule, source, dynoWeightSource } = await this.scheduleFrom(chainId)
     return {
       chainId,
+      baseName: tierName(chainId, 0) ?? '',
       baseBips: schedule.baseBips,
-      tiers: schedule.tiers.map((t) => ({ minScore: t.minScore.toString(), bips: t.bips })),
+      tiers: schedule.tiers.map((t, i) => ({ name: tierName(chainId, i + 1) ?? '', minScore: t.minScore.toString(), bips: t.bips })),
       dynoWeight: schedule.dynoWeight.toString(),
+      dynoWeightSource,
       countFarmBolt: schedule.countFarmBolt,
-      boltPayDiscountBips: schedule.boltPayDiscountBips,
       source,
       sink: a.sink,
       address: a.schedule,
@@ -100,7 +145,9 @@ export class HolderService {
 
   /** The fee this account pays right now. `fresh` bypasses the per-block cache (sign time). */
   async tier(accountId: string, chainId: number, fresh = false): Promise<HolderTier> {
-    const key = `${chainId}:${accountId}`
+    // The endpoint is part of the key: a tier read through the RPC the user has
+    // just replaced is not the tier, it is the old endpoint's answer.
+    const key = `${chainId}:${accountId}:${this.deps.chains.rpcEpoch(chainId)}`
     const now = this.deps.platform.now()
     const cached = this.tierCache.get(key)
     if (!fresh && cached && now - cached.at < TIER_CACHE_MS) return cached.value
@@ -145,35 +192,43 @@ export class HolderService {
     const a = this.addresses(chainId)
     const bolt = isEtn(chainId) ? (ELECTRONEUM_ADDRESSES[chainId].bolt as Hex | null) : null
     const dyno = isEtn(chainId) ? (ELECTRONEUM_ADDRESSES[chainId].dyno as Hex) : null
+    /*
+      Two balances, and that is the whole read.
+
+      It used to be three: `feeBipsFor` on the schedule contract came first and
+      was the authority, with these two as a fallback. The ladder is in the
+      binary now, so the only thing the chain still knows that we do not is what
+      this account holds.
+    */
     const calls = [
-      ...(a.schedule ? [{ address: a.schedule, abi: FEE_SCHEDULE_ABI, functionName: 'feeBipsFor', args: [owner] }] : []),
       ...(bolt ? [{ address: bolt, abi: ERC20_ABI, functionName: 'balanceOf', args: [owner] }] : []),
       ...(dyno ? [{ address: dyno, abi: ERC20_ABI, functionName: 'balanceOf', args: [owner] }] : []),
     ]
     const results = calls.length ? await readMany(this.deps.chains, chainId, calls).catch(() => [] as Array<{ ok: false }>) : []
     let i = 0
-    const fee = a.schedule ? results[i++] : undefined
     const boltBal = bolt ? results[i++] : undefined
     const dynoBal = dyno ? results[i++] : undefined
     const wallet = boltBal?.ok && typeof boltBal.value === 'bigint' ? boltBal.value : 0n
     const dynoAmt = dynoBal?.ok && typeof dynoBal.value === 'bigint' ? dynoBal.value : 0n
-    const { schedule, source: scheduleSource } = await this.scheduleFrom(chainId)
+    const { schedule: sched, source } = await this.scheduleFrom(chainId)
     const base = { chainId, sink: a.sink, schedule: a.schedule }
-    if (fee?.ok && Array.isArray(fee.value)) {
-      const [bips, tier, score] = fee.value as [number, number, bigint]
-      const next = nextTier(schedule, Number(tier))
-      const dynoPart = schedule.dynoWeight > 0n ? (dynoAmt * schedule.dynoWeight) / DYNO_WEIGHT_ONE : 0n
-      const farm = score > wallet + dynoPart ? score - wallet - dynoPart : 0n
-      return { ...base, bips: Number(bips), tier: Number(tier), score: score.toString(), nextTierAt: next ? next.minScore.toString() : null, nextTierBips: next ? next.bips : null, source: 'chain', breakdown: { wallet: wallet.toString(), farm: farm.toString(), dyno: dynoPart.toString() } }
-    }
-    // No schedule answer (owner's walk, 2026-09-05): the published schedule against what the chain does show — wallet BOLT and
-    // DYNO (farm deposits need the contract). A 3M-BOLT holder is the top tier here, not tier 0; the wallet sets PAY_PORTION.
-    const sched = scheduleSource === 'chain' ? schedule : FALLBACK_SCHEDULE
+    // Farm deposits are not counted: see `countFarmBolt` in fees.json.
     const dynoPart = sched.dynoWeight > 0n ? (dynoAmt * sched.dynoWeight) / DYNO_WEIGHT_ONE : 0n
     const score = wallet + dynoPart
     const local = tierFor(sched, score)
     const next = nextTier(sched, local.tier)
-    return { ...base, bips: local.bips, tier: local.tier, score: score.toString(), nextTierAt: next ? next.minScore.toString() : null, nextTierBips: next ? next.bips : null, source: 'fallback', breakdown: { wallet: wallet.toString(), farm: '0', dyno: dynoPart.toString() } }
+    return {
+      ...base,
+      bips: local.bips,
+      tier: local.tier,
+      name: tierName(chainId, local.tier) ?? '',
+      score: score.toString(),
+      nextTierAt: next ? next.minScore.toString() : null,
+      nextTierBips: next ? next.bips : null,
+      nextTierName: tierName(chainId, local.tier + 1) ?? null,
+      source,
+      breakdown: { wallet: wallet.toString(), farm: '0', dyno: dynoPart.toString() },
+    }
   }
 }
 

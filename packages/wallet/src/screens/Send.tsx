@@ -5,10 +5,10 @@
  * the scroll region. The recipient plate latches once it resolves (address
  * or `.etn` name); the review is the same Approval sheet every signature
  * uses, reached through `internal:send`, so poison, first-time and
- * large-send rules run before the verb arms. The receipt lands in Activity
- * and the Discharge plays here.
+ * large-send rules run before the verb arms. A broadcast send hands straight
+ * back to Home, where the pending row already lives.
  */
-import { Body, Column, Discharge, Icon, Input, Key, Pill, Plate, Row, ScrollView, TokenAvatar, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
+import { BarLoader, Body, Column, Icon, Input, Key, Pill, Plate, Row, ScrollView, TokenAvatar, metrics, paint, shortAddress } from '@boltvault/ui'
 import type { ChainView, ContactView, SendQuote, Settings, TokenView } from '@boltvault/engine'
 import { useEffect, useMemo, useState } from 'react'
 import { AmountWell } from '../components/AmountWell'
@@ -21,6 +21,7 @@ import { useActivity } from '../hooks/useActivity'
 import { usePortfolio } from '../hooks/usePortfolio'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
+import { useApprovals } from '../state/useApprovals'
 import { useWalletState } from '../state/useWalletState'
 import { formatAmountFiat, formatQuantity } from '../format'
 
@@ -30,8 +31,8 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
   const engine = useEngine()
   const router = useRouter()
   const { active } = useWalletState()
-  const { width, height } = useWindowDimensions()
   const { entries } = useActivity(active?.id ?? null)
+  const { pending } = useApprovals()
   const [chainId, setChainId] = useState(initialChainId ?? ETN)
   const portfolio = usePortfolio(active?.id ?? null, 5_000, [chainId])
   const balances = useChainBalances(active?.id ?? null)
@@ -46,7 +47,6 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [requestId, setRequestId] = useState<string | null>(initialRequestId ?? null)
-  const [fire, setFire] = useState(0)
   const [chainOpen, setChainOpen] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
@@ -81,9 +81,21 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
   }, [engine, active, chainId, token, to, amount])
 
   const sent = requestId ? entries.find((e) => e.id === requestId) : undefined
-  useEffect(() => {
-    if (sent?.hash) setFire((n) => n + 1)
-  }, [sent?.hash])
+
+  /*
+    Not finished until the signer has answered.
+
+    The Activity row is written *ahead* of the signature (the write-ahead in
+    `provider.broadcast`, so a lost worker still leaves a trace), which means
+    `sent` arrives while a Ledger is still waiting to be pressed. This screen
+    took that as the receipt and swapped itself for the terminal state.
+    Reported: "I'm seeing a 'Return to home' button when my ledger is saying I
+    need to sign ... I would expect it to say it's pending a signature
+    instead." The approval queue is the honest test: a request only leaves it
+    once the device has answered, one way or the other.
+  */
+  const awaiting = requestId !== null && pending.some((r) => r.id === requestId)
+  const deviceName = active?.kind === 'ledger' ? 'Ledger' : active?.kind === 'trezor' ? 'Trezor' : active?.kind === 'keystone' ? 'Keystone' : null
 
   const recents = useMemo(() => {
     const seen = new Set<string>()
@@ -127,32 +139,39 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
     }
   }
 
-  if (sent) {
+  if (awaiting) {
     return (
-      <Column flex={1} backgroundColor="$void" testID="send-done">
-        <Discharge fire={fire} kind={sent.status === 'failed' ? 'reject' : 'confirm'} width={width} height={height} reducedMotion={reducedMotion} />
-        <Column flex={1} padding={inset} gap="$4" justifyContent="center" zIndex={1}>
-          <Body size="title">{sent.status === 'failed' ? t({ id: 'send.failed', message: 'The network refused it' }) : sent.status === 'confirmed' ? t({ id: 'send.sent', message: 'Sent' }) : t({ id: 'send.sending', message: 'Sending…' })}</Body>
-          <Body tone="mute">{sent.statements[0] ?? ''}</Body>
-          {sent.hash ? (
-            <Body tone="mute" size="caption" numberOfLines={1}>
-              {sent.hash}
-            </Body>
-          ) : null}
-          {/*
-            No naming, anywhere. Owner: "I was caught off guard by the prompt
-            to provide a name for the transaction. I want to remove the concept
-            of doing that completely from the wallet." This asked for a label
-            for the recipient, but it arrived at the moment of signing — the
-            worst possible time to be asked to invent a word. Recent addresses
-            below the To field give the same convenience without naming
-            anything.
-          */}
-          <Key label={t({ id: 'backup.home', message: 'Back to Home' })} onPress={() => router.reset()} testID="send-home" />
-        </Column>
+      <Column flex={1} backgroundColor="$void" padding={inset} gap="$4" justifyContent="center" testID="send-awaiting">
+        <BarLoader active reducedMotion={reducedMotion} />
+        <Body size="title">{t({ id: 'send.awaiting', message: 'Waiting for your signature' })}</Body>
+        <Body tone="mute">{deviceName ? t({ id: 'send.awaiting.device', message: 'Confirm it on your {d}. Nothing leaves this wallet until you do.', values: { d: deviceName } }) : t({ id: 'send.awaiting.body', message: 'Approve it to send. Nothing leaves this wallet until you do.' })}</Body>
+        {/* Leaving the sheet must not strand the request: the way back to it is here. */}
+        <Key label={t({ id: 'send.awaiting.review', message: 'Show me the request' })} kind="secondary" onPress={() => requestId !== null && router.navigate('sign', { requestId })} testID="send-awaiting-review" />
       </Column>
     )
   }
+
+  /*
+    A broadcast send has nothing left to say, so it says it on Home.
+
+    This screen used to become a receipt — "Sending…", the hash, and a "Back
+    to Home" key to dismiss it — which is a page whose only content is an
+    instruction to leave. Owner: "skip the entire page/overlay and just go to
+    home after submitting the transaction and show the pending transaction
+    there". Home already carries it: the accessory reads "1 transaction
+    pending" and opens Activity, and it keeps reading that until the receipt
+    lands, which the receipt page never did.
+
+    `done` is deliberately not `sent` alone. The Activity row is written ahead
+    of the signature, so `sent` is true while a device is still being asked —
+    leaving then would abandon the sheet mid-signature.
+  */
+  const done = sent !== undefined && !awaiting
+  useEffect(() => {
+    if (done) router.setTab('home')
+  }, [done, router])
+  // One empty frame while the router moves rather than a flash of the form.
+  if (done) return <Column flex={1} backgroundColor="$void" testID="send-handoff" />
 
   return (
     <Column flex={1}>
@@ -193,7 +212,7 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
           label={t({ id: 'send.amount', message: 'Amount' })}
           value={amount}
           onChange={setAmount}
-          tokenPill={<Pill label={selected?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} icon={selected ? <TokenAvatar chainId={chainId} address={selected.address} symbol={selected.symbol} logoUri={selected.logoUri} size={18} /> : undefined} chevron tone="ink" onPress={() => setPickerOpen(true)} testID="send-token" />}
+          tokenPill={<Pill strong label={selected?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} icon={selected ? <TokenAvatar chainId={chainId} address={selected.address} symbol={selected.symbol} logoUri={selected.logoUri} size={18} /> : undefined} chevron tone="ink" onPress={() => setPickerOpen(true)} testID="send-token" />}
           fiat={formatAmountFiat(amount, row, currency)}
           balance={row ? `${formatQuantity(row.quantity)} ${row.symbol}` : null}
           onMax={quote ? () => setAmount(quote.max) : row ? () => setAmount(row.quantity) : undefined}
@@ -237,7 +256,7 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
         testID="send-chain-sheet"
         rowTestID={(id) => `send-chain-${id}`}
       />
-      <TokenPickerSheet open={pickerOpen} onClose={() => setPickerOpen(false)} title={t({ id: 'send.pick', message: 'Token to send' })} tokens={tokens} rows={rows} currency={currency} onPick={(address) => { setToken(address); setPickerOpen(false) }} reducedMotion={reducedMotion} />
+      <TokenPickerSheet open={pickerOpen} onClose={() => setPickerOpen(false)} title={t({ id: 'send.pick', message: 'Token to send' })} chainId={chainId} tokens={tokens} rows={rows} currency={currency} onPick={(address) => { setToken(address); setPickerOpen(false) }} reducedMotion={reducedMotion} />
     </Column>
   )
 }

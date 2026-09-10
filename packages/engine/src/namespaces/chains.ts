@@ -8,7 +8,7 @@
  * emitted as `chains.head` — the single event behind the filament, the Field
  * and portfolio refresh.
  */
-import { ALL_CHAINS, HOME_CHAIN_ID, type ChainDef } from '@boltvault/chains'
+import { ALL_CHAINS, HOME_CHAIN_ID, pollMs, type ChainDef } from '@boltvault/chains'
 import type { Platform } from '@boltvault/platform'
 import { createPublicClient, fallback, http, type PublicClient } from 'viem'
 import { z } from 'zod'
@@ -45,6 +45,7 @@ export class ChainsService implements HeadSource {
   private readonly cache = new Map<number, ChainHead>()
   private readonly inFlight = new Map<number, Promise<ChainHead>>()
   private readonly clients = new Map<number, PublicClient>()
+  private readonly epochs = new Map<number, number>()
   private overrides: Record<string, { url: string; trace?: string }> = {}
   private loaded: Promise<void> | null = null
   private readonly heads: HeadSource
@@ -53,9 +54,33 @@ export class ChainsService implements HeadSource {
     private readonly platform: Platform,
     private readonly bus: EventBus,
     heads?: HeadSource,
-    private readonly cacheMs = 4_000,
+    /**
+     * The engine's governed `fetch`. Every JSON-RPC request goes through it,
+     * so RPC endpoints share one budget with the indexer and the price APIs
+     * and a refusal from one endpoint is remembered rather than retried into.
+     */
+    private readonly fetchImpl?: typeof fetch,
+    /** Overrides the per-chain head cache; tests pin it, nothing else should. */
+    private readonly cacheMsOverride?: number,
   ) {
     this.heads = heads ?? this
+  }
+
+  /**
+   * How long a head observation stands for a chain.
+   *
+   * Was a flat four seconds for every chain, which is a sensible number for
+   * Electroneum and a wasteful one for Ethereum — three requests per block,
+   * two of them returning the number we already had. It is now the chain's own
+   * polling cadence, so however many surfaces ask, the network is asked once
+   * per block-worth of time.
+   */
+  private cacheMsFor(chainId: number): number {
+    // Just under the cadence, not equal to it: at exactly the poll interval a
+    // poll arriving on time finds an observation a hair younger than the TTL
+    // and is served the old number, so every other tick was skipped and a 5 s
+    // chain's heartbeat ran at 10 s. Four fifths leaves the margin.
+    return this.cacheMsOverride ?? Math.max(1_000, Math.round(pollMs(chainId, 'foreground') * 0.8))
   }
 
   private async load(): Promise<void> {
@@ -100,9 +125,23 @@ export class ChainsService implements HeadSource {
     // back empty, so adding a custom token reported "this contract does not
     // look like a token"). The aggregation we want is explicit, in
     // multicall.ts, where the address comes from the registry.
+    /*
+      Order is preference, and health does the rest.
+
+      `fallback` walks to the next transport whenever one throws — anything but
+      a user rejection or an execution revert, so a 429, a 5xx and a timeout all
+      fail over silently. The governor is what makes that cheap: a request to an
+      endpoint that is cooling throws in microseconds instead of spending a
+      timeout, so the wallet slides to the next URL without the user seeing a
+      pause. When the cooldown ends the preferred endpoint is simply used again.
+
+      `retryCount: 0` because retrying the endpoint that just refused us is how
+      a rate limit becomes a longer rate limit; the next URL is the better
+      answer, and it is already right there.
+    */
     const client = createPublicClient({
       transport: fallback(
-        urls.map((u) => http(u, { timeout: 10_000, batch: true })),
+        urls.map((u) => http(u, { timeout: 10_000, batch: true, ...(this.fetchImpl ? { fetchFn: this.fetchImpl } : {}) })),
         { retryCount: 0 },
       ),
     })
@@ -134,7 +173,7 @@ export class ChainsService implements HeadSource {
     if (url === null) {
       delete this.overrides[String(chainId)]
     } else {
-      const probe = createPublicClient({ transport: http(url, { timeout: 8_000 }) })
+      const probe = createPublicClient({ transport: http(url, { timeout: 8_000, ...(this.fetchImpl ? { fetchFn: this.fetchImpl } : {}) }) })
       const answered = await probe.getChainId().catch(() => null)
       if (answered !== chainId) throw new EngineError('invalid_argument', `${url} answers chain ${answered ?? 'nothing'}, not ${chainId}`)
       this.overrides[String(chainId)] = { url, ...(trace ? { trace } : {}) }
@@ -142,6 +181,20 @@ export class ChainsService implements HeadSource {
     await writeDoc(this.platform.storage.local, RPC_DOC, this.overrides)
     this.clients.delete(chainId)
     this.cache.delete(chainId)
+    this.epochs.set(chainId, this.rpcEpoch(chainId) + 1)
+  }
+
+  /**
+   * How many times this chain's endpoint has been changed in this session.
+   *
+   * `setRpc` drops this service's own client and head cache, but other services
+   * cache what they read *through* it — the holder tier stands for five seconds
+   * — and those kept answering from the endpoint the user had just moved away
+   * from. A counter is enough: a cache that puts it in its key simply misses
+   * the moment the endpoint changes, and costs nothing while it does not.
+   */
+  rpcEpoch(chainId: number): number {
+    return this.epochs.get(chainId) ?? 0
   }
 
   async blockNumber(chainId: number): Promise<bigint> {
@@ -152,7 +205,7 @@ export class ChainsService implements HeadSource {
     const def = this.def(chainId)
     const cached = this.cache.get(chainId)
     const now = this.platform.now()
-    if (cached && now - cached.observedAt < this.cacheMs) return cached
+    if (cached && now - cached.observedAt < this.cacheMsFor(chainId)) return cached
     const pending = this.inFlight.get(chainId)
     if (pending) return pending
     const p = this.fetch(def).finally(() => this.inFlight.delete(chainId))
@@ -186,16 +239,6 @@ export class ChainsService implements HeadSource {
       throw new EngineError('internal', `${def.name} RPC did not answer`, { cause: err instanceof Error ? err.message : String(err) })
     }
   }
-}
-
-/** Kept for callers that only need block numbers through the registry clients. */
-export const rpcHeadSource: HeadSource = {
-  blockNumber: async (chainId) => {
-    const def = ALL_CHAINS.find((c) => c.chainId === chainId)
-    if (!def) throw new EngineError('invalid_argument', `unknown chain ${chainId}`)
-    const client = createPublicClient({ transport: fallback(def.rpcUrls.map((u) => http(u, { timeout: 10_000 })), { retryCount: 0 }) })
-    return client.getBlockNumber({ cacheTime: 0 })
-  },
 }
 
 export function chainsNamespace(chains: ChainsService): NamespaceSpec {

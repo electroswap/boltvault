@@ -21,10 +21,23 @@ export function setupI18n(locale: string = SOURCE_LOCALE, messages: Record<strin
  * a compiled catalog Lingui returns the source message verbatim in production,
  * and the source locale must still read right. Plurals and rich ICU belong to
  * compiled catalogs.
+ *
+ * The catalog is only asked when it has an entry.
+ *
+ * `i18n._()` hands a plain string to its message compiler, and when no
+ * compiler is installed — which is our case, because the interpolation below
+ * is ours and we use no ICU — it logs "Uncompiled message detected!" and
+ * returns the string anyway. Correct output, and a console warning per string
+ * per render: the extension's console filled with them. English is the source
+ * locale, so for an untranslated id the answer is already in the descriptor;
+ * asking a catalog that has nothing to say only buys the warning. A locale
+ * that IS loaded, compiled, still goes through Lingui and keeps its plurals.
  */
 export function t(descriptor: MessageDescriptor): string {
   if (!activated) setupI18n()
-  let out = i18n._(descriptor)
+  const id = descriptor.id
+  const translated = id !== undefined && Object.prototype.hasOwnProperty.call(i18n.messages, id)
+  let out = translated ? i18n._(descriptor) : (descriptor.message ?? String(id ?? ''))
   const values = descriptor.values as Record<string, unknown> | undefined
   if (values) for (const [k, v] of Object.entries(values)) out = out.split(`{${k}}`).join(String(v))
   return out

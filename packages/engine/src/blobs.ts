@@ -52,7 +52,7 @@ const LastLookSchema = z.object({
 }) as unknown as z.ZodType<LastLook>
 
 export interface SealedStores {
-  /** Last-good portfolio snapshot, by account id. */
+  /** Last-good portfolio snapshot, by `<accountId>:<sorted chain ids>`. */
   readonly portfolio: SealedMap<PortfolioSnapshot>
   /** "Since you last looked", by account id. */
   readonly looks: SealedMap<LastLook>
@@ -123,6 +123,11 @@ export function createSealedStores(platform: Platform, dek: () => Promise<Uint8A
     info: 'bv/portfolio',
     aad: 'boltvault.portfolio.v1',
     schema: PortfolioSnapshotSchema,
+    // One entry per account *and* chain scope now (a snapshot is only true of
+    // the chains it was built from), so this is no longer one row per account.
+    // The working set is the scopes actually visited; the cap keeps a user who
+    // tours every chain on every account from growing the blob without end.
+    cap: 32,
   })
   const looks = new SealedMap<LastLook>(platform, dek, {
     key: 'portfolio.look.blob',
@@ -274,7 +279,7 @@ export function createSealedStores(platform: Platform, dek: () => Promise<Uint8A
     purgeAccount: async (accountId: string) => {
       const needle = accountId.toLowerCase()
       const names = (id: string): boolean => id.toLowerCase().includes(needle)
-      await portfolio.delete(accountId)
+      await portfolio.deleteWhere(names)
       await looks.delete(accountId)
       await allowances.deleteWhere(names)
       await positions.deleteWhere(names)

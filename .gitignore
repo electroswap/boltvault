@@ -17,5 +17,13 @@ pnpm-lock.yaml.lock
 # Audit working directory: dumps of real wallet storage, recovered plaintext
 # and crack output land here. Never commit it.
 
+# Local build configuration: the API origin and the wallet API key a developer
+# builds against. `.env.example` is the committed template; `.env` is yours and
+# holds a real key, so it never leaves the machine.
+.env
+.env.local
+.env.*.local
+!.env.example
+
 # Internal working documents, not published
 internal-docs/

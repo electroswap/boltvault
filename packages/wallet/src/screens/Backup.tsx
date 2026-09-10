@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
+import { useSecretGuard } from './onboarding/useSecretGuard'
 import { useRouter } from '../navigation/router'
 import { useWalletState } from '../state/useWalletState'
 import { useScene } from '../state/useScene'
@@ -19,6 +20,8 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
   const [seedId, setSeedId] = useState<string | null>(pending[0]?.id ?? null)
   const [password, setPassword] = useState('')
   const [words, setWords] = useState<string[] | null>(null)
+  // On from the moment a phrase is revealed until this screen goes away.
+  const { masked } = useSecretGuard(words !== null)
   const [quiz, setQuiz] = useState<{ positions: number[]; answers: Record<number, string> } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -46,7 +49,7 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
   return (
     <Column flex={1} backgroundColor="$void" testID="backup">
       <Field scene={scene} address="0x0000000000000000000000000000000000000e7n" quiet width={width} height={height} reducedMotion={reducedMotion} />
-      <ScrollView style={{ zIndex: 1 }} contentContainerStyle={{ padding: metrics.insetWide, gap: 16, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
+      <ScrollView style={{ zIndex: 1 }} contentContainerStyle={{ padding: metrics.insetWide, gap: 16 }}>
         <Row gap="$2">
           <Icon name="lock" size={18} color={paint.mute} />
           <Body size="title">{t({ id: 'backup.title', message: 'Back up your recovery phrase' })}</Body>
@@ -74,7 +77,17 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
         ) : !quiz ? (
           <Column gap="$3">
             <Plate role="raised">
-              <WordGrid words={words} />
+              {/* Screenshot-blocked while shown, masked the moment this stops being the active surface. */}
+              {masked ? (
+                <Column minHeight={168} alignItems="center" justifyContent="center" gap="$2" testID="backup-masked">
+                  <Icon name="eyeOff" size={20} color={paint.mute} />
+                  <Body tone="mute" size="caption">
+                    {t({ id: 'secret.masked', message: 'Hidden while this window is not in front' })}
+                  </Body>
+                </Column>
+              ) : (
+                <WordGrid words={words} />
+              )}
             </Plate>
             {/*
               The phrase stays in state until the check passes. It used to be

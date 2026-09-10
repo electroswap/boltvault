@@ -123,21 +123,30 @@ export class LedgerHidTransport {
     if (this.device.opened) await this.device.close().catch(() => undefined)
   }
 
-  /** Send one APDU and resolve with the full response (status word included). */
-  exchange(apdu: Uint8Array): Promise<Uint8Array> {
-    const run = this.queue.then(() => this.exchangeNow(apdu))
+  /**
+   * Send one APDU and resolve with the full response (status word included).
+   *
+   * `timeoutMs` overrides the default for this exchange only. A readiness probe
+   * needs a short one: on the dashboard the Ethereum app's CLA belongs to
+   * nothing, and some firmware simply does not answer rather than returning
+   * 0x6511 — so the default minute is a minute of spinner. The override has to
+   * reach the timer rather than race it from outside, because an abandoned
+   * exchange still holds this queue and would delay the signature behind it.
+   */
+  exchange(apdu: Uint8Array, timeoutMs?: number): Promise<Uint8Array> {
+    const run = this.queue.then(() => this.exchangeNow(apdu, timeoutMs ?? this.timeoutMs))
     this.queue = run.catch(() => undefined)
     return run
   }
 
-  private async exchangeNow(apdu: Uint8Array): Promise<Uint8Array> {
+  private async exchangeNow(apdu: Uint8Array, timeoutMs: number): Promise<Uint8Array> {
     await this.open()
     const assembler = new ApduAssembler()
     return new Promise<Uint8Array>((resolve, reject) => {
       const timer = setTimeout(() => {
         cleanup()
         reject(new LedgerTransportError('timeout', 'The device did not answer. Unlock it and open the Ethereum app.'))
-      }, this.timeoutMs)
+      }, timeoutMs)
       const onReport = (event: { readonly data: DataView }): void => {
         try {
           const bytes = new Uint8Array(event.data.buffer, event.data.byteOffset, event.data.byteLength)

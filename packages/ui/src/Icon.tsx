@@ -79,13 +79,23 @@ export interface IconProps {
   readonly color?: string
   /** 1.75 by default; a tile's glyph reads better at 2. */
   readonly strokeWidth?: number
+  /**
+   * Fill the glyph as well as stroke it.
+   *
+   * The set is a stroke language, and that is right for a control. A mark that
+   * stands for something you *have* — the star beside "Dividends to claim" —
+   * reads as an outline of a thing rather than the thing, which is why the
+   * owner asked for it filled. Only closed paths (star, shield, bell) fill
+   * sensibly; an open one (activity, check) would smear.
+   */
+  readonly filled?: boolean
   readonly testID?: string
 }
 
-export function Icon({ name, size = 22, color = paint.ink, strokeWidth = 1.75, testID }: IconProps) {
+export function Icon({ name, size = 22, color = paint.ink, strokeWidth = 1.75, filled = false, testID }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" testID={testID}>
-      <Path d={PATHS[name]} stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d={PATHS[name]} fill={filled ? color : 'none'} stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   )
 }

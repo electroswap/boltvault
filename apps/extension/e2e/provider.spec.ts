@@ -44,7 +44,9 @@ test('injection, connect, sign, send, reject, per-origin chain, blocked drainers
     expect((await dappRequest(dapp, 'wallet_switchEthereumChain', [{ chainId: TESTNET_HEX }])).result).toBeNull()
     expect((await dappRequest(dapp, 'eth_chainId')).result).toBe(TESTNET_HEX)
     expect((await dappRequest(dapp, 'eth_accounts')).result).toEqual([])
-    expect((await dappRequest(dapp, 'eth_blockNumber')).result).toBe('0xf4240')
+    // Chain state is NOT safe before connect (§F4): the wallet is not an open
+    // RPC relay for any page the user happens to visit. Discovery still answers.
+    expect((await dappRequest(dapp, 'eth_blockNumber')).error?.code).toBe(4100)
     expect((await dappRequest(dapp, 'eth_sign', [address, `0x${'aa'.repeat(32)}`])).error?.code).toBe(4200)
     expect((await dappRequest(dapp, 'wallet_addEthereumChain', [{ chainId: '0x539', rpcUrls: ['https://evil.example'] }])).error?.code).toBe(4902)
 
@@ -57,6 +59,8 @@ test('injection, connect, sign, send, reject, per-origin chain, blocked drainers
       expect(((await result) as { result?: string[] }).result).toEqual([address])
     }
     expect((await dappRequest(dapp, 'eth_accounts')).result).toEqual([address])
+    // ...and once connected, the same read goes through to the chain.
+    expect((await dappRequest(dapp, 'eth_blockNumber')).result).toBe('0xf4240')
     await expect(dapp.getByTestId('events')).toContainText('accountsChanged')
     await expect(dapp.getByTestId('events')).toContainText('"connect"')
     // A permitted site gets no second sheet.

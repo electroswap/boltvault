@@ -1,19 +1,88 @@
-# Maestro (master plan §12): create a vault, back it up, land on Home. Runs on a device build.
+# Maestro (master plan §12): the onboarding flow on a real device build.
+#
+# This file had drifted badly — it asserted `ob-create` straight after launch
+# (Home's empty state comes first, and its key is `create-vault`), and tapped
+# `ob-words-next` and `ob-password-next`, neither of which has ever existed. It
+# encoded the master plan's order rather than the app's.
+#
+# Two passes, because a UI runner cannot complete the create path on its own:
+# the backup check asks for three words from a phrase generated on the device,
+# and nothing here can read them back. So pass one proves the phrase renders and
+# the check appears — which is the part worth smoking on a device, since that is
+# where `hidePreview` is real — and pass two completes a vault by the watch path,
+# which has no secret and can be driven end to end.
 appId: io.electroswap.boltvault
 ---
 - launchApp:
     clearState: true
+
+# Home's empty state is the way in; onboarding is not the launch screen.
+- assertVisible:
+    id: "create-vault"
+- tapOn:
+    id: "create-vault"
+
+# The intro comes first on a fresh install.
+- assertVisible:
+    id: "ob-intro"
+- assertVisible:
+    id: "ob-intro-next"
+- tapOn:
+    id: "ob-intro-next"
+- tapOn:
+    id: "ob-intro-next"
+- tapOn:
+    id: "ob-intro-next"
+
+# --- pass one: the create path, as far as a runner can take it ---
 - assertVisible:
     id: "ob-create"
 - tapOn:
     id: "ob-create"
+# `vault.propose` runs here and writes nothing; the words are on screen at once.
 - assertVisible:
     id: "ob-words"
+- assertVisible:
+    id: "word-1"
+- assertVisible:
+    id: "word-12"
 - tapOn:
-    id: "ob-words-next"
+    id: "ob-words-done"
+- assertVisible:
+    id: "ob-quiz"
+# Nothing has been written to disk yet, so starting over really does start over.
+- tapOn:
+    id: "ob-quiz-back"
+- tapOn:
+    id: "ob-back"
+
+# --- pass two: the watch path, to a real Home ---
+- assertVisible:
+    id: "ob-watch"
+- tapOn:
+    id: "ob-watch"
+- tapOn:
+    id: "ob-watch-address"
+- inputText: "0x1F90a1b2C3d4E5F60718293a4B5c6D7e8F907b63"
+- tapOn:
+    id: "ob-watch-confirm"
+- assertVisible:
+    id: "ob-password"
+- tapOn:
+    id: "ob-password"
 - inputText: "correct horse battery staple 42"
 - tapOn:
-    id: "ob-password-next"
+    id: "ob-confirm"
+- inputText: "correct horse battery staple 42"
+- tapOn:
+    id: "ob-password-continue"
+# Argon2id runs here, so give the device a moment.
+- extendedWaitUntil:
+    visible:
+      id: "ob-done"
+    timeout: 60000
+- tapOn:
+    id: "ob-open"
 - assertVisible:
     id: "home"
 - assertVisible:

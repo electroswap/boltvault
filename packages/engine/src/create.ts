@@ -11,6 +11,7 @@ import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
 import { ActivityStore } from './activityStore'
 import { createSealedStores } from './blobs'
+import { FeeLadders } from './feeLadder'
 import { migrateSealed } from './migrateSealed'
 import { ApprovalStore } from './approvals'
 import { CacheShards } from './cache'
@@ -25,6 +26,9 @@ import { ContactsStore, contactsNamespace } from './namespaces/contacts'
 import { NamesService, namesNamespace } from './namespaces/names'
 import { PortfolioService, portfolioNamespace } from './namespaces/portfolio'
 import { BridgeService, bridgeNamespace } from './namespaces/bridge'
+import { Governor, governedFetch } from './governor'
+import { authHeaders } from './apiAuth'
+import { DynoWeight } from './dynoweight'
 import { GeckoTerminalPrices } from './prices'
 import { ProviderService } from './namespaces/provider'
 import { SendService, sendNamespace } from './namespaces/send'
@@ -53,7 +57,14 @@ import { SitesService, sitesNamespace } from './namespaces/sites'
 import { HttpRelay, MemoryRelay, SyncService, syncNamespace, type Relay } from './namespaces/sync'
 import { TokensService, tokensNamespace } from './namespaces/tokens'
 import { accountsNamespace, KEY_DEK, VaultManager, vaultNamespace } from './namespaces/vault'
-import { AccountIdSchema, ApprovalDecisionSchema, SettingsSchema, type ApprovalDecision, type ApprovalRequest, type Settings } from './schema'
+import {
+  AccountIdSchema,
+  ApprovalDecisionSchema,
+  SettingsSchema,
+  type ApprovalDecision,
+  type ApprovalRequest,
+  type Settings,
+} from './schema'
 import { SettingsStore } from './settingsStore'
 import { createInProcessTransport } from './transport'
 
@@ -149,8 +160,31 @@ const sharedMemoryRelay = new MemoryRelay()
 
 export function createEngine(deps: EngineDeps): Engine {
   const host = new EngineHost()
-  // A bare `fetch` loses its Window receiver when called as a method ("illegal invocation" in browsers): always wrap.
-  const fetchImpl: typeof fetch = deps.fetch ?? ((input, init) => fetch(input, init))
+  /*
+    One governed `fetch` for the whole engine.
+
+    Everything that leaves this process — JSON-RPC on ten chains, the
+    ElectroSwap indexer, GeckoTerminal, the signed statics, the public token
+    lists — is built on this one function, so the budget below is the wallet's
+    whole appetite rather than one service's opinion of it. Per host: a token
+    bucket, and a cooldown on a refusal that makes RPC failover instant. See
+    governor.ts.
+
+    A bare `fetch` loses its Window receiver when called as a method ("illegal
+    invocation" in browsers): always wrap.
+  */
+  const governor = new Governor(() => deps.platform.now())
+  const realFetch: typeof fetch = (input, init) => fetch(input, init)
+  /** Token lists, the indexer, the price APIs, the signed statics. */
+  const fetchImpl: typeof fetch = governedFetch(deps.fetch ?? realFetch, governor)
+  /*
+    JSON-RPC keeps the real fetch even when a test stands one in: `deps.fetch`
+    is the seam for "token lists and the ElectroSwap API", and the tests point
+    the chains at a local mock server instead. Both share the one governor,
+    which is the part that matters — the budget is the wallet's, not a
+    service's.
+  */
+  const rpcFetch: typeof fetch = governedFetch(realFetch, governor)
   let staticsRef: StaticsService | null = null
   const settings = new SettingsStore(deps.platform, host.events, deps.os)
   // The DEK accessor is needed by every sealed store below, so it is built
@@ -167,31 +201,107 @@ export function createEngine(deps: EngineDeps): Engine {
   const sealed = createSealedStores(deps.platform, dek)
   // The active account is read at call time, not now: `vault` is constructed
   // below, and an inbox entry is only ever attributed when it is pushed or read.
-  const notifications = new NotificationsService(deps.platform, host.events, sealed.notifications, async () => (await vault.active())?.id ?? null)
+  const notifications = new NotificationsService(
+    deps.platform,
+    host.events,
+    sealed.notifications,
+    async () => (await vault.active())?.id ?? null,
+  )
   const prefs = new PrefsService(deps.platform, host.events)
   // Every OS notification the watcher sends is also an inbox entry (plan A6): the tag says what it was about.
   const notifyingPlatform: Platform = {
     ...deps.platform,
     notify: async (n) => {
       const [prefix, a, b] = (n.tag ?? '').split(':')
-      const kind = prefix === 'live' ? 'live' : prefix === 'collect' ? 'collect' : prefix === 'dividends' ? 'dividends' : 'alert'
-      const target = prefix === 'live' ? `campaign:${a ?? ''}` : prefix === 'above' || prefix === 'below' ? `${a ?? 'token'}:${b ?? ''}` : prefix === 'collect' ? 'positions' : prefix === 'dividends' ? 'legends' : null
-      const day = Math.floor(deps.platform.now() / 86_400_000)
-      await notifications.push({ id: `${n.tag ?? n.title}:${kind === 'alert' || kind === 'live' ? deps.platform.now() : day}`, kind, title: n.title, body: n.body, target }).catch(() => undefined)
+      const kind =
+        prefix === 'live'
+          ? 'live'
+          : prefix === 'collect'
+            ? 'collect'
+            : prefix === 'dividends'
+              ? 'dividends'
+              : 'alert'
+      const target =
+        prefix === 'live'
+          ? `campaign:${a ?? ''}`
+          : prefix === 'above' || prefix === 'below'
+            ? `${a ?? 'token'}:${b ?? ''}`
+            : prefix === 'collect'
+              ? 'positions'
+              : prefix === 'dividends'
+                ? 'legends'
+                : null
+      /*
+        A standing condition keeps one row; an event gets its own.
+
+        Both used to be stamped — events with the clock, conditions with the
+        day — and a day stamp is what let "Dividends to claim" pile up: the id
+        differed every midnight, so nothing deduped it and a week of not
+        claiming meant seven identical rows. Conditions now carry the bare tag
+        and renew in place, so the row is the current amount rather than a
+        stack of yesterdays.
+      */
+      const standing = kind === 'collect' || kind === 'dividends'
+      const id = standing ? (n.tag ?? n.title) : `${n.tag ?? n.title}:${deps.platform.now()}`
+      await notifications
+        .push({
+          id,
+          kind,
+          title: n.title,
+          body: n.body,
+          target,
+          ...(standing ? { renew: true } : {}),
+        })
+        .catch(() => undefined)
       await deps.platform.notify(n)
     },
   }
-  const vault = new VaultManager(deps.platform, host.events, settings, { active: sealed.active, purgeAccount: async (id) => { await sealed.purgeAccount(id); await cache.forgetAccount(id) }, ...(deps.kdf ? { kdf: deps.kdf } : {}) })
+  const vault = new VaultManager(deps.platform, host.events, settings, {
+    active: sealed.active,
+    purgeAccount: async (id) => {
+      await sealed.purgeAccount(id)
+      await cache.forgetAccount(id)
+    },
+    ...(deps.kdf ? { kdf: deps.kdf } : {}),
+  })
   const approvals = new ApprovalStore(deps.platform, host.events)
   const sites = new SitesService(deps.platform, host.events, sealed.sites)
-  const chains = new ChainsService(deps.platform, host.events, deps.heads)
+  const chains = new ChainsService(deps.platform, host.events, deps.heads, rpcFetch)
   const activity = new ActivityStore(deps.platform, host.events, dek)
   const contacts = new ContactsStore(deps.platform, host.events, dek)
-  const relayFor = deps.relayFor ?? ((url: string): Relay => (/^https?:\/\//.test(url) ? new HttpRelay(url, fetchImpl, deps.clientKey) : sharedMemoryRelay))
-  const sync = new SyncService(deps.platform, host.events, { settings, sites, vault, relayFor, identity: sealed.syncIdentity, devices: sealed.syncDevices, meta: sealed.syncMeta })
-  staticsRef = new StaticsService({ platform: deps.platform, bus: host.events, fetch: fetchImpl, clientVersion: deps.clientVersion ?? 'BoltVault/0.1.0', body: deps.body ?? 'extension', ...(deps.staticsUrl ? { baseUrl: deps.staticsUrl } : {}), ...(deps.staticsPublicKey ? { publicKeyHex: deps.staticsPublicKey } : {}) })
+  const relayFor =
+    deps.relayFor ??
+    ((url: string): Relay =>
+      /^https?:\/\//.test(url) ? new HttpRelay(url, fetchImpl, deps.clientKey) : sharedMemoryRelay)
+  const sync = new SyncService(deps.platform, host.events, {
+    settings,
+    sites,
+    vault,
+    relayFor,
+    identity: sealed.syncIdentity,
+    devices: sealed.syncDevices,
+    meta: sealed.syncMeta,
+  })
+  staticsRef = new StaticsService({
+    platform: deps.platform,
+    bus: host.events,
+    fetch: fetchImpl,
+    clientVersion: deps.clientVersion ?? 'BoltVault/0.1.0',
+    body: deps.body ?? 'extension',
+    ...(deps.staticsUrl ? { baseUrl: deps.staticsUrl } : {}),
+    ...(deps.staticsPublicKey ? { publicKeyHex: deps.staticsPublicKey } : {}),
+  })
   const statics = staticsRef
-  const hardware = new HardwareService({ hid: deps.hid ?? null, ledger: deps.ledger ?? null, trezor: deps.trezor ?? null, vault, bus: host.events, platform: deps.platform })
+  const hardware = new HardwareService({
+    hid: deps.hid ?? null,
+    ledger: deps.ledger ?? null,
+    trezor: deps.trezor ?? null,
+    vault,
+    bus: host.events,
+    platform: deps.platform,
+  })
+  // Declared before the provider, which needs it for the trace route (§9.2).
+  const apiOrigin = (deps.apiOrigin ?? DEFAULT_API_ORIGIN).replace(/\/+$/, '')
   const provider = new ProviderService({
     platform: deps.platform,
     bus: host.events,
@@ -203,53 +313,273 @@ export function createEngine(deps: EngineDeps): Engine {
     activity,
     addressBook: () => contacts.referenceAddresses(),
     tokenMetadata: (chainId, address) => tokens.metadata(chainId, address),
-    watchAsset: (i) => tokens.addCustom({ chainId: i.chainId, address: i.address, source: 'dapp', origin: i.origin, ...(i.claimed ? { claimed: i.claimed } : {}) }),
+    watchAsset: (i) =>
+      tokens.addCustom({
+        chainId: i.chainId,
+        address: i.address,
+        source: 'dapp',
+        origin: i.origin,
+        ...(i.claimed ? { claimed: i.claimed } : {}),
+      }),
     tokenInfo: async (chainId) => {
       const out: Record<string, { symbol: string; decimals: number; name?: string }> = {}
-      for (const t of await tokens.universe(chainId)) if (t.address !== 'native') out[t.address.toLowerCase()] = { symbol: t.symbol, decimals: t.decimals, name: t.name }
+      for (const t of await tokens.universe(chainId))
+        if (t.address !== 'native')
+          out[t.address.toLowerCase()] = { symbol: t.symbol, decimals: t.decimals, name: t.name }
       return out
     },
     clientVersion: deps.clientVersion ?? 'BoltVault/0.1.0',
     statics: { scamOrigins: () => staticsRef?.scamOrigins() ?? [] },
     fetch: fetchImpl,
+    apiOrigin,
+    ...(deps.clientKey ? { clientKey: deps.clientKey } : {}),
     hardware,
     ...(deps.openApproval ? { openApproval: deps.openApproval } : {}),
     ...(deps.receiptPollMs !== undefined ? { receiptPollMs: deps.receiptPollMs } : {}),
   })
-  const tokens = new TokensService(deps.platform, host.events, chains, fetchImpl, sealed.tokensCustom, sealed.tokenPrefs)
-  const apiOrigin = (deps.apiOrigin ?? DEFAULT_API_ORIGIN).replace(/\/+$/, '')
+  const tokens = new TokensService(
+    deps.platform,
+    host.events,
+    chains,
+    fetchImpl,
+    sealed.tokensCustom,
+    sealed.tokenPrefs,
+  )
   const features = { limitOrders: deps.features?.limitOrders ?? false }
-  const electroswap = deps.electroswapUrl === null ? null : new ElectroSwapClient({ url: deps.electroswapUrl ?? `${apiOrigin}/graphql`, ...(deps.clientKey ? { apiKey: deps.clientKey } : {}), fetchImpl })
-  const prices = deps.pricesUrl === null ? null : new GeckoTerminalPrices(fetchImpl, () => deps.platform.now(), ...(deps.pricesUrl ? [deps.pricesUrl] : []))
-  const portfolio = new PortfolioService({ platform: deps.platform, bus: host.events, chains, tokens, vault, electroswap, prices, snapshots: sealed.portfolio, looks: sealed.looks })
+  /*
+    The GraphQL endpoint is behind the general auth gate rather than the wallet
+    routes, and it verifies the signature over an EMPTY body (see the API's
+    `walletSignatureAuthorized`) — so sign one here too, or every call would be
+    rejected for a body hash the server never computes.
+  */
+  const graphqlAuth = deps.clientKey
+    ? (method: string, url: string) =>
+        authHeaders({ key: deps.clientKey as string, method, url, now: deps.platform.now() })
+    : undefined
+  const electroswap =
+    deps.electroswapUrl === null
+      ? null
+      : new ElectroSwapClient({
+          url: deps.electroswapUrl ?? `${apiOrigin}/graphql`,
+          ...(graphqlAuth ? { authHeaders: graphqlAuth } : {}),
+          fetchImpl,
+        })
+  /*
+    Prefer our own proxy when this build has a wallet key (§9.4).
+
+    It answers in GeckoTerminal's exact shape, so this is a base URL rather
+    than a second client. What it buys: the upstream API keys stay server-side,
+    the cache is shared across every install instead of per-device, and no
+    third party ever sees a user's IP beside the tokens they hold. Without a
+    key we talk to GeckoTerminal directly — the fallback the plan allows, and
+    what every build did until now.
+  */
+  const pricesBase =
+    deps.pricesUrl ?? (deps.clientKey ? `${apiOrigin}/api/wallet/prices` : undefined)
+  const prices =
+    deps.pricesUrl === null
+      ? null
+      : new GeckoTerminalPrices(fetchImpl, () => deps.platform.now(), pricesBase, deps.clientKey)
+  const portfolio = new PortfolioService({
+    platform: deps.platform,
+    bus: host.events,
+    chains,
+    tokens,
+    vault,
+    electroswap,
+    prices,
+    snapshots: sealed.portfolio,
+    looks: sealed.looks,
+  })
   const names = new NamesService(chains, () => deps.platform.now())
-  const allowances = new AllowancesService({ platform: deps.platform, bus: host.events, chains, tokens, vault, provider, allowances: sealed.allowances })
+  const allowances = new AllowancesService({
+    platform: deps.platform,
+    bus: host.events,
+    chains,
+    tokens,
+    vault,
+    provider,
+    allowances: sealed.allowances,
+  })
   const send = new SendService({ platform: deps.platform, chains, tokens, names, vault, provider })
-  const scanner = new ActivityScanner({ platform: deps.platform, chains, activity, tokens, vault, settings, cache, bus: host.events, scan: sealed.scan })
-  const holder = new HolderService({ platform: deps.platform, chains, vault, cache })
+  const scanner = new ActivityScanner({
+    platform: deps.platform,
+    chains,
+    activity,
+    tokens,
+    vault,
+    settings,
+    cache,
+    bus: host.events,
+    scan: sealed.scan,
+  })
+  const weights = new DynoWeight({ platform: deps.platform, electroswap, cache })
+  // The published fee ladder. Without a key the route answers 401, so there is
+  // nothing to ask and the bundled ladder stands — which is a correct schedule.
+  const ladders = deps.clientKey
+    ? new FeeLadders({
+        fetch: fetchImpl,
+        url: `${apiOrigin}/api/wallet/fees`,
+        key: deps.clientKey,
+        now: () => deps.platform.now(),
+      })
+    : undefined
+  const holder = new HolderService({
+    platform: deps.platform,
+    chains,
+    vault,
+    cache,
+    weights,
+    ...(ladders ? { ladders } : {}),
+  })
   const flows = new FlowStore({ platform: deps.platform, bus: host.events, activity })
-  const swap = new SwapService({ statics,  platform: deps.platform, chains, tokens, vault, provider, settings, holder, flows })
-  const limit = new LimitService({ platform: deps.platform, bus: host.events, chains, tokens, vault, provider, settings, flows, enabled: features.limitOrders })
-  const watchlist = new WatchlistService({ platform: notifyingPlatform, bus: host.events, vault, watchlist: sealed.watchlist })
-  const legends = new LegendsService({ platform: deps.platform, chains, vault, provider, flows, legendsBest: sealed.legends })
-  const customCollections = new CustomCollectionsService({ platform: deps.platform, chains, fetch: fetchImpl, collections: sealed.nftCustom, meta: sealed.nftMeta })
-  const explore = new ExploreService({ platform: deps.platform, electroswap, tokens, vault, watchlist, cache, bus: host.events, custom: customCollections, legends })
-  const nft = new NftService({ platform: deps.platform, chains, vault, provider, flows, electroswap, explore, legends, cache, notifications, custom: customCollections })
-  const farm = new FarmService({ platform: deps.platform, chains, tokens, vault, provider, flows, settings, electroswap, cache })
-  const launchpad = new LaunchpadService({ platform: deps.platform, chains, vault, provider, flows, electroswap, names, watchlist, cache, referrals: sealed.launchpadRef })
-  const positions = new PositionsService({ platform: deps.platform, bus: host.events, farm, legends, limit, launchpad, tokens, positions: sealed.positions })
-  const remote = new RemoteSignService({ platform: deps.platform, bus: host.events, sync, vault, provider, canSignHere: async (a) => (await vault.privateKeyFor(a.id).catch(() => null)) !== null || (a.kind !== 'hd' && a.kind !== 'imported' && hardware.canSign(a)), ...(deps.receiptPollMs !== undefined ? { pollMs: deps.receiptPollMs * 5 } : {}) })
+  const swap = new SwapService({
+    statics,
+    platform: deps.platform,
+    chains,
+    tokens,
+    vault,
+    provider,
+    settings,
+    holder,
+    flows,
+  })
+  const limit = new LimitService({
+    platform: deps.platform,
+    bus: host.events,
+    chains,
+    tokens,
+    vault,
+    provider,
+    settings,
+    flows,
+    enabled: features.limitOrders,
+  })
+  const watchlist = new WatchlistService({
+    platform: notifyingPlatform,
+    bus: host.events,
+    vault,
+    watchlist: sealed.watchlist,
+  })
+  const legends = new LegendsService({
+    platform: deps.platform,
+    chains,
+    vault,
+    provider,
+    flows,
+    legendsBest: sealed.legends,
+  })
+  const customCollections = new CustomCollectionsService({
+    platform: deps.platform,
+    chains,
+    fetch: fetchImpl,
+    collections: sealed.nftCustom,
+    meta: sealed.nftMeta,
+  })
+  const explore = new ExploreService({
+    platform: deps.platform,
+    electroswap,
+    tokens,
+    vault,
+    watchlist,
+    cache,
+    bus: host.events,
+    custom: customCollections,
+    legends,
+  })
+  const nft = new NftService({
+    platform: deps.platform,
+    chains,
+    vault,
+    provider,
+    flows,
+    electroswap,
+    explore,
+    legends,
+    cache,
+    notifications,
+    custom: customCollections,
+  })
+  const farm = new FarmService({
+    platform: deps.platform,
+    chains,
+    tokens,
+    vault,
+    provider,
+    flows,
+    settings,
+    electroswap,
+    cache,
+  })
+  const launchpad = new LaunchpadService({
+    platform: deps.platform,
+    chains,
+    vault,
+    provider,
+    flows,
+    electroswap,
+    names,
+    watchlist,
+    cache,
+    referrals: sealed.launchpadRef,
+  })
+  const positions = new PositionsService({
+    platform: deps.platform,
+    bus: host.events,
+    farm,
+    legends,
+    limit,
+    launchpad,
+    tokens,
+    positions: sealed.positions,
+  })
+  const remote = new RemoteSignService({
+    platform: deps.platform,
+    bus: host.events,
+    sync,
+    vault,
+    provider,
+    canSignHere: async (a) =>
+      (await vault.privateKeyFor(a.id).catch(() => null)) !== null ||
+      (a.kind !== 'hd' && a.kind !== 'imported' && hardware.canSign(a)),
+    ...(deps.receiptPollMs !== undefined ? { pollMs: deps.receiptPollMs * 5 } : {}),
+  })
   provider.setRemote(remote)
   sync.setRecordHook((rec, from) => remote.onRecord(rec, from))
-  const dapps = new DappsService({ provider, bus: host.events, now: () => deps.platform.now(), random: (n) => deps.platform.random(n) })
-  const connect = new ConnectService({ walletKit: deps.walletKit ?? null, dapps, chains, vault, sites, bus: host.events })
+  const dapps = new DappsService({
+    provider,
+    bus: host.events,
+    now: () => deps.platform.now(),
+    random: (n) => deps.platform.random(n),
+  })
+  const connect = new ConnectService({
+    walletKit: deps.walletKit ?? null,
+    dapps,
+    chains,
+    vault,
+    sites,
+    bus: host.events,
+  })
   connect.init()
-  const bridge = new BridgeService({ statics, platform: deps.platform, bus: host.events, chains, vault, provider, flows, settings, transfers: sealed.bridge, ...(deps.receiptPollMs !== undefined ? { receiptPollMs: deps.receiptPollMs } : {}) })
+  const bridge = new BridgeService({
+    statics,
+    platform: deps.platform,
+    bus: host.events,
+    chains,
+    vault,
+    provider,
+    flows,
+    settings,
+    transfers: sealed.bridge,
+    ...(deps.receiptPollMs !== undefined ? { receiptPollMs: deps.receiptPollMs } : {}),
+  })
   watchlist.attach({
     tokens: (chainId) => explore.tokens(chainId),
     collections: (chainId) => explore.collections(chainId),
     campaigns: (chainId) => launchpad.list(chainId, undefined, ['ACTIVE', 'PENDING']),
-    accessory: async (accountId, chainId) => (await positions.snapshot(accountId, chainId)).accessory,
+    // The watch raises one notification, so it takes the first standing thing.
+    accessory: async (accountId, chainId) =>
+      (await positions.snapshot(accountId, chainId)).accessories[0] ?? null,
   })
 
   let migrating: Promise<unknown> | null = null
@@ -336,8 +666,17 @@ export function createEngine(deps: EngineDeps): Engine {
   })
   host.register('activity', {
     list: {
-      input: z.object({ accountId: AccountIdSchema.optional(), chainId: z.number().int().positive().optional(), limit: z.number().int().positive().max(500).optional() }).optional(),
-      handler: (arg) => activity.list((arg as { accountId?: string; chainId?: number; limit?: number } | undefined) ?? {}),
+      input: z
+        .object({
+          accountId: AccountIdSchema.optional(),
+          chainId: z.number().int().positive().optional(),
+          limit: z.number().int().positive().max(500).optional(),
+        })
+        .optional(),
+      handler: (arg) =>
+        activity.list(
+          (arg as { accountId?: string; chainId?: number; limit?: number } | undefined) ?? {},
+        ),
     },
     clear: { handler: () => activity.clear() },
   })
@@ -365,11 +704,21 @@ export function createEngine(deps: EngineDeps): Engine {
   host.register('dapps', dappsNamespace(dapps))
   host.register('connect', connectNamespace(connect))
   host.register('flags', flagsNamespace(statics))
-  host.register('about', aboutNamespace({ apiOrigin, apiIsDefault: apiOrigin === DEFAULT_API_ORIGIN, features }))
+  host.register(
+    'about',
+    aboutNamespace({ apiOrigin, apiIsDefault: apiOrigin === DEFAULT_API_ORIGIN, features }),
+  )
   host.register('notifications', notificationsNamespace(notifications))
   host.register('prefs', prefsNamespace(prefs))
 
-  const ready = Promise.all([approvals.hydrate(), sites.hydrate(), settings.get(), provider.init(), watchlist.hydrate(), statics.hydrate()]).then(() => {
+  const ready = Promise.all([
+    approvals.hydrate(),
+    sites.hydrate(),
+    settings.get(),
+    provider.init(),
+    watchlist.hydrate(),
+    statics.hydrate(),
+  ]).then(() => {
     // Signed flags refresh in the background; nothing waits on the network (§3.7).
     if (deps.staticsUrl !== null) void statics.refresh().catch(() => undefined)
   })

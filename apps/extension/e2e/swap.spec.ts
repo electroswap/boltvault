@@ -2,7 +2,15 @@
  * M5 definition of done (master plan §11) in the popup against a mock RPC:
  * a quote with the three fee lines and the holder tier, then Swap → the
  * approve, permit and swap sheets in turn → a Universal Router call whose
- * PAY_PORTION pays the configured sink at the schedule's bips → "Swapped".
+ * PAY_PORTION pays the build's fee recipient at the ladder's bips → "Swapped".
+ *
+ * The tier used to come from a `BoltVaultFeeSchedule` contract this test mocked,
+ * and the sink from a runtime `holder.configure`. Both are gone: the recipient
+ * and the ladder are configuration now (`packages/chains/fees.json`, read
+ * through `fees.ts`), and `configure` refuses outright on a chain the config
+ * names — which mainnet now is. So the only thing the chain is asked for is what
+ * the account holds, and the rung follows from that balance against the shipped
+ * ladder. 136,000 BOLT is Magneto (0.30%), one rung under Turbine (0.20%).
  */
 import { startMockRpc, type MockRpc } from '@boltvault/testing'
 import { expect, test } from '@playwright/test'
@@ -21,8 +29,8 @@ const QUOTER = '0xba3CAfCc197E71b9d114E515E75c037dA09A6312' as Hex
 const MIXED = '0x591c0d1d5f256aC963a824625B378cDb9c16F304' as Hex
 const V2_ROUTER = '0x072D4706f9A383D5608BD14B09b41683cb95fFd7' as Hex
 const FOT = '0x34dc8af1FFe9F71aB8B37F9Ea79c567ab64140b3' as Hex
-const SINK = '0x00000000000000000000000000000000000051ab' as Hex
-const SCHEDULE = '0x00000000000000000000000000000000000005c4' as Hex
+/** packages/chains/fees.json › chains.52014.recipient — a build constant, never configured at runtime (T10). */
+const SINK = '0xD6Cf49CbCF84B2cd2472a376B5f791689A0769d0' as Hex
 const MULTICALL3 = '0xcA11bde05977b3631167028862bE2a173976CA11'
 const UR_ABI = parseAbi(['function execute(bytes commands, bytes[] inputs, uint256 deadline) payable'])
 
@@ -34,7 +42,7 @@ test('quote with the fee stack, then approve → permit → swap through the she
   const ext = await launchWithExtension()
   const rpc: MockRpc = await startMockRpc({ chainId: 52014 })
   rpc.state.code.set(MULTICALL3.toLowerCase(), 'multicall3')
-  for (const a of [TOKEN, WETN, USDC, BOLT, DYNO, PERMIT2, UR, QUOTER, MIXED, V2_ROUTER, FOT, SINK, SCHEDULE]) rpc.state.code.set(a.toLowerCase(), '0x6080')
+  for (const a of [TOKEN, WETN, USDC, BOLT, DYNO, PERMIT2, UR, QUOTER, MIXED, V2_ROUTER, FOT, SINK]) rpc.state.code.set(a.toLowerCase(), '0x6080')
   const balances = new Map<string, bigint>()
   const allowances = new Map<string, bigint>()
   const erc20 = (name: string, symbol: string, decimals: bigint, bal: (owner: string) => bigint) => ({ data }: { data: Hex }): Hex => {
@@ -49,7 +57,7 @@ test('quote with the fee stack, then approve → permit → swap through the she
   rpc.state.calls.set(TOKEN.toLowerCase(), erc20('Fixture Token', 'FIX', 6n, (o) => balances.get(o) ?? 0n))
   rpc.state.calls.set(USDC.toLowerCase(), erc20('Hyperlane USDC', 'USDC', 6n, () => 0n))
   rpc.state.calls.set(WETN.toLowerCase(), erc20('Wrapped ETN', 'WETN', 18n, () => 0n))
-  rpc.state.calls.set(BOLT.toLowerCase(), erc20('BOLT', 'BOLT', 18n, () => 18_400n * 10n ** 18n))
+  rpc.state.calls.set(BOLT.toLowerCase(), erc20('BOLT', 'BOLT', 18n, () => 136_000n * 10n ** 18n))
   rpc.state.calls.set(DYNO.toLowerCase(), erc20('DYNO', 'DYNO', 18n, () => 0n))
   rpc.state.calls.set(PERMIT2.toLowerCase(), () => encodeAbiParameters(parseAbiParameters('uint160, uint48, uint48'), [0n, 0, 0]))
   // FIX → USDC on the 0.3 % V3 pool at 1 FIX = 0.5 USDC; every other candidate fails to quote.
@@ -65,19 +73,12 @@ test('quote with the fee stack, then approve → permit → swap through the she
       throw new Error('no')
     })
   }
-  rpc.state.calls.set(SCHEDULE.toLowerCase(), ({ data }) => {
-    if (data.length === 10 + 64) return encodeAbiParameters(parseAbiParameters('uint16, uint8, uint256'), [30, 2, 18_400n * 10n ** 18n])
-    if (data.length === 10) return encodeAbiParameters(parseAbiParameters('uint16, (uint256 minScore, uint16 bips)[], uint256, bool, uint16'), [50, [{ minScore: 1_000n * 10n ** 18n, bips: 40 }, { minScore: 10_000n * 10n ** 18n, bips: 30 }, { minScore: 50_000n * 10n ** 18n, bips: 20 }, { minScore: 100_000n * 10n ** 18n, bips: 10 }], 0n, true, 2_500])
-    return '0x'
-  })
   try {
     const { address, tab } = await createVault(ext)
     rpc.state.balances.set(address.toLowerCase(), 25n * 10n ** 18n)
     balances.set(address.toLowerCase(), 12_500_000n)
     await engineCall(tab, 'chains', 'setRpc', { chainId: 52014, url: rpc.url })
     await engineCall(tab, 'tokens', 'addCustom', { chainId: 52014, address: TOKEN })
-    // Mainnet's sink is not pinned yet, so the dev override is allowed here (T10 refuses it once it is).
-    await engineCall(tab, 'holder', 'configure', { chainId: 52014, sink: SINK, schedule: SCHEDULE })
     await tab.close()
 
     const popup = await ext.context.newPage()
@@ -100,8 +101,8 @@ test('quote with the fee stack, then approve → permit → swap through the she
     await expect(popup.getByTestId('swap-token-out')).toContainText('USDC')
     await popup.getByTestId('swap-amount-in').fill('2')
     await expect(popup.getByTestId('swap-amount-out')).toContainText('0.99', { timeout: 20_000 }) // 1 USDC − 0.30 %
-    await expect(popup.getByTestId('swap-fee')).toContainText('0.30% · BOLT tier 2')
-    await expect(popup.getByTestId('swap-fee')).toContainText('0.003 USDC to 0x0000…51ab')
+    await expect(popup.getByTestId('swap-fee')).toContainText('0.30% · Magneto')
+    await expect(popup.getByTestId('swap-fee')).toContainText('0.003 USDC to 0xD6Cf…69d0')
     await expect(popup.getByTestId('swap-fee-next')).toContainText('BOLT-eq for 0.20%')
     await expect(popup.getByTestId('swap-rate')).toContainText('1 FIX = 0.5 USDC')
     await expect(popup.getByTestId('swap-route')).toContainText('V3 0.3%')
@@ -115,7 +116,7 @@ test('quote with the fee stack, then approve → permit → swap through the she
     // The fee line opens the schedule sheet.
     await popup.getByTestId('swap-fee-line').click()
     await expect(popup.getByTestId('fee-sheet')).toBeVisible()
-    await expect(popup.getByTestId('fee-you')).toContainText('tier 2 · 0.30%')
+    await expect(popup.getByTestId('fee-you-name')).toContainText('Magneto · 0.30%')
     await expect(popup.getByTestId('fee-tiers')).toContainText('0.10%')
     await popup.getByTestId('fee-close').click()
     await expect(popup.getByTestId('swap-key')).toBeEnabled({ timeout: 10_000 })

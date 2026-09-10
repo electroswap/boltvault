@@ -31,7 +31,7 @@ describe('migrateSealed', () => {
     await local.set('accounts.active', env({ id: ACCT }))
     await local.set('sites', env({ 'https://app.electroswap.io': { origin: 'https://app.electroswap.io', chainId: 52014, accountId: ACCT, connected: true, lastAccounts: [ADDR] } }))
     await local.set(`allowances.${ACCT}.52014`, env({ rows: [], at: 7 }))
-    await local.set(`positions.52014.${ACCT}`, JSON.stringify({ accountId: ACCT, chainId: 52014, farms: [], legends: null, orders: [], campaigns: [], accessory: null, observedAt: 3 }))
+    await local.set(`positions.52014.${ACCT}`, JSON.stringify({ accountId: ACCT, chainId: 52014, farms: [], legends: null, orders: [], campaigns: [], accessories: [], observedAt: 3 }))
     await local.set(`activity.scan.${ACCT}.52014`, env({ block: 15_000_000 }))
     await local.set('bridge.transfers', env({ items: [] }))
     await local.set('notifications', env([]))
@@ -89,7 +89,7 @@ describe('migrateSealed', () => {
       await sealed.portfolio.set(id, { accountId: id, total: 1, rows: [], chainIds: [52014], currency: 'USD', change24h: null, unpricedCount: 0, observedAt: 1, stale: false } as never)
       await sealed.looks.set(id, { at: 1, total: 1 })
       await sealed.allowances.set(`${id}.52014`, { rows: [], at: 1 })
-      await sealed.positions.set(`52014.${id}`, { accountId: id, chainId: 52014, farms: [], legends: null, orders: [], campaigns: [], accessory: null, observedAt: 1 } as never)
+      await sealed.positions.set(`52014.${id}`, { accountId: id, chainId: 52014, farms: [], legends: null, orders: [], campaigns: [], accessories: [], observedAt: 1 } as never)
       await sealed.scan.set(`${id}.52014`, { block: 1 })
     }
     await sealed.sites.set('https://a.example', { origin: 'https://a.example', chainId: 52014, accountId: ACCT, connected: true, lastAccounts: [ADDR] })

@@ -187,5 +187,6 @@ const KNOWN_SHARDS = [
   'launchpad.list',
   'nft.inventory',
   'holder.tier',
+  'holder.weight',
   'activity.scan',
 ] as const

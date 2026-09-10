@@ -144,7 +144,7 @@ export function Token({ chainId, address, body }: { chainId: number; address: st
 
   return (
     <Column flex={1}>
-      <ScrollView contentContainerStyle={{ padding: inset, gap: 12, ...(wide ? { maxWidth: 640, width: '100%', alignSelf: 'center' } : {}) }} testID="token">
+      <ScrollView contentContainerStyle={{ padding: inset, gap: 12 }} testID="token">
         <PageHeader
           leading={
             <Row gap="$2" alignItems="center" flexShrink={1}>

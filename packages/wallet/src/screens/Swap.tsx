@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { SlippageSheet } from '../components/SlippageSheet'
 import { SwapCoachSheet } from '../components/SwapCoachSheet'
 import { TokenPickerSheet } from '../components/TokenPickerSheet'
+import { HomeKey } from '../components/HomeKey'
 import { useEngine } from '../engine/EngineProvider'
 import { useActivity } from '../hooks/useActivity'
 import { useCached } from '../hooks/useCached'
@@ -277,8 +278,8 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
     )
   }
 
-  const feeMain = quote ? (quote.fee.bips === 0 ? t({ id: 'swap.fee.zero', message: 'No wallet fee · BOLT tier {t}', values: { t: quote.fee.tier } }) : t({ id: 'swap.fee.main', message: '{p} · BOLT tier {t}', values: { p: formatPct(quote.fee.bips), t: quote.fee.tier } })) : t({ id: 'swap.fee.idle', message: '0.50% · hold BOLT for less' })
-  const feeDetail = quote && quote.fee.bips > 0 && quote.amountOutRaw !== '0' ? t({ id: 'swap.fee.detail', message: '{a} {s} to {sink}', values: { a: formatRaw(quote.fee.amountRaw, quote.decimalsOut), s: quote.symbolOut, sink: quote.fee.sink ? shortAddress(quote.fee.sink) : '—' } }) : null
+  const feeMain = quote ? (quote.fee.bips === 0 ? t({ id: 'swap.fee.zero.v2', message: 'No wallet fee · {name}', values: { name: quote.fee.name } }) : t({ id: 'swap.fee.main.v2', message: '{p} · {name}', values: { p: formatPct(quote.fee.bips), name: quote.fee.name } })) : t({ id: 'swap.fee.idle', message: '0.50% · hold BOLT for less' })
+  const feeDetail = quote && quote.fee.bips > 0 && quote.amountOutRaw !== '0' ? t({ id: 'swap.fee.detail', message: '{a} {s} to {to}', values: { a: formatRaw(quote.fee.amountRaw, quote.decimalsOut), s: quote.symbolOut, to: quote.fee.sink ? shortAddress(quote.fee.sink) : '—' } }) : null
   const nextLine = quote?.fee.nextTierAt && quote.fee.nextTierBips !== null ? t({ id: 'swap.fee.next', message: 'hold {n} BOLT-eq for {p}', values: { n: formatRaw(quote.fee.nextTierAt, 18), p: formatPct(quote.fee.nextTierBips) } }) : null
   const lockText = liquidity.value
     ? liquidity.value.lockedPct > 0
@@ -288,6 +289,26 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
       ? '…'
       : t({ id: 'swap.locks.unknown', message: 'No lock data' })
   const lockTone: 'surge' | 'ember' | 'mute' = liquidity.value ? (liquidity.value.lockedPct >= 50 ? 'surge' : liquidity.value.lockedPct > 0 ? 'ember' : 'mute') : 'mute'
+  /*
+    The lock treatment, borrowed from the interface (owner: "I like the lock UI
+    treatment that the UI applies").
+
+    There, a pair with locked liquidity turns both terminals' borders
+    `theme.success` and puts a second, filled button on the seam beside the flip
+    arrow carrying a padlock — `SwapSection locked={...}` and
+    `MidButtonWrapper success` in `pages/Swap/index.tsx`. It is the one piece of
+    reassurance the swap form gives you without being asked for.
+
+    Two things are ours rather than copied. The colour follows `lockTone`, so
+    the rim agrees with the "Liquidity locked" row below instead of calling 12%
+    and 90% the same thing. And the badge is a badge, not a button: the
+    interface's opens a tooltip carrying the lock's end date, which our
+    `LiquidityView` does not have — the percentage and the count are already on
+    the fee plate, so a press would only scroll the eye eight rows down.
+  */
+  const lockedPct = mode === 'swap' && liquidity.value ? liquidity.value.lockedPct : 0
+  const lockPaint = lockedPct > 0 ? (lockTone === 'surge' ? paint.surge : paint.ember) : null
+  const lockRim = lockPaint ? (`${lockPaint}59` as const) : null
   const problem = mode === 'swap' ? (quote?.problems[0] ?? null) : (limitQuote?.problems[0] ?? null)
   const canSwap = mode === 'swap' ? !!quote?.ok && fresh && !busy : !!limitQuote?.ok && !busy
   const receiveText = quote && quote.amountOutRaw !== '0' ? formatRaw(quote.receiveRaw, quote.decimalsOut) : '—'
@@ -295,9 +316,11 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
 
   return (
     <Column flex={1}>
-      <ScrollView contentContainerStyle={{ padding: inset, gap: 10, ...(wide ? { maxWidth: 560, width: '100%', alignSelf: 'center' } : {}) }} testID="swap">
+      <ScrollView contentContainerStyle={{ padding: inset, gap: 10 }} testID="swap">
         {/* Title row: Swap (or Swap · Limit) and the slippage pill (owner item W2). */}
-        <Row justifyContent="space-between" alignItems="center" minHeight={40}>
+        {/* `metrics.header` so the home key below fits without moving anything. */}
+        <Row justifyContent="space-between" alignItems="center" minHeight={metrics.header} gap="$2">
+          <HomeKey show={wide} />
           {limitOn ? (
             <Column width={180}>
               <Segmented
@@ -330,19 +353,28 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
             fiat={formatAmountFiat(amount, rowIn, currency)}
             balance={rowIn ? `${formatQuantity(rowIn.quantity)} ${rowIn.symbol}` : null}
             onMax={rowIn ? () => setAmount(rowIn.quantity) : undefined}
+            accent={lockRim}
             testID="terminal-in"
             inputTestID="swap-amount-in"
             maxTestID="swap-max"
             balanceTestID="swap-balance-in"
           />
 
-          <Row justifyContent="center" marginVertical={-20} zIndex={2}>
+          <Row justifyContent="center" alignItems="center" gap="$2" marginVertical={-20} zIndex={2}>
             <Pressable onPress={flip} accessibilityRole="button" accessibilityLabel={t({ id: 'swap.flip', message: 'Swap direction' })} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }} testID="swap-flip">
               <Chip width={36} height={36} borderRadius={18} padding={0} justifyContent="center" alignItems="center" backgroundColor="$glassRaisedSolid" borderWidth={0} overflow="hidden">
                 <Icon name="swap" color={paint.arc} size={18} />
                 <Rim radius={18} opacity={0.85} />
               </Chip>
             </Pressable>
+            {lockPaint ? (
+              <Row height={36} borderRadius={18} paddingHorizontal={10} gap={4} alignItems="center" backgroundColor="$glassRaisedSolid" borderWidth={1} borderColor={`${lockPaint}59` as const} accessibilityLabel={t({ id: 'swap.locked.a11y', message: 'Liquidity locked: {v}', values: { v: lockText } })} testID="swap-lock-badge">
+                <Icon name="lock" size={13} color={lockPaint} />
+                <Body tone={lockTone === 'surge' ? 'surge' : 'ember'} size="caption" fontWeight="600" fontVariant={['tabular-nums']}>
+                  {`${Math.round(lockedPct)}%`}
+                </Body>
+              </Row>
+            ) : null}
           </Row>
 
           {mode === 'swap' ? (
@@ -353,6 +385,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
               tokenPill={<TokenPill token={outView} onPress={() => setPicker('out')} testID="swap-token-out" />}
               fiat={quote && quote.amountOutRaw !== '0' ? formatAmountFiat(formatRaw(quote.receiveRaw, quote.decimalsOut).replace(/,/g, ''), rowOut, currency) : null}
               balance={rowOut ? `${formatQuantity(rowOut.quantity)} ${rowOut.symbol}` : null}
+              accent={lockRim}
               testID="terminal-out"
               inputTestID="swap-amount-out"
               balanceTestID="swap-balance-out"
@@ -480,7 +513,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
         ) : null}
       </ScrollView>
 
-      <ScreenFooter inset={inset} maxWidth={wide ? 560 : undefined} testID="swap-footer">
+      <ScreenFooter inset={inset} testID="swap-footer">
         {problem && (amount.trim() || minOut.trim()) ? (
           <Body tone="burn" size="caption" testID="swap-problem">
             {problem}
@@ -532,5 +565,5 @@ function FeeRow({ label, value, tone, testID }: { label: string; value: string; 
 }
 
 function TokenPill({ token, onPress, testID }: { token: TokenView | null; onPress: () => void; testID: string }) {
-  return <Pill label={token?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} icon={token ? <TokenAvatar chainId={ETN} address={token.address} symbol={token.symbol} logoUri={token.logoUri} size={18} /> : undefined} chevron tone="ink" onPress={onPress} accessibilityLabel={token?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} testID={testID} />
+  return <Pill strong label={token?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} icon={token ? <TokenAvatar chainId={ETN} address={token.address} symbol={token.symbol} logoUri={token.logoUri} size={18} /> : undefined} chevron tone="ink" onPress={onPress} accessibilityLabel={token?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} testID={testID} />
 }

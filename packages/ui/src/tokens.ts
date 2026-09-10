@@ -98,6 +98,16 @@ export const metrics = {
   /** Popup inset; mobile/tab use insetWide. */
   inset: 20,
   insetWide: 24,
+  /**
+   * How wide a page may get in the full tab.
+   *
+   * A wallet in a browser tab is still a wallet: a column of plates and rows,
+   * read top to bottom. Letting it span a 32-inch monitor does not show more,
+   * it just moves the balance a foot away from the token it belongs to. Home,
+   * Portfolio, the Rack and Collection already stopped here by hand; this is
+   * that number, once, so every screen stops at the same place.
+   */
+  page: 680,
   /** Minimum hit target. A PR that shrinks one fails CI. Thumbs are not cursors, so the phone asks for more. */
   hit: native ? 48 : 44,
   busBar: native ? 58 : 52,

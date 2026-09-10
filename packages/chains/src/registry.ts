@@ -4,6 +4,22 @@
  * Every chain ships >=2 RPC URLs (primary + fallback). PublicNode keyless tier is
  * the fallback-of-record. All URLs verified 2026-09-04 (see the design spec
  * rev 7, C3).
+ *
+ * `rpcUrls` is a preference order, and it is measured rather than assumed —
+ * `pnpm rpc:probe` drives every endpoint with the wallet's own request pattern
+ * (a head poll at `pollMs`, a balance and a Multicall3 aggregate every 30 s,
+ * all chains at once) and reports success rate, latency and refusals. Run
+ * 2026-09-09, 150 s per endpoint: every URL below answered 100% with no 429 at
+ * that rate, so the ordering is by "loosest limit first, then latency" — the
+ * chain's own endpoint leads where it measured within about 1.5x of the
+ * fastest, because an official endpoint is the one least likely to start
+ * charging us. The exception is Electroneum, where the owner's call is Ankr
+ * first (the two measured within 5 ms of each other over the run, and Ankr
+ * answered a cold single call in 159 ms against 413 ms).
+ *
+ * Removed in the same pass: `cloudflare-eth.com`, which answered 4.2% of
+ * requests — "Cannot fulfill request" and "Internal error" — and had been
+ * sitting in Ethereum's list as a fallback that could not fall back.
  */
 
 export interface NativeCurrency {
@@ -17,13 +33,17 @@ export interface ChainDef {
   readonly name: string
   readonly shortName: string
   readonly nativeCurrency: NativeCurrency
-  /** Ordered by preference. All verified to return the right chainId. */
+  /**
+   * Ordered by preference — first is tried first, and the rest are silent
+   * failover. All verified to return the right chainId (`pnpm registry:verify`)
+   * and measured under wallet load (`pnpm rpc:probe`).
+   */
   readonly rpcUrls: readonly string[]
   readonly explorer?: {
     readonly name: string
     readonly url: string
   }
-  /** ~ms between blocks; used for heartbeat honesty, not for timing logic. */
+  /** ~ms between blocks. Drives the heartbeat's honesty *and* `pollMs`. */
   readonly blockTimeMs?: number
   /** The wrapped native token (WETH-style), for display prices by address; absent on chains we do not price. */
   readonly wrappedNative?: string
@@ -54,7 +74,7 @@ const ETHEREUM: ChainDef = {
   name: 'Ethereum',
   shortName: 'ETH',
   nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-  rpcUrls: ['https://eth.drpc.org', 'https://ethereum-rpc.publicnode.com', 'https://cloudflare-eth.com'],
+  rpcUrls: ['https://eth.drpc.org', 'https://ethereum-rpc.publicnode.com', 'https://eth-pokt.nodies.app'],
   explorer: { name: 'Etherscan', url: 'https://etherscan.io' },
   blockTimeMs: 12_000,
   wrappedNative: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
@@ -123,7 +143,7 @@ const BASE: ChainDef = {
   name: 'Base',
   shortName: 'BASE',
   nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-  rpcUrls: ['https://mainnet.base.org', 'https://base-rpc.publicnode.com'],
+  rpcUrls: ['https://mainnet.base.org', 'https://base-rpc.publicnode.com', 'https://base.drpc.org'],
   explorer: { name: 'BaseScan', url: 'https://basescan.org' },
   blockTimeMs: 2_000,
   wrappedNative: '0x4200000000000000000000000000000000000006',
@@ -218,3 +238,38 @@ export const DEFAULT_PORTFOLIO_CHAIN_IDS: readonly number[] = CHAINS.map((c) => 
 export const HOME_CHAIN = ETN
 
 export const HOME_CHAIN_ID = ETN.chainId
+
+/**
+ * Whether a chain is the one being looked at, or one of the others in scope.
+ *
+ * "All chains" puts ten chains in scope, and they are not equally interesting:
+ * one of them is on screen and the rest are contributing a number to a total.
+ * Polling all ten as if each were the one in front of you is where a wallet's
+ * request budget goes.
+ */
+export type PollMode = 'foreground' | 'background'
+
+/**
+ * Nothing is polled faster than the home chain produces blocks. Chains with
+ * sub-second blocks (Arbitrum at 250 ms, Unichain and Linea at 1 s) have
+ * nothing to tell a wallet at their own cadence — the balance did not change
+ * four times a second — and asking at that rate is how a free endpoint starts
+ * refusing.
+ */
+const FOREGROUND_FLOOR_MS = 5_000
+/** A chain that is only feeding a total gets asked at a walking pace. */
+const BACKGROUND_FLOOR_MS = 30_000
+
+/**
+ * How often to ask a chain for its head.
+ *
+ * The chain's own block time is the upper bound on what is worth knowing —
+ * asking Ethereum every five seconds returns the same number twice out of
+ * three times — and the floors above are the lower bound on what is worth
+ * asking. Owner: "Many of those chains don't have 5 second blocks, so polling
+ * as frequently as we do doesn't serve any purpose."
+ */
+export function pollMs(chainId: number, mode: PollMode = 'foreground'): number {
+  const block = byId.get(chainId)?.blockTimeMs ?? 12_000
+  return mode === 'background' ? Math.max(block * 4, BACKGROUND_FLOOR_MS) : Math.max(block, FOREGROUND_FLOOR_MS)
+}

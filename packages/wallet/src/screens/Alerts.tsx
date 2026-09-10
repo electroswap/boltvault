@@ -1,17 +1,33 @@
 /**
- * Settings › Notifications (master plan §8.14, §7.13): the watchlist with
- * its alerts — a price or floor threshold per starred token or collection,
- * "tell me when it goes live" per campaign — and the two daily nudges the
- * wallet sends on its own (rewards to collect, dividends to claim).
+ * Settings › Notifications (master plan §8.14, §7.13): what the wallet has told
+ * you, then the watchlist that decides what it tells you next — a price or
+ * floor threshold per starred token or collection, "tell me when it goes live"
+ * per campaign — and the two daily nudges it sends on its own.
+ *
+ * **The inbox had no screen.** Home's Alerts tile badges `notifications.unread`,
+ * and this page listed only the watchlist, so a badged "1" opened onto "Nothing
+ * starred yet." — two different collections, one of them with nowhere to be
+ * read. Owner: "the Alerts button sometimes has a 1 badge, but clicking on it
+ * just shows 'Nothing starred yet' and no alert."
+ *
+ * Opening the page marks them read, which is what clears the badge. That is the
+ * whole contract of a badge: it counts what you have not seen, and you have now
+ * seen it.
  */
-import { Body, Chip, Column, Input, Key, Plate, Row, ScrollView, Toggle, metrics, shortAddress } from '@boltvault/ui'
+import { Body, Chip, Column, Icon, Input, Key, Plate, Pressable, Row, ScrollView, Toggle, metrics, paint, shortAddress } from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
-import type { WatchItem } from '@boltvault/engine'
+import type { NotificationView, WatchItem } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
+import { useNotifications } from '../hooks/useNotifications'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
+
+const ETN = 52014
+
+/** The glyph for each kind of note, from the set the rest of the app already uses. */
+const ICONS = { alert: 'bell', live: 'launch', offer: 'nft', collect: 'farm', dividends: 'star', arrival: 'receive', system: 'info' } as const
 
 type BodyKind = 'extension-popup' | 'extension-tab' | 'mobile'
 
@@ -25,9 +41,22 @@ export function Alerts({ body }: { body: BodyKind }) {
   const engine = useEngine()
   const router = useRouter()
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
+  const { items: notes, markRead, clear: clearNotes } = useNotifications()
   const [items, setItems] = useState<WatchItem[]>([])
   const [drafts, setDrafts] = useState<Record<string, { above: string; below: string }>>({})
   const [checked, setChecked] = useState<string[] | null>(null)
+
+  /*
+    Marked read on arrival, once. Not per render, or a note that lands while
+    the page is open would be marked read before it has been on screen for a
+    frame — and not never, or the badge would still be counting notes the user
+    is looking at.
+  */
+  useEffect(() => {
+    markRead()
+    // Deliberately on mount only: `markRead` is stable enough and re-running
+    // this would swallow anything arriving while the page is open.
+  }, [])
 
   useEffect(() => {
     engine.watchlist.list().then(setItems, () => undefined)
@@ -35,6 +64,15 @@ export function Alerts({ body }: { body: BodyKind }) {
       if (e.type === 'watchlist.changed') setItems(e.items)
     })
   }, [engine])
+
+  /** Where a note points. The same mapping Home's rotor uses for the same strings. */
+  const openTarget = (target: string | null): void => {
+    if (target === null) return
+    if (target === 'legends') return router.navigate('legends')
+    if (target === 'offers' || target === 'positions') return router.navigate('portfolio')
+    if (target.startsWith('farm:')) return router.navigate('farm', { chainId: ETN, farmId: Number(target.slice(5)) })
+    if (target.startsWith('campaign:')) return router.navigate('campaign', { chainId: ETN, pool: target.slice(9) })
+  }
 
   const key = (i: WatchItem): string => `${i.kind}:${i.chainId}:${i.address.toLowerCase()}`
   const save = async (i: WatchItem): Promise<void> => {
@@ -49,6 +87,17 @@ export function Alerts({ body }: { body: BodyKind }) {
       <Body tone="mute" size="caption">
         {t({ id: 'alerts.body', message: 'Star a token, collection or campaign from Explore, then set what to tell you about. Rewards to collect and dividends to claim are mentioned once a day on their own. Nothing here nags.' })}
       </Body>
+      {notes.length > 0 ? (
+        <Column gap="$2" testID="alerts-inbox">
+          <Row justifyContent="space-between" alignItems="center">
+            <Body size="title">{t({ id: 'alerts.inbox', message: 'Recent' })}</Body>
+            <Key label={t({ id: 'alerts.clear', message: 'Clear' })} kind="secondary" size="compact" onPress={clearNotes} testID="alerts-clear" />
+          </Row>
+          {notes.map((n) => (
+            <NoteRow key={n.id} note={n} onOpen={() => openTarget(n.target)} />
+          ))}
+        </Column>
+      ) : null}
       {host.push ? (
       <Plate gap="$2" testID="alerts-push">
         <Row justifyContent="space-between" alignItems="center">
@@ -110,5 +159,28 @@ export function Alerts({ body }: { body: BodyKind }) {
         </Row>
       ) : null}
     </ScrollView>
+  )
+}
+
+/** One note: what happened, and a way to go and deal with it. */
+function NoteRow({ note, onOpen }: { note: NotificationView; onOpen: () => void }) {
+  const tappable = note.target !== null
+  return (
+    <Pressable onPress={tappable ? onOpen : undefined} disabled={!tappable} accessibilityRole={tappable ? 'button' : undefined} accessibilityLabel={`${note.title}. ${note.body}`} testID={`alert-note-${note.kind}`}>
+      <Plate role="card" gap={2} paddingVertical={10}>
+        <Row gap="$2" alignItems="center">
+          <Icon name={ICONS[note.kind]} size={16} color={note.read ? paint.mute : paint.arc} />
+          <Column flex={1} minWidth={0} alignItems="flex-start" gap={1}>
+            <Body size="caption" fontWeight={note.read ? '400' : '600'} numberOfLines={1}>
+              {note.title}
+            </Body>
+            <Body tone="mute" size="caption" fontSize={11} lineHeight={14} numberOfLines={2}>
+              {note.body}
+            </Body>
+          </Column>
+          {tappable ? <Icon name="chevronRight" size={14} color={paint.mute} /> : null}
+        </Row>
+      </Plate>
+    </Pressable>
   )
 }

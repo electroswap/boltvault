@@ -23,7 +23,6 @@ export interface FeeSchedule {
   /** BOLT-equivalent per DYNO, 18-decimal fixed point (`DYNO_WEIGHT_ONE` = one BOLT per DYNO); 0 = DYNO does not count. */
   readonly dynoWeight: bigint
   readonly countFarmBolt: boolean
-  readonly boltPayDiscountBips: number
 }
 
 export interface HolderTier {
@@ -56,7 +55,6 @@ export const FALLBACK_SCHEDULE: FeeSchedule = {
   /** 875.68 BOLT-eq per DYNO. */
   dynoWeight: 875_680n * 10n ** 15n,
   countFarmBolt: true,
-  boltPayDiscountBips: 2_500,
 }
 
 export function tierFor(schedule: FeeSchedule, score: bigint): { bips: number; tier: number } {

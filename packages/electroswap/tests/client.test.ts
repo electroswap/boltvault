@@ -33,23 +33,36 @@ describe('ElectroSwapClient headers (T4.1)', () => {
     expect(nativeAddress()).toBe('NATIVE')
   })
 
-  it('sends Content-Type + interface Referer on the electroswap host, and X-BoltVault-Key when set', async () => {
+  it('sends Content-Type + interface Referer, and whatever the signer returns', async () => {
     const { fn, calls } = mockFetch({ token: null })
-    const client = new ElectroSwapClient({ fetchImpl: fn, apiKey: 'KEY123' })
+    // The client no longer holds a key: it is handed a per-request signer, and
+    // what that signs is the method, the URL and the exact body about to be sent.
+    const seen: Array<[string, string, string]> = []
+    const client = new ElectroSwapClient({
+      fetchImpl: fn,
+      authHeaders: (method, url, body) => {
+        seen.push([method, url, body])
+        return { 'X-BoltVault-Auth': 'v1.deadbeef.1.n.m' }
+      },
+    })
     await client.tokenMarket(ELECTRONEUM_MAINNET, TOKEN)
     const init = calls[0]?.init as RequestInit
     const headers = init.headers as Record<string, string>
     expect(headers['Content-Type']).toBe('application/json')
     expect(headers['Referer']).toBe('https://app.electroswap.io/')
-    expect(headers['X-BoltVault-Key']).toBe('KEY123')
+    expect(headers['X-BoltVault-Auth']).toBe('v1.deadbeef.1.n.m')
+    expect(headers['X-BoltVault-Key']).toBeUndefined()
+    expect(seen[0]?.[0]).toBe('POST')
+    expect(seen[0]?.[2]).toBe(init.body)
   })
 
-  it('omits X-BoltVault-Key when no apiKey is configured', async () => {
+  it('sends no credential at all when there is no signer', async () => {
     const { fn, calls } = mockFetch({ token: null })
     const client = new ElectroSwapClient({ fetchImpl: fn })
     await client.tokenMarket(ELECTRONEUM_MAINNET, TOKEN)
     const headers = (calls[0]?.init as RequestInit).headers as Record<string, string>
     expect(headers['X-BoltVault-Key']).toBeUndefined()
+    expect(headers['X-BoltVault-Auth']).toBeUndefined()
   })
 
   it('maps a non-2xx HTTP response to ElectroSwapError with status', async () => {

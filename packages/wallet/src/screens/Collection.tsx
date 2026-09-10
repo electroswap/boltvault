@@ -6,7 +6,24 @@
  * dividends card and a mint plate only when the chain says the collection
  * mints; pieces on a grid that sizes itself to the body.
  */
-import { Artwork, Body, Column, IconButton, Key, Pill, Plate, Pressable, Row, ScrollView, Scrim, Segmented, StatStrip, TileGrid, metrics, useWindowDimensions } from '@boltvault/ui'
+import {
+  Artwork,
+  Body,
+  Column,
+  IconButton,
+  Key,
+  Pill,
+  Plate,
+  Pressable,
+  Row,
+  ScrollView,
+  Scrim,
+  Segmented,
+  StatStrip,
+  TileGrid,
+  metrics,
+  useWindowDimensions,
+} from '@boltvault/ui'
 import type { AssetView, CollectionView, LegendsStatus, NftActivityView } from '@boltvault/engine'
 import { useEffect, useRef, useState } from 'react'
 import { DividendsCard } from '../components/DividendsCard'
@@ -14,7 +31,7 @@ import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
 import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
 import { useLastGood } from '../hooks/useLastGood'
-import { formatRaw } from '../format'
+import { formatCompact, formatRaw } from '../format'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { useSwapFlow } from '../state/useSwapFlow'
@@ -23,7 +40,17 @@ import { useScreenBusy } from '../state/useScreenBusy'
 
 type BodyKind = 'extension-popup' | 'extension-tab' | 'mobile'
 
-export function Collection({ body, chainId, address, reducedMotion = false }: { body: BodyKind; chainId: number; address: string; reducedMotion?: boolean }) {
+export function Collection({
+  body,
+  chainId,
+  address,
+  reducedMotion = false,
+}: {
+  body: BodyKind
+  chainId: number
+  address: string
+  reducedMotion?: boolean
+}) {
   const engine = useEngine()
   const router = useRouter()
   const { width } = useWindowDimensions()
@@ -51,9 +78,9 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
   const [activity, setActivity] = useState<NftActivityView[]>([])
   const [showActivity, setShowActivity] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const [dividendsOpen, setDividendsOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-
 
   // The shell draws one loader over the whole screen while this is true.
   /**
@@ -74,7 +101,8 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
   const settled = useRef({ banner: false, logo: false })
   const markSettled = (which: 'banner' | 'logo'): void => {
     settled.current[which] = true
-    if ((!wantsBanner || settled.current.banner) && (!wantsLogo || settled.current.logo)) setArtReady(true)
+    if ((!wantsBanner || settled.current.banner) && (!wantsLogo || settled.current.logo))
+      setArtReady(true)
   }
   useEffect(() => {
     settled.current = { banner: false, logo: false }
@@ -83,11 +111,21 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
     return () => clearTimeout(give)
   }, [chainId, address, collection?.bannerUrl, collection?.imageUrl])
 
-  useScreenBusy('collection', collection === null || (collection.paysDividends && active !== null && legends === null) || ((wantsBanner || wantsLogo) && !artReady))
+  useScreenBusy(
+    'collection',
+    collection === null ||
+      (collection.paysDividends && active !== null && legends === null) ||
+      ((wantsBanner || wantsLogo) && !artReady),
+  )
 
   useEffect(() => {
     let alive = true
-    engine.explore.collection({ chainId, address, ...(active ? { accountId: active.id } : {}) }).then((c) => alive && setCollection(c), () => undefined)
+    engine.explore
+      .collection({ chainId, address, ...(active ? { accountId: active.id } : {}) })
+      .then(
+        (c) => alive && setCollection(c),
+        () => undefined,
+      )
     return () => {
       alive = false
     }
@@ -103,14 +141,23 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
   useEffect(() => {
     if (custom.current === true) return
     let alive = true
-    engine.nft.assets({ chainId, address, orderBy, asc: orderBy === 'PRICE', ...(listedOnly ? { listed: true } : {}), ...(active ? { accountId: active.id } : {}) }).then(
-      (page) => {
-        if (!alive) return
-        setAssets(page.assets)
-        setNext(page.next)
-      },
-      (err: unknown) => alive && setError(err instanceof Error ? err.message : String(err)),
-    )
+    engine.nft
+      .assets({
+        chainId,
+        address,
+        orderBy,
+        asc: orderBy === 'PRICE',
+        ...(listedOnly ? { listed: true } : {}),
+        ...(active ? { accountId: active.id } : {}),
+      })
+      .then(
+        (page) => {
+          if (!alive) return
+          setAssets(page.assets)
+          setNext(page.next)
+        },
+        (err: unknown) => alive && setError(err instanceof Error ? err.message : String(err)),
+      )
     return () => {
       alive = false
     }
@@ -120,7 +167,12 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
   useEffect(() => {
     if (!collection?.custom || !active) return
     let alive = true
-    engine.nft.inventory({ accountId: active.id, chainId }).then((inv) => alive && setAssets(inv.assets.filter((a) => a.address.toLowerCase() === address.toLowerCase())), () => undefined)
+    engine.nft.inventory({ accountId: active.id, chainId }).then(
+      (inv) =>
+        alive &&
+        setAssets(inv.assets.filter((a) => a.address.toLowerCase() === address.toLowerCase())),
+      () => undefined,
+    )
     return () => {
       alive = false
     }
@@ -129,7 +181,10 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
   useEffect(() => {
     if (!collection?.paysDividends || !active) return
     let alive = true
-    engine.legends.status({ accountId: active.id, chainId }).then((s) => alive && setLegends(s), () => undefined)
+    engine.legends.status({ accountId: active.id, chainId }).then(
+      (s) => alive && setLegends(s),
+      () => undefined,
+    )
     return () => {
       alive = false
     }
@@ -142,7 +197,15 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
 
   const more = async (): Promise<void> => {
     if (!next) return
-    const page = await engine.nft.assets({ chainId, address, orderBy, asc: orderBy === 'PRICE', ...(listedOnly ? { listed: true } : {}), after: next, ...(active ? { accountId: active.id } : {}) })
+    const page = await engine.nft.assets({
+      chainId,
+      address,
+      orderBy,
+      asc: orderBy === 'PRICE',
+      ...(listedOnly ? { listed: true } : {}),
+      after: next,
+      ...(active ? { accountId: active.id } : {}),
+    })
     setAssets((xs) => [...xs, ...page.assets])
     setNext(page.next)
   }
@@ -160,15 +223,70 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
     }
   }
 
-  if (flow) return <FlowPlate flow={flow} body={body} reducedMotion={reducedMotion} titles={{ working: t({ id: 'legends.working', message: 'Working…' }), done: flow.steps.some((s) => s.step === 'mint') ? t({ id: 'legends.minted', message: 'Minted' }) : flow.steps.some((s) => s.step === 'register') ? t({ id: 'legends.activated', message: 'Dividends activated' }) : t({ id: 'legends.claimed', message: 'Claimed' }) }} onDone={dismiss} testID="legends-flow" />
+  if (flow)
+    return (
+      <FlowPlate
+        flow={flow}
+        body={body}
+        reducedMotion={reducedMotion}
+        titles={{
+          working: t({ id: 'legends.working', message: 'Working…' }),
+          done: flow.steps.some((s) => s.step === 'mint')
+            ? t({ id: 'legends.minted', message: 'Minted' })
+            : flow.steps.some((s) => s.step === 'register')
+              ? t({ id: 'legends.activated', message: 'Dividends activated' })
+              : t({ id: 'legends.claimed', message: 'Claimed' }),
+        }}
+        onDone={dismiss}
+        testID="legends-flow"
+      />
+    )
 
   const mint = collection?.mint ?? null
-  const star = collection && !collection.custom ? <IconButton icon="star" label={collection.starred ? t({ id: 'watch.unstar', message: 'Stop alerts' }) : t({ id: 'watch.alerts.on', message: 'Alert me' })} active={collection.starred} onPress={() => void engine.watchlist[collection.starred ? 'unstar' : 'star']({ kind: 'collection', chainId, address, label: collection.name }).then(() => setCollection({ ...collection, starred: !collection.starred }))} testID="collection-star" /> : null
-  const removeCustom = collection?.custom ? <IconButton icon="trash" label={t({ id: 'collection.remove', message: 'Remove this collection' })} tone="burn" onPress={() => void engine.nft.removeCollection({ chainId, address }).then(() => router.back())} testID="collection-remove" /> : null
+  const star =
+    collection && !collection.custom ? (
+      <IconButton
+        icon="star"
+        label={
+          collection.starred
+            ? t({ id: 'watch.unstar', message: 'Stop alerts' })
+            : t({ id: 'watch.alerts.on', message: 'Alert me' })
+        }
+        active={collection.starred}
+        onPress={() =>
+          void engine.watchlist[collection.starred ? 'unstar' : 'star']({
+            kind: 'collection',
+            chainId,
+            address,
+            label: collection.name,
+          }).then(() => setCollection({ ...collection, starred: !collection.starred }))
+        }
+        testID="collection-star"
+      />
+    ) : null
+  const removeCustom = collection?.custom ? (
+    <IconButton
+      icon="trash"
+      label={t({ id: 'collection.remove', message: 'Remove this collection' })}
+      tone="burn"
+      onPress={() =>
+        void engine.nft.removeCollection({ chainId, address }).then(() => router.back())
+      }
+      testID="collection-remove"
+    />
+  ) : null
 
   return (
-    <ScrollView contentContainerStyle={{ padding: inset, gap: 12, ...(wide ? { maxWidth: 680, width: '100%', alignSelf: 'center' } : {}) }} testID="collection">
-      <PageHeader title={collection?.name ?? ''} right={<>{star}{removeCustom}</>} />
+    <ScrollView contentContainerStyle={{ padding: inset, gap: 12 }} testID="collection">
+      <PageHeader
+        title={collection?.name ?? ''}
+        right={
+          <>
+            {star}
+            {removeCustom}
+          </>
+        }
+      />
       {/*
         Owner: the loader "should be displayed until all resources (collection
         header, logo, metadata, and dividends - if applicable) have downloaded
@@ -184,7 +302,16 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
           <Column>
             {collection.bannerUrl ? (
               <Column position="relative">
-                <Artwork uri={collection.bannerUrl} label={collection.name} size={{ width: contentWidth, height: 104 }} onSettled={() => markSettled('banner')} />
+                {/* `scaleToWidth`: the box becomes the banner's own shape once
+                    it reports one, so a wide strip is not cropped to 104 px.
+                    104 is what shows until then, and if it never answers. */}
+                <Artwork
+                  uri={collection.bannerUrl}
+                  label={collection.name}
+                  size={{ width: contentWidth, height: 104 }}
+                  scaleToWidth
+                  onSettled={() => markSettled('banner')}
+                />
                 {/* Transparent at the top, solid at the bottom, the banner's
                     full width — so the name sits on the picture rather than on
                     a grey bar laid over it. */}
@@ -193,8 +320,18 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
                 </Column>
               </Column>
             ) : null}
-            <Row gap="$3" alignItems="flex-end" marginTop={collection.bannerUrl ? -32 : 0} paddingHorizontal={collection.bannerUrl ? 12 : 0}>
-              <Artwork uri={collection.imageUrl} label={collection.name} size={64} onSettled={() => markSettled('logo')} />
+            <Row
+              gap="$3"
+              alignItems="flex-end"
+              marginTop={collection.bannerUrl ? -32 : 0}
+              paddingHorizontal={collection.bannerUrl ? 12 : 0}
+            >
+              <Artwork
+                uri={collection.imageUrl}
+                label={collection.name}
+                size={64}
+                onSettled={() => markSettled('logo')}
+              />
               <Column flex={1} alignItems="flex-start" paddingBottom={4}>
                 <Row gap="$2" alignItems="center">
                   <Body size="title" numberOfLines={1} flexShrink={1}>
@@ -203,9 +340,22 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
                   {collection.verified ? <Body tone="arc">✓</Body> : null}
                 </Row>
                 <Row gap="$2" flexWrap="wrap">
-                  {collection.paysDividends ? <Pill label={t({ id: 'explore.dividends', message: 'Pays dividends' })} tone="ember" size="xs" /> : null}
-                  {collection.custom ? <Pill label={t({ id: 'collection.custom', message: 'Custom' })} size="xs" /> : null}
-                  {collection.standard !== 'unknown' ? <Pill label={collection.standard === 'ERC1155' ? 'ERC-1155' : 'ERC-721'} size="xs" /> : null}
+                  {collection.paysDividends ? (
+                    <Pill
+                      label={t({ id: 'explore.dividends', message: 'Pays dividends' })}
+                      tone="ember"
+                      size="xs"
+                    />
+                  ) : null}
+                  {collection.custom ? (
+                    <Pill label={t({ id: 'collection.custom', message: 'Custom' })} size="xs" />
+                  ) : null}
+                  {collection.standard !== 'unknown' ? (
+                    <Pill
+                      label={collection.standard === 'ERC1155' ? 'ERC-1155' : 'ERC-721'}
+                      size="xs"
+                    />
+                  ) : null}
                 </Row>
               </Column>
             </Row>
@@ -216,9 +366,16 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
                 {collection.description}
               </Body>
               {collection.description.length > 140 ? (
-                <Pressable onPress={() => setExpanded((v) => !v)} accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }} testID="collection-readmore">
+                <Pressable
+                  onPress={() => setExpanded((v) => !v)}
+                  accessibilityRole="button"
+                  style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}
+                  testID="collection-readmore"
+                >
                   <Body tone="arc" size="caption">
-                    {expanded ? t({ id: 'less', message: 'Less' }) : t({ id: 'readmore', message: 'Read more' })}
+                    {expanded
+                      ? t({ id: 'less', message: 'Less' })
+                      : t({ id: 'readmore', message: 'Read more' })}
                   </Body>
                 </Pressable>
               ) : null}
@@ -227,19 +384,48 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
           {!collection.custom ? (
             <StatStrip
               small
-              columns={wide ? 5 : 3}
+              // Five across even in the popup: the unit moved into the label and
+              // the figures compacted, so the row that needed two now needs one.
+              columns={5}
               cells={[
-                { label: t({ id: 'collection.floor', message: 'Floor' }), value: collection.floorEtn !== null ? `${collection.floorEtn} ETN` : '—' },
-                { label: t({ id: 'collection.vol', message: '24h volume' }), value: collection.volume24hEtn !== null ? `${Math.round(collection.volume24hEtn)} ETN` : '—' },
-                { label: t({ id: 'collection.owners', message: 'Owners' }), value: collection.owners !== null ? String(collection.owners) : '—' },
-                { label: t({ id: 'collection.listed', message: 'Listed' }), value: collection.percentListed !== null ? `${Math.round(collection.percentListed)}%` : '—' },
-                { label: t({ id: 'collection.supply', message: 'Pieces' }), value: collection.totalSupply !== null ? String(collection.totalSupply) : '—' },
+                // The unit as a caption on the two price cells: in the label it clipped
+                // at five columns, in the value it clipped harder, and dropping it
+                // would leave "1.4K" of nothing in particular.
+                {
+                  label: t({ id: 'collection.floor', message: 'Floor' }),
+                  value: formatCompact(collection.floorEtn),
+                  caption: 'ETN',
+                },
+                {
+                  label: t({ id: 'collection.vol.short', message: '24h vol' }),
+                  value: formatCompact(collection.volume24hEtn),
+                  caption: 'ETN',
+                },
+                {
+                  label: t({ id: 'collection.owners', message: 'Owners' }),
+                  value: formatCompact(collection.owners),
+                },
+                {
+                  label: t({ id: 'collection.listed', message: 'Listed' }),
+                  value:
+                    collection.percentListed !== null
+                      ? `${Math.round(collection.percentListed)}%`
+                      : '—',
+                },
+                {
+                  label: t({ id: 'collection.supply', message: 'Pieces' }),
+                  value: formatCompact(collection.totalSupply),
+                },
               ]}
               testID="collection-stats"
             />
           ) : (
             <Body tone="mute" size="caption" testID="collection-custom-note">
-              {t({ id: 'collection.custom.body', message: 'Added by you. Pieces and images are read from the contract; there is no market data or marketplace here.' })}
+              {t({
+                id: 'collection.custom.body',
+                message:
+                  'Added by you. Pieces and images are read from the contract; there is no market data or marketplace here.',
+              })}
             </Body>
           )}
         </Column>
@@ -251,19 +437,56 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
         card appeared late and shoved the pieces grid down the page, which is
         the jank the owner filmed on Electric Legends.
       */}
-      {legends && active ? <DividendsCard status={legends} busy={busy} reducedMotion={reducedMotion} onActivate={() => void run(() => engine.legends.activate({ accountId: active.id, chainId }))} onClaim={() => void run(() => engine.legends.claim({ accountId: active.id, chainId }))} onPiece={(tokenId) => router.navigate('nft', { chainId, address, tokenId })} /> : null}
+      {/*
+        Collapsed until asked for: this page is about the pieces, and the whole
+        card — bar, stats, a scroller of medallions — used to sit above them.
+      */}
+      {legends && active ? (
+        <DividendsCard
+          status={legends}
+          collapsed={!dividendsOpen}
+          onDetails={() => setDividendsOpen((v) => !v)}
+          busy={busy}
+          reducedMotion={reducedMotion}
+          onActivate={() =>
+            void run(() => engine.legends.activate({ accountId: active.id, chainId }))
+          }
+          onClaim={() => void run(() => engine.legends.claim({ accountId: active.id, chainId }))}
+          onPiece={(tokenId) => router.navigate('nft', { chainId, address, tokenId })}
+        />
+      ) : null}
 
       {/* Mint only when the chain says so (owner item N5). */}
       {mint?.mintable && mint.mintableCount > 0 && active ? (
         <Plate role="card" gap="$2" testID="collection-mint">
           <Row justifyContent="space-between" alignItems="center" gap="$3">
             <Column flex={1} alignItems="flex-start">
-              <Body fontWeight="600">{t({ id: 'collection.mint.title', message: 'Minting now' })}</Body>
+              <Body fontWeight="600">
+                {t({ id: 'collection.mint.title', message: 'Minting now' })}
+              </Body>
               <Body tone="mute" size="caption">
-                {t({ id: 'collection.mint.body', message: '{p} ETN each · {n} left for you · {s} minted', values: { p: formatRaw(mint.priceWei, 18), n: mint.mintableCount, s: mint.totalSupply } })}
+                {t({
+                  id: 'collection.mint.body',
+                  message: '{p} ETN each · {n} left for you · {s} minted',
+                  values: {
+                    p: formatRaw(mint.priceWei, 18),
+                    n: mint.mintableCount,
+                    s: mint.totalSupply,
+                  },
+                })}
               </Body>
             </Column>
-            <Key label={t({ id: 'collection.mint.key', message: 'Mint' })} size="compact" disabled={busy || mint.mintableCount === 0} onPress={() => void run(() => engine.nft.mint({ accountId: active.id, chainId, count: 1, address }))} testID="collection-mint-key" />
+            <Key
+              label={t({ id: 'collection.mint.key', message: 'Mint' })}
+              size="compact"
+              disabled={busy || mint.mintableCount === 0}
+              onPress={() =>
+                void run(() =>
+                  engine.nft.mint({ accountId: active.id, chainId, count: 1, address }),
+                )
+              }
+              testID="collection-mint-key"
+            />
           </Row>
         </Plate>
       ) : null}
@@ -282,18 +505,51 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
               testID="collection-sort"
             />
           </Column>
-          <Pill label={t({ id: 'collection.listedOnly', message: 'Listed only' })} selected={listedOnly} size="sm" onPress={() => setListedOnly((v) => !v)} testID="collection-listed" />
+          <Pill
+            label={t({ id: 'collection.listedOnly', message: 'Listed only' })}
+            selected={listedOnly}
+            size="sm"
+            onPress={() => setListedOnly((v) => !v)}
+            testID="collection-listed"
+          />
         </Row>
       ) : null}
       {error ? <Body tone="burn">{error}</Body> : null}
       {/* Owner: at most two across in the popup; the tab may use its width. */}
       {assets.length > 0 ? (
-        <TileGrid target={wide ? 150 : 160} gap={8} minCols={2} maxCols={wide ? 6 : 2} fallbackWidth={contentWidth} testID="collection-grid">
+        <TileGrid
+          target={wide ? 150 : 160}
+          gap={8}
+          minCols={2}
+          maxCols={wide ? 6 : 2}
+          fallbackWidth={contentWidth}
+          testID="collection-grid"
+        >
           {(layout) => (
             <Row gap={8} flexWrap="wrap">
               {assets.map((a) => (
-                <Pressable key={`${a.address}:${a.tokenId}`} onPress={() => router.navigate('nft', { chainId, address: a.address, tokenId: a.tokenId })} accessibilityRole="button" accessibilityLabel={a.name} style={{ width: layout.size }} testID={`piece-${a.tokenId}`}>
-                  <Artwork uri={a.smallImageUrl} label={a.name} size={layout.size} badge={a.listing?.priceEtn !== null && a.listing?.priceEtn !== undefined ? { text: `${a.listing.priceEtn} ETN`, tone: 'arc' } : a.bestBid ? { text: t({ id: 'piece.offer', message: 'Offer' }), tone: 'ember' } : null} />
+                <Pressable
+                  key={`${a.address}:${a.tokenId}`}
+                  onPress={() =>
+                    router.navigate('nft', { chainId, address: a.address, tokenId: a.tokenId })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={a.name}
+                  style={{ width: layout.size }}
+                  testID={`piece-${a.tokenId}`}
+                >
+                  <Artwork
+                    uri={a.smallImageUrl}
+                    label={a.name}
+                    size={layout.size}
+                    badge={
+                      a.listing?.priceEtn !== null && a.listing?.priceEtn !== undefined
+                        ? { text: `${a.listing.priceEtn} ETN`, tone: 'arc' }
+                        : a.bestBid
+                          ? { text: t({ id: 'piece.offer', message: 'Offer' }), tone: 'ember' }
+                          : null
+                    }
+                  />
                   <Body tone="mute" size="caption" numberOfLines={1}>
                     {a.name}
                   </Body>
@@ -304,18 +560,48 @@ export function Collection({ body, chainId, address, reducedMotion = false }: { 
         </TileGrid>
       ) : collection?.custom ? (
         <Body tone="mute" size="caption">
-          {t({ id: 'collection.custom.none', message: 'None of this collection’s pieces are in your wallet.' })}
+          {t({
+            id: 'collection.custom.none',
+            message: 'None of this collection’s pieces are in your wallet.',
+          })}
         </Body>
       ) : null}
-      {next ? <Key label={t({ id: 'collection.more', message: 'More' })} kind="secondary" size="compact" onPress={() => void more()} testID="collection-more" /> : null}
-      {!collection?.custom ? <Pill label={showActivity ? t({ id: 'collection.activity.hide', message: 'Hide activity' }) : t({ id: 'collection.activity', message: 'Activity' })} size="sm" selected={showActivity} onPress={() => setShowActivity((v) => !v)} testID="collection-activity-toggle" /> : null}
+      {next ? (
+        <Key
+          label={t({ id: 'collection.more', message: 'More' })}
+          kind="secondary"
+          size="compact"
+          onPress={() => void more()}
+          testID="collection-more"
+        />
+      ) : null}
+      {!collection?.custom ? (
+        <Pill
+          label={
+            showActivity
+              ? t({ id: 'collection.activity.hide', message: 'Hide activity' })
+              : t({ id: 'collection.activity', message: 'Activity' })
+          }
+          size="sm"
+          selected={showActivity}
+          onPress={() => setShowActivity((v) => !v)}
+          testID="collection-activity-toggle"
+        />
+      ) : null}
       {showActivity ? (
         <Column gap={2} testID="collection-activity">
           {activity.map((ev) => (
-            <Row key={`${ev.hash ?? ev.timestamp}-${ev.tokenId ?? ''}-${ev.type}`} justifyContent="space-between" minHeight={32} alignItems="center">
+            <Row
+              key={`${ev.hash ?? ev.timestamp}-${ev.tokenId ?? ''}-${ev.type}`}
+              justifyContent="space-between"
+              minHeight={32}
+              alignItems="center"
+            >
               <Body size="caption">{`${activityLabel(ev.type)} ${ev.name ?? `#${ev.tokenId ?? ''}`}`}</Body>
               <Body tone="mute" size="caption">
-                {ev.priceEtn !== null ? `${ev.priceEtn} ETN` : new Date(ev.timestamp * 1000).toLocaleDateString('en-GB')}
+                {ev.priceEtn !== null
+                  ? `${ev.priceEtn} ETN`
+                  : new Date(ev.timestamp * 1000).toLocaleDateString('en-GB')}
               </Body>
             </Row>
           ))}

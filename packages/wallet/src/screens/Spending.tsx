@@ -61,13 +61,13 @@ export function Spending({ body }: { body: 'extension-popup' | 'extension-tab' |
         {tier ? (
           <Column gap={2}>
             <Body tone="arc" size="caption" testID="spending-tier">
-              {t({ id: 'spending.tier', message: 'Your tier: {t} · {p} on swaps', values: { t: tier.tier, p: formatPct(tier.bips) } })}
+              {t({ id: 'spending.tier.v2', message: 'Your tier: {name} · {p} on swaps', values: { name: tier.name, p: formatPct(tier.bips) } })}
             </Body>
             <Body tone="mute" size="caption">
               {t({ id: 'spending.score', message: '{s} BOLT-eq counted', values: { s: formatBolt(tier.score) } })}
             </Body>
             <Body tone="mute" size="caption">
-              {tier.sink ? t({ id: 'spending.sink', message: 'Fee sink {a}', values: { a: shortAddress(tier.sink) } }) : t({ id: 'spending.sink.none', message: 'Fee sink not set on this network' })}
+              {tier.sink ? t({ id: 'spending.recipient', message: 'Fees go to {a}', values: { a: shortAddress(tier.sink) } }) : t({ id: 'spending.recipient.none', message: 'In-wallet swaps are off on this network' })}
             </Body>
           </Column>
         ) : null}

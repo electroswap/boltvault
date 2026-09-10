@@ -82,6 +82,10 @@ export interface VaultNamespace {
   status(): Promise<VaultStatus>
   /** A vault with no seed yet — watch-only or hardware-first users add accounts afterwards. */
   createEmpty(input: { password: string }): Promise<VaultStatus>
+  /** Block screenshots while a phrase is on screen (§8.1). Real on mobile; the extension cannot, and says so. */
+  hidePreview(input: { hide: boolean }): Promise<void>
+  /** A fresh phrase with nothing written: the words are shown and checked before a password exists (§8.1). */
+  propose(input: { bits?: 128 | 256 }): Promise<{ mnemonic: string }>
   /** Onboarding: a fresh 12/24-word seed. The mnemonic is returned exactly once. */
   create(input: { password: string; bits?: 128 | 256; label?: string }): Promise<{ accounts: AccountView[]; mnemonic: string; seedId: string }>
   import(input: { mnemonic: string; password: string; passphrase?: string; label?: string }): Promise<{ accounts: AccountView[]; seedId: string }>
@@ -350,6 +354,11 @@ export interface PositionsNamespace {
 /** Hardware devices (§2.7 S7): Ledger over HID from the worker in M5. */
 export interface HardwareNamespace {
   ledgerStatus(): Promise<{ available: boolean; devices: Array<{ deviceId: string; model: string }>; app: { version: string; blindSigning: boolean } | null; problem: string | null }>
+  /**
+   * Can the device be asked to sign right now? Bounded at a few seconds and
+   * silent on the device, so a sheet may ask while it is being read.
+   */
+  ledgerPreflight(input?: { deviceId?: string }): Promise<{ state: 'ready' | 'no_device' | 'locked' | 'wrong_app' | 'no_answer' | 'unavailable' | 'error'; message: string | null; blindSigning: boolean | null }>
   ledgerAddresses(input: { scheme: 'bip44' | 'live'; from?: number; count?: number; deviceId?: string }): Promise<Array<{ path: string; address: string; index: number }>>
   ledgerVerify(input: { path: string; deviceId?: string }): Promise<{ address: string }>
   verifyAccount(input: { accountId: AccountId }): Promise<{ address: string }>

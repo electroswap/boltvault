@@ -31,9 +31,40 @@ let snapshot: { vault: VaultStatus | null; accounts: readonly AccountView[]; act
   loaded: false,
 }
 
+/**
+ * Bumped by every engine event, so a slower answer cannot undo a newer one.
+ *
+ * `refresh()` is fire-and-forget on ~28 mounts, and its reply used to be applied
+ * whenever it happened to arrive. On the phone that is a security bug, not a
+ * cosmetic one: resuming the app remounts every screen, so a `vault.status()`
+ * goes out while the vault is still unlocked; the autolock alarm then fires
+ * (`timerAlarms` catches up overdue timers on `active`), the engine locks and
+ * emits a locked status, the shell shows Unlock — and then the older reply
+ * lands and puts `unlocked: true` back. Owner: "it just flashes the unlock page
+ * and then goes to the home page."
+ *
+ * The engine was locked the whole time and would have refused to sign, but the
+ * wallet showed an unlocked wallet, which is exactly what a lock screen exists
+ * to prevent. Events are the newer truth; a reply older than the last event is
+ * discarded rather than trusted.
+ */
+export function createGeneration(): { begin(): number; bump(): void; stillCurrent(token: number): boolean } {
+  let n = 0
+  return {
+    begin: () => n,
+    bump: () => {
+      n += 1
+    },
+    stillCurrent: (token) => token === n,
+  }
+}
+
+const generation = createGeneration()
+
 /** Tests and the harness: forget the shared snapshot. */
 export function clearWalletSnapshot(): void {
   snapshot = { vault: null, accounts: [], activeId: null, loaded: false }
+  generation.bump()
 }
 
 /** Vault status + accounts, kept current by engine events. */
@@ -45,8 +76,15 @@ export function useWalletState(): WalletState {
   const [loading, setLoading] = useState(!snapshot.loaded)
 
   const refresh = useCallback(() => {
+    const asked = generation.begin()
     Promise.all([engine.vault.status(), engine.accounts.list(), engine.accounts.active()]).then(
       ([v, list, active]) => {
+        // Something authoritative happened while this was in flight. Stop
+        // loading — the answer arrived — but do not let it speak for now.
+        if (!generation.stillCurrent(asked)) {
+          setLoading(false)
+          return
+        }
         snapshot = { vault: v, accounts: list, activeId: active?.id ?? null, loaded: true }
         setVault(v)
         setAccounts(list)
@@ -60,6 +98,7 @@ export function useWalletState(): WalletState {
   useEffect(() => {
     refresh()
     return engine.events.subscribe((e) => {
+      if (e.type === 'vault.status' || e.type === 'accounts.changed') generation.bump()
       if (e.type === 'vault.status') {
         snapshot = { ...snapshot, vault: e.status, loaded: true }
         setVault(e.status)

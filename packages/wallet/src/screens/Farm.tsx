@@ -40,7 +40,6 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
   const { setActive } = useSwapFlow()
   const { flow, dismiss } = useActiveFlow(['farm'])
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
-  const wide = body === 'extension-tab'
   const [loadedFarm, setFarm] = useState<FarmView | null>(null)
   const farm = useLastGood(`farm:${chainId}:${farmId}`, loadedFarm)
   // The shell draws one loader over the whole screen while this is true.
@@ -131,7 +130,7 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
 
   return (
     <Column flex={1}>
-      <ScrollView contentContainerStyle={{ padding: inset, gap: 12, ...(wide ? { maxWidth: 560, width: '100%', alignSelf: 'center' } : {}) }} testID="farm">
+      <ScrollView contentContainerStyle={{ padding: inset, gap: 12 }} testID="farm">
         <PageHeader leading={farm ? <Row gap="$2" alignItems="center"><PairAvatars farm={farm} size={24} /><Body size="title" numberOfLines={1}>{farm.name || `${farm.symbol0}/${farm.symbol1}`}</Body></Row> : undefined} title={farm ? undefined : t({ id: 'farm.title', message: 'Farm' })} right={farm ? <>{!farm.active ? <Pill label={t({ id: 'farm.closed', message: 'Closed' })} tone="ember" size="sm" /> : null}<Pill label={farm.version === 3 ? 'V3' : 'V2'} size="sm" /></> : undefined} />
         {farm ? (
           <>

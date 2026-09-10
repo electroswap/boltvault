@@ -7,6 +7,7 @@
  */
 import { styled, Text as TText, View as TView } from '@tamagui/core'
 import type { ComponentProps, ReactNode } from 'react'
+import { PlateFill } from './PlateFill'
 import { Rim } from './Rim'
 import { current, glow, radius } from './tokens'
 
@@ -44,6 +45,13 @@ export const Row = styled(TView, {
 const PlateFrame = styled(TView, {
   name: 'Plate',
   position: 'relative',
+  /*
+    A stacking context, so `PlateFill` can sit at `zIndex: -1` — above this
+    frame's own flat background, below everything in it. Without one, the
+    negative layer would fall through to the nearest ancestor that has a
+    stacking context and paint behind that instead.
+  */
+  zIndex: 0,
   backgroundColor: '$glass',
   borderRadius: '$recessed',
   borderWidth: 1,
@@ -76,8 +84,15 @@ const RADIUS_BY_ROLE: Record<PlateRole, number> = { recessed: radius.recessed, r
 
 export function Plate({ role = 'recessed', children, ...rest }: PlateProps) {
   const lit = RIM_BY_ROLE[role]
+  /*
+    The gradient goes UNDER the children and over the frame's flat colour, which
+    stays as the fallback for the frame it is painted on before layout lands.
+    See `PlateFill` for why the bible treats this as a material and not a
+    flourish.
+  */
   return (
     <PlateFrame role={role} {...rest}>
+      <PlateFill role={role} radius={RADIUS_BY_ROLE[role]} />
       {children}
       {lit > 0 ? <Rim radius={RADIUS_BY_ROLE[role]} opacity={lit} /> : null}
     </PlateFrame>

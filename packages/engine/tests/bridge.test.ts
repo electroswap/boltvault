@@ -223,7 +223,7 @@ describe('the Hyperlane bridge on two mock chains', () => {
 })
 
 describe('display prices off Electroneum', () => {
-  it('asks GeckoTerminal by token address only, caches for a minute, and backs off on 429', async () => {
+  it('asks GeckoTerminal by token address only, caches the answer, and backs off on 429', async () => {
     const urls: string[] = []
     let status = 200
     const fetchImpl: typeof fetch = async (input) => {
@@ -239,12 +239,12 @@ describe('display prices off Electroneum', () => {
     expect(urls).toHaveLength(1)
     expect(urls[0]).toMatch(/^https:\/\/gecko\.test\/api\/v2\/networks\/eth\/tokens\/multi\//)
     expect(urls[0]).not.toMatch(/0x3333/) // never an account
-    // Within the minute nothing is fetched again.
+    // Within the cache window nothing is fetched again.
     now += 30_000
     await prices.prices(1, ['native'])
     expect(urls).toHaveLength(1)
-    // After it, a 429 leaves the rows unpriced and starts a cooldown.
-    now += 60_000
+    // Past it, a 429 leaves the rows unpriced and starts a cooldown.
+    now += 150_000
     status = 429
     const cooled = await prices.prices(1, ['native'])
     expect(cooled.size).toBe(0)
@@ -253,5 +253,67 @@ describe('display prices off Electroneum', () => {
     expect(urls).toHaveLength(2)
     // Electroneum is never asked here.
     expect((await prices.prices(52014, ['native'])).size).toBe(0)
+  })
+
+  it('signs requests to our own proxy, sends the key itself nowhere, and credentials the public feed not at all', async () => {
+    const sent: Array<{ host: string; key: string | null; auth: string | null }> = []
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const headers = new Headers(init?.headers as HeadersInit)
+      sent.push({ host: new URL(String(input)).host, key: headers.get('x-boltvault-key'), auth: headers.get('x-boltvault-auth') })
+      return new Response(JSON.stringify({ data: [] }), { status: 200, headers: { 'content-type': 'application/json' } })
+    }
+    const key = 'a-client-identifier-not-a-secret'
+    /*
+      Our proxy: a per-request signature says which client is calling, which is
+      what the key was for. The key does not travel (§9.1) — it used to, and a
+      credential visible in devtools is a credential anyone can reuse.
+    */
+    await new GeckoTerminalPrices(fetchImpl, () => 1, 'https://electroswap.io/api/wallet/prices', key).prices(1, ['native'])
+    expect(sent.at(-1)?.host).toBe('electroswap.io')
+    expect(sent.at(-1)?.key).toBeNull()
+    expect(sent.at(-1)?.auth).toMatch(/^v1\.[0-9a-f]{8}\./)
+    // And it is bound to this request, so it cannot be lifted onto another one.
+    expect(sent.at(-1)?.auth).not.toContain(key)
+    /*
+      The public feed: nothing, ever. Handing GeckoTerminal an identifier that
+      every install shares would tell a third party which requests are ours and
+      buy us nothing — the whole point of the proxy is that they see neither
+      our users nor us.
+    */
+    await new GeckoTerminalPrices(fetchImpl, () => 1, undefined, key).prices(1, ['native'])
+    expect(sent.at(-1)).toEqual({ host: 'api.geckoterminal.com', key: null, auth: null })
+  })
+
+  it('keeps the logo it is given, and only asks once about a token it has no price for', async () => {
+    const asked: string[][] = []
+    const fetchImpl: typeof fetch = async (input) => {
+      const chunk = (String(input).split('/multi/')[1] ?? '').split(',')
+      asked.push(chunk)
+      // WETH answers with a logo; the second address is simply not in the reply.
+      return new Response(
+        JSON.stringify({ data: [{ attributes: { address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', price_usd: '2500.5', image_url: 'https://coin-images.example/weth.png' } }] }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }
+    let now = 1_000_000
+    const prices = new GeckoTerminalPrices(fetchImpl, () => now, 'https://gecko.test/api/v2')
+    const unknown = '0x1111111111111111111111111111111111111111'
+
+    const first = await prices.prices(1, ['native', unknown])
+    expect(first.get('native')?.price).toBe(2500.5)
+    expect(first.get('native')?.logoUri).toBe('https://coin-images.example/weth.png')
+    expect(first.has(unknown)).toBe(false)
+    expect(asked).toHaveLength(1)
+
+    /*
+      Past the price TTL the unknown token is still not asked about again.
+      Only answered rows used to be cached, so the long tail of any wallet was
+      re-requested on every block — which is what spent the minute's calls and
+      brought back the 429 that left every chain unpriced.
+    */
+    now += 2 * 60_000
+    const second = await prices.prices(1, [unknown])
+    expect(second.size).toBe(0)
+    expect(asked).toHaveLength(1)
   })
 })

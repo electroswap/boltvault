@@ -33,6 +33,15 @@ export interface LedgerDeviceView {
   readonly model: string
 }
 
+/** The answer to "can we sign on this device right now", and what to do if not. */
+export interface LedgerPreflightView {
+  readonly state: 'ready' | 'no_device' | 'locked' | 'wrong_app' | 'no_answer' | 'unavailable' | 'error'
+  /** Null only when ready; otherwise the sentence to show. */
+  readonly message: string | null
+  /** Whether blind signing is on, when we could ask. */
+  readonly blindSigning: boolean | null
+}
+
 export interface LedgerStatusView {
   readonly available: boolean
   readonly transport: 'hid' | 'ble' | 'usb' | null
@@ -102,16 +111,40 @@ export class HardwareService {
     return { app: new LedgerEthApp(transport), deviceId: device.id, model: transport.model }
   }
 
+  /**
+   * Can this Ledger be asked to sign right now? Bounded, and shows nothing on
+   * the device — safe to call while a sheet is being read.
+   */
+  async ledgerPreflight(deviceId?: string): Promise<LedgerPreflightView> {
+    if (!this.ledger) return { state: 'unavailable', message: 'Ledger is not available in this body.', blindSigning: null }
+    const devices = await this.ledger.list().catch(() => [])
+    if (devices.length === 0) {
+      const message = this.ledger.kind === 'ble' ? 'No Ledger is in range. Turn it on, unlock it and open the Ethereum app.' : 'No Ledger is connected. Plug it in, unlock it and open the Ethereum app.'
+      return { state: 'no_device', message, blindSigning: null }
+    }
+    try {
+      const { app } = await this.app(deviceId)
+      const readiness = await app.ready()
+      if (readiness.state === 'ready') return { state: 'ready', message: null, blindSigning: readiness.app.blindSigning }
+      return { state: readiness.state, message: readiness.message, blindSigning: null }
+    } catch (err) {
+      return { state: 'error', message: plain(err), blindSigning: null }
+    }
+  }
+
   async ledgerStatus(): Promise<LedgerStatusView> {
     if (!this.ledger) return { available: false, transport: null, devices: [], app: null, problem: null }
     const devices = await this.listLedgers()
     if (devices.length === 0) return { available: true, transport: this.ledger.kind, devices, app: null, problem: null }
     try {
       const { app } = await this.app()
-      const cfg = await app.getAppConfiguration()
+      // Bounded: an unlocked device on the dashboard answers this by not
+      // answering, and the Devices screen should say so in a moment rather
+      // than hold a spinner for the transport's full minute.
+      const cfg = await app.getAppConfiguration(3_000)
       return { available: true, transport: this.ledger.kind, devices, app: { version: cfg.version, blindSigning: cfg.blindSigning }, problem: null }
     } catch (err) {
-      return { available: true, transport: this.ledger.kind, devices, app: null, problem: plain(err) }
+      return { available: true, transport: this.ledger.kind, devices, app: null, problem: err instanceof LedgerTransportError ? 'Open the Ethereum app on your Ledger.' : plain(err) }
     }
   }
 
@@ -278,6 +311,22 @@ export class HardwareService {
     if (account.kind === 'ledger') {
       if (!this.ledger) return null
       const { app } = await this.app(account.hardware.deviceId)
+      /*
+        Ask the device whether it can sign before sending it anything to sign.
+
+        On the dashboard the Ethereum app's APDU class belongs to no running
+        app, and rather than returning 0x6511 some firmware does not answer at
+        all — so the first signing APDU sat there for the transport's full
+        minute and the sheet spun. Owner: "Connecting to ledger spins if not in
+        the Ethereum app on the ledger device, should do a pre-flight check to
+        detect HW readiness before attempting to send."
+
+        `ready()` is bounded at three seconds and shows nothing on the device,
+        so the cost of asking is nothing and the answer is a sentence the user
+        can act on.
+      */
+      const readiness = await app.ready()
+      if (readiness.state !== 'ready') throw new EngineError('invalid_argument', readiness.message)
       return ledgerAccount({ address: account.address as `0x${string}`, path: account.hardware.path, app })
     }
     if (account.kind === 'trezor') {
@@ -307,6 +356,7 @@ const SchemeSchema = z.enum(['bip44', 'live'])
 export function hardwareNamespace(hardware: HardwareService, vault: VaultManager): NamespaceSpec {
   return {
     ledgerStatus: { handler: () => hardware.ledgerStatus() },
+    ledgerPreflight: { input: z.object({ deviceId: z.string().optional() }).optional(), handler: (arg) => hardware.ledgerPreflight((arg as { deviceId?: string } | undefined)?.deviceId) },
     ledgerAddresses: { input: z.object({ scheme: SchemeSchema, from: z.number().int().nonnegative().optional(), count: z.number().int().positive().max(20).optional(), deviceId: z.string().optional() }), handler: (arg) => hardware.ledgerAddresses(arg as { scheme: PathScheme; from?: number; count?: number; deviceId?: string }) },
     ledgerVerify: { input: z.object({ path: z.string().min(1), deviceId: z.string().optional() }), handler: (arg) => hardware.ledgerVerify(arg as { path: string; deviceId?: string }) },
     trezorStatus: { handler: () => hardware.trezorStatus() },

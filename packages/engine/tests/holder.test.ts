@@ -1,7 +1,10 @@
 /**
- * The holder tier without a schedule contract (owner's walk, 2026-09-05):
- * the published schedule is applied to what the chain does show — wallet
- * BOLT and DYNO — so a 3M-BOLT holder reads as the top tier, not tier 0.
+ * The holder tier, from `fees.json` and the chain's balances.
+ *
+ * There is no schedule contract any more, so there is no degraded path and no
+ * "the contract said otherwise": the ladder is in the binary and the only thing
+ * read from the chain is what this account holds. A 3M-BOLT holder is a
+ * Reactor, and says so at sign time with no network in the way.
  */
 import { createMemoryPlatform } from '@boltvault/platform/memory'
 import { ELECTRONEUM_ADDRESSES } from '@boltvault/chains'
@@ -45,30 +48,38 @@ describe('holder tier on the published schedule', () => {
   })
 
   const fresh = async (): Promise<Awaited<ReturnType<Engine['engine']['holder']['tier']>>> => {
-    // `configure` with nothing clears the per-block tier cache without pinning anything.
-    await engine.engine.holder.configure({ chainId: ETN, sink: null, schedule: null }).catch(() => undefined)
-    return engine.engine.holder.tier({ accountId, chainId: ETN })
+    /*
+      The service's own `fresh` flag, not `configure`.
+
+      This used to lean on `configure({ sink: null, schedule: null })` for the
+      side effect of clearing the per-block tier cache. Now that mainnet's
+      addresses are pinned in the build, `configure` refuses outright — which is
+      the point of it, no runtime message may move the fee — so the clear never
+      happened and every case after the first read the first one's cached tier.
+      Asking for a fresh read says what the test means anyway.
+    */
+    return engine.holder.tier(accountId, ETN, true)
   }
 
   it('an empty wallet is tier 0 at the base fee, with the first tier ahead of it', async () => {
     const tier = await fresh()
-    expect(tier).toMatchObject({ tier: 0, bips: 50, source: 'fallback', nextTierBips: 40 })
+    expect(tier).toMatchObject({ tier: 0, name: 'Static', bips: 50, source: 'config', nextTierBips: 40, nextTierName: 'Charge' })
     expect(tier.nextTierAt).toBe((13_600n * 10n ** 18n).toString())
   })
 
-  it('3M BOLT in the wallet is the top tier at the lowest fee', async () => {
+  it('3M BOLT in the wallet is the top rung, Reactor, at the lowest fee', async () => {
     bolt = 3_074_077n * 10n ** 18n
     const tier = await fresh()
-    expect(tier).toMatchObject({ tier: 4, bips: 10, source: 'fallback', nextTierAt: null, nextTierBips: null })
+    expect(tier).toMatchObject({ tier: 4, name: 'Reactor', bips: 10, source: 'config', nextTierAt: null, nextTierBips: null, nextTierName: null })
     expect(tier.score).toBe(bolt.toString())
     expect(tier.breakdown).toEqual({ wallet: bolt.toString(), farm: '0', dyno: '0' })
   })
 
   it('DYNO counts at the published weight and moves the tier', async () => {
     bolt = 0n
-    dyno = 200n * 10n ** 18n // 200 × 875.68 = 175,136 BOLT-eq → tier 2
+    dyno = 200n * 10n ** 18n // 200 × 875.68 = 175,136 BOLT-eq → Magneto
     const tier = await fresh()
-    expect(tier).toMatchObject({ tier: 2, bips: 30, source: 'fallback', nextTierBips: 20 })
+    expect(tier).toMatchObject({ tier: 2, name: 'Magneto', bips: 30, source: 'config', nextTierBips: 20, nextTierName: 'Turbine' })
     expect(BigInt(tier.breakdown.dyno)).toBe(175_136n * 10n ** 18n)
   })
 })

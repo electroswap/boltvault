@@ -5,7 +5,7 @@
  * from the chain by more than 1 %. The last-good snapshot is persisted so the
  * popup paints before the first RPC answers.
  */
-import { HOME_CHAIN_ID } from '@boltvault/chains'
+import { HOME_CHAIN_ID, pollMs } from '@boltvault/chains'
 import type { ElectroSwapClient } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
 import { formatUnits, parseAbi, type Hex } from 'viem'
@@ -13,7 +13,7 @@ import { z } from 'zod'
 import { EngineError } from '../errors'
 import type { PriceSource } from '../prices'
 import type { EventBus, NamespaceSpec } from '../host'
-import { readMany } from '../multicall'
+import { multicallAddress, readMany, type ReadCall } from '../multicall'
 import { AccountIdSchema, type PortfolioRow, type PortfolioSnapshot, type TokenView } from '../schema'
 // Snapshots and "since you last looked" used to be one plaintext document per
 // account (`bv:local:portfolio.<accountId>`), which put the USD total, every
@@ -27,9 +27,25 @@ import type { TokensService } from './tokens'
 import type { VaultManager } from './vault'
 
 const ERC20_BALANCE = parseAbi(['function balanceOf(address owner) view returns (uint256)'])
+/** Multicall3 weighs the native coin as well as tokens — its own view function. */
+const MULTICALL3_BALANCE = parseAbi(['function getEthBalance(address addr) view returns (uint256)'])
 const DUST_FIAT = 1
 const DIVERGENCE = 0.01
-const REFRESH_DEBOUNCE_MS = 2_500
+/**
+ * How often a scope may be rebuilt, at the least.
+ *
+ * This was a flat 2.5 s, and `usePortfolio` asks on every block — so with
+ * "All chains" in scope the wallet rebuilt ten chains, a native balance and a
+ * Multicall3 aggregate each, several times a minute, forever. None of those
+ * chains had produced a new block worth reading. The cadence is now the
+ * scope's own: one chain moves at that chain's pace, and a basket of them
+ * moves at a background pace, because a chain contributing a number to a total
+ * does not need asking as often as the chain you are looking at.
+ */
+function refreshEveryMs(chainIds: readonly number[]): number {
+  const mode = chainIds.length > 1 ? 'background' : 'foreground'
+  return Math.max(...chainIds.map((c) => pollMs(c, mode)), 1_000)
+}
 const PRICE_BUDGET_MS = 4_000
 
 interface PriceRow {
@@ -37,6 +53,8 @@ interface PriceRow {
   readonly change24h: number | null
   readonly apiQuantity: number | null
   readonly spam: boolean
+  /** A logo the price source carried, for a token whose list entry has none. */
+  readonly logoUri: string | null
 }
 
 export interface PortfolioDeps {
@@ -55,6 +73,26 @@ export interface PortfolioDeps {
   readonly looks: SealedMap<LastLook>
 }
 
+/**
+ * The stored key for a snapshot: the account *and* the chains it covers.
+ *
+ * A snapshot is only true of the chains it was built from, and this store held
+ * exactly one per account. So the Home scope changing from "All chains" to one
+ * chain — or Send opening, which asks for a single chain while Home holds them
+ * all — read back a snapshot built for a *different* set of chains and served
+ * it as the answer. The total, the row list and the per-token quantities all
+ * belonged to the previous scope until a refresh landed on top. Owner: "Cache
+ * keys should include chain info as I'm seeing weird numbers until chain data
+ * is able to refresh", and "Switching between chains causes some really weird
+ * behaviors due to caching."
+ *
+ * Sorted, so [1, 52014] and [52014, 1] are the same cache entry: the order
+ * only decides how rows are grouped, never what is in them.
+ */
+function scopeKey(accountId: string, chainIds: readonly number[]): string {
+  return `${accountId}:${[...new Set(chainIds)].sort((a, b) => a - b).join('-')}`
+}
+
 export class PortfolioService {
   private readonly inFlight = new Map<string, Promise<PortfolioSnapshot>>()
   private readonly lastRefresh = new Map<string, number>()
@@ -63,21 +101,40 @@ export class PortfolioService {
 
   /** The last-good snapshot at once (stale flag set), and a refresh in the background. */
   async snapshot(accountId: string, chainIds: readonly number[] = [HOME_CHAIN_ID]): Promise<PortfolioSnapshot> {
-    const value = await this.deps.snapshots.get(accountId)
-    const last = this.lastRefresh.get(accountId) ?? 0
-    if (this.deps.platform.now() - last > REFRESH_DEBOUNCE_MS) void this.refresh(accountId, chainIds).catch(() => undefined)
+    const k = scopeKey(accountId, chainIds)
+    const value = await this.deps.snapshots.get(k)
+    const last = this.lastRefresh.get(k) ?? 0
+    if (this.deps.platform.now() - last > refreshEveryMs(chainIds)) void this.refresh(accountId, chainIds).catch(() => undefined)
     if (value) return { ...value, stale: true }
     return { accountId, chainIds: [...chainIds], currency: 'USD', total: null, change24h: null, unpricedCount: 0, rows: [], observedAt: 0, stale: true }
   }
 
-  /** The persisted last-good snapshot, no refresh (plan C1). */
-  async cached(accountId: string): Promise<PortfolioSnapshot | null> {
-    const value = await this.deps.snapshots.get(accountId)
+  /**
+   * The persisted last-good snapshot, no refresh (plan C1).
+   *
+   * Without a scope this answers with the widest snapshot the account has,
+   * which is what a caller that names no chains is really asking for — the
+   * chain sheet wants the balance held on *each* chain, and a single-chain
+   * snapshot can only speak for one of them.
+   */
+  async cached(accountId: string, chainIds?: readonly number[]): Promise<PortfolioSnapshot | null> {
+    const value = chainIds ? await this.deps.snapshots.get(scopeKey(accountId, chainIds)) : await this.widest(accountId)
     return value ? { ...value, stale: true } : null
   }
 
+  /** The account's snapshot covering the most chains; the most recent of those breaks a tie. */
+  private async widest(accountId: string): Promise<PortfolioSnapshot | null> {
+    const prefix = `${accountId}:`
+    let best: PortfolioSnapshot | null = null
+    for (const [id, snap] of Object.entries(await this.deps.snapshots.entries())) {
+      if (!id.startsWith(prefix)) continue
+      if (best === null || snap.chainIds.length > best.chainIds.length || (snap.chainIds.length === best.chainIds.length && snap.observedAt > best.observedAt)) best = snap
+    }
+    return best
+  }
+
   async refresh(accountId: string, chainIds: readonly number[] = [HOME_CHAIN_ID]): Promise<PortfolioSnapshot> {
-    const k = `${accountId}:${chainIds.join(',')}`
+    const k = scopeKey(accountId, chainIds)
     const open = this.inFlight.get(k)
     if (open) return open
     const p = this.build(accountId, chainIds).finally(() => this.inFlight.delete(k))
@@ -85,68 +142,120 @@ export class PortfolioService {
     return p
   }
 
+  /**
+   * One chain's rows. Called for every chain at once (see `build`), so nothing
+   * in here may depend on another chain having finished.
+   */
+  private async chainRows(chainId: number, owner: Hex): Promise<PortfolioRow[]> {
+    const d = this.deps
+    const rows: PortfolioRow[] = []
+    const universe = await d.tokens.universe(chainId)
+    const balances = await this.balances(chainId, owner, universe)
+    /*
+      Price what is held, not what exists.
+
+      Off Electroneum this asked GeckoTerminal about the whole public token
+      list — hundreds of addresses, thirty to a request — for a wallet
+      holding a handful of them. The free tier allows about thirty calls a
+      minute across all networks, so one Base refresh spent four of them and
+      the next chain got a 429; the shared cooldown then left every chain
+      showing "without price". Held tokens are one request, and the answer
+      is the same.
+
+      The balances have to be in hand first, which is why this no longer
+      runs beside them. Quantities are still the truth and still never wait
+      on display data: the price call keeps its bounded slot, and a slow or
+      rate-limited source yields unpriced rows, never a late snapshot.
+    */
+    const held = universe.filter((t) => (balances.get(t.address.toLowerCase()) ?? 0n) > 0n || t.source === 'user' || t.source === 'dapp' || t.pinned)
+    const prices = await Promise.race([this.prices(chainId, owner, held), new Promise<Map<string, PriceRow>>((resolve) => setTimeout(() => resolve(new Map()), PRICE_BUDGET_MS))])
+    for (const t of held) {
+      const raw = balances.get(t.address.toLowerCase()) ?? 0n
+      const quantityNum = Number(formatUnits(raw, t.decimals))
+      const price = prices.get(t.address === 'native' ? 'native' : t.address.toLowerCase()) ?? null
+      // A balance of zero is worth zero whatever the price is, and needs no
+      // price to say so. `prices()` is owner-scoped, so an empty wallet gets
+      // no rows back at all — which used to leave fiat null, count the token
+      // as "without price", and drop the whole total to null. Owner: "an
+      // empty wallet is showing '1 token - 1 without price' ... I know it's
+      // got a price because a wallet with ETN in it shows the value."
+      let fiat: number | null = raw === 0n ? 0 : null
+      let change24h: number | null = null
+      if (price && Number.isFinite(price.price)) {
+        const diverged = price.apiQuantity !== null && quantityNum > 0 && Math.abs(price.apiQuantity - quantityNum) / Math.max(price.apiQuantity, quantityNum) > DIVERGENCE
+        if (!diverged) {
+          fiat = quantityNum * price.price
+          change24h = price.change24h
+        }
+      }
+      const spam = price?.spam === true
+      rows.push({
+        chainId,
+        address: t.address,
+        symbol: t.symbol,
+        name: t.name,
+        decimals: t.decimals,
+        // The price source often carries a mark for a token whose list entry
+        // has none — the majors on chains we ship no logo for.
+        logoUri: t.logoUri ?? price?.logoUri ?? null,
+        raw: raw.toString(),
+        quantity: formatUnits(raw, t.decimals),
+        fiat,
+        change24h,
+        share: 0,
+        pinned: t.pinned,
+        custom: t.source === 'user' || t.source === 'dapp',
+        hidden: t.hidden || spam || (raw > 0n && fiat !== null && fiat < DUST_FIAT && !t.pinned && t.address !== 'native'),
+      })
+    }
+    return rows
+  }
+
   private async build(accountId: string, chainIds: readonly number[]): Promise<PortfolioSnapshot> {
     const d = this.deps
     const account = (await d.vault.accounts()).find((a) => a.id === accountId)
     if (!account) throw new EngineError('not_found', 'no such account')
     const owner = account.address as Hex
-    const rows: PortfolioRow[] = []
-    for (const chainId of chainIds) {
-      const universe = await d.tokens.universe(chainId)
-      // Quantities are the truth and never wait for display data: prices get a bounded slot.
-      const [balances, prices] = await Promise.all([
-        this.balances(chainId, owner, universe),
-        Promise.race([this.prices(chainId, owner), new Promise<Map<string, PriceRow>>((resolve) => setTimeout(() => resolve(new Map()), PRICE_BUDGET_MS))]),
-      ])
-      for (const t of universe) {
-        const raw = balances.get(t.address.toLowerCase()) ?? 0n
-        const keep = raw > 0n || t.source === 'user' || t.source === 'dapp' || t.pinned
-        if (!keep) continue
-        const quantityNum = Number(formatUnits(raw, t.decimals))
-        const price = prices.get(t.address === 'native' ? 'native' : t.address.toLowerCase()) ?? null
-        // A balance of zero is worth zero whatever the price is, and needs no
-        // price to say so. `prices()` is owner-scoped, so an empty wallet gets
-        // no rows back at all — which used to leave fiat null, count the token
-        // as "without price", and drop the whole total to null. Owner: "an
-        // empty wallet is showing '1 token - 1 without price' ... I know it's
-        // got a price because a wallet with ETN in it shows the value."
-        let fiat: number | null = raw === 0n ? 0 : null
-        let change24h: number | null = null
-        if (price && Number.isFinite(price.price)) {
-          const diverged = price.apiQuantity !== null && quantityNum > 0 && Math.abs(price.apiQuantity - quantityNum) / Math.max(price.apiQuantity, quantityNum) > DIVERGENCE
-          if (!diverged) {
-            fiat = quantityNum * price.price
-            change24h = price.change24h
-          }
-        }
-        const spam = price?.spam === true
-        rows.push({
-          chainId,
-          address: t.address,
-          symbol: t.symbol,
-          name: t.name,
-          decimals: t.decimals,
-          logoUri: t.logoUri,
-          raw: raw.toString(),
-          quantity: formatUnits(raw, t.decimals),
-          fiat,
-          change24h,
-          share: 0,
-          pinned: t.pinned,
-          custom: t.source === 'user' || t.source === 'dapp',
-          hidden: t.hidden || spam || (raw > 0n && fiat !== null && fiat < DUST_FIAT && !t.pinned && t.address !== 'native'),
-        })
-      }
-    }
+    /*
+      Every chain at once.
+
+      This was a `for await`, so with "All chains" the wallet read Ethereum,
+      then BNB, then Base, then the other seven — each waiting on the last for
+      no reason. The chains share nothing: different endpoints, different
+      universes, different multicalls. Owner: "the RPC calls made for each
+      chain are being made sequentially ... those calls should happen in
+      parallel." Ten chains now cost about what the slowest one costs instead
+      of the sum of all ten.
+
+      Rows still come back in the caller's chain order — `Promise.all` keeps
+      the array's order — so the snapshot is deterministic and the sort below
+      is the only thing that decides what the user sees.
+    */
+    const perChain = await Promise.all(chainIds.map((chainId) => this.chainRows(chainId, owner)))
+    const rows: PortfolioRow[] = perChain.flat()
     const priced = rows.filter((r) => r.fiat !== null && !r.hidden)
     const total = priced.length ? priced.reduce((s, r) => s + (r.fiat ?? 0), 0) : null
     let previous = 0
     for (const r of priced) previous += (r.fiat ?? 0) / (1 + (r.change24h ?? 0))
     const change24h = total !== null && previous > 0 ? total / previous - 1 : null
     const withShare = rows.map((r) => ({ ...r, share: total && r.fiat !== null && !r.hidden ? r.fiat / total : 0 }))
+    /*
+      Most valuable first, and the native coin takes its place in that order
+      like everything else.
+
+      It used to be pinned to the top whatever it was worth, which put $8,410
+      of ETN above $13,756 of BOLT and made the column stop meaning what it
+      looks like it means — a list sorted by size that is not sorted by size is
+      worse than an unsorted one, because you trust it. Owner: "I want the
+      highest value balances to always show at the top in the portfolio view
+      (descending order)."
+
+      Unpriced rows still sink below priced ones (`?? -1`), and among rows that
+      tie — every row on a chain we have no prices for — `pinned` brings the
+      native coin back to the top, which is where it belongs when nothing has
+      a value to compare.
+    */
     withShare.sort((a, b) => {
-      if (a.address === 'native') return -1
-      if (b.address === 'native') return 1
       const fa = a.fiat ?? -1
       const fb = b.fiat ?? -1
       if (fb !== fa) return fb - fa
@@ -164,33 +273,47 @@ export class PortfolioService {
       observedAt: d.platform.now(),
       stale: false,
     }
-    await d.snapshots.set(accountId, snapshot)
-    this.lastRefresh.set(accountId, d.platform.now())
+    await d.snapshots.set(scopeKey(accountId, chainIds), snapshot)
+    this.lastRefresh.set(scopeKey(accountId, chainIds), d.platform.now())
     d.bus.emit({ type: 'portfolio.snapshot', snapshot })
     return snapshot
   }
 
   private async balances(chainId: number, owner: Hex, universe: readonly TokenView[]): Promise<Map<string, bigint>> {
     const out = new Map<string, bigint>()
-    const native = (await this.deps.chains.rpc(chainId, 'eth_getBalance', [owner, 'latest']).catch(() => null)) as string | null
-    if (native) out.set('native', BigInt(native))
     const erc20 = universe.filter((t) => t.address !== 'native')
-    const results = await readMany(
-      this.deps.chains,
-      chainId,
-      erc20.map((t) => ({ address: t.address as Hex, abi: ERC20_BALANCE, functionName: 'balanceOf', args: [owner] })),
-    )
+    const mc = await multicallAddress(this.deps.chains, chainId)
+    const calls: ReadCall[] = erc20.map((t) => ({ address: t.address as Hex, abi: ERC20_BALANCE, functionName: 'balanceOf', args: [owner] }))
+    /*
+      The native coin rides in the same aggregate.
+
+      Multicall3 has `getEthBalance` precisely so a wallet does not need a
+      second round trip to weigh the coin it is already weighing tokens for.
+      It was a separate `eth_getBalance` per chain, awaited before the batch —
+      so ten chains meant ten extra calls, each one holding up the aggregate
+      behind it.
+    */
+    if (mc) calls.push({ address: mc, abi: MULTICALL3_BALANCE, functionName: 'getEthBalance', args: [owner] })
+    const results = await readMany(this.deps.chains, chainId, calls)
     erc20.forEach((t, i) => {
       const r = results[i]
       if (r?.ok && typeof r.value === 'bigint') out.set(t.address.toLowerCase(), r.value)
     })
+    const weighed = mc ? results[erc20.length] : undefined
+    if (weighed?.ok && typeof weighed.value === 'bigint') {
+      out.set('native', weighed.value)
+      return out
+    }
+    // No multicall here, or it declined to answer for the coin: ask directly.
+    const native = (await this.deps.chains.rpc(chainId, 'eth_getBalance', [owner, 'latest']).catch(() => null)) as string | null
+    if (native) out.set('native', BigInt(native))
     return out
   }
 
-  private async prices(chainId: number, owner: Hex): Promise<Map<string, PriceRow>> {
+  private async prices(chainId: number, owner: Hex, held: readonly TokenView[]): Promise<Map<string, PriceRow>> {
     const out = new Map<string, PriceRow>()
     const es = this.deps.electroswap
-    if (chainId !== 52014 && chainId !== 5201420) return this.otherPrices(chainId)
+    if (chainId !== 52014 && chainId !== 5201420) return this.otherPrices(chainId, held)
     if (!es) return out
     try {
       const p = await es.portfolio(chainId, owner)
@@ -199,7 +322,7 @@ export class PortfolioService {
         const value = b.denominatedValue?.value
         if (!Number.isFinite(qty) || qty <= 0 || typeof value !== 'number') continue
         const k = b.token.standard === 'NATIVE' || b.token.address.toUpperCase() === 'NATIVE' ? 'native' : b.token.address.toLowerCase()
-        out.set(k, { price: value / qty, change24h: typeof b.tokenProjectMarket?.pricePercentChange?.value === 'number' ? b.tokenProjectMarket.pricePercentChange.value / 100 : null, apiQuantity: qty, spam: b.tokenProjectMarket?.tokenProject?.isSpam === true })
+        out.set(k, { price: value / qty, change24h: typeof b.tokenProjectMarket?.pricePercentChange?.value === 'number' ? b.tokenProjectMarket.pricePercentChange.value / 100 : null, apiQuantity: qty, spam: b.tokenProjectMarket?.tokenProject?.isSpam === true, logoUri: null })
       }
     } catch {
       // Display data is optional: unpriced rows, never a shrinking hero.
@@ -208,14 +331,13 @@ export class PortfolioService {
   }
 
   /** Off Electroneum only token addresses leave the wallet — never the account (§3.8). */
-  private async otherPrices(chainId: number): Promise<Map<string, PriceRow>> {
+  private async otherPrices(chainId: number, held: readonly TokenView[]): Promise<Map<string, PriceRow>> {
     const out = new Map<string, PriceRow>()
     const source = this.deps.prices
     if (!source) return out
     try {
-      const universe = await this.deps.tokens.universe(chainId)
-      const priced = await source.prices(chainId, universe.map((t) => t.address))
-      for (const [k, v] of priced) out.set(k, { price: v.price, change24h: v.change24h, apiQuantity: null, spam: false })
+      const priced = await source.prices(chainId, held.map((t) => t.address))
+      for (const [k, v] of priced) out.set(k, { price: v.price, change24h: v.change24h, apiQuantity: null, spam: false, logoUri: v.logoUri })
     } catch {
       // Unpriced rows, never a shrinking hero.
     }
@@ -226,7 +348,7 @@ export class PortfolioService {
   async lastLook(accountId: string): Promise<{ previous: { at: number; total: number | null } | null; total: number | null }> {
     const d = this.deps
     const previous = await d.looks.get(accountId)
-    const snap = await d.snapshots.get(accountId)
+    const snap = await this.widest(accountId)
     const total = snap?.total ?? null
     await d.looks.set(accountId, { at: d.platform.now(), total })
     return { previous, total }
@@ -250,6 +372,12 @@ export function portfolioNamespace(portfolio: PortfolioService): NamespaceSpec {
       },
     },
     lastLook: { input: z.object({ accountId: AccountIdSchema }), handler: (arg) => portfolio.lastLook((arg as { accountId: string }).accountId) },
-    cached: { input: z.object({ accountId: AccountIdSchema }), handler: (arg) => portfolio.cached((arg as { accountId: string }).accountId) },
+    cached: {
+      input: z.object({ accountId: AccountIdSchema, chainIds: z.array(z.number().int().positive()).optional() }),
+      handler: (arg) => {
+        const { accountId, chainIds } = arg as { accountId: string; chainIds?: number[] }
+        return portfolio.cached(accountId, chainIds)
+      },
+    },
   }
 }

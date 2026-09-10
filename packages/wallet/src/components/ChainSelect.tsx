@@ -113,6 +113,13 @@ export function useChainBalances(accountId: string | null): ReadonlyMap<number, 
       return
     }
     let alive = true
+    /*
+      Merged, never replaced. Snapshots are per chain scope now, so the events
+      arriving here speak for different sets of chains — Home's "All chains"
+      rebuild, then Send's single chain. Replacing the map with each one made
+      every other chain's balance vanish and come back as the surfaces took
+      turns refreshing.
+    */
     const apply = (snapshot: { rows: ReadonlyArray<{ chainId: number; fiat: number | null }>; currency: 'USD' | 'ETN' } | null): void => {
       if (!alive || !snapshot) return
       const sums = new Map<number, number>()
@@ -120,7 +127,11 @@ export function useChainBalances(accountId: string | null): ReadonlyMap<number, 
         if (r.fiat === null) continue
         sums.set(r.chainId, (sums.get(r.chainId) ?? 0) + r.fiat)
       }
-      setMap(new Map([...sums].map(([chainId, v]) => [chainId, formatFiat(v, snapshot.currency)])))
+      setMap((prev) => {
+        const next = new Map(prev)
+        for (const [chainId, v] of sums) next.set(chainId, formatFiat(v, snapshot.currency))
+        return next
+      })
     }
     engine.portfolio.cached({ accountId }).then(apply, () => undefined)
     const off = engine.events.subscribe((e) => {

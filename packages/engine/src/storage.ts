@@ -7,12 +7,23 @@
  * silently overwritten — and the default is returned (master plan §3.5).
  */
 import type { KeyValueStore } from '@boltvault/platform'
-import type { ZodType } from 'zod'
+import type { ZodType, ZodTypeDef } from 'zod'
 
 export interface DocSpec<T> {
   readonly key: string
   readonly version: number
-  readonly schema: ZodType<T>
+  /**
+   * Validates whatever was on disk into a `T`.
+   *
+   * `ZodType<T, ZodTypeDef, unknown>`, not `ZodType<T>` — the latter also pins
+   * the schema's INPUT to `T`, which forbids the one feature a stored document
+   * most wants: `.default()`. A schema with a defaulted key accepts input
+   * without it (that is the point — documents written before the key existed
+   * still parse) and outputs a `T` with it filled in. Reading is the only thing
+   * that parses here, and it parses `unknown`, so the input type was never
+   * anyone's business.
+   */
+  readonly schema: ZodType<T, ZodTypeDef, unknown>
   /** Upgrade `data` written at `fromVersion` toward `version`; may return unknown. */
   readonly migrate?: (data: unknown, fromVersion: number) => unknown
   readonly defaultValue: () => T

@@ -15,6 +15,20 @@ export interface ArtworkProps {
   readonly uri: string | null
   readonly label: string
   readonly size: number | { width: number; height: number }
+  /**
+   * Take the height from the image's own proportions instead of the caller's.
+   *
+   * A collection banner is whatever shape its artist made it, and drawing it
+   * into a fixed 104 px box with `cover` crops the middle out of a 3:1 strip —
+   * which is what the owner saw. With this the box measures the image once and
+   * becomes the same shape, so the whole banner is on screen.
+   *
+   * `size.height` is still used: it is what shows until the image reports its
+   * dimensions (so nothing jumps from zero), and the fallback if it never does.
+   * The result is capped at a square, because past that it is not a banner and
+   * would push the whole page below the fold.
+   */
+  readonly scaleToWidth?: boolean
   /** The one slow sweep on open (the Piece view); the Rack passes false. */
   readonly sweep?: boolean
   readonly reducedMotion?: boolean
@@ -48,7 +62,18 @@ function initials(label: string): string {
     .toUpperCase()
 }
 
-export function Artwork({ uri: source, label, size, sweep = false, reducedMotion = false, badge = null, radius = 12, onSettled, testID }: ArtworkProps) {
+export function Artwork({
+  uri: source,
+  label,
+  size,
+  sweep = false,
+  reducedMotion = false,
+  badge = null,
+  radius = 12,
+  scaleToWidth = false,
+  onSettled,
+  testID,
+}: ArtworkProps) {
   // Served from the body's disk cache when it has a copy; otherwise the
   // network URL, with the cache filled behind this render.
   const uri = useCachedImage(source)
@@ -68,18 +93,67 @@ export function Artwork({ uri: source, label, size, sweep = false, reducedMotion
   // image used to stay stuck on the placeholder because `failed` never reset.
   const failed = uri !== undefined && uri !== null && uri === failedUri
   const width = typeof size === 'number' ? size : size.width
-  const height = typeof size === 'number' ? size : size.height
+  const asked = typeof size === 'number' ? size : size.height
+  /*
+    The image's own height ÷ width, once it has said. `Image.getSize` is the one
+    API that answers this on both platforms — react-native-web implements it
+    against a detached <img>, native against the decoder — and it is cheap on a
+    second call because the image is already in the same cache the render uses.
+  */
+  const [ratio, setRatio] = useState<number | null>(null)
+  useEffect(() => {
+    setRatio(null)
+    if (!scaleToWidth || uri === null || uri === undefined || uri === '') return
+    let alive = true
+    Image.getSize(
+      uri,
+      (w, h) => {
+        if (alive && w > 0 && h > 0) setRatio(h / w)
+      },
+      () => undefined,
+    )
+    return () => {
+      alive = false
+    }
+  }, [scaleToWidth, uri])
+  const height =
+    scaleToWidth && ratio !== null ? Math.max(1, Math.min(Math.round(width * ratio), width)) : asked
   const show = !!uri && !failed
   // A small box cannot hold a name: it shows the name's initials instead ("Electric Legends" → EL).
   const small = Math.min(width, height) < 80
   return (
-    <Column width={width} height={height} borderRadius={radius} overflow="hidden" backgroundColor="$glass" borderWidth={1} borderColor="rgba(95,216,255,0.12)" testID={testID}>
+    <Column
+      width={width}
+      height={height}
+      borderRadius={radius}
+      overflow="hidden"
+      backgroundColor="$glass"
+      borderWidth={1}
+      borderColor="rgba(95,216,255,0.12)"
+      testID={testID}
+    >
       {show ? (
-        <Image source={{ uri: uri ?? '' }} onLoad={settle} onError={() => { setFailedUri(uri ?? null); settle() }} style={{ width, height }} resizeMode="cover" accessibilityLabel={label} />
+        <Image
+          source={{ uri: uri ?? '' }}
+          onLoad={settle}
+          onError={() => {
+            setFailedUri(uri ?? null)
+            settle()
+          }}
+          style={{ width, height }}
+          resizeMode="cover"
+          accessibilityLabel={label}
+        />
       ) : (
         <Column flex={1} alignItems="center" justifyContent="center" padding={small ? 2 : 8}>
           {small ? (
-            <Body tone="mute" fontWeight="600" fontSize={Math.round(Math.min(width, height) * 0.36)} lineHeight={Math.round(Math.min(width, height) * 0.5)} numberOfLines={1}>
+            <Body
+              tone="mute"
+              fontWeight="600"
+              fontSize={Math.round(Math.min(width, height) * 0.36)}
+              lineHeight={Math.round(Math.min(width, height) * 0.5)}
+              numberOfLines={1}
+            >
               {initials(label)}
             </Body>
           ) : (
@@ -90,8 +164,23 @@ export function Artwork({ uri: source, label, size, sweep = false, reducedMotion
         </Column>
       )}
       {/* Contact shadow at the shelf and the specular edge from the Field. */}
-      <Column position="absolute" left={0} right={0} bottom={0} height={Math.max(6, height * 0.12)} backgroundColor="rgba(2,3,8,0.45)" />
-      <Column position="absolute" left={0} right={0} top={0} height={1} backgroundColor={light.core} opacity={0.35} />
+      <Column
+        position="absolute"
+        left={0}
+        right={0}
+        bottom={0}
+        height={Math.max(6, height * 0.12)}
+        backgroundColor="rgba(2,3,8,0.45)"
+      />
+      <Column
+        position="absolute"
+        left={0}
+        right={0}
+        top={0}
+        height={1}
+        backgroundColor={light.core}
+        opacity={0.35}
+      />
       {sweep && !reducedMotion && show ? (
         <Animated.View
           pointerEvents="none"
@@ -112,7 +201,18 @@ export function Artwork({ uri: source, label, size, sweep = false, reducedMotion
         />
       ) : null}
       {badge ? (
-        <Column position="absolute" right={6} bottom={6} paddingHorizontal={6} paddingVertical={2} borderRadius={6} backgroundColor="rgba(6,9,19,0.85)" borderWidth={1} borderColor={badge.tone === 'arc' ? paint.arc : paint.ember} testID={testID ? `${testID}-badge` : undefined}>
+        <Column
+          position="absolute"
+          right={6}
+          bottom={6}
+          paddingHorizontal={6}
+          paddingVertical={2}
+          borderRadius={6}
+          backgroundColor="rgba(6,9,19,0.85)"
+          borderWidth={1}
+          borderColor={badge.tone === 'arc' ? paint.arc : paint.ember}
+          testID={testID ? `${testID}-badge` : undefined}
+        >
           <Body tone={badge.tone} size="caption">
             {badge.text}
           </Body>

@@ -11,7 +11,7 @@ import {
   FEE_BIPS_BASE,
   DEFAULT_SLIPPAGE_BPS,
 } from '../src/fee'
-import { ELECTRONEUM_ADDRESSES, BOLTVAULT_FEE_SINK } from '@boltvault/chains'
+import { ELECTRONEUM_ADDRESSES, feeRecipient } from '@boltvault/chains'
 
 describe('fee math (T5.2, 25 bps of output, base 10_000)', () => {
   it('feeAmount is floor(output * 25 / 10000)', () => {
@@ -58,15 +58,16 @@ describe('fee math (T5.2, 25 bps of output, base 10_000)', () => {
   })
 })
 
-describe('fee sink + enablement (T5.2)', () => {
-  it('feeSinkFor mirrors the registry constant', () => {
-    expect(feeSinkFor(52014)).toBe(BOLTVAULT_FEE_SINK[52014])
-    expect(feeSinkFor(5201420)).toBe(BOLTVAULT_FEE_SINK[5201420])
+describe('fee recipient + enablement (T5.2)', () => {
+  it('feeSinkFor is the configured recipient, and nothing off Electroneum', () => {
+    expect(feeSinkFor(52014)).toBe(feeRecipient(52014))
+    expect(feeSinkFor(5201420)).toBe(feeRecipient(5201420))
+    // A chain with no fee config can never pay a fee, whatever the config says.
     expect(feeSinkFor(1)).toBeNull()
   })
 
-  it('inWalletSwapEnabled is true only when a sink is pinned (currently none)', () => {
-    expect(inWalletSwapEnabled(52014)).toBe(BOLTVAULT_FEE_SINK[52014] != null)
+  it('in-wallet swap is on exactly where a recipient is configured', () => {
+    expect(inWalletSwapEnabled(52014)).toBe(feeRecipient(52014) != null)
     expect(inWalletSwapEnabled(1)).toBe(false)
   })
 
@@ -76,15 +77,17 @@ describe('fee sink + enablement (T5.2)', () => {
     expect(() => universalRouterFor(1)).toThrow(/not ETN/)
   })
 
-  it('feeBreakdown throws when no sink is pinned (do-not-swap), else returns the sheet', () => {
-    // Currently both sinks are null (pending PR-ES-5) → throws.
-    if (BOLTVAULT_FEE_SINK[52014] == null) {
-      expect(() => feeBreakdown(1_000_000n, 52014)).toThrow(/no fee sink/)
+  it('feeBreakdown refuses without a recipient (do-not-swap), else returns the sheet', () => {
+    // Whichever way the config is set, one of these two is the live behaviour.
+    if (feeRecipient(52014) == null) {
+      expect(() => feeBreakdown(1_000_000n, 52014)).toThrow(/no fee recipient/)
     } else {
       const sheet = feeBreakdown(1_000_000n, 52014)
       expect(sheet.fee + sheet.userOut).toBe(1_000_000n)
-      expect(sheet.sink).toBe(BOLTVAULT_FEE_SINK[52014])
+      expect(sheet.sink).toBe(feeRecipient(52014))
       expect(sheet.minOut <= sheet.userOut).toBe(true)
     }
+    // The testnet has no recipient configured, so it must refuse.
+    expect(() => feeBreakdown(1_000_000n, 5201420)).toThrow(/no fee recipient/)
   })
 })

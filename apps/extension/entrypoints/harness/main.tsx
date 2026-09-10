@@ -5,6 +5,10 @@
  * expose it and it holds no secrets.
  *
  * harness.html?scenario=funded&screen=home&body=extension-popup&motion=reduced
+ *
+ * `art=on` additionally loads the collection's real images from the CDN. It is
+ * off by default so the committed baselines stay network-free and
+ * deterministic; the landing page's screenshots are the only thing that asks.
  */
 import { App, createFixtureEngine, isTabId, type FixtureScenario, type ScreenId } from '@boltvault/wallet'
 import '../../src/chrome.css'
@@ -16,20 +20,42 @@ const screen = (q.get('screen') ?? 'home') as ScreenId
 const body = (q.get('body') ?? 'extension-popup') as 'extension-popup' | 'extension-tab' | 'mobile'
 const reducedMotion = q.get('motion') === 'reduced'
 const dapp = q.get('dapp') ?? 'on'
+const art = q.get('art') === 'on'
+/**
+ * `dapp=connected` also makes the host report the harness body.
+ *
+ * Home only asks for the site strip when the host is the extension popup or
+ * the harness (`host.body`), because "the site under the popup" is an
+ * extension idea — a phone has no current tab. The fixture already connects
+ * app.electroswap.io, so declaring the body is the whole of what was missing.
+ * It is opt-in because several screens branch on `host.body`, and flipping it
+ * for every shot would move more than this one strip.
+ */
 const harnessHost = {
   copy: async () => undefined,
   currentTab: async () => (dapp === 'none' ? null : dapp === 'off' ? { origin: 'https://example.com', host: 'example.com', favicon: null } : { origin: 'https://app.electroswap.io', host: 'app.electroswap.io', favicon: null }),
+  ...(dapp === 'connected' ? { body: 'harness' as const } : {}),
 }
 
 const root = document.getElementById('root')
 if (!root) throw new Error('harness: no #root')
 
-createFixtureEngine(scenario).then((engine) => {
+createFixtureEngine(scenario, { art }).then((engine) => {
   const initialTab = isTabId(screen) ? screen : 'home'
   // Screens with required params get a representative fixture value.
   const LEGENDS = '0x31cbb613D14cc85Cf3A8889007562E4B5cE9518b'
   const segment = q.get('segment')
-  const initialParams = screen === 'token' ? { chainId: 52014, address: '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1' } : screen === 'collection' ? { chainId: 52014, address: LEGENDS } : screen === 'nft' ? { chainId: 52014, address: LEGENDS, tokenId: '12' } : screen === 'farm' ? { chainId: 52014, farmId: 0 } : screen === 'campaign' ? { chainId: 52014, pool: '0x9999999999999999999999999999999999999999' } : screen === 'explore' && (segment === 'tokens' || segment === 'collectibles' || segment === 'launch' || segment === 'farms') ? { segment } : undefined
+  /*
+    `step` (and `path`) reach onboarding's later steps, which had no baseline at
+    all — `screens.spec.ts` captured the first frame and nothing else, so eight
+    of nine steps could regress unseen. The screen validates the value through
+    `clampEntryStep`, which admits only steps that need no state from a previous
+    one; `words` and `quiz` are deliberately not among them, because a phrase is
+    freshly random every run and would make a pixel baseline meaningless.
+  */
+  const step = q.get('step')
+  const path = q.get('path')
+  const initialParams = screen === 'onboarding' ? { ...(step ? { step } : {}), ...(path === 'create' || path === 'import' || path === 'watch' ? { path } : {}) } : screen === 'token' ? { chainId: 52014, address: '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1' } : screen === 'collection' ? { chainId: 52014, address: LEGENDS } : screen === 'nft' ? { chainId: 52014, address: LEGENDS, tokenId: '12' } : screen === 'farm' ? { chainId: 52014, farmId: 0 } : screen === 'campaign' ? { chainId: 52014, pool: '0x9999999999999999999999999999999999999999' } : screen === 'explore' && (segment === 'tokens' || segment === 'collectibles' || segment === 'launch' || segment === 'farms') ? { segment } : undefined
   createRoot(root).render(<App engine={engine.engine} body={body} initialTab={initialTab} initialScreen={screen} {...(initialParams ? { initialParams } : {})} reducedMotion={reducedMotion} host={harnessHost} />)
   document.documentElement.dataset['ready'] = '1'
 })

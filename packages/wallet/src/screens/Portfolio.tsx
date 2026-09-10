@@ -37,7 +37,7 @@ export function Portfolio({ body }: { body: BodyKind }) {
   const [scopeOpen, setScopeOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const accountId = active?.id ?? null
-  const portfolio = usePortfolio(accountId, 5_000, scope.chainIds)
+  const portfolio = usePortfolio(accountId, 5_000, scope.loaded ? scope.chainIds : null)
   const { positions } = usePositions(accountId, !!vault?.unlocked)
   const [segment, setSegment] = useState<Segment>('tokens')
   // Collecting is offered wherever a position is shown, so the card reads the
@@ -59,7 +59,6 @@ export function Portfolio({ body }: { body: BodyKind }) {
   }
   const [sinceLook, setSinceLook] = useState<{ at: number; total: number | null } | null>(null)
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
-  const wide = body !== 'extension-popup'
 
   // "Since you last looked" (§7.13), once per open.
   useEffect(() => {
@@ -84,7 +83,7 @@ export function Portfolio({ body }: { body: BodyKind }) {
 
   return (
     <Column flex={1} testID="portfolio">
-      <ScrollView contentContainerStyle={{ padding: inset, gap: 16, ...(wide ? { maxWidth: 680, width: '100%', alignSelf: 'center' } : {}) }}>
+      <ScrollView contentContainerStyle={{ padding: inset, gap: 16 }}>
         <PageHeader title={t({ id: 'portfolio.title', message: 'Portfolio' })} />
         <Column gap="$2">
           <Row>
@@ -141,6 +140,7 @@ export function Portfolio({ body }: { body: BodyKind }) {
                   change={formatChange(r.change24h)}
                   share={r.share}
                   logoUri={r.logoUri}
+                  chainBadge={scope.chainIds.length > 1}
                   mark={r.custom ? t({ id: 'home.mark.custom', message: 'Custom' }) : null}
                   onPress={() => router.navigate('token', { chainId: r.chainId, address: r.address })}
                 />

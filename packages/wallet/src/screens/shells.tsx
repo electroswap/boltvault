@@ -39,7 +39,7 @@ export function SettingsShell({ body }: { body: Body_ }) {
     { id: 'devices', title: t({ id: 'settings.devices', message: 'Devices & sync' }), rows: [t({ id: 'settings.devices.rows', message: 'Pair a phone or browser; move your vault' })] },
     { id: 'notifications', title: t({ id: 'settings.notifications', message: 'Notifications' }), rows: [t({ id: 'settings.notifications.rows', message: 'Watchlist alerts, campaigns going live, rewards and dividends' })] },
     { id: 'feel', title: t({ id: 'settings.feel', message: 'Appearance & feel' }), rows: [t({ id: 'settings.feel.rows', message: 'Motion, haptics, sound, currency' })] },
-    { id: 'about', title: t({ id: 'settings.about', message: 'About' }), rows: [t({ id: 'settings.about.rows', message: 'Version, encryption, fee sink' })] },
+    { id: 'about', title: t({ id: 'settings.about', message: 'About' }), rows: [t({ id: 'settings.about.rows', message: 'Version, encryption, where fees go' })] },
   ]
   return (
     <ScrollView contentContainerStyle={{ padding: insetFor(body), gap: 12 }} testID="settings">

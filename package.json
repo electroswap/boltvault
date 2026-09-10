@@ -13,6 +13,7 @@
     "depcruise": "depcruise packages apps tools --config .dependency-cruiser.cjs",
     "no-any": "node tools/no-any.mjs",
     "registry:verify": "tsx tools/registry-verify.ts",
+    "rpc:probe": "tsx tools/rpc-probe.ts",
     "abi:sync": "tsx tools/abi-sync.ts",
     "check": "pnpm typecheck && pnpm lint && pnpm no-any && pnpm depcruise && SKIP_LIVE=1 pnpm test:ci && pnpm --filter @boltvault/extension build",
     "i18n:extract": "node tools/i18n-extract.mjs",
@@ -21,7 +22,8 @@
     "zip:chrome": "node tools/zip-store.mjs chrome",
     "zip:firefox": "node tools/zip-store.mjs firefox",
     "build:manifest": "node tools/build-manifest.mjs",
-    "build:repro": "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) BUILD_HASH=$(git rev-parse HEAD) pnpm --filter @boltvault/extension build && SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) BUILD_HASH=$(git rev-parse HEAD) pnpm --filter @boltvault/extension build:firefox && node tools/build-manifest.mjs apps/extension/.output/chrome-mv3 && node tools/build-manifest.mjs apps/extension/.output/firefox-mv3"
+    "build:release": "BOLTVAULT_HARNESS=0 pnpm --filter @boltvault/extension build",
+    "build:repro": "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) BUILD_HASH=$(git rev-parse HEAD) BOLTVAULT_HARNESS=0 pnpm --filter @boltvault/extension build && SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) BUILD_HASH=$(git rev-parse HEAD) BOLTVAULT_HARNESS=0 pnpm --filter @boltvault/extension build:firefox && node tools/build-manifest.mjs apps/extension/.output/chrome-mv3 && node tools/build-manifest.mjs apps/extension/.output/firefox-mv3"
   },
   "devDependencies": {
     "@boltvault/chains": "workspace:*",

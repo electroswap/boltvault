@@ -33,7 +33,16 @@ export const FAKE_METAMASK_DIR = fileURLToPath(new URL('../../../packages/testin
 export async function launchWithExtension(opts: { extra?: readonly string[] } = {}): Promise<LoadedExtension> {
   if (!existsSync(join(EXTENSION_DIR, 'manifest.json'))) throw new Error(`extension not built at ${EXTENSION_DIR} — run pnpm build`)
   const userDataDir = await mkdtemp(join(tmpdir(), 'bv-e2e-'))
-  const dirs = [EXTENSION_DIR, ...(opts.extra ?? [])].join(',')
+  /*
+    Extra extensions load BEFORE ours.
+
+    Chromium injects `document_start` content scripts in load order, and the
+    coexistence test only means anything if the other wallet got to
+    `window.ethereum` first — that is the case `installProvider` yields in. With
+    ours first the fixture's own `if (window.ethereum) return` fired instead,
+    and the test asserted our behaviour against a page MetaMask never touched.
+  */
+  const dirs = [...(opts.extra ?? []), EXTENSION_DIR].join(',')
   const context = await chromium.launchPersistentContext(userDataDir, {
     channel: 'chromium',
     headless: true,

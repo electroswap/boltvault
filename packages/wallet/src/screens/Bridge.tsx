@@ -80,7 +80,6 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
-  const wide = body === 'extension-tab'
 
   useEffect(() => {
     engine.chains.list().then(setChains, () => undefined)
@@ -206,7 +205,7 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
 
   return (
     <Column flex={1}>
-      <ScrollView contentContainerStyle={{ paddingHorizontal: inset, paddingTop: inset, paddingBottom: 12, gap: 10, ...(wide ? { maxWidth: 560, width: '100%', alignSelf: 'center' } : {}) }} testID="bridge">
+      <ScrollView contentContainerStyle={{ paddingHorizontal: inset, paddingTop: inset, paddingBottom: 12, gap: 10 }} testID="bridge">
         <PageHeader title={t({ id: 'bridge.title', message: 'Bridge' })} subtitle={active.label ? t({ id: 'from.account', message: 'from {a}', values: { a: `${active.label} · ${shortAddress(active.address)}` } }) : undefined} />
 
         {/* The console: From and To wells, the flip (or the cable, in flight) on the seam. */}
@@ -216,7 +215,7 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
             right={<ChainSelect chainId={fromChain} label={chainName(fromChain)} onPress={() => setSheet('from')} testID="bridge-from-select" />}
             value={amount}
             onChange={setAmount}
-            tokenPill={route ? <Pill label={route.symbol} icon={<TokenAvatar chainId={fromChain} address={route.token} symbol={route.symbol} size={18} />} chevron={symbols.length > 1} tone="ink" size="md" onPress={symbols.length > 1 ? () => setSheet('asset') : undefined} testID="bridge-asset-select" /> : undefined}
+            tokenPill={route ? <Pill strong label={route.symbol} icon={<TokenAvatar chainId={fromChain} address={route.token} symbol={route.symbol} size={18} />} chevron={symbols.length > 1} tone="ink" size="md" onPress={symbols.length > 1 ? () => setSheet('asset') : undefined} testID="bridge-asset-select" /> : undefined}
             fiat={amount.trim() && Number(amount) > 0 ? formatFiat(Number(amount), 'USD') : null}
             balance={quote ? `${formatRaw(quote.balanceRaw, quote.decimals)} ${quote.symbol}` : null}
             onMax={quote ? () => setAmount(formatRaw(quote.balanceRaw, quote.decimals).replace(/,/g, '')) : undefined}
@@ -319,7 +318,7 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
         ) : null}
       </ScrollView>
 
-      <ScreenFooter inset={inset} maxWidth={wide ? 560 : undefined} testID="bridge-footer">
+      <ScreenFooter inset={inset} testID="bridge-footer">
           {problem ? (
             <Body tone="burn" size="caption" testID="bridge-problem">
               {problem}

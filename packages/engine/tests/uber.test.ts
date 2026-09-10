@@ -384,7 +384,7 @@ describe('the uber-app on the mainnet mock', () => {
     const pos = await engine.engine.positions.snapshot({ accountId, chainId: CHAIN })
     expect(pos.farms.length).toBe(1)
     expect(pos.legends?.ownedTokenIds).toEqual(['12', '13'])
-    expect(pos.accessory?.kind).toBe('dividends')
+    expect(pos.accessories[0]?.kind).toBe('dividends')
     await engine.engine.watchlist.star({ kind: 'token', chainId: CHAIN, address: BOLT, label: 'BOLT' })
     await engine.engine.watchlist.setAlert({ kind: 'token', chainId: CHAIN, address: BOLT, above: 0.25, below: null, onLive: false })
     expect((await engine.engine.watchlist.list())[0]).toMatchObject({ kind: 'token', above: 0.25 })

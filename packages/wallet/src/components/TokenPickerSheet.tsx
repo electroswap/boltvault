@@ -13,7 +13,7 @@ import { t } from '../i18n'
 
 const ETN = 52014
 
-export function TokenPickerSheet({ open, onClose, title, tokens, rows, currency, exclude, onPick, reducedMotion = false }: { open: boolean; onClose: () => void; title: string; tokens: readonly TokenView[]; rows: readonly PortfolioRow[]; currency: 'USD' | 'ETN'; exclude?: string; onPick: (address: string) => void; reducedMotion?: boolean }) {
+export function TokenPickerSheet({ open, onClose, title, chainId = ETN, tokens, rows, currency, exclude, onPick, reducedMotion = false }: { open: boolean; onClose: () => void; title: string; chainId?: number; tokens: readonly TokenView[]; rows: readonly PortfolioRow[]; currency: 'USD' | 'ETN'; exclude?: string; onPick: (address: string) => void; reducedMotion?: boolean }) {
   const engine = useEngine()
   const [query, setQuery] = useState('')
   const [found, setFound] = useState<TokenView[]>([])
@@ -46,11 +46,11 @@ export function TokenPickerSheet({ open, onClose, title, tokens, rows, currency,
       return
     }
     let alive = true
-    engine.tokens.search({ chainId: ETN, query: q }).then((r) => alive && setFound(r), () => alive && setFound([]))
+    engine.tokens.search({ chainId, query: q }).then((r) => alive && setFound(r), () => alive && setFound([]))
     return () => {
       alive = false
     }
-  }, [engine, q, listed.length])
+  }, [engine, q, listed.length, chainId])
 
   const shown = listed.length > 0 ? listed : found
   return (
@@ -61,10 +61,18 @@ export function TokenPickerSheet({ open, onClose, title, tokens, rows, currency,
           return (
             <Pressable key={x.address} onPress={() => onPick(x.address)} accessibilityRole="button" accessibilityLabel={x.symbol} style={{ minHeight: 52, justifyContent: 'center' }} testID={`swap-pick-${x.symbol}`}>
               <Row gap="$3" alignItems="center" paddingVertical={6}>
-                <TokenAvatar chainId={ETN} address={x.address} symbol={x.symbol} logoUri={x.logoUri} size={32} />
+                {/*
+                  The sheet's own chain, not Electroneum. Send picks a chain
+                  before it picks a token, and pinning this to 52014 asked for
+                  the Electroneum mark of an address that is on Base — so the
+                  bundled and coin marks answered for the wrong chain. The
+                  held row's logo is the fallback: it carries what the price
+                  source knew for a token the list has no mark for.
+                */}
+                <TokenAvatar chainId={chainId} address={x.address} symbol={x.symbol} logoUri={x.logoUri ?? r?.logoUri ?? null} size={32} />
                 <Column flex={1} minWidth={0} alignItems="flex-start">
                   <Row gap="$2" alignItems="center">
-                    <Body fontWeight="600">{x.symbol}</Body>
+                    <Body fontWeight="700">{x.symbol}</Body>
                     {x.source === 'lookup' ? (
                       <Body tone="ember" size="caption">
                         {t({ id: 'swap.pick.new', message: 'Not on the list' })}

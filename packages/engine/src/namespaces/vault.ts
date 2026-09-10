@@ -295,6 +295,26 @@ export class VaultManager {
     return this.status()
   }
 
+  /**
+   * A phrase, not yet a vault (§8.1).
+   *
+   * The master plan puts the words and the backup check BEFORE the password,
+   * and `create` cannot do that: it is the call that mints the phrase, and it
+   * needs the password in the same breath because the password is the KDF input
+   * that seals the file. So minting is separated from sealing. This returns a
+   * phrase and writes nothing; `import` turns it into a vault once a password
+   * exists, and `confirmBackup` verifies the words the user was asked about —
+   * it accepts any positions, so the quiz does not need a seed to exist first.
+   *
+   * Nothing reaching disk until the password step succeeds is the real prize:
+   * abandoning the flow at the words step used to leave an unlocked vault with
+   * no backup behind it, and now leaves nothing at all.
+   */
+  async propose(input: { bits?: 128 | 256 }): Promise<{ mnemonic: string }> {
+    if (await this.readFile()) throw new EngineError('invalid_argument', 'a vault already exists')
+    return { mnemonic: generateEntropy(input.bits ?? 128).mnemonic }
+  }
+
   async create(input: { password: string; bits?: 128 | 256; label?: string }): Promise<{ accounts: AccountView[]; mnemonic: string; seedId: string }> {
     const entropy = generateEntropy(input.bits ?? 128)
     const seed = this.seedFromMnemonic(entropy.mnemonic, input.label ?? 'Seed 1')
@@ -460,6 +480,22 @@ export class VaultManager {
     await this.dek()
     await this.writeFile(removeWrap(await this.requireV2(), 'device', input.keyId, this.platform.now()))
     return this.emitStatus()
+  }
+
+  /**
+   * Block screenshots and task-switcher previews while a phrase is on screen.
+   *
+   * `Platform.hidePreview` has existed since the platform contract was written
+   * and had **no callers anywhere in the repo**, though the master plan (§8.1)
+   * requires it on the words step. Mobile implements it with
+   * `expo-screen-capture`; the extension cannot and says so honestly.
+   *
+   * On the vault namespace because that is where secrets live, and routed
+   * through the engine because the engine is what holds the Platform — which is
+   * also why `createMemoryPlatform` has a `previewHidden` flag to assert on.
+   */
+  async hidePreview(input: { hide: boolean }): Promise<void> {
+    await this.platform.hidePreview(input.hide)
   }
 
   // ---- backup --------------------------------------------------------------------
@@ -732,6 +768,10 @@ export function vaultNamespace(vault: VaultManager, settings: SettingsStore): Na
   return {
     status: { handler: () => vault.status() },
     createEmpty: { input: z.object({ password: PasswordSchema }), handler: (arg) => vault.createEmpty(arg as { password: string }) },
+    propose: {
+      input: z.object({ bits: z.union([z.literal(128), z.literal(256)]).optional() }),
+      handler: (arg) => vault.propose(arg as { bits?: 128 | 256 }),
+    },
     create: {
       input: z.object({ password: PasswordSchema, bits: z.union([z.literal(128), z.literal(256)]).optional(), label: z.string().max(64).optional() }),
       handler: (arg) => vault.create(arg as { password: string; bits?: 128 | 256; label?: string }),
@@ -776,6 +816,7 @@ export function vaultNamespace(vault: VaultManager, settings: SettingsStore): Na
         return vault.applyAutoLock()
       },
     },
+    hidePreview: { input: z.object({ hide: z.boolean() }), handler: (arg) => vault.hidePreview(arg as { hide: boolean }) },
     backupQuiz: { input: z.object({ seedId: z.string() }), handler: (arg) => vault.backupQuiz(arg as { seedId: string }) },
     confirmBackup: {
       input: z.object({ seedId: z.string(), answers: z.array(z.object({ position: z.number().int().positive(), word: z.string() })).min(3) }),

@@ -80,7 +80,7 @@ export function Piece({ body, chainId, address, tokenId, reducedMotion = false }
 
   return (
     <Column flex={1}>
-    <ScrollView contentContainerStyle={{ padding: inset, gap: 12, ...(body === 'extension-tab' ? { maxWidth: 640, width: '100%', alignSelf: 'center' } : {}) }} testID="piece">
+    <ScrollView contentContainerStyle={{ padding: inset, gap: 12 }} testID="piece">
       <PageHeader title={asset?.name ?? ''} right={<>{asset ? <Pill label={asset.collectionName} icon={asset.collectionVerified ? <Icon name="check" size={14} color={paint.arc} /> : undefined} size="sm" onPress={() => router.navigate('collection', { chainId, address })} testID="piece-collection" /> : null}</>} />
       {loadError ? <Body tone="burn">{loadError}</Body> : null}
       {!asset && !loadError ? (

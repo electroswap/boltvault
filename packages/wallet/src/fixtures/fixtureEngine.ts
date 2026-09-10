@@ -27,7 +27,34 @@ export function fixtureSnapshot(accountId: string): PortfolioSnapshot {
   return { accountId, chainIds: [52014], currency: 'USD', total: 12478.66, change24h: 0.021, unpricedCount: 1, rows, observedAt: FIXED_NOW, stale: false }
 }
 
-export async function createFixtureEngine(scenario: FixtureScenario): Promise<Engine> {
+/**
+ * The collection's real artwork, for a screenshot that has to look like the
+ * product rather than like a fixture.
+ *
+ * It is OFF unless asked for, and the default stays exactly as it was, because
+ * the harness's whole promise is "no network, so screenshots are
+ * deterministic" — the committed baselines must not start depending on a CDN
+ * being up. `harness.html?art=on` turns it on for the landing page's shots,
+ * which are taken by hand and can afford a fetch.
+ */
+const ART_BASE = 'https://static.electroswap.io'
+const LEGENDS_ART = {
+  banner: `${ART_BASE}/images/ElectricLegends_Banner.webp`,
+  logo: `${ART_BASE}/images/ElectricLegends_Logo.webp`,
+  piece: (tokenId: string): string => `${ART_BASE}/nfts/0x31cbb613D14cc85Cf3A8889007562E4B5cE9518b/${tokenId}_medium.webp`,
+} as const
+
+export interface FixtureOptions {
+  /** Load the collection's real images from the CDN. Off by default; see LEGENDS_ART. */
+  readonly art?: boolean
+}
+
+export async function createFixtureEngine(scenario: FixtureScenario, options: FixtureOptions = {}): Promise<Engine> {
+  // With art on, the owned pieces are the ones the CDN actually has, so a
+  // medallion's number and the picture under it agree.
+  const art = options.art === true
+  const ownedIds = art ? ['5', '4', '6'] : ['12', '13', '41']
+  const artOf = (tokenId: string): string | null => (art ? LEGENDS_ART.piece(tokenId) : null)
   const platform = createMemoryPlatform({ now: FIXED_NOW })
   const engine = createEngine({ platform, heads })
   await engine.ready
@@ -70,7 +97,7 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
             ],
             statements: [{ text: 'Allow 0x2222…2222 to move an unlimited amount of 0x1111…1111', tone: 'warn' }],
             changes: [],
-            presentation: { delayMs: 1500, typedConfirmation: 'app.electroswap.io', blocked: false },
+            presentation: { delayMs: 1500, typedConfirmation: 'CONFIRM', blocked: false },
             simulationMode: 'estimate',
           },
           clientRequestId: 'fixture-sign',
@@ -130,8 +157,8 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
     const BOLT = '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1'
     const USDC = '0x3187deAd7A2Bd6770F5Fe81495D1B715926AAe6e'
     const SINK = '0x00000000000000000000000000000000000051ab'
-    const tierView: HolderTier = { chainId: 52014, bips: 40, tier: 1, score: '18400000000000000000000', nextTierAt: '136000000000000000000000', nextTierBips: 30, source: 'chain', sink: SINK, schedule: '0x00000000000000000000000000000000000005c4', breakdown: { wallet: '18400000000000000000000', farm: '0', dyno: '0' } }
-    const schedule: FeeScheduleView = { chainId: 52014, baseBips: 50, tiers: [{ minScore: '13600000000000000000000', bips: 40 }, { minScore: '136000000000000000000000', bips: 30 }, { minScore: '680000000000000000000000', bips: 20 }, { minScore: '1360000000000000000000000', bips: 10 }], dynoWeight: '875680000000000000000', countFarmBolt: true, boltPayDiscountBips: 2500, source: 'chain', sink: SINK, address: '0x00000000000000000000000000000000000005c4' }
+    const tierView: HolderTier = { chainId: 52014, bips: 40, tier: 1, name: 'Charge', nextTierName: 'Magneto', score: '18400000000000000000000', nextTierAt: '136000000000000000000000', nextTierBips: 30, source: 'config', sink: SINK, schedule: '0x00000000000000000000000000000000000005c4', breakdown: { wallet: '18400000000000000000000', farm: '0', dyno: '0' } }
+    const schedule: FeeScheduleView = { chainId: 52014, baseName: 'Static', baseBips: 50, tiers: [{ name: 'Charge', minScore: '13600000000000000000000', bips: 40 }, { name: 'Magneto', minScore: '136000000000000000000000', bips: 30 }, { name: 'Turbine', minScore: '680000000000000000000000', bips: 20 }, { name: 'Reactor', minScore: '1360000000000000000000000', bips: 10 }], dynoWeight: '828590000000000000000', dynoWeightSource: 'average', countFarmBolt: true, source: 'config', sink: SINK, address: '0x00000000000000000000000000000000000005c4' }
     const swapQuote = (arg: { tokenIn: string; tokenOut: string; amountIn: string; slippageBips?: number }): SwapQuote => {
       const inRow = snap.rows.find((r) => r.address.toLowerCase() === arg.tokenIn.toLowerCase()) ?? snap.rows[0]
       const outRow = snap.rows.find((r) => r.address.toLowerCase() === arg.tokenOut.toLowerCase()) ?? snap.rows[2]
@@ -162,11 +189,11 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
         priceImpactPct: 0.12,
         slippageBips: Number(slippage),
         taxBips: 0,
-        fee: { bips: 40, tier: 1, amountRaw: fee.toString(), sink: SINK, source: 'chain', nextTierAt: '136000000000000000000000', nextTierBips: 30 },
+        fee: { bips: 40, tier: 1, name: 'Charge', amountRaw: fee.toString(), sink: SINK, source: 'config', nextTierAt: '136000000000000000000000', nextTierBips: 30 },
         route: { label: 'V3 0.3%', hops: [{ kind: 'v3', tokenIn: '0x138DAFbDA0CCB3d8E39C19edb0510Fc31b7C1c77', tokenOut: USDC, fee: 3000 }] },
         gasEstimate: '210000',
         steps: arg.tokenIn === 'native' ? ['swap'] : ['approve', 'permit', 'swap'],
-        quotedAt: FIXED_NOW,
+        quotedAt: Date.now(),
         ok,
         problems: ok ? [] : [amountIn > 0n ? `Not enough ${inRow?.symbol ?? 'ETN'}.` : 'Enter an amount above zero.'],
       }
@@ -203,19 +230,19 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
       { chainId: 52014, address: USDC, symbol: 'USDC', name: 'Hyperlane USDC', decimals: 6, logoUri: null, price: 1, change24h: 0, change7d: 0, volume24h: 96_400, tvl: 610_000, marketCap: null, safety: 'VERIFIED', pinned: false },
       { chainId: 52014, address: '0xEe432C220273e4F949007B4c1946562826Efa055', symbol: 'DYNO', name: 'DYNO', decimals: 18, logoUri: null, price: 0.012, change24h: 11.4, change7d: -2.2, volume24h: 12_000, tvl: 41_000, marketCap: 240_000, safety: 'VERIFIED', pinned: false },
     ]
-    const legendsCollection: CollectionView = { chainId: 52014, address: LEGENDS, name: 'Electric Legends', volumeEtn: 128, volumeChangePct: 12.5, floorChangePct: -3.1, sales: 4, description: 'The flagship ElectroSwap collection. Every Legend shares a third of the marketplace fees.', verified: true, standard: 'ERC721', totalSupply: 500, imageUrl: null, bannerUrl: null, creatorFee: { payoutAddress: OTHER, basisPoints: 500 }, floorEtn: 40, volume24hEtn: 128, totalVolumeEtn: 41_208, owners: 212, listed: 31, percentListed: 6.2, traits: [{ name: 'Element', values: ['Volt', 'Arc', 'Plasma'] }], paysDividends: true, starred: false, owned: 2, mint: { mintable: true, priceWei: '25000000000000000000', mintableCount: 3, totalSupply: 500 } }
+    const legendsCollection: CollectionView = { chainId: 52014, address: LEGENDS, name: 'Electric Legends', volumeEtn: 128, volumeChangePct: 12.5, floorChangePct: -3.1, sales: 4, description: 'The flagship ElectroSwap collection. Every Legend shares a third of the marketplace fees.', verified: true, standard: 'ERC721', totalSupply: 500, imageUrl: art ? LEGENDS_ART.logo : null, bannerUrl: art ? LEGENDS_ART.banner : null, creatorFee: { payoutAddress: OTHER, basisPoints: 500 }, floorEtn: 40, volume24hEtn: 128, totalVolumeEtn: 41_208, owners: 212, listed: 31, percentListed: 6.2, traits: [{ name: 'Element', values: ['Volt', 'Arc', 'Plasma'] }], paysDividends: true, starred: false, owned: 2, mint: { mintable: true, priceWei: '25000000000000000000', mintableCount: 3, totalSupply: 500 } }
     const voltsCollection: CollectionView = { chainId: 52014, address: '0x8888888888888888888888888888888888888888', name: 'Volts', volumeEtn: 900, volumeChangePct: -8, floorChangePct: 2.4, sales: 11, description: null, verified: true, standard: 'ERC721', totalSupply: 2_000, imageUrl: null, bannerUrl: null, creatorFee: null, floorEtn: 2.4, volume24hEtn: 900, totalVolumeEtn: 12_000, owners: 640, listed: 140, percentListed: 7, traits: [], paysDividends: false, starred: false, owned: 0 }
-    const piece = (tokenId: string, extra: Partial<AssetView> = {}): AssetView => ({ chainId: 52014, address: LEGENDS, tokenId, name: `Legend #${tokenId}`, description: 'A Volt-class Legend, struck in the first storm.', imageUrl: null, smallImageUrl: null, animationUrl: null, mediaType: 'IMAGE', owner: address, mine: true, standard: 'ERC721', collectionName: 'Electric Legends', collectionVerified: true, collectionImageUrl: null, creatorFee: { payoutAddress: OTHER, basisPoints: 500 }, suspicious: false, rarityRank: Number(tokenId) * 3, traits: [{ name: 'Element', value: 'Volt', rarity: 0.12 }, { name: 'Charge', value: 'High', rarity: 0.3 }], lastPriceEtn: 38, listing: null, bestBid: null, bids: [], dividendsWei: '310000000000000000', paysDividends: true, ...extra })
+    const piece = (tokenId: string, extra: Partial<AssetView> = {}): AssetView => ({ chainId: 52014, address: LEGENDS, tokenId, name: `Legend #${tokenId}`, description: 'A Volt-class Legend, struck in the first storm.', imageUrl: artOf(tokenId), smallImageUrl: artOf(tokenId), animationUrl: null, mediaType: 'IMAGE', owner: address, mine: true, standard: 'ERC721', collectionName: 'Electric Legends', collectionVerified: true, collectionImageUrl: art ? LEGENDS_ART.logo : null, creatorFee: { payoutAddress: OTHER, basisPoints: 500 }, suspicious: false, rarityRank: Number(tokenId) * 3, traits: [{ name: 'Element', value: 'Volt', rarity: 0.12 }, { name: 'Charge', value: 'High', rarity: 0.3 }], lastPriceEtn: 38, listing: null, bestBid: null, bids: [], dividendsWei: '310000000000000000', paysDividends: true, ...extra })
     const offer = { type: 'BID' as const, status: 'VALID' as const, priceEtn: 36.5, priceRaw: '36500000000000000000', orderHash: '0xbid1', maker: OTHER, createdAt: Math.floor(FIXED_NOW / 1000) - 3_600, endAt: Math.floor(FIXED_NOW / 1000) + 5 * 86_400, actionable: true }
     const listing = { type: 'LISTING' as const, status: 'VALID' as const, priceEtn: 42, priceRaw: '42000000000000000000', orderHash: '0xlist1', maker: address, createdAt: Math.floor(FIXED_NOW / 1000) - 7_200, endAt: Math.floor(FIXED_NOW / 1000) + 6 * 86_400, actionable: true }
-    const owned: AssetView[] = [piece('12', { bids: [offer], bestBid: offer }), piece('13', { listing }), piece('41', { rarityRank: 9, dividendsWei: '0' })]
-    const inventory: Inventory = { accountId, chainId: 52014, assets: owned, collections: [{ address: LEGENDS, name: 'Electric Legends', logoUrl: null, balance: 3, floorEtn: 40 }], floorValueEtn: 120, listedCount: 1, withOffersCount: 1, observedAt: FIXED_NOW }
-    const legendsStatus: LegendsStatus = { accountId, chainId: 52014, collection: LEGENDS, distributor: '0xc4065B310d64a02Ac4BF43CFd35C5Fe1A42811ea', ownedTokenIds: ['12', '13', '41'], registeredTokenIds: ['12', '13'], unregisteredTokenIds: ['41'], claimableWei: '3210000000000000000', bestClaimWei: '5000000000000000000', vesselLevel: 0.64, lifetimePaidWei: '41208000000000000000000', activeTokenCount: 300, shareOfNextFee: 0.00222, dividendsEnabled: true, mint: { mintable: true, priceWei: '105000000000000000000', mintableCount: 3, totalSupply: 500 }, observedAt: FIXED_NOW }
+    const owned: AssetView[] = [piece(ownedIds[0] as string, { bids: [offer], bestBid: offer }), piece(ownedIds[1] as string, { listing }), piece(ownedIds[2] as string, { rarityRank: 9, dividendsWei: '0' })]
+    const inventory: Inventory = { accountId, chainId: 52014, assets: owned, collections: [{ address: LEGENDS, name: 'Electric Legends', logoUrl: art ? LEGENDS_ART.logo : null, balance: 3, floorEtn: 40 }], floorValueEtn: 120, listedCount: 1, withOffersCount: 1, observedAt: FIXED_NOW }
+    const legendsStatus: LegendsStatus = { accountId, chainId: 52014, collection: LEGENDS, distributor: '0xc4065B310d64a02Ac4BF43CFd35C5Fe1A42811ea', ownedTokenIds: ownedIds, registeredTokenIds: ['12', '13'], unregisteredTokenIds: ['41'], claimableWei: '3210000000000000000', bestClaimWei: '5000000000000000000', vesselLevel: 0.64, lifetimePaidWei: '41208000000000000000000', activeTokenCount: 300, shareOfNextFee: 0.00222, dividendsEnabled: true, mint: { mintable: true, priceWei: '105000000000000000000', mintableCount: 3, totalSupply: 500 }, observedAt: FIXED_NOW }
     const farm: FarmView = { chainId: 52014, id: 0, version: 2, name: 'ETN/USDC', poolAddr: '0x7777777777777777777777777777777777777777', token0: '0x138DAFbDA0CCB3d8E39C19edb0510Fc31b7C1c77', token1: USDC, symbol0: 'ETN', symbol1: 'USDC', decimals0: 18, decimals1: 6, active: true, tvlUsd: 12_400, baseApy: 41.2, thirdPartyApy: 3.1, thirdParty: { token: '0x8888888888888888888888888888888888888888', symbol: 'ZAP' }, farmerCount: 88, position: { liquidity: '100000000000000000000', shareOfFarm: 0.043, durationMultiplier: 17_500, boltMultiplier: 10_500, boltDeposited: '50000000000000000000000', startingBlock: 12_058_000, blocksServed: 3_153_600, pendingRewards: '12400000000000000000', pendingThirdParty: '0', fees0: '0', fees1: '0', at2x: FIXED_NOW + 61 * 86_400_000, at25x: FIXED_NOW + 183 * 86_400_000, nextStair: { bolt: '100000000000000000000000', multiplier: 11_500, more: '50000000000000000000000' }, amount0: '410000000000000000000000', amount1: '1213000000' } }
     const farm2: FarmView = { ...farm, id: 1, version: 3, name: 'BOLT/ETN', token0: BOLT, token1: '0x138DAFbDA0CCB3d8E39C19edb0510Fc31b7C1c77', symbol0: 'BOLT', symbol1: 'ETN', decimals0: 18, decimals1: 18, tvlUsd: 6_100, baseApy: 58.9, thirdPartyApy: null, thirdParty: null, farmerCount: 41, position: null }
     const campaign: CampaignView = { chainId: 52014, pool: POOL, status: 'ACTIVE', phase: 'live', token: { name: 'Zap Protocol', symbol: 'ZAP', decimals: 18, address: null }, creator: OTHER, creatorName: 'zap.etn', logoUrl: null, bannerUrl: null, description: 'Zap is a lightning-fast payments layer on Electroneum.', links: { website: 'https://zap.example', twitter: null, discord: null, telegram: 'https://t.me/zap' }, starts: Math.floor(FIXED_NOW / 1000) - 86_400, ends: Math.floor(FIXED_NOW / 1000) + 3 * 86_400, raisedWei: '3120000000000000000000', minEtnToLaunchWei: '5000000000000000000000', maxContributionWei: '500000000000000000000', minContributionWei: '1000000000000000000', fill: 0.624, contributorCount: 63, affiliatePercent: 5, shareLink: 'zap7k', contributedWei: '250000000000000000000', claimed: false, claimableTokensRaw: '0', referralClaimableWei: '0', keys: ['contribute'], starred: true }
     const campaign2: CampaignView = { ...campaign, pool: '0x9999999999999999999999999999999999999998', status: 'PENDING', phase: 'upcoming', token: { name: 'Nimbus', symbol: 'NIM', decimals: 18, address: null }, starts: Math.floor(FIXED_NOW / 1000) + 2 * 86_400, ends: Math.floor(FIXED_NOW / 1000) + 9 * 86_400, raisedWei: '0', fill: 0, contributorCount: 0, contributedWei: '0', keys: [], starred: false, creatorName: null }
-    const positions: Positions = { accountId, chainId: 52014, farms: [farm], legends: legendsStatus, orders: [{ chainId: 52014, orderId: '42', tokenIn: BOLT, tokenOut: USDC, symbolIn: 'BOLT', symbolOut: 'USDC', decimalsIn: 18, decimalsOut: 6, amountInExact: '5000000000000000000000', amountOutMin: '1100000000', amountInRemaining: '5000000000000000000000', amountOutFilled: '0', unwrapOutput: false, createdAt: Math.floor(FIXED_NOW / 1000) - 3_600, expiresAt: Math.floor(FIXED_NOW / 1000) + 6 * 86_400, status: 'open' }], campaigns: [campaign], accessory: { kind: 'dividends', text: '3.21 ETN in dividends to claim', target: 'legends' }, observedAt: FIXED_NOW }
+    const positions: Positions = { accountId, chainId: 52014, farms: [farm], legends: legendsStatus, orders: [{ chainId: 52014, orderId: '42', tokenIn: BOLT, tokenOut: USDC, symbolIn: 'BOLT', symbolOut: 'USDC', decimalsIn: 18, decimalsOut: 6, amountInExact: '5000000000000000000000', amountOutMin: '1100000000', amountInRemaining: '5000000000000000000000', amountOutFilled: '0', unwrapOutput: false, createdAt: Math.floor(FIXED_NOW / 1000) - 3_600, expiresAt: Math.floor(FIXED_NOW / 1000) + 6 * 86_400, status: 'open' }], campaigns: [campaign], accessories: [{ kind: 'dividends', text: '3.21 ETN in dividends to claim', target: 'legends' }, { kind: 'collect', text: '12.4 DYNO to collect', target: 'farm:1' }], observedAt: FIXED_NOW }
     const watch: WatchItem[] = [
       { kind: 'token', chainId: 52014, address: BOLT, label: 'BOLT', above: 0.25, below: null, onLive: false, addedAt: FIXED_NOW - 86_400_000, lastValue: 0.19 },
       { kind: 'campaign', chainId: 52014, address: POOL, label: 'ZAP', above: null, below: null, onLive: true, addedAt: FIXED_NOW - 3_600_000, lastValue: 1 },
@@ -238,6 +265,9 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
         input: Any,
         handler: async (arg) => {
           const a = (arg as { address: string }).address.toLowerCase()
+          if (a === 'native') {
+            return { address: 'native', symbol: 'ETN', name: 'Electroneum', decimals: 18, native: true, price: 0.0065, change24h: 2.1, change7d: 5.4, volume24h: 184_200, tvl: 1_240_000, marketCap: 53_000_000, fdv: 53_000_000, safety: 'VERIFIED', spam: false, logoUrl: null, description: "Electroneum's own coin, and the gas of every transaction on the chain.", homepageUrl: 'https://electroneum.com', twitterUrl: null, telegramUrl: null, sparkline: fixturePrices('1D').points }
+          }
           if (a !== BOLT.toLowerCase()) return null
           return { address: BOLT, symbol: 'BOLT', name: 'BOLT', decimals: 18, native: false, price: 0.19, change24h: -0.8, change7d: 3.2, volume24h: 42_100, tvl: 380_000, marketCap: 1_900_000, fdv: 2_400_000, safety: 'VERIFIED', spam: false, logoUrl: null, description: 'BOLT is the ElectroSwap utility token. Holding it lowers the wallet fee on every swap, boosts farm rewards through the multiplier stairs, and puts you on the launchpad allowlist. Supply is fixed; a share of every marketplace fee buys BOLT back for the Legends vault.', homepageUrl: 'https://electroswap.io', twitterUrl: 'https://x.com/electroswap', telegramUrl: 'https://t.me/electroswap', sparkline: fixturePrices('1D').points }
         },
@@ -252,7 +282,7 @@ export async function createFixtureEngine(scenario: FixtureScenario): Promise<En
       inventory: { input: Any, handler: async () => inventory },
       assets: { input: Any, handler: async () => ({ assets: [...owned, piece('77', { owner: OTHER, mine: false, listing: { ...listing, maker: OTHER, priceEtn: 44, priceRaw: '44000000000000000000' }, dividendsWei: '0' }), piece('78', { owner: OTHER, mine: false, dividendsWei: '0' })], total: 500, next: null }) },
       asset: { input: Any, handler: async (arg) => owned.find((a) => a.tokenId === (arg as { tokenId: string }).tokenId) ?? piece(String((arg as { tokenId: string }).tokenId), { owner: OTHER, mine: false, listing: { ...listing, maker: OTHER, priceEtn: 44, priceRaw: '44000000000000000000' }, dividendsWei: '0' }) },
-      activity: { input: Any, handler: async () => [{ address: LEGENDS, tokenId: '13', name: 'Legend #13', imageUrl: null, type: 'LISTING' as const, from: address, to: null, hash: null, priceEtn: 42, timestamp: Math.floor(FIXED_NOW / 1000) - 7_200 }, { address: LEGENDS, tokenId: '9', name: 'Legend #9', imageUrl: null, type: 'SALE' as const, from: OTHER, to: address, hash: `0x${'d4'.repeat(32)}`, priceEtn: 38, timestamp: Math.floor(FIXED_NOW / 1000) - 86_400 }] },
+      activity: { input: Any, handler: async () => [{ address: LEGENDS, tokenId: art ? '24' : '13', name: art ? 'Legend #24' : 'Legend #13', imageUrl: artOf(art ? '24' : '13'), type: 'LISTING' as const, from: address, to: null, hash: null, priceEtn: 42, timestamp: Math.floor(FIXED_NOW / 1000) - 7_200 }, { address: LEGENDS, tokenId: art ? '6' : '9', name: art ? 'Legend #6' : 'Legend #9', imageUrl: artOf(art ? '6' : '9'), type: 'SALE' as const, from: OTHER, to: address, hash: `0x${'d4'.repeat(32)}`, priceEtn: 38, timestamp: Math.floor(FIXED_NOW / 1000) - 86_400 }] },
       offers: { input: Any, handler: async () => offersInbox },
       collectionApproved: { input: Any, handler: async () => true },
       customCollections: { input: Any, handler: async () => [] },

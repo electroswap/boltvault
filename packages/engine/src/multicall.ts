@@ -1,7 +1,8 @@
 /**
- * Batched reads through Multicall3 (master plan §2.8): chunks of 50, the
- * canonical deployment verified by `eth_getCode` once per chain, and a
- * per-call fallback when a chain has no working multicall.
+ * Batched reads through Multicall3 (master plan §2.8): bursts coalesced into
+ * one aggregate, chunked and sent in parallel, the canonical deployment
+ * verified by `eth_getCode` once per chain, and a per-call fallback when a
+ * chain has no working multicall.
  */
 import { ELECTRONEUM_ADDRESSES } from '@boltvault/chains'
 import type { Abi, Hex, PublicClient } from 'viem'
@@ -18,7 +19,25 @@ export interface ReadCall {
 
 export type ReadResult = { readonly ok: true; readonly value: unknown } | { readonly ok: false }
 
-const CHUNK = 50
+/**
+ * Calls per aggregate.
+ *
+ * Was 50, which is a cautious number for arbitrary calls and a wasteful one
+ * for the call this actually makes most: `balanceOf`, 36 bytes in and 32 out.
+ * BNB's public list is over a thousand tokens, so a portfolio read was twenty
+ * aggregates — and they went out one after another. At 200 it is four, and
+ * the request is still a few tens of kilobytes.
+ */
+const CHUNK = 200
+/**
+ * How many aggregates for one chain may be in flight together.
+ *
+ * Enough that a long universe finishes in a round or two, few enough that one
+ * refresh does not look like a burst to the endpoint serving it — the governor
+ * would let far more through, and being a good guest is cheaper than being
+ * rate-limited.
+ */
+const CHUNK_CONCURRENCY = 4
 const verified = new Map<number, Hex | null>()
 
 /**
@@ -128,22 +147,42 @@ async function readManyNow(chains: ChainsService, chainId: number, calls: readon
   const mc = await multicallAddress(chains, chainId)
   const out: ReadResult[] = []
   if (mc) {
-    for (let i = 0; i < calls.length; i += CHUNK) {
-      const chunk = calls.slice(i, i + CHUNK)
-      try {
-        const results = await client.multicall({ contracts: chunk.map((c) => ({ address: c.address, abi: c.abi, functionName: c.functionName, args: c.args as never })) as never, multicallAddress: mc, allowFailure: true })
-        for (const r of results as Array<{ status: 'success' | 'failure'; result?: unknown }>) out.push(r.status === 'success' ? { ok: true, value: r.result } : { ok: false })
-      } catch {
-        // A whole chunk failed (RPC hiccup): fall back per call for this chunk.
-        for (const c of chunk) out.push(await one(client, c))
+    const chunks: ReadCall[][] = []
+    for (let i = 0; i < calls.length; i += CHUNK) chunks.push(calls.slice(i, i + CHUNK))
+    // Bounded workers rather than `Promise.all` over every chunk: the results
+    // are written back by index, so the answer keeps the caller's order however
+    // the chunks finish.
+    const done: ReadResult[][] = new Array<ReadResult[]>(chunks.length)
+    let next = 0
+    const worker = async (): Promise<void> => {
+      for (;;) {
+        const i = next
+        next += 1
+        const chunk = chunks[i]
+        if (chunk === undefined) return
+        done[i] = await aggregate(client, mc, chunk)
       }
     }
-    return out
+    await Promise.all(Array.from({ length: Math.min(CHUNK_CONCURRENCY, chunks.length) }, () => worker()))
+    return done.flat()
   }
   // No multicall on this chain: individual calls, bounded so a huge universe cannot melt the RPC.
   for (const c of calls.slice(0, 120)) out.push(await one(client, c))
   for (let i = 120; i < calls.length; i++) out.push({ ok: false })
   return out
+}
+
+/** One aggregate, falling back to individual calls when the whole thing fails. */
+async function aggregate(client: PublicClient, mc: Hex, chunk: readonly ReadCall[]): Promise<ReadResult[]> {
+  try {
+    const results = await client.multicall({ contracts: chunk.map((c) => ({ address: c.address, abi: c.abi, functionName: c.functionName, args: c.args as never })) as never, multicallAddress: mc, allowFailure: true })
+    return (results as Array<{ status: 'success' | 'failure'; result?: unknown }>).map((r) => (r.status === 'success' ? { ok: true, value: r.result } : { ok: false }))
+  } catch {
+    // A whole chunk failed (RPC hiccup): fall back per call for this chunk.
+    const out: ReadResult[] = []
+    for (const c of chunk) out.push(await one(client, c))
+    return out
+  }
 }
 
 async function one(client: PublicClient, c: ReadCall): Promise<ReadResult> {

@@ -28,6 +28,7 @@ import {
 import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
 import type { SealedMap } from '../sealed'
+import { authHeaders } from '../apiAuth'
 import { EngineError } from '../errors'
 import type { EventBus, NamespaceSpec } from '../host'
 import type { PairedDevice, Settings, SyncStatus } from '../schema'
@@ -46,11 +47,18 @@ export class MemoryRelay implements Relay {
   private readonly rows = new Map<string, SealedRecord[]>()
   async put(pairingId: string, sealed: SealedRecord): Promise<void> {
     const list = this.rows.get(pairingId) ?? []
-    if (!list.some((r) => r.seq === sealed.seq && r.authorSigningPublicKey === sealed.authorSigningPublicKey)) list.push(sealed)
+    if (
+      !list.some(
+        (r) => r.seq === sealed.seq && r.authorSigningPublicKey === sealed.authorSigningPublicKey,
+      )
+    )
+      list.push(sealed)
     this.rows.set(pairingId, list)
   }
   async list(pairingId: string, afterSeq: number): Promise<SealedRecord[]> {
-    return (this.rows.get(pairingId) ?? []).filter((r) => r.seq > afterSeq).sort((a, b) => a.seq - b.seq)
+    return (this.rows.get(pairingId) ?? [])
+      .filter((r) => r.seq > afterSeq)
+      .sort((a, b) => a.seq - b.seq)
   }
 }
 
@@ -61,15 +69,28 @@ export class HttpRelay implements Relay {
     private readonly fetchFn: typeof fetch = fetch,
     private readonly clientKey?: string,
   ) {}
-  private headers(): Record<string, string> {
-    return { 'content-type': 'application/json', ...(this.clientKey ? { 'X-BoltVault-Key': this.clientKey } : {}) }
+  /** The key never travels; each call carries a signature over its own method, path and body (§9.1). */
+  private headers(method: string, url: string, body: string): Record<string, string> {
+    return {
+      'content-type': 'application/json',
+      ...(this.clientKey
+        ? authHeaders({ key: this.clientKey, method, url, body, now: Date.now() })
+        : {}),
+    }
   }
   async put(pairingId: string, sealed: SealedRecord): Promise<void> {
-    const res = await this.fetchFn(`${this.baseUrl}/${pairingId}/${sealed.seq}`, { method: 'PUT', headers: this.headers(), body: JSON.stringify(sealed) })
+    const url = `${this.baseUrl}/${pairingId}/${sealed.seq}`
+    const body = JSON.stringify(sealed)
+    const res = await this.fetchFn(url, {
+      method: 'PUT',
+      headers: this.headers('PUT', url, body),
+      body,
+    })
     if (!res.ok) throw new EngineError('internal', `relay put failed: ${res.status}`)
   }
   async list(pairingId: string, afterSeq: number): Promise<SealedRecord[]> {
-    const res = await this.fetchFn(`${this.baseUrl}/${pairingId}?after=${afterSeq}`, { headers: this.headers() })
+    const url = `${this.baseUrl}/${pairingId}?after=${afterSeq}`
+    const res = await this.fetchFn(url, { headers: this.headers('GET', url, '') })
     if (!res.ok) throw new EngineError('internal', `relay list failed: ${res.status}`)
     return (await res.json()) as SealedRecord[]
   }
@@ -101,7 +122,15 @@ export type PairedDeviceRow = z.infer<typeof PairedDeviceRowSchema>
  * Keychain-held key.)
  */
 
-const AnswerSchema = z.object({ v: z.literal(1), kind: z.literal('boltvault-pair-answer'), pairingId: z.string(), deviceId: z.string(), label: z.string(), x25519PublicKey: z.string(), signingPublicKey: z.string() })
+const AnswerSchema = z.object({
+  v: z.literal(1),
+  kind: z.literal('boltvault-pair-answer'),
+  pairingId: z.string(),
+  deviceId: z.string(),
+  label: z.string(),
+  x25519PublicKey: z.string(),
+  signingPublicKey: z.string(),
+})
 type Answer = z.infer<typeof AnswerSchema>
 
 interface Pending {
@@ -126,10 +155,13 @@ export interface SyncDeps {
 
 export class SyncService {
   private pending: Pending | null = null
-  private hook: ((rec: SyncRecord, from: { deviceId: string; label: string }) => Promise<boolean>) | null = null
+  private hook:
+    ((rec: SyncRecord, from: { deviceId: string; label: string }) => Promise<boolean>) | null = null
 
   /** Remote sign registers here for the `signRequest` / `signResponse` collections (§6). */
-  setRecordHook(hook: (rec: SyncRecord, from: { deviceId: string; label: string }) => Promise<boolean>): void {
+  setRecordHook(
+    hook: (rec: SyncRecord, from: { deviceId: string; label: string }) => Promise<boolean>,
+  ): void {
     this.hook = hook
   }
 
@@ -149,7 +181,14 @@ export class SyncService {
 
   private async label(): Promise<string> {
     const { label } = (await this.deps.meta.get('me')) ?? { label: null, applied: {} }
-    return label ?? (this.platform.kind === 'mobile' ? 'Phone' : this.platform.kind === 'extension' ? 'Browser' : 'Device')
+    return (
+      label ??
+      (this.platform.kind === 'mobile'
+        ? 'Phone'
+        : this.platform.kind === 'extension'
+          ? 'Browser'
+          : 'Device')
+    )
   }
 
   private async devices(): Promise<PairedDeviceRow[]> {
@@ -162,13 +201,26 @@ export class SyncService {
 
   async status(): Promise<SyncStatus> {
     const [me, label, rows] = await Promise.all([this.identity(), this.label(), this.devices()])
-    const devices: PairedDevice[] = rows.map((r) => ({ deviceId: r.deviceId, label: r.label, pairedAt: r.pairedAt, lastSeenAt: r.lastSeenAt }))
+    const devices: PairedDevice[] = rows.map((r) => ({
+      deviceId: r.deviceId,
+      label: r.label,
+      pairedAt: r.pairedAt,
+      lastSeenAt: r.lastSeenAt,
+    }))
     const p = this.pending
     return {
       deviceId: me.deviceId,
       deviceLabel: label,
       devices,
-      pending: p && p.channel && p.peer ? { pairingId: p.pairingId, sas: p.channel.sas, peerDeviceId: p.peer.deviceId, role: p.role } : null,
+      pending:
+        p && p.channel && p.peer
+          ? {
+              pairingId: p.pairingId,
+              sas: p.channel.sas,
+              peerDeviceId: p.peer.deviceId,
+              role: p.role,
+            }
+          : null,
     }
   }
 
@@ -179,24 +231,38 @@ export class SyncService {
   }
 
   async setDeviceLabel(label: string): Promise<SyncStatus> {
-    await this.deps.meta.set('me', { ...((await this.deps.meta.get('me')) ?? { label: null, applied: {} }), label })
+    await this.deps.meta.set('me', {
+      ...((await this.deps.meta.get('me')) ?? { label: null, applied: {} }),
+      label,
+    })
     return this.emit()
   }
 
   async createOffer(relayUrl: string): Promise<{ offer: string }> {
     const me = await this.identity()
     const keys = createPairingKeys((n) => this.platform.random(n))
-    const offer = createPairingOffer(me, keys, relayUrl, 10 * 60_000, this.platform.now(), (n) => this.platform.random(n))
-    this.pending = { role: 'offer', pairingId: offer.pairingId, keys, relayUrl, peer: null, channel: null }
+    const offer = createPairingOffer(me, keys, relayUrl, 10 * 60_000, this.platform.now(), (n) =>
+      this.platform.random(n),
+    )
+    this.pending = {
+      role: 'offer',
+      pairingId: offer.pairingId,
+      keys,
+      relayUrl,
+      peer: null,
+      channel: null,
+    }
     return { offer: JSON.stringify({ ...offer, label: await this.label() }) }
   }
 
   async acceptOffer(offerJson: string): Promise<{ sas: string; answer: string }> {
     const offer = parsePairingOffer(offerJson)
     if (!offer) throw new EngineError('invalid_argument', 'that is not a BoltVault pairing code')
-    if (offer.expiresAt < this.platform.now()) throw new EngineError('expired', 'this pairing code has expired — make a new one')
+    if (offer.expiresAt < this.platform.now())
+      throw new EngineError('expired', 'this pairing code has expired — make a new one')
     const me = await this.identity()
-    if (offer.deviceId === me.deviceId) throw new EngineError('invalid_argument', 'that is this device')
+    if (offer.deviceId === me.deviceId)
+      throw new EngineError('invalid_argument', 'that is this device')
     const keys = createPairingKeys((n) => this.platform.random(n))
     const channel = deriveChannel(offer.pairingId, keys.x25519PrivateKey, offer.x25519PublicKey)
     const offerLabel = (JSON.parse(offerJson) as { label?: unknown }).label
@@ -205,26 +271,44 @@ export class SyncService {
       pairingId: offer.pairingId,
       keys,
       relayUrl: offer.relayUrl,
-      peer: { deviceId: offer.deviceId, label: typeof offerLabel === 'string' ? offerLabel : 'Device', signingPublicKey: offer.signingPublicKey },
+      peer: {
+        deviceId: offer.deviceId,
+        label: typeof offerLabel === 'string' ? offerLabel : 'Device',
+        signingPublicKey: offer.signingPublicKey,
+      },
       channel,
     }
-    const answer: Answer = { v: 1, kind: 'boltvault-pair-answer', pairingId: offer.pairingId, deviceId: me.deviceId, label: await this.label(), x25519PublicKey: keys.x25519PublicKey, signingPublicKey: me.signingPublicKey }
+    const answer: Answer = {
+      v: 1,
+      kind: 'boltvault-pair-answer',
+      pairingId: offer.pairingId,
+      deviceId: me.deviceId,
+      label: await this.label(),
+      x25519PublicKey: keys.x25519PublicKey,
+      signingPublicKey: me.signingPublicKey,
+    }
     await this.emit()
     return { sas: channel.sas, answer: JSON.stringify(answer) }
   }
 
   async completeOffer(answerJson: string): Promise<{ sas: string }> {
     const p = this.pending
-    if (!p || p.role !== 'offer') throw new EngineError('invalid_argument', 'no pairing offer is open')
+    if (!p || p.role !== 'offer')
+      throw new EngineError('invalid_argument', 'no pairing offer is open')
     let answer: Answer
     try {
       answer = AnswerSchema.parse(JSON.parse(answerJson))
     } catch {
       throw new EngineError('invalid_argument', 'that is not a BoltVault pairing answer')
     }
-    if (answer.pairingId !== p.pairingId) throw new EngineError('invalid_argument', 'this answer is for a different pairing')
+    if (answer.pairingId !== p.pairingId)
+      throw new EngineError('invalid_argument', 'this answer is for a different pairing')
     p.channel = deriveChannel(p.pairingId, p.keys.x25519PrivateKey, answer.x25519PublicKey)
-    p.peer = { deviceId: answer.deviceId, label: answer.label, signingPublicKey: answer.signingPublicKey }
+    p.peer = {
+      deviceId: answer.deviceId,
+      label: answer.label,
+      signingPublicKey: answer.signingPublicKey,
+    }
     await this.emit()
     return { sas: p.channel.sas }
   }
@@ -233,7 +317,18 @@ export class SyncService {
     const p = this.pending
     if (!p || !p.channel || !p.peer) throw new EngineError('invalid_argument', 'nothing to confirm')
     const rows = (await this.devices()).filter((r) => r.deviceId !== p.peer?.deviceId)
-    rows.push({ deviceId: p.peer.deviceId, label: p.peer.label, signingPublicKey: p.peer.signingPublicKey, pairingId: p.pairingId, channelKey: p.channel.key, relayUrl: p.relayUrl, pairedAt: this.platform.now(), lastSeenAt: null, seqOut: 0, seqIn: 0 })
+    rows.push({
+      deviceId: p.peer.deviceId,
+      label: p.peer.label,
+      signingPublicKey: p.peer.signingPublicKey,
+      pairingId: p.pairingId,
+      channelKey: p.channel.key,
+      relayUrl: p.relayUrl,
+      pairedAt: this.platform.now(),
+      lastSeenAt: null,
+      seqOut: 0,
+      seqIn: 0,
+    })
     await this.saveDevices(rows)
     this.pending = null
     return this.emit()
@@ -251,15 +346,33 @@ export class SyncService {
 
   // ---- records -------------------------------------------------------------------
 
-  private async collect(): Promise<Array<Omit<SyncRecord, 'seq' | 'authorDeviceId' | 'authorLabel' | 'at'>>> {
+  private async collect(): Promise<
+    Array<Omit<SyncRecord, 'seq' | 'authorDeviceId' | 'authorLabel' | 'at'>>
+  > {
     const out: Array<Omit<SyncRecord, 'seq' | 'authorDeviceId' | 'authorLabel' | 'at'>> = []
     const settings = await this.deps.settings.get()
     const { reducedMotion: _os, autoLock: _local, ...shared } = settings
     out.push({ collection: 'settings', key: 'settings', value: shared })
-    for (const s of this.deps.sites.list()) out.push({ collection: 'siteChain', key: s.origin, value: s.chainId })
+    for (const s of this.deps.sites.list())
+      out.push({ collection: 'siteChain', key: s.origin, value: s.chainId })
     for (const a of await this.deps.vault.accounts()) {
-      if (a.kind === 'watch' || a.kind === 'ledger' || a.kind === 'trezor' || a.kind === 'keystone') {
-        out.push({ collection: 'account', key: a.address.toLowerCase(), value: { kind: a.kind, label: a.label, address: a.address, path: a.hardware?.path ?? null, deviceId: a.hardware?.deviceId ?? null } })
+      if (
+        a.kind === 'watch' ||
+        a.kind === 'ledger' ||
+        a.kind === 'trezor' ||
+        a.kind === 'keystone'
+      ) {
+        out.push({
+          collection: 'account',
+          key: a.address.toLowerCase(),
+          value: {
+            kind: a.kind,
+            label: a.label,
+            address: a.address,
+            path: a.hardware?.path ?? null,
+            deviceId: a.hardware?.deviceId ?? null,
+          },
+        })
       }
     }
     return out
@@ -276,8 +389,17 @@ export class SyncService {
       const channel: Channel = { pairingId: row.pairingId, key: row.channelKey, sas: '' }
       for (const r of records) {
         row.seqOut += 1
-        const rec: SyncRecord = { ...r, seq: row.seqOut, authorDeviceId: me.deviceId, authorLabel: label, at: this.platform.now() }
-        await relay.put(row.pairingId, sealRecord(channel, me, rec, (n) => this.platform.random(n)))
+        const rec: SyncRecord = {
+          ...r,
+          seq: row.seqOut,
+          authorDeviceId: me.deviceId,
+          authorLabel: label,
+          at: this.platform.now(),
+        }
+        await relay.put(
+          row.pairingId,
+          sealRecord(channel, me, rec, (n) => this.platform.random(n)),
+        )
         pushed += 1
       }
     }
@@ -286,7 +408,9 @@ export class SyncService {
   }
 
   /** Seal one record to every paired device now (sign requests and answers, §6). */
-  async pushOne(record: Omit<SyncRecord, 'seq' | 'authorDeviceId' | 'authorLabel' | 'at'>): Promise<{ pushed: number }> {
+  async pushOne(
+    record: Omit<SyncRecord, 'seq' | 'authorDeviceId' | 'authorLabel' | 'at'>,
+  ): Promise<{ pushed: number }> {
     const me = await this.identity()
     const label = await this.label()
     const rows = await this.devices()
@@ -295,8 +419,17 @@ export class SyncService {
       const relay = this.deps.relayFor(row.relayUrl)
       const channel: Channel = { pairingId: row.pairingId, key: row.channelKey, sas: '' }
       row.seqOut += 1
-      const rec: SyncRecord = { ...record, seq: row.seqOut, authorDeviceId: me.deviceId, authorLabel: label, at: this.platform.now() }
-      await relay.put(row.pairingId, sealRecord(channel, me, rec, (n) => this.platform.random(n)))
+      const rec: SyncRecord = {
+        ...record,
+        seq: row.seqOut,
+        authorDeviceId: me.deviceId,
+        authorLabel: label,
+        at: this.platform.now(),
+      }
+      await relay.put(
+        row.pairingId,
+        sealRecord(channel, me, rec, (n) => this.platform.random(n)),
+      )
       pushed += 1
     }
     await this.saveDevices(rows)
@@ -330,7 +463,10 @@ export class SyncService {
       row.lastSeenAt = this.platform.now()
     }
     await this.saveDevices(rows)
-    await this.deps.meta.set('me', { ...((await this.deps.meta.get('me')) ?? { label: null, applied: {} }), applied })
+    await this.deps.meta.set('me', {
+      ...((await this.deps.meta.get('me')) ?? { label: null, applied: {} }),
+      applied,
+    })
     if (count > 0) await this.emit()
     return { applied: count }
   }
@@ -351,12 +487,25 @@ export class SyncService {
       }
       case 'account': {
         if (rec.value === null) return false
-        const v = rec.value as { kind: string; label: string; address: string; path: string | null; deviceId: string | null }
+        const v = rec.value as {
+          kind: string
+          label: string
+          address: string
+          path: string | null
+          deviceId: string | null
+        }
         const existing = await this.deps.vault.accounts()
         if (existing.some((a) => a.address.toLowerCase() === v.address.toLowerCase())) return false
         const label = `${v.label} · from ${from.label}`
         if (v.kind === 'watch') await this.deps.vault.addWatch({ address: v.address, label })
-        else if ((v.kind === 'ledger' || v.kind === 'trezor' || v.kind === 'keystone') && v.path) await this.deps.vault.addHardware({ kind: v.kind, address: v.address, path: v.path, ...(v.deviceId ? { deviceId: v.deviceId } : {}), label })
+        else if ((v.kind === 'ledger' || v.kind === 'trezor' || v.kind === 'keystone') && v.path)
+          await this.deps.vault.addHardware({
+            kind: v.kind,
+            address: v.address,
+            path: v.path,
+            ...(v.deviceId ? { deviceId: v.deviceId } : {}),
+            label,
+          })
         else return false
         return true
       }
@@ -369,13 +518,28 @@ export class SyncService {
 export function syncNamespace(sync: SyncService): NamespaceSpec {
   return {
     status: { handler: () => sync.status() },
-    setDeviceLabel: { input: z.object({ label: z.string().trim().min(1).max(32) }), handler: (arg) => sync.setDeviceLabel((arg as { label: string }).label) },
-    createOffer: { input: z.object({ relayUrl: z.string().min(1) }), handler: (arg) => sync.createOffer((arg as { relayUrl: string }).relayUrl) },
-    acceptOffer: { input: z.object({ offer: z.string().min(1) }), handler: (arg) => sync.acceptOffer((arg as { offer: string }).offer) },
-    completeOffer: { input: z.object({ answer: z.string().min(1) }), handler: (arg) => sync.completeOffer((arg as { answer: string }).answer) },
+    setDeviceLabel: {
+      input: z.object({ label: z.string().trim().min(1).max(32) }),
+      handler: (arg) => sync.setDeviceLabel((arg as { label: string }).label),
+    },
+    createOffer: {
+      input: z.object({ relayUrl: z.string().min(1) }),
+      handler: (arg) => sync.createOffer((arg as { relayUrl: string }).relayUrl),
+    },
+    acceptOffer: {
+      input: z.object({ offer: z.string().min(1) }),
+      handler: (arg) => sync.acceptOffer((arg as { offer: string }).offer),
+    },
+    completeOffer: {
+      input: z.object({ answer: z.string().min(1) }),
+      handler: (arg) => sync.completeOffer((arg as { answer: string }).answer),
+    },
     confirm: { handler: () => sync.confirm() },
     cancelPairing: { handler: () => sync.cancelPairing() },
-    unpair: { input: z.object({ deviceId: z.string() }), handler: (arg) => sync.unpair((arg as { deviceId: string }).deviceId) },
+    unpair: {
+      input: z.object({ deviceId: z.string() }),
+      handler: (arg) => sync.unpair((arg as { deviceId: string }).deviceId),
+    },
     push: { handler: () => sync.push() },
     pull: { handler: () => sync.pull() },
   }

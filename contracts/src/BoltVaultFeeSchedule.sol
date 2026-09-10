@@ -56,8 +56,6 @@ contract BoltVaultFeeSchedule {
     bool public countFarmBolt = true;
     uint256[] public farmIds;
     Tier[] private _tiers;
-    /// @notice Discount for paying the fee in BOLT (v1.1), in bips of the fee.
-    uint16 public boltPayDiscountBips = 2_500;
     /// @notice Reserved: minimum holding duration in blocks (needs a balance-snapshot hook to enforce).
     uint256 public minHoldBlocks;
 
@@ -66,7 +64,6 @@ contract BoltVaultFeeSchedule {
     event DynoWeightSet(uint256 weight);
     event CountFarmBoltSet(bool count);
     event FarmIdsSet(uint256[] farmIds);
-    event BoltPayDiscountSet(uint16 bips);
     event MinHoldBlocksSet(uint256 blocks);
     event OwnershipTransferStarted(address indexed from, address indexed to);
     event OwnershipTransferred(address indexed from, address indexed to);
@@ -111,8 +108,8 @@ contract BoltVaultFeeSchedule {
     }
 
     /// @notice The whole schedule for the fee sheet.
-    function schedule() external view returns (uint16 base, Tier[] memory tiers, uint256 weight, bool countFarm, uint16 boltPayDiscount) {
-        return (baseBips, _tiers, dynoWeight, countFarmBolt, boltPayDiscountBips);
+    function schedule() external view returns (uint16 base, Tier[] memory tiers, uint256 weight, bool countFarm) {
+        return (baseBips, _tiers, dynoWeight, countFarmBolt);
     }
 
     function tiers() external view returns (Tier[] memory) {
@@ -177,12 +174,6 @@ contract BoltVaultFeeSchedule {
     function setFarmIds(uint256[] calldata ids) external onlyOwner {
         farmIds = ids;
         emit FarmIdsSet(ids);
-    }
-
-    function setBoltPayDiscountBips(uint16 bips) external onlyOwner {
-        if (bips > 10_000) revert BipsTooHigh();
-        boltPayDiscountBips = bips;
-        emit BoltPayDiscountSet(bips);
     }
 
     function setMinHoldBlocks(uint256 blocks) external onlyOwner {

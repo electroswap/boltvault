@@ -1,9 +1,17 @@
 /**
  * One collection in the ranked list (owner ask 2026-09-06: the Collections
- * page reads like ElectroSwap's trending table): the rank, the artwork, the
- * name with its verified check, a line of floor · pieces · owners, and at
- * the right the window's volume with its change. Plain rows on the Grid
- * with hairlines between them, so fifty of them stay a list.
+ * page reads like ElectroSwap's trending table): the artwork, the name with
+ * its verified check, a line of floor · pieces · owners, and at the right the
+ * window's volume with its change. Plain rows on the Grid with hairlines
+ * between them, so fifty of them stay a list.
+ *
+ * The rank number is gone. The list is still ranked — it is ordered by volume,
+ * which is the whole point — but printing "1." beside the top row says nothing
+ * the position does not, and the 18 px column plus its gap held the artwork off
+ * the page margin on every row. Owner: "get rid of the numbers on the
+ * collections list, they add no real value ... make sure the collection icons
+ * are left aligned." The artwork is now the first thing in the row, so it
+ * starts exactly where the screen's own inset does.
  */
 import { Artwork, Body, Column, Icon, Pressable, Row, paint } from '@boltvault/ui'
 import type { CollectionView } from '@boltvault/engine'
@@ -32,7 +40,7 @@ function compact(n: number | null): string {
   return n >= 1e6 ? `${trim((n / 1e6).toFixed(1))}M` : n >= 1e4 ? `${trim((n / 1e3).toFixed(1))}K` : n.toLocaleString('en-US')
 }
 
-export function CollectionRankRow({ rank, collection: c, currency, etnUsd, onPress, last = false }: { rank: number; collection: CollectionView; currency: CollectionCurrency; etnUsd: number | null; onPress: () => void; last?: boolean }) {
+export function CollectionRankRow({ collection: c, currency, etnUsd, onPress, last = false }: { collection: CollectionView; currency: CollectionCurrency; etnUsd: number | null; onPress: () => void; last?: boolean }) {
   const change = c.volumeChangePct
   const changeTone: 'surge' | 'burn' | 'mute' = change === null || change === 0 ? 'mute' : change > 0 ? 'surge' : 'burn'
   const line = [
@@ -44,9 +52,6 @@ export function CollectionRankRow({ rank, collection: c, currency, etnUsd, onPre
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={c.name} testID={`explore-collection-${c.address}`} style={{ minHeight: 56, justifyContent: 'center' }}>
       <Row gap="$3" alignItems="center" paddingVertical={8} borderBottomWidth={last ? 0 : 1} borderBottomColor="$edge">
-        <Body tone="mute" size="caption" width={18} textAlign="right" fontVariant={['tabular-nums']}>
-          {String(rank)}
-        </Body>
         <Artwork uri={c.imageUrl} label={c.name} size={36} />
         <Column flex={1} minWidth={0} alignItems="flex-start">
           <Row gap={4} alignItems="center" alignSelf="stretch">

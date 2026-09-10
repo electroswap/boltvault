@@ -47,12 +47,25 @@ function present(value: unknown): boolean {
  * `null` for a key never seen, so a first visit still shows its skeleton.
  */
 export function useLastGood<T>(key: string | null, value: T | null | undefined): T | null {
-  const latest = useRef<T | null>(null)
-  if (key !== null && present(value)) latest.current = value as T
+  /*
+    The held value carries the key it was seen under.
+
+    It used to be a bare value, and the effect below wrote it under whatever
+    key the current render had. So the render *after* a key change — the one
+    where the caller has reset and is passing null — filed the previous key's
+    answer under the new key. Switching Home from Electroneum to Ethereum
+    therefore did not merely show Electroneum's total for a beat; it recorded
+    it as Ethereum's, and the next visit to Ethereum painted those numbers
+    instantly and with confidence. A remembered value belongs to the key it
+    was seen under, or it is not a memory of anything.
+  */
+  const latest = useRef<{ key: string; value: T } | null>(null)
+  if (key !== null && present(value)) latest.current = { key, value: value as T }
   useEffect(() => {
     // The write lands in an effect so render stays free of side effects; the
     // read below is synchronous, which is the whole point.
-    if (key !== null && present(latest.current)) keep(key, latest.current)
+    const held = latest.current
+    if (key !== null && held !== null && held.key === key) keep(key, held.value)
   })
   if (present(value)) return value as T
   if (key === null) return null

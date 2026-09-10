@@ -23,7 +23,6 @@ const QUOTER = '0x945ec22FFc3f88aeD031C1C4d051B82282736B41' as Hex
 const V2_ROUTER = '0x5410F10a5E214AF03EA601Ca8C76b665A786BCe1' as Hex
 const DYNO = '0x162D5a58096b63D89D83e0C66b4731A6CC8b10aF' as Hex
 const SINK = '0x00000000000000000000000000000000000051ab' as Hex
-const SCHEDULE = '0x00000000000000000000000000000000000005c4' as Hex
 
 const LIST = { name: 'fixture', tokens: [{ chainId: TESTNET, address: TOKEN, name: 'Fixture Token', symbol: 'FIX', decimals: 6 }] }
 const str = (v: string): Hex => encodeAbiParameters(parseAbiParameters('string'), [v])
@@ -72,13 +71,13 @@ describe('swap on the testnet mock', () => {
   const balances = new Map<string, bigint>()
   const allowances = new Map<string, bigint>()
   let permitNonce = 0
-  let scheduleBips = 30
+  let dynoBalance = 25_000n * 10n ** 18n
 
   beforeAll(async () => {
     resetMulticallCache()
     rpc = await startMockRpc({ chainId: TESTNET })
     rpc.state.code.set(CANONICAL_MULTICALL3.toLowerCase(), 'multicall3')
-    for (const a of [TOKEN, WETN, PERMIT2, UR, QUOTER, V2_ROUTER, DYNO, SINK, SCHEDULE]) rpc.state.code.set(a.toLowerCase(), '0x6080')
+    for (const a of [TOKEN, WETN, PERMIT2, UR, QUOTER, V2_ROUTER, DYNO, SINK]) rpc.state.code.set(a.toLowerCase(), '0x6080')
     rpc.state.calls.set(TOKEN.toLowerCase(), ({ data }) => {
       const sel = data.slice(0, 10)
       if (sel === '0x06fdde03') return str('Fixture Token')
@@ -96,7 +95,10 @@ describe('swap on the testnet mock', () => {
       if (sel === '0x70a08231') return u(0n)
       return '0x'
     })
-    rpc.state.calls.set(DYNO.toLowerCase(), () => u(0n))
+    // 25,000 DYNO at 1 BOLT-eq each puts this account on Magneto, the middle rung
+    // of the testnet ladder in fees.json — tier 2, 30 bips, Turbine next at 50k.
+    // Mutable, because a tier moving mid-flow is now a balance moving.
+    rpc.state.calls.set(DYNO.toLowerCase(), () => u(dynoBalance))
     rpc.state.calls.set(PERMIT2.toLowerCase(), () => encodeAbiParameters(parseAbiParameters('uint160, uint48, uint48'), [0n, 0, permitNonce]))
     // The V3 quoter answers the 0.3 % pool at 1 FIX = 2 WETN-units (scaled by decimals); everything else fails to quote.
     rpc.state.calls.set(QUOTER.toLowerCase(), ({ data }) => {
@@ -112,12 +114,6 @@ describe('swap on the testnet mock', () => {
     })
     rpc.state.calls.set(V2_ROUTER.toLowerCase(), () => {
       throw new Error('no pair')
-    })
-    rpc.state.calls.set(SCHEDULE.toLowerCase(), ({ data }) => {
-      // feeBipsFor(address) → (bips, tier, score) has one argument; schedule() has none.
-      if (data.length === 10 + 64) return encodeAbiParameters(parseAbiParameters('uint16, uint8, uint256'), [scheduleBips, scheduleBips === 30 ? 2 : 0, 18_400n * 10n ** 18n])
-      if (data.length === 10) return encodeAbiParameters(parseAbiParameters('uint16, (uint256 minScore, uint16 bips)[], uint256, bool, uint16'), [50, [{ minScore: 1_000n * 10n ** 18n, bips: 40 }, { minScore: 10_000n * 10n ** 18n, bips: 30 }, { minScore: 50_000n * 10n ** 18n, bips: 20 }], 0n, true, 2_500])
-      return '0x'
     })
     const fetchImpl: typeof fetch = async (input) => {
       if (String(input).includes('tokenlist.json')) return new Response(JSON.stringify(LIST), { status: 200, headers: { 'content-type': 'application/json' } })
@@ -142,21 +138,28 @@ describe('swap on the testnet mock', () => {
     await rpc.close()
   })
 
-  it('falls back to the base fee while no schedule is configured, never lower', async () => {
+  it('knows the tier from the shipped ladder, but will not swap without a recipient', async () => {
     const tier = await engine.engine.holder.tier({ accountId, chainId: TESTNET })
-    expect(tier).toMatchObject({ bips: 50, tier: 0, source: 'fallback', sink: null })
+    // The ladder needs no contract, so the tier is known even here; what is
+    // missing is somewhere to pay, and that is what stops the swap.
+    expect(tier).toMatchObject({ bips: 30, tier: 2, name: 'Magneto', source: 'config', sink: null })
     const q = await engine.engine.swap.quote({ accountId, chainId: TESTNET, tokenIn: TOKEN, tokenOut: 'native', amountIn: '1' })
     expect(q.ok).toBe(false)
-    expect(q.problems.join(' ')).toMatch(/fee sink/i)
+    // The words, not just the refusal: this is the line the owner reads when a
+    // chain has no recipient, and it used to name a sink contract that no
+    // longer exists anywhere in the wallet.
+    expect(q.problems.join(' ')).toMatch(/no fee address is set/i)
+    expect(q.problems.join(' ')).not.toMatch(/sink/i)
   })
 
-  it('reads the tier from the schedule contract once configured', async () => {
-    await engine.engine.holder.configure({ chainId: TESTNET, sink: SINK, schedule: SCHEDULE })
+  it('pays the configured recipient at the ladder\u2019s bips once one is set', async () => {
+    await engine.engine.holder.configure({ chainId: TESTNET, sink: SINK, schedule: null })
     const tier = await engine.engine.holder.tier({ accountId, chainId: TESTNET })
-    expect(tier).toMatchObject({ bips: 30, tier: 2, source: 'chain', sink: SINK, nextTierAt: (50_000n * 10n ** 18n).toString(), nextTierBips: 20 })
+    expect(tier).toMatchObject({ bips: 30, tier: 2, name: 'Magneto', source: 'config', sink: SINK, nextTierAt: (50_000n * 10n ** 18n).toString(), nextTierBips: 20, nextTierName: 'Turbine' })
     const schedule = await engine.engine.holder.schedule({ chainId: TESTNET })
-    expect(schedule.source).toBe('chain')
+    expect(schedule.source).toBe('config')
     expect(schedule.tiers.map((t) => t.bips)).toEqual([40, 30, 20])
+    expect(schedule.tiers.map((t) => t.name)).toEqual(['Charge', 'Magneto', 'Turbine'])
   })
 
   it('quotes through the mini-router with the three fee lines and the steps a fresh token needs', async () => {
@@ -164,7 +167,7 @@ describe('swap on the testnet mock', () => {
     expect(q.ok, q.problems.join(' ')).toBe(true)
     expect(q.route.label).toBe('V3 0.3%')
     expect(q.amountOutRaw).toBe((2n * 10n ** 18n).toString())
-    expect(q.fee).toMatchObject({ bips: 30, tier: 2, sink: SINK, source: 'chain' })
+    expect(q.fee).toMatchObject({ bips: 30, tier: 2, name: 'Magneto', sink: SINK, source: 'config' })
     expect(BigInt(q.fee.amountRaw)).toBe((2n * 10n ** 18n * 30n) / 10_000n)
     expect(BigInt(q.receiveRaw)).toBe(2n * 10n ** 18n - BigInt(q.fee.amountRaw))
     expect(BigInt(q.minimumOutRaw)).toBeLessThan(BigInt(q.receiveRaw))
@@ -249,10 +252,11 @@ describe('swap on the testnet mock', () => {
     const first = await engine.engine.swap.quote({ accountId, chainId: TESTNET, tokenIn: TOKEN, tokenOut: 'native', amountIn: '1' })
     expect(first.fee.bips).toBe(30)
     const { flowId } = await engine.engine.swap.execute({ accountId, chainId: TESTNET, tokenIn: TOKEN, tokenOut: 'native', amountIn: '1' })
-    // Permit first (the allowance is in place), then the schedule changes under us before the swap step builds.
+    // Permit first (the allowance is in place), then the holding drops out of the
+    // tier before the swap step builds — the ladder is fixed, the score is not.
     let flow = await waitStep(engine, flowId, 0, 'signing')
     expect(flow.steps.map((s) => s.step)).toEqual(['permit', 'swap'])
-    scheduleBips = 50
+    dynoBalance = 0n
     await engine.engine.approvals.decide({ id: flow.steps[0]?.requestId ?? '', approve: true })
     flow = await waitStep(engine, flowId, 1, 'signing')
     expect(flow.quote?.fee.bips).toBe(50)

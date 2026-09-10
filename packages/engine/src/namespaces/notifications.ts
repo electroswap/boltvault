@@ -44,7 +44,18 @@ export class NotificationsService {
     // Entries written before notes carried an account cannot be attributed, and
     // the whole reason for this change is that unattributed notes were shown to
     // the wrong wallet. Drop them once; they are re-raised by the next scan.
-    this.items = stored.filter((n) => n.accountId !== undefined)
+    const kept = stored.filter((n) => n.accountId !== undefined)
+    this.items = collapse(kept)
+    /*
+      Write the tidy-up back rather than re-doing it on every read.
+
+      An inbox that accumulated day-stamped rows before this rule existed would
+      otherwise keep them on disk indefinitely, filtered out on the way past —
+      which is fine until something reads the store without going through here.
+      Best effort: a locked vault refuses the write and the read-time collapse
+      still holds.
+    */
+    if (this.items.length !== stored.length) void this.persist(this.items).catch(() => undefined)
     return this.items
   }
 
@@ -67,15 +78,31 @@ export class NotificationsService {
     return this.mine(await this.hydrate(), await this.activeAccountId()).filter((n) => !n.read).length
   }
 
-  /** Append once per id (a repeat is a no-op, read or not). Newest first. */
-  async push(input: { id: string; kind: NotificationView['kind']; title: string; body: string; target?: string | null; accountId?: string | null }): Promise<boolean> {
+  /**
+   * Append once per id (a repeat is a no-op, read or not). Newest first.
+   *
+   * `renew` is for the standing conditions — dividends to claim, rewards to
+   * collect. Those are not events that happened once; they are a state that is
+   * still true, and they were being raised again every day under a
+   * day-stamped id. Nothing deduped across days, so a week of not claiming
+   * left seven identical "Dividends to claim" rows stacked in Needs attention
+   * (owner: "Multiple 'Dividends to claim' on Activity tab"). With `renew` the
+   * standing note is one row that is brought back up to date and unread,
+   * carrying the current amount, instead of a new row beside the old ones.
+   */
+  async push(input: { id: string; kind: NotificationView['kind']; title: string; body: string; target?: string | null; accountId?: string | null; renew?: boolean }): Promise<boolean> {
     const items = await this.hydrate()
     // Ids are scoped too: the same dividends notice for two accounts is two
     // notes, not one that the second account silently swallows as a duplicate.
     const accountId = input.accountId !== undefined ? input.accountId : await this.activeAccountId()
     const id = accountId === null ? input.id : `${accountId}:${input.id}`
-    if (items.some((n) => n.id === id)) return false
-    await this.persist([{ id, kind: input.kind, title: input.title, body: input.body, target: input.target ?? null, at: this.platform.now(), read: false, accountId }, ...items])
+    const note: NotificationView = { id, kind: input.kind, title: input.title, body: input.body, target: input.target ?? null, at: this.platform.now(), read: false, accountId }
+    if (items.some((n) => n.id === id)) {
+      if (input.renew !== true) return false
+      await this.persist([note, ...items.filter((n) => n.id !== id)])
+      return true
+    }
+    await this.persist([note, ...items])
     return true
   }
 
@@ -93,6 +120,36 @@ export class NotificationsService {
     const items = await this.hydrate()
     await this.persist(items.filter((n) => !(n.accountId === null || n.accountId === accountId)))
   }
+}
+
+/**
+ * Kinds that describe a condition rather than an event, and so may only ever
+ * hold one row per account. An alert crossing a threshold is news each time it
+ * happens; "you have dividends to claim" is the same sentence until you claim.
+ */
+const STANDING: ReadonlySet<NotificationView['kind']> = new Set<NotificationView['kind']>(['collect', 'dividends'])
+
+/**
+ * At most one standing note per account and kind, newest kept.
+ *
+ * Runs on every read so an inbox that already accumulated day-stamped
+ * duplicates heals itself on the next open, rather than needing the user to
+ * clear it.
+ */
+function collapse(items: readonly NotificationView[]): NotificationView[] {
+  const seen = new Set<string>()
+  const out: NotificationView[] = []
+  for (const n of items) {
+    if (!STANDING.has(n.kind)) {
+      out.push(n)
+      continue
+    }
+    const stream = `${n.accountId ?? '-'}:${n.kind}`
+    if (seen.has(stream)) continue
+    seen.add(stream)
+    out.push(n)
+  }
+  return out
 }
 
 export function notificationsNamespace(n: NotificationsService): NamespaceSpec {

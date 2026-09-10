@@ -8,6 +8,7 @@
 import { Body, Chip, Column, Icon, Key, Plate, BarLoader, Row, ScrollView, Segmented, Sheet, metrics, paint, shortAddress, type IconName } from '@boltvault/ui'
 import { cacheKey, type ActivityEntry, type ChainView, type NotificationView, type ScanSummary } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
+import { HomeKey } from '../components/HomeKey'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { useActivity } from '../hooks/useActivity'
@@ -58,6 +59,8 @@ function iconFor(e: ActivityEntry): 'arrowUpRight' | 'arrowDownLeft' | 'approval
 }
 
 const NOTE_ICON: Record<NotificationView['kind'], IconName> = { alert: 'bell', live: 'launch', offer: 'nft', collect: 'farm', dividends: 'star', arrival: 'arrowDownLeft', system: 'info' }
+/** Marks that stand for something held, not something to do — drawn solid (owner: the dividends star "should be filled in"). */
+const NOTE_FILLED: ReadonlySet<NotificationView['kind']> = new Set<NotificationView['kind']>(['dividends'])
 
 export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' | 'mobile' }) {
   const engine = useEngine()
@@ -129,7 +132,9 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
     <Column flex={1}>
       <ScrollView contentContainerStyle={{ padding: inset, gap: 12 }} testID="activity">
         <Row justifyContent="space-between" alignItems="center" minHeight={metrics.header}>
-          <Body size="title">{t({ id: 'activity.title', message: 'Activity' })}</Body>
+          {/* A tab root in the full tab has no Back, so it carries the way home. */}
+          <HomeKey show={body === 'extension-tab'} />
+          <Body size="title" flex={1}>{t({ id: 'activity.title', message: 'Activity' })}</Body>
           {scan.error && !scan.refreshing ? (
             <Body tone="mute" size="caption" testID="activity-scan-problem">
               {t({ id: 'activity.scan.problem', message: 'Some chains did not answer' })}
@@ -145,7 +150,7 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
             {recent.map((n) => (
               <Plate key={n.id} role="card" gap={2} onPress={() => openNote(n)} cursor="pointer" testID={`note-${n.id}`}>
                 <Row gap="$3" alignItems="center">
-                  <Icon name={NOTE_ICON[n.kind]} size={18} color={n.read ? paint.mute : paint.ember} />
+                  <Icon name={NOTE_ICON[n.kind]} filled={NOTE_FILLED.has(n.kind)} size={18} color={n.read ? paint.mute : paint.ember} />
                   <Column flex={1}>
                     <Body numberOfLines={1}>{n.title}</Body>
                     <Body tone="mute" size="caption" numberOfLines={1}>

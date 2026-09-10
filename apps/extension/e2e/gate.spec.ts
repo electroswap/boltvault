@@ -21,8 +21,19 @@ import { EXTENSION_DIR, launchWithExtension } from './extension'
  * carried a stacked duplicate layer, 20% of the source, which gzip was already
  * collapsing to almost nothing. Worth knowing before anyone optimises bytes
  * that the compressor has handled.
+ *
+ * **It was measuring the wrong build.** The screenshot harness shipped in the
+ * release, and `harness.html` does not merely add its own chunk — it imports the
+ * fixture engine, which reaches every screen, so Vite hoisted the lot into the
+ * shared chunk the popup loads. Excluding it from a release build took the
+ * measured total from 906 KB to 460 KB. The budget was never 3 KB from the edge;
+ * half of what it was counting was a development surface.
+ *
+ * So the number comes down rather than up. 600 KB is ~140 KB above what ships
+ * today, which is room for real work, and low enough that the gate bites again —
+ * at 910 it could not have caught anything for years.
  */
-const POPUP_GZ_BUDGET = 910 * 1024
+const POPUP_GZ_BUDGET = 600 * 1024
 const INTERACTIVE_BUDGET_MS = 300
 
 async function walk(dir: string): Promise<string[]> {
@@ -35,7 +46,7 @@ async function walk(dir: string): Promise<string[]> {
   return out
 }
 
-test('bundle: popup ≤ 910 KB gzip, no eval / new Function anywhere', async () => {
+test('bundle: popup ≤ 600 KB gzip, no eval / new Function anywhere', async () => {
   const files = (await walk(EXTENSION_DIR)).filter((f) => /\.(js|css|html)$/.test(f))
   let popupGz = 0
   const evals: string[] = []
@@ -47,7 +58,21 @@ test('bundle: popup ≤ 910 KB gzip, no eval / new Function anywhere', async () 
     popupGz += gzipSync(buf, { level: 9 }).length
   }
   console.log(`popup-side gzip total: ${(popupGz / 1024).toFixed(0)} KB`)
+  // Never conditional: no build of this extension may contain eval.
   expect(evals).toEqual([])
+  /*
+    The size assertion only means anything against a release build. A default
+    `pnpm build` includes the harness, and the harness drags the fixture engine
+    into the shared chunk — so measuring one would be measuring development
+    scaffolding. Say which build this is rather than failing a developer's loop
+    for a number that was never about them.
+  */
+  const isRelease = !files.some((f) => f.includes('harness'))
+  if (!isRelease) {
+    console.log(`skipping the size assertion: this is a development build (${(popupGz / 1024).toFixed(0)} KB includes the harness). Run \`pnpm build:release\` to measure what ships.`)
+    test.skip(true, 'development build — run pnpm build:release to measure the shipped bundle')
+    return
+  }
   expect(popupGz).toBeLessThanOrEqual(POPUP_GZ_BUDGET)
 })
 

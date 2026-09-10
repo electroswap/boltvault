@@ -42,6 +42,22 @@ const RNW_DIR = dirname(require.resolve('react-native-web/package.json'))
  */
 export default defineConfig({
   srcDir: '.',
+  /*
+    The screenshot harness is a development surface, and it was shipping.
+
+    `harness.html` and its chunk are 45 KB gzipped — the fixture engine, every
+    screen's fixture data and the scenario switcher — and they were in the
+    release manifest as a web-accessible resource, gated by nothing. No user can
+    reach anything useful through it (the fixtures are an offline engine holding
+    the public `abandon…about` test vector), but it is 45 KB nobody downloads for
+    a reason, and one more page in the attack surface than the product needs.
+
+    Excluded from a release build only. `pnpm build` still produces it, because
+    `e2e/screens.spec.ts`, `e2e/shot.spec.ts` and `e2e/radii.spec.ts` all load
+    `harness.html` out of the same `.output/chrome-mv3` — taking it out of the
+    default build would break the screenshot loop rather than the release.
+  */
+  filterEntrypoints: process.env['BOLTVAULT_HARNESS'] === '0' ? ['background', 'content-isolated', 'content-main', 'popup', 'sign', 'tab'] : undefined,
   // Firefox 128+ is MV3 too: an event page instead of a worker, the same CSP (§4.7).
   manifestVersion: 3,
   manifest: ({ browser }) => ({
@@ -83,6 +99,14 @@ export default defineConfig({
       // Development builds: point the API at a local services/api, turn optional surfaces on.
       __API_ORIGIN__: JSON.stringify((process.env['WXT_BOLTVAULT_API'] ?? 'https://electroswap.io').replace(/\/+$/, '')),
       __LIMIT_ORDERS__: JSON.stringify(process.env['WXT_BOLTVAULT_LIMIT_ORDERS'] === '1'),
+      /*
+        The wallet key (§9.1). A client identifier, not a secret — every
+        install ships the same one — so it buys access, not trust, and every
+        bound that matters is applied by the API regardless of it. Empty means
+        "no key": the engine then talks to the public price feed directly
+        instead of our proxy, which is the documented fallback.
+      */
+      __WALLET_KEY__: JSON.stringify(process.env['WXT_BOLTVAULT_KEY'] ?? ''),
     },
     optimizeDeps: {
       esbuildOptions: { loader: { '.js': 'jsx' }, resolveExtensions: ['.web.js', '.js', '.ts', '.tsx'] },

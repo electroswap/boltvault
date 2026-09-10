@@ -40,7 +40,7 @@ export const ERC20_ABI = parseAbi([
 /** BoltVaultFeeSchedule (contracts/src/BoltVaultFeeSchedule.sol). */
 export const FEE_SCHEDULE_ABI = parseAbi([
   'function feeBipsFor(address account) view returns (uint16 bips, uint8 tier, uint256 score)',
-  'function schedule() view returns (uint16 baseBips, (uint256 minScore, uint16 bips)[] tiers, uint256 dynoWeight, bool countFarmBolt, uint16 boltPayDiscountBips)',
+  'function schedule() view returns (uint16 baseBips, (uint256 minScore, uint16 bips)[] tiers, uint256 dynoWeight, bool countFarmBolt)',
   'function baseBips() view returns (uint16)',
 ])
 

@@ -7,6 +7,8 @@ import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
 import { useWalletState } from '../state/useWalletState'
+import { PASSKEY_USER_ID } from './Onboarding'
+import { passwordStrength } from './onboarding/rules'
 
 const AUTO_LOCKS: AutoLock[] = ['5min', '15min', '60min', 'never']
 
@@ -16,6 +18,7 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
   const { vault, refresh } = useWalletState()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
+  const nextStrength = passwordStrength(next)
   const [exportPassword, setExportPassword] = useState('')
   const [exportCode, setExportCode] = useState('')
   const [frames, setFrames] = useState<string[] | null>(null)
@@ -78,8 +81,16 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
       <Plate gap="$3" testID="change-password">
         <Body size="title">{t({ id: 'security.password', message: 'Change password' })}</Body>
         <Input value={current} onChange={setCurrent} secure placeholder={t({ id: 'security.current', message: 'Current password' })} />
-        <Input value={next} onChange={setNext} secure placeholder={t({ id: 'security.new', message: 'New password (12+ characters)' })} />
-        <Key label={t({ id: 'security.password.key', message: 'Change password' })} disabled={busy || !current || next.length < 12} onPress={() => run(async () => { await engine.vault.changePassword({ current, next }); setCurrent(''); setNext(''); setNote(t({ id: 'security.password.done', message: 'Password changed.' })) })} />
+        {/*
+          The same rule onboarding applies, from the same function.
+
+          This was `next.length < 12`, so a password refused when creating a
+          vault — twelve identical characters, say — was accepted when changing
+          one. A second, weaker definition of "strong enough" is worse than no
+          check, because it is the one an attacker gets to choose.
+        */}
+        <Input value={next} onChange={setNext} secure placeholder={t({ id: 'security.new', message: 'New password' })} hint={next ? nextStrength.label : null} />
+        <Key label={t({ id: 'security.password.key', message: 'Change password' })} disabled={busy || !current || nextStrength.score === 0} onPress={() => run(async () => { await engine.vault.changePassword({ current, next }); setCurrent(''); setNext(''); setNote(t({ id: 'security.password.done', message: 'Password changed.' })) })} />
       </Plate>
 
       {/*
@@ -147,7 +158,10 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
             onPress={() =>
               run(async () => {
                 if (!host.passkeys) return
-                const r = await host.passkeys.create({ userName: 'BoltVault', userIdHex: '01', rpName: 'BoltVault' })
+                // The same handle onboarding enrols with: "one vault, one user
+                // handle, re-enrolling replaces the credential" only holds if
+                // both places agree. This used to be '01' and did not.
+                const r = await host.passkeys.create({ userName: 'BoltVault', userIdHex: PASSKEY_USER_ID, rpName: 'BoltVault' })
                 await engine.vault.enrolPasskey({ credentialId: r.credentialId, prfSecretHex: r.prfSecretHex })
               })
             }

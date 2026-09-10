@@ -44,9 +44,9 @@ msgid "Wallet fee"
 msgstr "Wallet fee"
 
 #: packages/wallet/src/screens/About.tsx
-msgctxt "about.fee.body"
-msgid "In-wallet swaps pay 0.5% of the output, less by BOLT/DYNO tier, to the fee sink on Electroneum. Fees fund the wallet; the sink’s sweeps are on the explorer."
-msgstr "In-wallet swaps pay 0.5% of the output, less by BOLT/DYNO tier, to the fee sink on Electroneum. Fees fund the wallet; the sink’s sweeps are on the explorer."
+msgctxt "about.fee.body.v2"
+msgid "In-wallet swaps pay 0.5% of the output, less by BOLT/DYNO tier, to the address below on Electroneum. Fees fund the wallet, and every payment is on the explorer."
+msgstr "In-wallet swaps pay 0.5% of the output, less by BOLT/DYNO tier, to the address below on Electroneum. Fees fund the wallet, and every payment is on the explorer."
 
 #: packages/wallet/src/screens/About.tsx
 msgctxt "about.fee.none"
@@ -74,6 +74,11 @@ msgid "No analytics. Only ElectroSwap’s API and the chain RPCs ever see an add
 msgstr "No analytics. Only ElectroSwap’s API and the chain RPCs ever see an address."
 
 #: packages/wallet/src/screens/About.tsx
+msgctxt "about.recipient"
+msgid "Fees go to"
+msgstr "Fees go to"
+
+#: packages/wallet/src/screens/About.tsx
 msgctxt "about.report"
 msgid "Report a problem"
 msgstr "Report a problem"
@@ -84,19 +89,9 @@ msgid "Software bill of materials"
 msgstr "Software bill of materials"
 
 #: packages/wallet/src/screens/About.tsx
-msgctxt "about.schedule"
-msgid "Schedule"
-msgstr "Schedule"
-
-#: packages/wallet/src/screens/About.tsx
 msgctxt "about.security"
 msgid "Security policy & audits"
 msgstr "Security policy & audits"
-
-#: packages/wallet/src/screens/About.tsx
-msgctxt "about.sink"
-msgid "Sink"
-msgstr "Sink"
 
 #: packages/wallet/src/screens/Accounts.tsx
 msgctxt "accounts.title"
@@ -328,7 +323,7 @@ msgctxt "acct.ledger.on"
 msgid "Ledger connected"
 msgstr "Ledger connected"
 
-#: packages/wallet/src/components/accounts/AccountRow.tsx
+#: packages/wallet/src/screens/Accounts.tsx
 msgctxt "acct.menu"
 msgid "Account options"
 msgstr "Account options"
@@ -694,6 +689,11 @@ msgid "Accept"
 msgstr "Accept"
 
 #: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.awaitDevice"
+msgid "Confirm on your {d}. Check the details on its screen before you approve."
+msgstr "Confirm on your {d}. Check the details on its screen before you approve."
+
+#: packages/wallet/src/screens/Approval.tsx
 msgctxt "approval.blocked"
 msgid "BoltVault will not sign this. See why above."
 msgstr "BoltVault will not sign this. See why above."
@@ -734,6 +734,16 @@ msgid "First time here"
 msgstr "First time here"
 
 #: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.ledger.notready"
+msgid "Your Ledger is not ready to sign."
+msgstr "Your Ledger is not ready to sign."
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.ledger.notready.body"
+msgid "This clears by itself once the device is unlocked with the Ethereum app open."
+msgstr "This clears by itself once the device is unlocked with the Ethereum app open."
+
+#: packages/wallet/src/screens/Approval.tsx
 msgctxt "approval.more"
 msgid "{n} more waiting"
 msgstr "{n} more waiting"
@@ -747,11 +757,6 @@ msgstr "Nothing to sign"
 msgctxt "approval.none.body"
 msgid "This request was already decided or has expired."
 msgstr "This request was already decided or has expired."
-
-#: packages/wallet/src/screens/Approval.tsx
-msgctxt "approval.nopreview"
-msgid "No balance preview on this network — only the revert check ran."
-msgstr "No balance preview on this network — only the revert check ran."
 
 #: packages/wallet/src/screens/Approval.tsx
 msgctxt "approval.preview"
@@ -828,7 +833,7 @@ msgctxt "approval.watch.title.unknown"
 msgid "Add a token to your list"
 msgstr "Add a token to your list"
 
-#: packages/wallet/src/screens/Onboarding.tsx
+#: packages/wallet/src/screens/onboarding/IntroCarousel.tsx
 msgctxt "back"
 msgid "Back"
 msgstr "Back"
@@ -843,7 +848,7 @@ msgctxt "backup.done"
 msgid "Backed up. Swapping and signing are unlocked."
 msgstr "Backed up. Swapping and signing are unlocked."
 
-#: packages/wallet/src/screens/Send.tsx
+#: packages/wallet/src/screens/Backup.tsx
 msgctxt "backup.home"
 msgid "Back to Home"
 msgstr "Back to Home"
@@ -862,6 +867,46 @@ msgstr "Show words"
 msgctxt "backup.title"
 msgid "Back up your recovery phrase"
 msgstr "Back up your recovery phrase"
+
+#: packages/wallet/src/screens/AddressBook.tsx
+msgctxt "book.add"
+msgid "Save an address"
+msgstr "Save an address"
+
+#: packages/wallet/src/screens/AddressBook.tsx
+msgctxt "book.add.hint"
+msgid "A name you will recognise later. Saved addresses appear as chips on the Send screen."
+msgstr "A name you will recognise later. Saved addresses appear as chips on the Send screen."
+
+#: packages/wallet/src/screens/AddressBook.tsx
+msgctxt "book.address.ph"
+msgid "0x… or name.etn"
+msgstr "0x… or name.etn"
+
+#: packages/wallet/src/screens/AddressBook.tsx
+msgctxt "book.name.ph"
+msgid "Name"
+msgstr "Name"
+
+#: packages/wallet/src/screens/AddressBook.tsx
+msgctxt "book.none"
+msgid "Nothing saved yet. Send still offers the addresses you used recently."
+msgstr "Nothing saved yet. Send still offers the addresses you used recently."
+
+#: packages/wallet/src/screens/AddressBook.tsx
+msgctxt "book.remove"
+msgid "Remove {n}"
+msgstr "Remove {n}"
+
+#: packages/wallet/src/screens/AddressBook.tsx
+msgctxt "book.saved"
+msgid "Saved"
+msgstr "Saved"
+
+#: packages/wallet/src/screens/AddressBook.tsx
+msgctxt "book.title"
+msgid "Address book"
+msgstr "Address book"
 
 #: packages/wallet/src/screens/Bridge.tsx
 msgctxt "bridge.approve"
@@ -1344,9 +1389,9 @@ msgid "Pieces"
 msgstr "Pieces"
 
 #: packages/wallet/src/screens/Collection.tsx
-msgctxt "collection.vol"
-msgid "24h volume"
-msgstr "24h volume"
+msgctxt "collection.vol.short"
+msgid "24h vol"
+msgstr "24h vol"
 
 #: packages/wallet/src/screens/Explore.tsx
 msgctxt "collections.all"
@@ -1383,7 +1428,7 @@ msgctxt "copied"
 msgid "Copied"
 msgstr "Copied"
 
-#: packages/wallet/src/screens/Campaign.tsx
+#: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "copy"
 msgid "Copy"
 msgstr "Copy"
@@ -1659,29 +1704,14 @@ msgid "Browser"
 msgstr "Browser"
 
 #: packages/wallet/src/screens/Explore.tsx
-msgctxt "explore.collections.all"
-msgid "Showing everything"
-msgstr "Showing everything"
-
-#: packages/wallet/src/screens/Explore.tsx
 msgctxt "explore.collections.empty"
 msgid "No collections to show."
 msgstr "No collections to show."
 
 #: packages/wallet/src/screens/Explore.tsx
-msgctxt "explore.collections.everything"
-msgid "Show everything"
-msgstr "Show everything"
-
-#: packages/wallet/src/screens/Explore.tsx
 msgctxt "explore.collections.title"
 msgid "Collections"
 msgstr "Collections"
-
-#: packages/wallet/src/screens/Explore.tsx
-msgctxt "explore.collections.verified"
-msgid "Show verified only"
-msgstr "Show verified only"
 
 #: packages/wallet/src/screens/Explore.tsx
 msgctxt "explore.collections.verifiedOnly"
@@ -1879,19 +1909,14 @@ msgid "Deposit both sides of the pair to start earning DYNO. Your multiplier gro
 msgstr "Deposit both sides of the pair to start earning DYNO. Your multiplier grows with time and with BOLT deposited as a boost."
 
 #: packages/wallet/src/screens/Farm.tsx
-msgctxt "farm.pending"
-msgid "{d} DYNO to collect"
-msgstr "{d} DYNO to collect"
-
-#: packages/wallet/src/screens/Farm.tsx
 msgctxt "farm.ratio"
 msgid "The pool sets the ratio; unused amounts come back to you."
 msgstr "The pool sets the ratio; unused amounts come back to you."
 
 #: packages/wallet/src/screens/Farm.tsx
 msgctxt "farm.share"
-msgid "{p}% of the farm"
-msgstr "{p}% of the farm"
+msgid "{p}% of farm"
+msgstr "{p}% of farm"
 
 #: packages/wallet/src/screens/Farm.tsx
 msgctxt "farm.stair"
@@ -1904,24 +1929,29 @@ msgid "Lands on the {b} BOLT stair · {m}×"
 msgstr "Lands on the {b} BOLT stair · {m}×"
 
 #: packages/wallet/src/screens/Farm.tsx
-msgctxt "farm.stat.apy"
-msgid "APY"
-msgstr "APY"
+msgctxt "farm.stat.apy.base"
+msgid "Base APY"
+msgstr "Base APY"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.stat.apy.yours"
+msgid "Your APY"
+msgstr "Your APY"
+
+#: packages/wallet/src/screens/Farm.tsx
+msgctxt "farm.stat.collect"
+msgid "To collect"
+msgstr "To collect"
 
 #: packages/wallet/src/components/cards/FarmCard.tsx
-msgctxt "farm.stat.bolt"
-msgid "BOLT {m}×"
-msgstr "BOLT {m}×"
+msgctxt "farm.stat.combined"
+msgid "{d}× · BOLT {b}×"
+msgstr "{d}× · BOLT {b}×"
 
 #: packages/wallet/src/screens/Farm.tsx
 msgctxt "farm.stat.farmers"
 msgid "Farmers"
 msgstr "Farmers"
-
-#: packages/wallet/src/components/cards/FarmCard.tsx
-msgctxt "farm.stat.multiplier"
-msgid "Multiplier"
-msgstr "Multiplier"
 
 #: packages/wallet/src/components/cards/FarmCard.tsx
 msgctxt "farm.stat.start"
@@ -1999,29 +2029,69 @@ msgid "Your position"
 msgstr "Your position"
 
 #: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.from.dyno"
+msgid "From DYNO"
+msgstr "From DYNO"
+
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.from.dyno.v"
+msgid "{n} BOLT-eq"
+msgstr "{n} BOLT-eq"
+
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.from.wallet"
+msgid "In your wallet"
+msgstr "In your wallet"
+
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.from.wallet.v"
+msgid "{n} BOLT"
+msgstr "{n} BOLT"
+
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.gauge.here"
+msgid "{s} BOLT-eq"
+msgstr "{s} BOLT-eq"
+
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.gauge.next"
+msgid "{name} at {s}"
+msgstr "{name} at {s}"
+
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.gauge.top"
+msgid "Top tier · lowest fee"
+msgstr "Top tier · lowest fee"
+
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
 msgctxt "fee.getBolt"
 msgid "Get BOLT"
 msgstr "Get BOLT"
 
 #: packages/wallet/src/screens/FeeScheduleSheet.tsx
-msgctxt "fee.next"
-msgid "{n} more BOLT-eq for {p}"
-msgstr "{n} more BOLT-eq for {p}"
+msgctxt "fee.next.v2"
+msgid "{n} more BOLT-eq and every swap costs {p} instead of {c}."
+msgstr "{n} more BOLT-eq and every swap costs {p} instead of {c}."
 
 #: packages/wallet/src/screens/FeeScheduleSheet.tsx
-msgctxt "fee.score"
-msgid "{s} BOLT-eq — {w} in your wallet, {f} deposited in farms, {d} from DYNO"
-msgstr "{s} BOLT-eq — {w} in your wallet, {f} deposited in farms, {d} from DYNO"
+msgctxt "fee.recipient"
+msgid "The fee goes to {a}, in the same transaction as the swap. Every payment is on the explorer."
+msgstr "The fee goes to {a}, in the same transaction as the swap. Every payment is on the explorer."
 
 #: packages/wallet/src/screens/FeeScheduleSheet.tsx
-msgctxt "fee.sheet.body"
-msgid "Every in-wallet swap pays a fee on what you receive. The more BOLT you hold — in your wallet or deposited as a farm boost — the less you pay. The schedule lives on chain; the wallet reads it live."
-msgstr "Every in-wallet swap pays a fee on what you receive. The more BOLT you hold — in your wallet or deposited as a farm boost — the less you pay. The schedule lives on chain; the wallet reads it live."
+msgctxt "fee.recipient.none"
+msgid "In-wallet swaps are off on this network — no fee address is set for it in this build."
+msgstr "In-wallet swaps are off on this network — no fee address is set for it in this build."
 
 #: packages/wallet/src/screens/FeeScheduleSheet.tsx
-msgctxt "fee.sheet.fallback"
-msgid "The schedule contract did not answer; these are the published defaults and you pay the base rate until it does."
-msgstr "The schedule contract did not answer; these are the published defaults and you pay the base rate until it does."
+msgctxt "fee.sheet.body.v2"
+msgid "Every in-wallet swap pays a fee on what you receive. The more BOLT and DYNO you hold, the less you pay — five rungs, from Static to Reactor. The ladder ships inside the wallet, so it is the same at signing time as it is here."
+msgstr "Every in-wallet swap pays a fee on what you receive. The more BOLT and DYNO you hold, the less you pay — five rungs, from Static to Reactor. The ladder ships inside the wallet, so it is the same at signing time as it is here."
+
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.sheet.fallback.named"
+msgid "This network has no fee ladder configured; these are the published defaults."
+msgstr "This network has no fee ladder configured; these are the published defaults."
 
 #: packages/wallet/src/screens/FeeScheduleSheet.tsx
 msgctxt "fee.sheet.title"
@@ -2029,34 +2099,34 @@ msgid "Wallet fee schedule"
 msgstr "Wallet fee schedule"
 
 #: packages/wallet/src/screens/FeeScheduleSheet.tsx
-msgctxt "fee.sink"
-msgid "Fees go to the fee sink {a}. What it does with them is published in About."
-msgstr "Fees go to the fee sink {a}. What it does with them is published in About."
+msgctxt "fee.tier.base.named"
+msgid "{name} · under {n} BOLT-eq"
+msgstr "{name} · under {n} BOLT-eq"
 
 #: packages/wallet/src/screens/FeeScheduleSheet.tsx
-msgctxt "fee.sink.none"
-msgid "The fee sink for this network is not set yet; in-wallet swaps stay off until it is."
-msgstr "The fee sink for this network is not set yet; in-wallet swaps stay off until it is."
+msgctxt "fee.tier.row.named"
+msgid "{name} · {n}+ BOLT-eq"
+msgstr "{name} · {n}+ BOLT-eq"
 
 #: packages/wallet/src/screens/FeeScheduleSheet.tsx
-msgctxt "fee.tier.base"
-msgid "Under {n} BOLT-eq"
-msgstr "Under {n} BOLT-eq"
+msgctxt "fee.weight.fixed"
+msgid "1 DYNO = {n} BOLT"
+msgstr "1 DYNO = {n} BOLT"
 
 #: packages/wallet/src/screens/FeeScheduleSheet.tsx
-msgctxt "fee.tier.row"
-msgid "Tier {t} · {n}+ BOLT-eq"
-msgstr "Tier {t} · {n}+ BOLT-eq"
+msgctxt "fee.weight.measured.v2"
+msgid "1 DYNO = {n} BOLT · seven-day average"
+msgstr "1 DYNO = {n} BOLT · seven-day average"
 
 #: packages/wallet/src/screens/FeeScheduleSheet.tsx
-msgctxt "fee.top"
-msgid "Top tier — the lowest fee there is."
-msgstr "Top tier — the lowest fee there is."
+msgctxt "fee.you.rung"
+msgid "{name} · {p}"
+msgstr "{name} · {p}"
 
 #: packages/wallet/src/screens/FeeScheduleSheet.tsx
-msgctxt "fee.you"
-msgid "You: tier {t} · {p}"
-msgstr "You: tier {t} · {p}"
+msgctxt "fee.you.v2"
+msgid "Your tier"
+msgstr "Your tier"
 
 #: packages/wallet/src/screens/Feel.tsx
 msgctxt "feel.currency"
@@ -2087,6 +2157,31 @@ msgstr "Reduce motion"
 msgctxt "feel.motion.hint"
 msgid "The background holds still and digits update without rolling. Also follows your system’s reduce-motion setting."
 msgstr "The background holds still and digits update without rolling. Also follows your system’s reduce-motion setting."
+
+#: packages/wallet/src/screens/Feel.tsx
+msgctxt "feel.scene"
+msgid "Background"
+msgstr "Background"
+
+#: packages/wallet/src/screens/Feel.tsx
+msgctxt "feel.scene.circuit"
+msgid "Circuit"
+msgstr "Circuit"
+
+#: packages/wallet/src/screens/Feel.tsx
+msgctxt "feel.scene.grid"
+msgid "Grid"
+msgstr "Grid"
+
+#: packages/wallet/src/screens/Feel.tsx
+msgctxt "feel.scene.hint"
+msgid "Circuit is a printed board that lights a trace on every Electroneum block. Grid is the wave mesh. Off draws neither and uses the least battery."
+msgstr "Circuit is a printed board that lights a trace on every Electroneum block. Grid is the wave mesh. Off draws neither and uses the least battery."
+
+#: packages/wallet/src/screens/Feel.tsx
+msgctxt "feel.scene.off"
+msgid "Off"
+msgstr "Off"
 
 #: packages/wallet/src/screens/Feel.tsx
 msgctxt "feel.sound"
@@ -2319,9 +2414,49 @@ msgid "{s} arriving on {c} in about {m} min"
 msgstr "{s} arriving on {c} in about {m} min"
 
 #: packages/wallet/src/screens/Home.tsx
+msgctxt "home.acc.collect.many"
+msgid "across {n} farms"
+msgstr "across {n} farms"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.acc.collect.sub"
+msgid "{where} · {a}% APY, still earning"
+msgstr "{where} · {a}% APY, still earning"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.acc.div.many"
+msgid "{n} Legends pieces"
+msgstr "{n} Legends pieces"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.acc.div.one"
+msgid "1 Legends piece"
+msgstr "1 Legends piece"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.acc.div.sub"
+msgid "{pieces} · {p} ETN paid so far"
+msgstr "{pieces} · {p} ETN paid so far"
+
+#: packages/wallet/src/screens/Home.tsx
 msgctxt "home.acc.pending"
 msgid "{n} transaction pending"
 msgstr "{n} transaction pending"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.acc.tier"
+msgid "{name} tier · {p} wallet fee"
+msgstr "{name} tier · {p} wallet fee"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.acc.tier.next"
+msgid "{n} more BOLT-eq for {next} at {p}"
+msgstr "{n} more BOLT-eq for {next} at {p}"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.acc.tier.top"
+msgid "Top tier — the lowest fee there is."
+msgstr "Top tier — the lowest fee there is."
 
 #: packages/wallet/src/screens/Home.tsx
 msgctxt "home.acc.unlimited"
@@ -2362,6 +2497,11 @@ msgstr "{n} live"
 msgctxt "home.badge.offers"
 msgid "{n} offers"
 msgstr "{n} offers"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.badge.pending"
+msgid "{n} pending"
+msgstr "{n} pending"
 
 #: packages/wallet/src/screens/Home.tsx
 msgctxt "home.create.body"
@@ -2507,11 +2647,6 @@ msgstr "{from} → {to}"
 msgctxt "home.since.none"
 msgid "No priced change to report."
 msgstr "No priced change to report."
-
-#: packages/wallet/src/screens/Home.tsx
-msgctxt "home.tier"
-msgid "Tier {t}"
-msgstr "Tier {t}"
 
 #: packages/wallet/src/screens/Token.tsx
 msgctxt "home.today"
@@ -2674,6 +2809,11 @@ msgid "Plug in your Ledger, unlock it and open the Ethereum app. Your keys never
 msgstr "Plug in your Ledger, unlock it and open the Ethereum app. Your keys never leave the device; BoltVault only shows you what it will sign."
 
 #: packages/wallet/src/components/HardwarePickers.tsx
+msgctxt "ledger.body.mobile"
+msgid "Connect your Ledger with an OTG cable, unlock it and open the Ethereum app — or wake a Nano X, Stax or Flex to pair over Bluetooth. Your keys never leave the device; BoltVault only shows you what it will sign."
+msgstr "Connect your Ledger with an OTG cable, unlock it and open the Ethereum app — or wake a Nano X, Stax or Flex to pair over Bluetooth. Your keys never leave the device; BoltVault only shows you what it will sign."
+
+#: packages/wallet/src/components/HardwarePickers.tsx
 msgctxt "ledger.live"
 msgid "Ledger Live"
 msgstr "Ledger Live"
@@ -2687,6 +2827,11 @@ msgstr "Reading addresses from your Ledger…"
 msgctxt "ledger.none"
 msgid "No Ledger paired yet. Press Pair Ledger, then pick your Ledger in the browser’s device list."
 msgstr "No Ledger paired yet. Press Pair Ledger, then pick your Ledger in the browser’s device list."
+
+#: packages/wallet/src/components/HardwarePickers.tsx
+msgctxt "ledger.none.mobile"
+msgid "No Ledger found yet. Check the cable is an OTG one and the device is unlocked with the Ethereum app open, then press Refresh. For Bluetooth models, allow the Bluetooth prompt."
+msgstr "No Ledger found yet. Check the cable is an OTG one and the device is unlocked with the Ethereum app open, then press Refresh. For Bluetooth models, allow the Bluetooth prompt."
 
 #: packages/wallet/src/components/HardwarePickers.tsx
 msgctxt "ledger.nopick"
@@ -2728,6 +2873,16 @@ msgctxt "legends.activate"
 msgid "Activate dividends"
 msgstr "Activate dividends"
 
+#: packages/wallet/src/components/DividendsCard.tsx
+msgctxt "legends.activate.many"
+msgid "{n} pieces to activate"
+msgstr "{n} pieces to activate"
+
+#: packages/wallet/src/components/DividendsCard.tsx
+msgctxt "legends.activate.one"
+msgid "1 piece to activate"
+msgstr "1 piece to activate"
+
 #: packages/wallet/src/screens/Legends.tsx
 msgctxt "legends.activated"
 msgid "Dividends activated"
@@ -2764,6 +2919,11 @@ msgid "1 piece"
 msgstr "1 piece"
 
 #: packages/wallet/src/components/DividendsCard.tsx
+msgctxt "legends.details"
+msgid "Details"
+msgstr "Details"
+
+#: packages/wallet/src/components/DividendsCard.tsx
 msgctxt "legends.earning.all"
 msgid "Every piece is earning."
 msgstr "Every piece is earning."
@@ -2777,6 +2937,11 @@ msgstr "Hold a Legend and it shares a third of every marketplace fee."
 msgctxt "legends.earning.some"
 msgid "{e} of {n} pieces earning — activate the rest once and they share every fee from then on."
 msgstr "{e} of {n} pieces earning — activate the rest once and they share every fee from then on."
+
+#: packages/wallet/src/components/DividendsCard.tsx
+msgctxt "legends.hide"
+msgid "Hide details"
+msgstr "Hide details"
 
 #: packages/wallet/src/screens/Legends.tsx
 msgctxt "legends.how"
@@ -3024,6 +3189,31 @@ msgid "Unlisted"
 msgstr "Unlisted"
 
 #: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.biometric.title"
+msgid "Unlock with your fingerprint?"
+msgstr "Unlock with your fingerprint?"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.biometric.yes"
+msgid "Turn on biometric unlock"
+msgstr "Turn on biometric unlock"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.blocked.body"
+msgid "Unlock it to carry on. To use a different recovery phrase, add it as another account once you are in."
+msgstr "Unlock it to carry on. To use a different recovery phrase, add it as another account once you are in."
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.blocked.key"
+msgid "Open my wallet"
+msgstr "Open my wallet"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.blocked.title"
+msgid "This device already has a vault"
+msgstr "This device already has a vault"
+
+#: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "ob.confirm"
 msgid "Confirm password"
 msgstr "Confirm password"
@@ -3032,11 +3222,6 @@ msgstr "Confirm password"
 msgctxt "ob.create"
 msgid "Create a new vault"
 msgstr "Create a new vault"
-
-#: packages/wallet/src/screens/Onboarding.tsx
-msgctxt "ob.create.key"
-msgid "Create vault"
-msgstr "Create vault"
 
 #: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "ob.done.body"
@@ -3054,6 +3239,36 @@ msgid "This is Electroneum Smart Chain (52014)"
 msgstr "This is Electroneum Smart Chain (52014)"
 
 #: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.done.your"
+msgid "Your first address"
+msgstr "Your first address"
+
+#: packages/wallet/src/screens/onboarding/rules.ts
+msgctxt "ob.err.exists"
+msgid "This device already has a vault. Unlock it instead, or add another account from Accounts."
+msgstr "This device already has a vault. Unlock it instead, or add another account from Accounts."
+
+#: packages/wallet/src/screens/onboarding/rules.ts
+msgctxt "ob.err.generic"
+msgid "Something went wrong: {m}"
+msgstr "Something went wrong: {m}"
+
+#: packages/wallet/src/screens/onboarding/rules.ts
+msgctxt "ob.err.mnemonic"
+msgid "That is not a valid recovery phrase. Check the spelling and the order of the words."
+msgstr "That is not a valid recovery phrase. Check the spelling and the order of the words."
+
+#: packages/wallet/src/screens/onboarding/rules.ts
+msgctxt "ob.err.notfound"
+msgid "That step expired. Start again from the beginning."
+msgstr "That step expired. Start again from the beginning."
+
+#: packages/wallet/src/screens/onboarding/rules.ts
+msgctxt "ob.err.storage"
+msgid "This device would not save the vault. Free some space and try again."
+msgstr "This device would not save the vault. Free some space and try again."
+
+#: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "ob.hardware.note"
 msgid "Ledger, Trezor and Keystone accounts are added from the Accounts sheet after your vault exists."
 msgstr "Ledger, Trezor and Keystone accounts are added from the Accounts sheet after your vault exists."
@@ -3063,10 +3278,15 @@ msgctxt "ob.import"
 msgid "Import a recovery phrase"
 msgstr "Import a recovery phrase"
 
-#: packages/wallet/src/screens/Onboarding.tsx
-msgctxt "ob.import.key"
-msgid "Import"
-msgstr "Import"
+#: packages/wallet/src/screens/onboarding/rules.ts
+msgctxt "ob.import.count.bad"
+msgid "{n} words — a phrase is 12, 15, 18, 21 or 24"
+msgstr "{n} words — a phrase is 12, 15, 18, 21 or 24"
+
+#: packages/wallet/src/screens/onboarding/rules.ts
+msgctxt "ob.import.count.ok"
+msgid "{n} words"
+msgstr "{n} words"
 
 #: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "ob.import.ph"
@@ -3083,17 +3303,37 @@ msgctxt "ob.import.title"
 msgid "Enter your recovery phrase"
 msgstr "Enter your recovery phrase"
 
+#: packages/wallet/src/screens/onboarding/IntroCarousel.tsx
+msgctxt "ob.intro.next"
+msgid "Next"
+msgstr "Next"
+
+#: packages/wallet/src/screens/onboarding/IntroCarousel.tsx
+msgctxt "ob.intro.skip"
+msgid "Skip"
+msgstr "Skip"
+
+#: packages/wallet/src/screens/onboarding/IntroCarousel.tsx
+msgctxt "ob.intro.start"
+msgid "Get started"
+msgstr "Get started"
+
 #: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "ob.mismatch"
 msgid "The passwords differ."
 msgstr "The passwords differ."
 
 #: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.needtab"
+msgid "This step needs the full tab, and this window cannot open one. Open BoltVault from the toolbar and try again."
+msgstr "This step needs the full tab, and this window cannot open one. Open BoltVault from the toolbar and try again."
+
+#: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "ob.passkey.body"
 msgid "Your face or fingerprint unlocks the vault on this device. Your password still works, and it is still needed to reveal or export the phrase."
 msgstr "Your face or fingerprint unlocks the vault on this device. Your password still works, and it is still needed to reveal or export the phrase."
 
-#: packages/wallet/src/screens/Onboarding.tsx
+#: packages/wallet/src/screens/onboarding/rules.ts
 msgctxt "ob.passkey.noprf"
 msgid "This browser created a passkey without the PRF feature, so it cannot unlock the vault on its own. Use your password."
 msgstr "This browser created a passkey without the PRF feature, so it cannot unlock the vault on its own. Use your password."
@@ -3129,6 +3369,11 @@ msgid "It seals your vault on this device. A few unrelated words beat a short st
 msgstr "It seals your vault on this device. A few unrelated words beat a short string of symbols. We cannot reset it."
 
 #: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.password.seal"
+msgid "Create vault"
+msgstr "Create vault"
+
+#: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "ob.password.title"
 msgid "Choose a password"
 msgstr "Choose a password"
@@ -3144,14 +3389,24 @@ msgid "Which addresses do you recognise?"
 msgstr "Which addresses do you recognise?"
 
 #: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.quiz.back"
+msgid "Show the words again"
+msgstr "Show the words again"
+
+#: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "ob.quiz.body"
 msgid "Type the words at these positions. This is the backup check that unlocks swapping and signing."
 msgstr "Type the words at these positions. This is the backup check that unlocks swapping and signing."
 
-#: packages/wallet/src/screens/Onboarding.tsx
+#: packages/wallet/src/screens/Backup.tsx
 msgctxt "ob.quiz.confirm"
 msgid "Confirm backup"
 msgstr "Confirm backup"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.quiz.nomatch"
+msgid "Not the word at this position"
+msgstr "Not the word at this position"
 
 #: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "ob.quiz.title"
@@ -3162,6 +3417,61 @@ msgstr "Confirm three words"
 msgctxt "ob.quiz.word"
 msgid "Word {n}"
 msgstr "Word {n}"
+
+#: packages/wallet/src/screens/onboarding/IntroCarousel.tsx
+msgctxt "ob.slide1.body"
+msgid "Your recovery phrase is sealed with your password on this device. Nothing leaves it unless you export it."
+msgstr "Your recovery phrase is sealed with your password on this device. Nothing leaves it unless you export it."
+
+#: packages/wallet/src/screens/onboarding/IntroCarousel.tsx
+msgctxt "ob.slide1.title"
+msgid "Your keys stay here"
+msgstr "Your keys stay here"
+
+#: packages/wallet/src/screens/onboarding/IntroCarousel.tsx
+msgctxt "ob.slide2.body"
+msgid "One phrase, one wallet, every balance in one place. Swap and bridge without leaving it."
+msgstr "One phrase, one wallet, every balance in one place. Swap and bridge without leaving it."
+
+#: packages/wallet/src/screens/onboarding/IntroCarousel.tsx
+msgctxt "ob.slide2.title"
+msgid "Electroneum, and nine chains beside it"
+msgstr "Electroneum, and nine chains beside it"
+
+#: packages/wallet/src/screens/onboarding/IntroCarousel.tsx
+msgctxt "ob.slide3.account"
+msgid "Account 1"
+msgstr "Account 1"
+
+#: packages/wallet/src/screens/onboarding/IntroCarousel.tsx
+msgctxt "ob.slide3.body"
+msgid "BoltVault previews the balance changes before you sign, and refuses what it cannot verify."
+msgstr "BoltVault previews the balance changes before you sign, and refuses what it cannot verify."
+
+#: packages/wallet/src/screens/onboarding/IntroCarousel.tsx
+msgctxt "ob.slide3.in"
+msgid "+ 0.41"
+msgstr "+ 0.41"
+
+#: packages/wallet/src/screens/onboarding/IntroCarousel.tsx
+msgctxt "ob.slide3.moves"
+msgid "This transaction moves"
+msgstr "This transaction moves"
+
+#: packages/wallet/src/screens/onboarding/IntroCarousel.tsx
+msgctxt "ob.slide3.out"
+msgid "− 250"
+msgstr "− 250"
+
+#: packages/wallet/src/screens/onboarding/IntroCarousel.tsx
+msgctxt "ob.slide3.title"
+msgid "See what a transaction moves"
+msgstr "See what a transaction moves"
+
+#: packages/wallet/src/screens/onboarding/IntroCarousel.tsx
+msgctxt "ob.slide3.warn"
+msgid "Unlimited approval — BoltVault will ask you to make it exact."
+msgstr "Unlimited approval — BoltVault will ask you to make it exact."
 
 #: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "ob.watch"
@@ -3174,9 +3484,9 @@ msgid "You will see balances and activity but cannot send or sign. Add a key or 
 msgstr "You will see balances and activity but cannot send or sign. Add a key or pair a device later."
 
 #: packages/wallet/src/screens/Onboarding.tsx
-msgctxt "ob.watch.key"
-msgid "Watch"
-msgstr "Watch"
+msgctxt "ob.watch.noname"
+msgid "That name does not resolve to an address."
+msgstr "That name does not resolve to an address."
 
 #: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "ob.watch.title"
@@ -3194,14 +3504,24 @@ msgid "Your keys, your Electroneum"
 msgstr "Your keys, your Electroneum"
 
 #: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.words.back"
+msgid "Start over"
+msgstr "Start over"
+
+#: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "ob.words.body"
-msgid "This is the only copy. Anyone with these words controls your funds; BoltVault will never ask for them except on this screen and the quiz."
-msgstr "This is the only copy. Anyone with these words controls your funds; BoltVault will never ask for them except on this screen and the quiz."
+msgid "This is the only copy. Anyone with these words controls your funds; BoltVault will never ask for them except on this screen and the check that follows."
+msgstr "This is the only copy. Anyone with these words controls your funds; BoltVault will never ask for them except on this screen and the check that follows."
 
 #: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "ob.words.done"
 msgid "I wrote them down"
 msgstr "I wrote them down"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "ob.words.making"
+msgid "Making your phrase…"
+msgstr "Making your phrase…"
 
 #: packages/wallet/src/screens/Onboarding.tsx
 msgctxt "ob.words.title"
@@ -3498,22 +3818,27 @@ msgctxt "portfolio.title"
 msgid "Portfolio"
 msgstr "Portfolio"
 
-#: packages/wallet/src/screens/Onboarding.tsx
+#: packages/wallet/src/screens/onboarding/rules.ts
 msgctxt "pw.good"
 msgid "Good"
 msgstr "Good"
 
-#: packages/wallet/src/screens/Onboarding.tsx
+#: packages/wallet/src/screens/onboarding/rules.ts
 msgctxt "pw.ok"
 msgid "Usable — a longer phrase is stronger"
 msgstr "Usable — a longer phrase is stronger"
 
-#: packages/wallet/src/screens/Onboarding.tsx
+#: packages/wallet/src/screens/onboarding/rules.ts
+msgctxt "pw.repetitive"
+msgid "Too few different characters"
+msgstr "Too few different characters"
+
+#: packages/wallet/src/screens/onboarding/rules.ts
 msgctxt "pw.short"
 msgid "At least {n} characters"
 msgstr "At least {n} characters"
 
-#: packages/wallet/src/screens/Onboarding.tsx
+#: packages/wallet/src/screens/onboarding/rules.ts
 msgctxt "pw.strong"
 msgid "Strong"
 msgstr "Strong"
@@ -3638,6 +3963,11 @@ msgctxt "rack.title"
 msgid "Your collection"
 msgstr "Your collection"
 
+#: packages/wallet/src/components/HomeKey.tsx
+msgctxt "rail.home"
+msgid "Home"
+msgstr "Home"
+
 #: packages/wallet/src/screens/Token.tsx
 msgctxt "readmore"
 msgid "Read more"
@@ -3733,10 +4063,15 @@ msgctxt "reveal.title"
 msgid "Recovery phrase · {label}"
 msgstr "Recovery phrase · {label}"
 
-#: packages/wallet/src/screens/Send.tsx
+#: packages/wallet/src/screens/Devices.tsx
 msgctxt "save"
 msgid "Save"
 msgstr "Save"
+
+#: packages/wallet/src/screens/Onboarding.tsx
+msgctxt "secret.masked"
+msgid "Hidden while this window is not in front"
+msgstr "Hidden while this window is not in front"
 
 #: packages/wallet/src/screens/Security.tsx
 msgctxt "security.about"
@@ -3752,6 +4087,16 @@ msgstr "Auto-lock"
 msgctxt "security.autolock.hint"
 msgid "Locks after this long without activity. Always locks when the browser closes."
 msgstr "Locks after this long without activity. Always locks when the browser closes."
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.biometrics.add"
+msgid "Turn on biometric unlock"
+msgstr "Turn on biometric unlock"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.biometrics.none"
+msgid "No fingerprint or face is enrolled on this device yet. Add one in the system settings, then come back."
+msgstr "No fingerprint or face is enrolled on this device yet. Add one in the system settings, then come back."
 
 #: packages/wallet/src/screens/Security.tsx
 msgctxt "security.current"
@@ -3795,33 +4140,13 @@ msgstr "Export vault (opens a full tab)"
 
 #: packages/wallet/src/screens/Security.tsx
 msgctxt "security.new"
-msgid "New password (12+ characters)"
-msgstr "New password (12+ characters)"
-
-#: packages/wallet/src/screens/Security.tsx
-msgctxt "security.passkey.row"
-msgid "Passkey"
-msgstr "Passkey"
-
-#: packages/wallet/src/screens/Security.tsx
-msgctxt "security.passkeys"
-msgid "Passkeys"
-msgstr "Passkeys"
+msgid "New password"
+msgstr "New password"
 
 #: packages/wallet/src/screens/Security.tsx
 msgctxt "security.passkeys.add"
 msgid "Add passkey"
 msgstr "Add passkey"
-
-#: packages/wallet/src/screens/Security.tsx
-msgctxt "security.passkeys.none"
-msgid "No passkey enrolled. A passkey unlocks the vault with your face or fingerprint on this device; the password stays required for reveal and export."
-msgstr "No passkey enrolled. A passkey unlocks the vault with your face or fingerprint on this device; the password stays required for reveal and export."
-
-#: packages/wallet/src/screens/Security.tsx
-msgctxt "security.passkeys.unsupported"
-msgid "Passkeys with the PRF feature are not available in this browser or on this device."
-msgstr "Passkeys with the PRF feature are not available in this browser or on this device."
 
 #: packages/wallet/src/screens/Security.tsx
 msgctxt "security.password"
@@ -3839,6 +4164,36 @@ msgid "Change password"
 msgstr "Change password"
 
 #: packages/wallet/src/screens/Security.tsx
+msgctxt "security.quick"
+msgid "Quick unlock"
+msgstr "Quick unlock"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.quick.body"
+msgid "Unlock with your face or fingerprint instead of typing your password. What gets stored is a key this device will only release once you have authenticated — never your password, and never your keys. The password keeps working, and is still required to reveal or export your phrase."
+msgstr "Unlock with your face or fingerprint instead of typing your password. What gets stored is a key this device will only release once you have authenticated — never your password, and never your keys. The password keeps working, and is still required to reveal or export your phrase."
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.quick.device"
+msgid "Fingerprint or face on this device"
+msgstr "Fingerprint or face on this device"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.quick.none"
+msgid "Nothing enrolled yet, so the password is the only way in."
+msgstr "Nothing enrolled yet, so the password is the only way in."
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.quick.passkey"
+msgid "Passkey"
+msgstr "Passkey"
+
+#: packages/wallet/src/screens/Security.tsx
+msgctxt "security.quick.unsupported"
+msgid "Neither passkeys nor a device keystore are available here."
+msgstr "Neither passkeys nor a device keystore are available here."
+
+#: packages/wallet/src/screens/Security.tsx
 msgctxt "security.title"
 msgid "Security"
 msgstr "Security"
@@ -3849,14 +4204,29 @@ msgid "Amount"
 msgstr "Amount"
 
 #: packages/wallet/src/screens/Send.tsx
+msgctxt "send.awaiting"
+msgid "Waiting for your signature"
+msgstr "Waiting for your signature"
+
+#: packages/wallet/src/screens/Send.tsx
+msgctxt "send.awaiting.body"
+msgid "Approve it to send. Nothing leaves this wallet until you do."
+msgstr "Approve it to send. Nothing leaves this wallet until you do."
+
+#: packages/wallet/src/screens/Send.tsx
+msgctxt "send.awaiting.device"
+msgid "Confirm it on your {d}. Nothing leaves this wallet until you do."
+msgstr "Confirm it on your {d}. Nothing leaves this wallet until you do."
+
+#: packages/wallet/src/screens/Send.tsx
+msgctxt "send.awaiting.review"
+msgid "Show me the request"
+msgstr "Show me the request"
+
+#: packages/wallet/src/screens/Send.tsx
 msgctxt "send.chain.title"
 msgid "Send on"
 msgstr "Send on"
-
-#: packages/wallet/src/screens/Send.tsx
-msgctxt "send.failed"
-msgid "The network refused it"
-msgstr "The network refused it"
 
 #: packages/wallet/src/screens/Send.tsx
 msgctxt "send.fee"
@@ -3877,26 +4247,6 @@ msgstr "Token to send"
 msgctxt "send.review"
 msgid "Review"
 msgstr "Review"
-
-#: packages/wallet/src/screens/Send.tsx
-msgctxt "send.save"
-msgid "Save this address for next time"
-msgstr "Save this address for next time"
-
-#: packages/wallet/src/screens/Send.tsx
-msgctxt "send.save.ph"
-msgid "Name"
-msgstr "Name"
-
-#: packages/wallet/src/screens/Send.tsx
-msgctxt "send.sending"
-msgid "Sending…"
-msgstr "Sending…"
-
-#: packages/wallet/src/screens/Send.tsx
-msgctxt "send.sent"
-msgid "Sent"
-msgstr "Sent"
 
 #: packages/wallet/src/screens/Send.tsx
 msgctxt "send.title"
@@ -3920,8 +4270,8 @@ msgstr "About"
 
 #: packages/wallet/src/screens/shells.tsx
 msgctxt "settings.about.rows"
-msgid "Version, encryption, fee sink"
-msgstr "Version, encryption, fee sink"
+msgid "Version, encryption, where fees go"
+msgstr "Version, encryption, where fees go"
 
 #: packages/wallet/src/screens/shells.tsx
 msgctxt "settings.accounts"
@@ -3942,6 +4292,16 @@ msgstr "Approvals"
 msgctxt "settings.approvals.rows"
 msgid "What contracts can move your tokens; revoke"
 msgstr "What contracts can move your tokens; revoke"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.book"
+msgid "Address book"
+msgstr "Address book"
+
+#: packages/wallet/src/screens/shells.tsx
+msgctxt "settings.book.rows"
+msgid "Names for the addresses you send to"
+msgstr "Names for the addresses you send to"
 
 #: packages/wallet/src/screens/shells.tsx
 msgctxt "settings.devices"
@@ -4139,19 +4499,19 @@ msgid "Wallet fee schedule"
 msgstr "Wallet fee schedule"
 
 #: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.recipient"
+msgid "Fees go to {a}"
+msgstr "Fees go to {a}"
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.recipient.none"
+msgid "In-wallet swaps are off on this network"
+msgstr "In-wallet swaps are off on this network"
+
+#: packages/wallet/src/screens/Spending.tsx
 msgctxt "spending.score"
 msgid "{s} BOLT-eq counted"
 msgstr "{s} BOLT-eq counted"
-
-#: packages/wallet/src/screens/Spending.tsx
-msgctxt "spending.sink"
-msgid "Fee sink {a}"
-msgstr "Fee sink {a}"
-
-#: packages/wallet/src/screens/Spending.tsx
-msgctxt "spending.sink.none"
-msgid "Fee sink not set on this network"
-msgstr "Fee sink not set on this network"
 
 #: packages/wallet/src/screens/Spending.tsx
 msgctxt "spending.slippage"
@@ -4174,9 +4534,9 @@ msgid "A first-time recipient pauses for a second look; a send above a tenth of 
 msgstr "A first-time recipient pauses for a second look; a send above a tenth of a token balance asks you to unlock again. Both are always on."
 
 #: packages/wallet/src/screens/Spending.tsx
-msgctxt "spending.tier"
-msgid "Your tier: {t} · {p} on swaps"
-msgstr "Your tier: {t} · {p} on swaps"
+msgctxt "spending.tier.v2"
+msgid "Your tier: {name} · {p} on swaps"
+msgstr "Your tier: {name} · {p} on swaps"
 
 #: packages/wallet/src/components/SwapCoachSheet.tsx
 msgctxt "swap.coach.1"
@@ -4240,8 +4600,8 @@ msgstr "Wallet fee schedule"
 
 #: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.fee.detail"
-msgid "{a} {s} to {sink}"
-msgstr "{a} {s} to {sink}"
+msgid "{a} {s} to {to}"
+msgstr "{a} {s} to {to}"
 
 #: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.fee.idle"
@@ -4249,9 +4609,9 @@ msgid "0.50% · hold BOLT for less"
 msgstr "0.50% · hold BOLT for less"
 
 #: packages/wallet/src/screens/Swap.tsx
-msgctxt "swap.fee.main"
-msgid "{p} · BOLT tier {t}"
-msgstr "{p} · BOLT tier {t}"
+msgctxt "swap.fee.main.v2"
+msgid "{p} · {name}"
+msgstr "{p} · {name}"
 
 #: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.fee.next"
@@ -4259,9 +4619,9 @@ msgid "hold {n} BOLT-eq for {p}"
 msgstr "hold {n} BOLT-eq for {p}"
 
 #: packages/wallet/src/screens/Swap.tsx
-msgctxt "swap.fee.zero"
-msgid "No wallet fee · BOLT tier {t}"
-msgstr "No wallet fee · BOLT tier {t}"
+msgctxt "swap.fee.zero.v2"
+msgid "No wallet fee · {name}"
+msgstr "No wallet fee · {name}"
 
 #: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.flip"
@@ -4437,6 +4797,16 @@ msgstr "Swap"
 msgctxt "swap.working"
 msgid "Swapping…"
 msgstr "Swapping…"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "tab.activity"
+msgid "Activity"
+msgstr "Activity"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "tab.swap"
+msgid "Swap"
+msgstr "Swap"
 
 #: packages/wallet/src/screens/Token.tsx
 msgctxt "token.activity"
@@ -4682,6 +5052,21 @@ msgstr "Trezor {m}{l}"
 msgctxt "trezor.unavailable"
 msgid "A Trezor connects from the browser extension. On the phone you can watch its address and sign on your paired computer — pair it under Settings › Devices."
 msgstr "A Trezor connects from the browser extension. On the phone you can watch its address and sign on your paired computer — pair it under Settings › Devices."
+
+#: packages/wallet/src/screens/Unlock.tsx
+msgctxt "unlock.biometric"
+msgid "Unlock with biometrics"
+msgstr "Unlock with biometrics"
+
+#: packages/wallet/src/screens/Unlock.tsx
+msgctxt "unlock.biometric.fail"
+msgid "That did not unlock the vault. Use your password."
+msgstr "That did not unlock the vault. Use your password."
+
+#: packages/wallet/src/screens/Unlock.tsx
+msgctxt "unlock.biometric.reason"
+msgid "Unlock BoltVault"
+msgstr "Unlock BoltVault"
 
 #: packages/wallet/src/screens/Unlock.tsx
 msgctxt "unlock.help"

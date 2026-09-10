@@ -102,7 +102,7 @@ export function Campaign({ body, chainId, pool, reducedMotion = false }: { body:
 
   return (
     <Column flex={1}>
-      <ScrollView contentContainerStyle={{ padding: inset, gap: 12, ...(wide ? { maxWidth: 640, width: '100%', alignSelf: 'center' } : {}) }} testID="campaign">
+      <ScrollView contentContainerStyle={{ padding: inset, gap: 12 }} testID="campaign">
         <PageHeader title={c?.token.symbol ?? ''} right={alertPill ?? undefined} />
         {error && !c ? <Body tone="burn">{error}</Body> : null}
         {c ? (

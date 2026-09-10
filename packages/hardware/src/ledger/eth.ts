@@ -9,8 +9,19 @@ import { buildApdu, concatBytes, INS, LedgerError, unwrapResponse } from './apdu
 import { pathToBytes } from './paths'
 
 export interface ApduTransport {
-  exchange(apdu: Uint8Array): Promise<Uint8Array>
+  /** `timeoutMs` is a per-exchange override; a transport may ignore it. */
+  exchange(apdu: Uint8Array, timeoutMs?: number): Promise<Uint8Array>
 }
+
+/**
+ * Whether the device can be asked to sign, and what to do when it cannot.
+ *
+ * Every state here is one a person can fix in a few seconds, which is the
+ * whole reason to ask before sending rather than after.
+ */
+export type LedgerReadiness =
+  | { readonly state: 'ready'; readonly app: AppConfiguration }
+  | { readonly state: 'locked' | 'wrong_app' | 'no_answer' | 'error'; readonly message: string }
 
 export interface AppConfiguration {
   /** Arbitrary (blind) data signing is enabled in the app's settings. */
@@ -60,12 +71,40 @@ export function eip155TailOffset(raw: Uint8Array, chainId: number): number {
 export class LedgerEthApp {
   constructor(private readonly transport: ApduTransport) {}
 
-  private async send(ins: number, p1: number, p2: number, data: Uint8Array): Promise<Uint8Array> {
-    return unwrapResponse(await this.transport.exchange(buildApdu(ins, p1, p2, data)))
+  private async send(ins: number, p1: number, p2: number, data: Uint8Array, timeoutMs?: number): Promise<Uint8Array> {
+    return unwrapResponse(await this.transport.exchange(buildApdu(ins, p1, p2, data), timeoutMs))
   }
 
-  async getAppConfiguration(): Promise<AppConfiguration> {
-    const r = await this.send(INS.GET_APP_CONFIGURATION, 0, 0, new Uint8Array())
+  /**
+   * Is the device ready to sign? Asked before anything is sent to it.
+   *
+   * `getAppConfiguration` is the cheapest APDU the Ethereum app answers and
+   * the only one that is safe to send unprompted — it shows nothing on the
+   * screen and asks the user for nothing. What it tells us is everything that
+   * goes wrong at this step: a locked device, the dashboard instead of the
+   * app, or a device that does not answer at all.
+   *
+   * The short deadline is the point. Without it a send begins, the first
+   * signing APDU goes out to a dashboard that will not answer, and the sheet
+   * spins for a full minute before saying so.
+   */
+  async ready(timeoutMs = 3_000): Promise<LedgerReadiness> {
+    try {
+      return { state: 'ready', app: await this.getAppConfiguration(timeoutMs) }
+    } catch (err) {
+      if (err instanceof LedgerError) {
+        if (err.code === 'locked') return { state: 'locked', message: err.message }
+        if (err.code === 'wrong_app') return { state: 'wrong_app', message: err.message }
+        return { state: 'error', message: err.message }
+      }
+      // A transport timeout on THIS apdu means the dashboard, not a slow device:
+      // the app answers its own configuration immediately or not at all.
+      return { state: 'no_answer', message: 'Open the Ethereum app on your Ledger, then try again.' }
+    }
+  }
+
+  async getAppConfiguration(timeoutMs?: number): Promise<AppConfiguration> {
+    const r = await this.send(INS.GET_APP_CONFIGURATION, 0, 0, new Uint8Array(), timeoutMs)
     if (r.length < 4) throw new LedgerError('wrong_app', 0x9000, 'Open the Ethereum app on your Ledger.')
     const flags = r[0] as number
     return { blindSigning: (flags & 0x01) !== 0, erc20Provisioning: (flags & 0x02) !== 0, version: `${r[1]}.${r[2]}.${r[3]}` }
