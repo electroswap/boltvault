@@ -1,6 +1,6 @@
 import 'react-native-get-random-values'
 import { createEngine, type Engine } from '@boltvault/engine'
-import { App as WalletApp, Splash, takeSplash, type UiHost } from '@boltvault/wallet'
+import { App as WalletApp, SplashRoot, takeSplash, type UiHost } from '@boltvault/wallet'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useState } from 'react'
 import { Linking, Share, StyleSheet, View } from 'react-native'
@@ -112,7 +112,8 @@ export default function App() {
     <SafeAreaProvider>
       <View style={styles.root}>
         <StatusBar style="light" />
-        {engine && splashDone ? <Shell engine={engine.engine} /> : <Splash />}
+        {/* `SplashRoot`, not `Splash`: out here there is no TamaguiProvider yet — WalletApp owns it. */}
+        {engine && splashDone ? <Shell engine={engine.engine} /> : <SplashRoot />}
         <ScanHost />
       </View>
     </SafeAreaProvider>

@@ -16,7 +16,7 @@
  * rather than a new animation vocabulary: the mark, then the name, then the
  * ElectroSwap lock-up, 70 ms apart.
  */
-import { Body, BoltMark, Column, EsWordmark, Field, Ignition, useWindowDimensions } from '@boltvault/ui'
+import { Body, BoltMark, Column, EsWordmark, Field, Ignition, TamaguiProvider, tamaguiConfig, useWindowDimensions } from '@boltvault/ui'
 import { t } from '../i18n'
 
 let spent = false
@@ -59,5 +59,30 @@ export function Splash({ reducedMotion = false }: { reducedMotion?: boolean }) {
         </Column>
       </Ignition>
     </Column>
+  )
+}
+
+/**
+ * The splash with a theme of its own, for a body that renders it before the app.
+ *
+ * `Splash` is built from Tamagui primitives and theme tokens, and the only
+ * `TamaguiProvider` in the product is the one `App` mounts — so on the phone,
+ * where the splash stands in for the app while the engine is still being built,
+ * it had no theme at all and Tamagui threw `Missing theme` on the very first
+ * frame. The wallet crashed on launch.
+ *
+ * Nothing caught it because every automated view of this screen goes through
+ * the harness, which renders it *inside* `App` — where the provider is. The
+ * device smoke (`apps/mobile/scripts/device-smoke.sh`) is what catches this
+ * class of fault; it exists for exactly this and wants a phone attached.
+ *
+ * So: `Splash` inside the app (the screen registry, the harness, tests),
+ * `SplashRoot` outside it.
+ */
+export function SplashRoot({ reducedMotion = false }: { reducedMotion?: boolean }) {
+  return (
+    <TamaguiProvider config={tamaguiConfig} defaultTheme="dark">
+      <Splash reducedMotion={reducedMotion} />
+    </TamaguiProvider>
   )
 }
