@@ -323,53 +323,8 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
-  packages/activity:
-    dependencies:
-      '@boltvault/core':
-        specifier: workspace:*
-        version: link:../core
-      viem:
-        specifier: ^2.56.3
-        version: 2.56.3(typescript@5.9.3)(zod@3.25.76)
-    devDependencies:
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
-  packages/adapters:
-    dependencies:
-      viem:
-        specifier: ^2
-        version: 2.56.3(typescript@5.9.3)(zod@3.25.76)
-    devDependencies:
-      '@types/node':
-        specifier: ^22.20.1
-        version: 22.20.1
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
-  packages/approvals:
-    dependencies:
-      '@boltvault/chains':
-        specifier: workspace:*
-        version: link:../chains
-      viem:
-        specifier: ^2.56.3
-        version: 2.56.3(typescript@5.9.3)(zod@3.25.76)
-    devDependencies:
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
   packages/chains:
     dependencies:
@@ -529,21 +484,6 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
-  packages/farm:
-    dependencies:
-      '@boltvault/chains':
-        specifier: workspace:*
-        version: link:../chains
-      viem:
-        specifier: ^2.56.3
-        version: 2.56.3(typescript@5.9.3)(zod@3.25.76)
-    devDependencies:
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
   packages/hardware:
     dependencies:
@@ -576,34 +516,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
-  packages/launchpad:
-    dependencies:
-      '@boltvault/chains':
-        specifier: workspace:*
-        version: link:../chains
-      viem:
-        specifier: ^2.56.3
-        version: 2.56.3(typescript@5.9.3)(zod@3.25.76)
-    devDependencies:
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
-  packages/ledger:
-    dependencies:
-      viem:
-        specifier: ^2.56.3
-        version: 2.56.3(typescript@5.9.3)(zod@3.25.76)
-    devDependencies:
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
   packages/market-data:
     devDependencies:
@@ -614,46 +527,8 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
-  packages/nft:
-    dependencies:
-      '@boltvault/chains':
-        specifier: workspace:*
-        version: link:../chains
-      viem:
-        specifier: ^2.56.3
-        version: 2.56.3(typescript@5.9.3)(zod@3.25.76)
-    devDependencies:
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
-  packages/other-chain:
-    dependencies:
-      '@boltvault/chains':
-        specifier: workspace:*
-        version: link:../chains
-    devDependencies:
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-      viem:
-        specifier: ^2.56.3
-        version: 2.56.3(typescript@5.9.3)(zod@3.25.76)
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
-  packages/passkey:
-    devDependencies:
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
   packages/platform:
     dependencies:
@@ -671,21 +546,6 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
-  packages/portfolio:
-    dependencies:
-      '@boltvault/token-catalog':
-        specifier: workspace:*
-        version: link:../token-catalog
-    devDependencies:
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-      viem:
-        specifier: ^2.56.3
-        version: 2.56.3(typescript@5.9.3)(zod@3.25.76)
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
   packages/protocol:
     dependencies:
@@ -719,18 +579,6 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
-  packages/send:
-    dependencies:
-      viem:
-        specifier: ^2.56.3
-        version: 2.56.3(typescript@5.9.3)(zod@3.25.76)
-    devDependencies:
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
   packages/settings:
     dependencies:
@@ -745,21 +593,6 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
-  packages/swap:
-    dependencies:
-      '@boltvault/chains':
-        specifier: workspace:*
-        version: link:../chains
-      viem:
-        specifier: ^2.56.3
-        version: 2.56.3(typescript@5.9.3)(zod@3.25.76)
-    devDependencies:
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
   packages/testing:
     dependencies:
@@ -796,30 +629,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
-  packages/token-info:
-    dependencies:
-      '@boltvault/chains':
-        specifier: workspace:*
-        version: link:../chains
-      viem:
-        specifier: ^2.56.3
-        version: 2.56.3(typescript@5.9.3)(zod@3.25.76)
-    devDependencies:
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
-  packages/trezor:
-    devDependencies:
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
   packages/ui:
     dependencies:
@@ -898,14 +708,6 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
-  packages/wc:
-    devDependencies:
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
 packages:
 
