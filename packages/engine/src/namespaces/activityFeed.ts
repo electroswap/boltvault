@@ -17,7 +17,6 @@ import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
 import type { ActivityStore } from '../activityStore'
 import { cacheKey, type DocCache } from '../cache'
-import type { NamespaceSpec } from '../host'
 import { type ActivityCategory, type ActivityEntry } from '../schema'
 
 /** Long enough that scrolling Activity does not re-ask; short enough that an arrival shows up. */
@@ -182,11 +181,5 @@ export class ActivityFeedService {
   async detail(id: string): Promise<ActivityEntry | null> {
     const local = await this.deps.activity.list({})
     return local.find((e) => e.id === id || e.hash === id) ?? null
-  }
-}
-
-export function activityFeedNamespace(feed: ActivityFeedService): NamespaceSpec {
-  return {
-    available: { handler: async () => ({ available: feed.available }) },
   }
 }

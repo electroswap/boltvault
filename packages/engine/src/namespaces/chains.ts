@@ -13,12 +13,18 @@ import type { Platform } from '@boltvault/platform'
 import { createPublicClient, fallback, http, type PublicClient } from 'viem'
 import { z } from 'zod'
 import { EngineError } from '../errors'
+import type { GovernorSnapshot } from '../governor'
 import type { EventBus, NamespaceSpec } from '../host'
 import type { ChainHead, ChainView } from '../schema'
 import { readDoc, writeDoc, type DocSpec } from '../storage'
 
 export interface HeadSource {
   blockNumber(chainId: number): Promise<bigint>
+}
+
+/** What `chains.hosts()` needs from the rate governor, and nothing more. */
+export interface HostHealthSource {
+  snapshot(): GovernorSnapshot[]
 }
 
 const RPC_DOC: DocSpec<Record<string, { url: string; trace?: string }>> = {
@@ -78,8 +84,33 @@ export class ChainsService implements HeadSource {
     private readonly fetchImpl?: typeof fetch,
     /** Overrides the per-chain head cache; tests pin it, nothing else should. */
     private readonly cacheMsOverride?: number,
+    /**
+     * The rate governor, for Settings › Networks.
+     *
+     * The governor already knows which hosts are cooling and which have refused
+     * this wallet's credentials outright; nothing could ask it. It belongs on
+     * this service because the thing a user can act on — an endpoint — is what
+     * this service owns, and because "ElectroSwap's API is refusing this wallet"
+     * is a sentence the Networks screen should be able to say instead of
+     * showing a column of empty values.
+     */
+    private readonly governor?: HostHealthSource,
   ) {
     this.heads = heads ?? this
+  }
+
+  /**
+   * Every outside host the wallet has spoken to this session, and what the
+   * governor thinks of it: budget, cooldown, and whether the host answered 401
+   * or 403 and has not accepted a request since (`refused`).
+   *
+   * A refusal is the one state here a user can do something about — a key the
+   * API no longer honours, or a device clock far enough out that the request
+   * signature is rejected — and until now it was invisible: every call simply
+   * failed, quietly, for fifteen minutes at a time.
+   */
+  hosts(): GovernorSnapshot[] {
+    return this.governor?.snapshot() ?? []
   }
 
   /**
@@ -277,6 +308,7 @@ export function chainsNamespace(chains: ChainsService): NamespaceSpec {
       handler: (arg) => chains.head((arg as { chainId: number }).chainId),
     },
     rpcs: { handler: () => chains.rpcs() },
+    hosts: { handler: async () => chains.hosts() },
     setRpc: {
       input: z.object({ chainId: z.number().int().positive(), url: z.string().url().nullable(), trace: z.string().url().nullable().optional() }),
       handler: async (arg) => {
