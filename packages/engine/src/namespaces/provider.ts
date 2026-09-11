@@ -57,7 +57,7 @@ import {
   type PreparedTx,
 } from '../approvalPayloads'
 import { authHeaders } from '../apiAuth'
-import type { ApprovalStore } from '../approvals'
+import { APPROVAL_TTL_MS, type ApprovalStore } from '../approvals'
 import { EngineError } from '../errors'
 import type { EventBus } from '../host'
 import type { ActivityEntry, ApprovalRequest, AccountView } from '../schema'
@@ -633,6 +633,25 @@ export class ProviderService {
     const accounts = await d.vault.accounts()
     const activity = await d.activity.list({ chainId }).catch(() => [] as ActivityEntry[])
     const sentTo = activity.filter((e) => e.category !== 'RECEIVE' && e.to).map((e) => e.to as Hex)
+    /*
+      Addresses that have only ever sent to this account, never been sent to.
+
+      `RECIPIENT_POISON_SOURCE` reads this and the field was never populated,
+      so the rule could not fire. A duster plants a lookalike by sending a tiny
+      amount; the address then appears in history and looks familiar. It is
+      deliberately not part of the lookalike reference set — §3.6 explains why
+      that would invert the attack — but choosing one as a recipient is worth
+      saying out loud.
+    */
+    const sentToSet = new Set(sentTo.map((a) => a.toLowerCase()))
+    const inboundOnly = [
+      ...new Set(
+        activity
+          .filter((e) => e.category === 'RECEIVE' && e.to)
+          .map((e) => (e.to as string).toLowerCase())
+          .filter((a) => !sentToSet.has(a)),
+      ),
+    ] as Hex[]
     const contracts: Record<string, { hasCode: boolean }> = {}
     const balances: Record<string, bigint> = {}
     const probe: Hex[] = []
@@ -654,6 +673,29 @@ export class ProviderService {
         .catch(() => null)) as string | null
       if (bal) balances['native'] = BigInt(bal)
     }
+    /*
+      The token's balance, for a token transfer.
+
+      `LARGE_SEND` compares the amount against the balance of the asset being
+      moved, and only the native balance was ever read — so the step-up worked
+      for ETN and silently never fired for any token. `balanceOf(address)` is
+      one `eth_call`; the selector is spelled out to avoid pulling an ABI into
+      this file.
+    */
+    if (request.kind === 'transaction' && request.tx.to && request.tx.data.startsWith('0xa9059cbb')) {
+      const token = request.tx.to.toLowerCase()
+      const callData = `0x70a08231${account.slice(2).toLowerCase().padStart(64, '0')}` as Hex
+      const raw = (await d.chains
+        .rpc(chainId, 'eth_call', [{ to: request.tx.to, data: callData }, 'latest'])
+        .catch(() => null)) as string | null
+      if (raw && raw.length > 2) {
+        try {
+          balances[token] = BigInt(raw)
+        } catch {
+          // a contract that answers something that is not a number tells us nothing
+        }
+      }
+    }
     const addressBook = d.addressBook ? await d.addressBook().catch(() => [] as string[]) : []
     const tokens = d.tokenInfo
       ? await d
@@ -664,6 +706,7 @@ export class ProviderService {
     for (const [addr, info] of Object.entries(tokens)) labels[addr] = info.symbol
     const context: AssessmentContext = emptyContext({
       sentTo,
+      inboundOnly,
       addressBook: addressBook as Hex[],
       tokens,
       labels,
@@ -791,6 +834,21 @@ export class ProviderService {
 
   // ---- transactions ---------------------------------------------------------------
 
+  /** (chain:account) → the nonces this wallet has handed out but not yet seen on chain. */
+  private readonly reservedNonces = new Map<string, Array<{ nonce: number; at: number }>>()
+
+  private reserveNonce(chainId: number, from: Hex, onChain: number): number {
+    const key = `${chainId}:${from.toLowerCase()}`
+    const now = this.deps.platform.now()
+    // An approval cannot outlive its TTL, so neither can its claim on a nonce.
+    const live = (this.reservedNonces.get(key) ?? []).filter((r) => now - r.at < APPROVAL_TTL_MS && r.nonce >= onChain)
+    const highest = live.reduce((m, r) => Math.max(m, r.nonce), onChain - 1)
+    const nonce = Math.max(onChain, highest + 1)
+    live.push({ nonce, at: now })
+    this.reservedNonces.set(key, live)
+    return nonce
+  }
+
   private async prepare(
     chainId: number,
     tx: TxParams,
@@ -800,10 +858,23 @@ export class ProviderService {
     const value = tx.value ?? '0x0'
     const data = tx.data ?? '0x'
     const to = tx.to ?? null
+    /*
+      A nonce nobody else in this wallet is already holding.
+
+      `eth_getTransactionCount(pending)` only counts what the node has seen. Two
+      approvals prepared before either is broadcast — a dApp asking twice, or a
+      send raised while a swap sheet is open — both read the same number, and
+      the second transaction to arrive replaces the first at the same nonce.
+      One of them silently never happens, and which one is a race.
+
+      Reservations are held per (chain, account) for the approval's lifetime and
+      pruned by age, so a request that is abandoned or expires gives its number
+      back without needing a settle hook.
+    */
     const nonce =
       tx.nonce !== undefined
         ? parseInt(tx.nonce, 16)
-        : parseInt(String(await rpc('eth_getTransactionCount', [tx.from, 'pending'])), 16)
+        : this.reserveNonce(chainId, tx.from, parseInt(String(await rpc('eth_getTransactionCount', [tx.from, 'pending'])), 16))
     let gas: bigint
     let estimateError: string | null = null
     if (tx.gas !== undefined) {
@@ -1043,6 +1114,14 @@ export class ProviderService {
     let raw: Hex
     try {
       const account = await this.signer(intent.accountId)
+      /*
+        The queue may have moved while the sheet was open. Re-signing with a
+        new nonce here would sign something the user never saw, so the request
+        fails instead and can be raised again with a current one.
+      */
+      const pending = parseInt(String(await d.chains.rpc(intent.chainId, 'eth_getTransactionCount', [tx.from, 'pending'])), 16)
+      if (Number.isFinite(pending) && pending > tx.nonce)
+        throw new RpcError(RPC.INTERNAL, 'This transaction\u2019s place in the queue was taken while the sheet was open. Ask again.')
       raw = await account.signTransaction(toSerializable(intent.chainId, tx))
       // Before it can be broadcast, it has to have come from the account we asked.
       ProviderService.assertSignedBy(

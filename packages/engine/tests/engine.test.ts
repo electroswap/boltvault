@@ -219,12 +219,21 @@ describe('vault v2 + accounts', () => {
     expect(right.ok).toBe(true)
     expect(right.status.backupComplete).toBe(true)
 
-    const { frames } = await a.engine.vault.export({ password: 'pw', code: 'orbit velvet cactus' })
+    /*
+      The phrase is minted by the engine. What this envelope holds — every
+      seed, passphrase and imported key — is rendered as a QR, so the
+      ciphertext is public by design and the phrase is all of the protection;
+      an eight-character user-invented one, lower-cased before the KDF, was not
+      enough for something a camera can capture and grind offline.
+    */
+    await expectError(a.engine.vault.export({ password: 'pw', code: 'orbit velvet cactus' }), 'invalid_argument')
+    const { frames, code } = await a.engine.vault.export({ password: 'pw' })
     expect(frames.length).toBeGreaterThan(0)
+    expect(code.split(' ')).toHaveLength(6)
     const b = boot()
     await b.ready
     await expectError(b.engine.vault.importExport({ frames, code: 'wrong code!!', password: 'newpw' }), 'unauthorized')
-    const moved = await b.engine.vault.importExport({ frames, code: 'orbit velvet cactus', password: 'newpw' })
+    const moved = await b.engine.vault.importExport({ frames, code, password: 'newpw' })
     expect(moved.accounts[0]?.address).toBe(right.status.seeds.length ? (await a.engine.accounts.list())[0]?.address : '')
     expect((await b.engine.vault.status()).backupComplete).toBe(true)
     await expectError(a.engine.vault.importExport({ frames, code: 'orbit velvet cactus', password: 'x' }), 'invalid_argument')

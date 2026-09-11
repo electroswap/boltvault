@@ -155,6 +155,24 @@ describe('money on the testnet mock', () => {
     expect(decoded.args).toEqual([FRIEND, 2_500_000n])
   })
 
+  /*
+    `eth_getTransactionCount(pending)` only counts what the node has seen, so
+    two approvals raised before either is broadcast both read the same number —
+    and the second to arrive replaces the first at that nonce. One of them
+    silently never happens, and which one is a race. The wallet hands out its
+    own, above anything it has already reserved.
+  */
+  it('gives two unsettled approvals consecutive nonces', async () => {
+    const one = await engine.engine.send.submit({ accountId, chainId: TESTNET, token: 'native', to: FRIEND, amount: '0.1' })
+    const two = await engine.engine.send.submit({ accountId, chainId: TESTNET, token: 'native', to: FRIEND, amount: '0.2' })
+    const p1 = parseApprovalPayload((await approvalById(engine, one.requestId)).payload)
+    const p2 = parseApprovalPayload((await approvalById(engine, two.requestId)).payload)
+    if (p1?.kind !== 'send_transaction' || p2?.kind !== 'send_transaction') throw new Error('expected transactions')
+    expect(p2.tx.nonce).toBe(p1.tx.nonce + 1)
+    await engine.engine.approvals.decide({ id: one.requestId, approve: false })
+    await engine.engine.approvals.decide({ id: two.requestId, approve: false })
+  })
+
   it('finds the unlimited Permit2 allowance and revokes it through the sheet', async () => {
     const rows = await engine.engine.allowances.scan({ accountId, chainId: TESTNET, logs: false })
     const permit = rows.find((r) => r.spender.toLowerCase() === PERMIT2.toLowerCase() && r.standard === 'erc20')

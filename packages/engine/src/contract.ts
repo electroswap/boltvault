@@ -107,7 +107,8 @@ export interface VaultNamespace {
   backupQuiz(input: { seedId: string }): Promise<{ positions: number[]; wordCount: number }>
   confirmBackup(input: { seedId: string; answers: Array<{ position: number; word: string }> }): Promise<{ ok: boolean; status: VaultStatus }>
   /** Air-gapped move (§6): the plaintext under a one-time code, as animated-QR frames. */
-  export(input: { password: string; code: string }): Promise<{ frames: string[] }>
+  /** `code` is minted by the engine when absent; the caller shows what comes back. */
+  export(input: { password: string; code?: string }): Promise<{ frames: string[]; code: string }>
   importExport(input: { frames: string[]; code: string; password: string }): Promise<{ accounts: AccountView[] }>
 }
 

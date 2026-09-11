@@ -24,7 +24,14 @@ export function FreshnessLine({ freshness, observedAt, refreshing, reducedMotion
   return (
     <Column gap="$1" testID={testID}>
       <Refreshing active={refreshing} reducedMotion={reducedMotion} />
-      {stale && !refreshing && observedAt !== null ? <Stale label={agoLabel(observedAt)} /> : null}
+      {/*
+        The label stays up while a refresh is in flight. It used to be
+        suppressed by `refreshing`, so a screen whose refresh never lands — a
+        rate-limited price proxy, an endpoint in cooldown — went quiet at
+        exactly the moment the number stopped being current. A sweep says "we
+        are asking"; it does not say "this is now".
+      */}
+      {stale && observedAt !== null ? <Stale label={agoLabel(observedAt)} /> : null}
     </Column>
   )
 }

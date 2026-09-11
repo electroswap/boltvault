@@ -88,6 +88,21 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
               ) : (
                 <WordGrid words={words} />
               )}
+              {/*
+                A seed with a BIP-39 passphrase cannot be restored from these
+                words alone. The engine has always known — `hasPassphrase` is
+                on the seed view — and no screen read it, so someone who
+                imported with a passphrase could pass the quiz, be told "backed
+                up", and hold twelve words that recover an empty wallet.
+              */}
+              {vault?.seeds.find((x) => x.id === id)?.hasPassphrase ? (
+                <Body tone="ember" size="caption" testID="backup-passphrase-warning">
+                  {t({
+                    id: 'backup.passphrase',
+                    message: 'This recovery phrase has a BIP-39 passphrase. These words alone will not restore it — write the passphrase down too, and keep it somewhere separate.',
+                  })}
+                </Body>
+              ) : null}
             </Plate>
             {/*
               The phrase stays in state until the check passes. It used to be

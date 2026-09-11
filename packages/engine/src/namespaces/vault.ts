@@ -21,6 +21,8 @@ import {
   createVaultV2,
   deriveAccount,
   exportVaultV2,
+  EXPORT_CODE_WORDS,
+  mintExportCode,
   fromHex,
   generateEntropy,
   migrateV1,
@@ -534,11 +536,25 @@ export class VaultManager {
 
   // ---- export / import (air-gapped) ---------------------------------------------------
 
-  async export(input: { password: string; code: string }): Promise<{ frames: string[] }> {
+  /**
+   * Seal the whole vault for another device.
+   *
+   * The phrase is minted here rather than invented by the user. What this
+   * envelope holds — every seed, every passphrase, every imported key — is put
+   * on screen as a QR, so the ciphertext is public by design and the phrase is
+   * the entire protection. An eight-character floor, lower-cased before the
+   * KDF, was not that. The caller may still supply one, but it has to be at
+   * least as long as what we would have generated.
+   */
+  async export(input: { password: string; code?: string }): Promise<{ frames: string[]; code: string }> {
     await this.verifyPassword(input.password)
+    const supplied = (input.code ?? '').trim()
+    if (supplied && supplied.split(/\s+/).filter(Boolean).length < EXPORT_CODE_WORDS)
+      throw new EngineError('invalid_argument', `A phrase you choose must be at least ${EXPORT_CODE_WORDS} words. Leave it blank and BoltVault will make one.`)
+    const code = supplied || mintExportCode((n) => this.platform.random(n))
     const { pt } = await this.plaintext()
-    const env = await exportVaultV2(this.crypto, pt, input.code, await this.kdfParams(), this.platform.now())
-    return { frames: chunkForQr(JSON.stringify(env)) }
+    const env = await exportVaultV2(this.crypto, pt, code, await this.kdfParams(), this.platform.now())
+    return { frames: chunkForQr(JSON.stringify(env)), code }
   }
 
   async importExport(input: { frames: string[]; code: string; password: string }): Promise<{ accounts: AccountView[] }> {
@@ -823,8 +839,8 @@ export function vaultNamespace(vault: VaultManager, settings: SettingsStore): Na
       handler: (arg) => vault.confirmBackup(arg as { seedId: string; answers: Array<{ position: number; word: string }> }),
     },
     export: {
-      input: z.object({ password: PasswordSchema, code: z.string().min(8) }),
-      handler: (arg) => vault.export(arg as { password: string; code: string }),
+      input: z.object({ password: PasswordSchema, code: z.string().optional() }),
+      handler: (arg) => vault.export(arg as { password: string; code?: string }),
     },
     importExport: {
       input: z.object({ frames: z.array(z.string()).min(1), code: z.string().min(8), password: PasswordSchema }),

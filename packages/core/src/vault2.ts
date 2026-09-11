@@ -18,6 +18,7 @@
  * Crypto: @noble only. The KDF is injected (`Argon2idFn`) so the extension
  * (hash-wasm) and mobile (libsodium) share this file byte-for-byte.
  */
+import { wordlist } from '@scure/bip39/wordlists/english'
 import { xchacha20poly1305 } from '@noble/ciphers/chacha'
 import { hkdf } from '@noble/hashes/hkdf'
 import { sha256 } from '@noble/hashes/sha256'
@@ -309,6 +310,34 @@ export interface VaultExportEnvelope {
   readonly nonce: string
   readonly ct: string
   readonly createdAt: number
+}
+
+/**
+ * Mint the one-time phrase that seals an export.
+ *
+ * The export holds every seed, passphrase and imported key in the vault, and
+ * it is rendered as a QR — so the ciphertext is public by design, and the
+ * phrase is the whole of the protection. A user-invented one carried an
+ * eight-character floor and was lower-cased before the KDF, which is not
+ * enough for something a camera in the room can capture and grind offline.
+ *
+ * Six words from the BIP-39 list is about 66 bits: still typeable on the
+ * destination device, and out of reach of an offline search even before
+ * Argon2id makes each guess expensive.
+ */
+export const EXPORT_CODE_WORDS = 6
+export function mintExportCode(random: (n: number) => Uint8Array): string {
+  const out: string[] = []
+  for (let i = 0; i < EXPORT_CODE_WORDS; i++) {
+    // Rejection-sampled to stay uniform over the 2048-word list.
+    let n = 2048
+    while (n >= 2048) {
+      const b = random(2)
+      n = (((b[0] ?? 0) << 8) | (b[1] ?? 0)) & 0x07ff
+    }
+    out.push(wordlist[n] as string)
+  }
+  return out.join(' ')
 }
 
 /** Seal the plaintext under a one-time code (typed on the destination, never displayed there). */

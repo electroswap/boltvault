@@ -18,6 +18,7 @@ import { useActivity } from '../hooks/useActivity'
 import { useCached } from '../hooks/useCached'
 import { usePortfolio } from '../hooks/usePortfolio'
 import { usePrefs } from '../hooks/usePrefs'
+import { FreshnessLine } from '../components/FreshnessLine'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { useReducedMotion } from '../state/useReducedMotion'
@@ -172,6 +173,17 @@ export function Token({ chainId, address, body }: { chainId: number; address: st
           }
         />
 
+        {/*
+          How old this price is, when it is old.
+
+          The hero used to render a cached figure with nothing to distinguish
+          it from a current one, and `maxAgeMs` means no refresh is even
+          attempted inside the window. A price proxy in cooldown could
+          therefore show an hour-old number as the answer to "what is this
+          worth" — and the decision to swap is made on that number, even though
+          the on-chain quote protects the execution.
+        */}
+        <FreshnessLine freshness={detail.freshness} observedAt={detail.observedAt} refreshing={detail.refreshing} testID="token-freshness" />
         {/* The price on the Grid (plan B5). */}
         <Column gap="$2" testID="token-price-block">
           <Row alignItems="flex-end" gap="$3" flexWrap="wrap">

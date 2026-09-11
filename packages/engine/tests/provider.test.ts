@@ -55,14 +55,15 @@ function dapp(engine: Engine, origin: string, session = 'sess'): DappClient {
   }
 }
 
-async function nextApproval(engine: Engine): Promise<ApprovalRequest> {
-  const existing = engine.approvals.list()[0]
+async function nextApproval(engine: Engine, match: (r: ApprovalRequest) => boolean = () => true): Promise<ApprovalRequest> {
+  const existing = engine.approvals.list().find(match)
   if (existing) return existing
   return new Promise((resolve) => {
     const off = engine.host.events.subscribe((e) => {
-      if (e.type === 'approvals.changed' && e.pending[0]) {
+      const hit = e.type === 'approvals.changed' ? e.pending.find(match) : undefined
+      if (hit) {
         off()
-        resolve(e.pending[0])
+        resolve(hit)
       }
     })
   })

@@ -221,13 +221,24 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
               ) : (
                 <AnimatedQR frames={frames} />
               )}
-              <Key label={t({ id: 'security.export.done', message: 'Done' })} kind="secondary" onPress={() => setFrames(null)} />
+              {/*
+                The phrase is generated, not invented: this envelope holds every
+                seed and key in the vault and is shown as a QR, so the phrase is
+                the whole of the protection. Six BIP-39 words is still typeable
+                on the other device and out of reach of an offline search.
+              */}
+              <Body size="caption" tone="mute">
+                {t({ id: 'security.export.phrase', message: 'Type this phrase on the other device:' })}
+              </Body>
+              <Body selectable testID="export-code">
+                {exportCode}
+              </Body>
+              <Key label={t({ id: 'security.export.done', message: 'Done' })} kind="secondary" onPress={() => { setFrames(null); setExportCode('') }} />
             </>
           ) : (
             <>
               <Input value={exportPassword} onChange={setExportPassword} secure placeholder={t({ id: 'security.current', message: 'Current password' })} />
-              <Input value={exportCode} onChange={setExportCode} placeholder={t({ id: 'security.export.code', message: 'One-time phrase (3+ words)' })} hint={t({ id: 'security.export.hint', message: 'Type this on the other device. It is not shown there.' })} />
-              <Key label={t({ id: 'security.export.key', message: 'Show export code' })} disabled={busy || !exportPassword || exportCode.trim().length < 8} onPress={() => run(async () => { const r = await engine.vault.export({ password: exportPassword, code: exportCode }); setFrames(r.frames); setExportPassword('') })} />
+              <Key label={t({ id: 'security.export.key', message: 'Show export code' })} disabled={busy || !exportPassword} onPress={() => run(async () => { const r = await engine.vault.export({ password: exportPassword }); setFrames(r.frames); setExportCode(r.code); setExportPassword('') })} />
             </>
           )}
         </Plate>
