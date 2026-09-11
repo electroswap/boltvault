@@ -135,7 +135,16 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
         {farm ? (
           <>
             <Row justifyContent="center">
-              <Coil durationMultiplier={p?.durationMultiplier ?? 10_000} boltMultiplier={p?.boltMultiplier ?? 10_000} glow={glow} size={body === 'extension-popup' ? 190 : 240} reducedMotion={reducedMotion} testID="coil" />
+              {/*
+                The dates belong ON the ring (§7.12 "the Coil": "dates are
+                engraved on the ring", acceptance "the multiplier and the date
+                to 2.5× are readable at a glance"). The Coil has taken them
+                since it was written and this screen never passed them, so the
+                dates lived only in the caption two plates down — which is not
+                a glance. They stay in the caption too: the ring says when, the
+                caption says what it is.
+              */}
+              <Coil durationMultiplier={p?.durationMultiplier ?? 10_000} boltMultiplier={p?.boltMultiplier ?? 10_000} glow={glow} size={body === 'extension-popup' ? 190 : 240} at2x={dateLabel(p?.at2x ?? null)} at25x={dateLabel(p?.at25x ?? null)} reducedMotion={reducedMotion} testID="coil" />
             </Row>
             {!farm.active ? (
               <Plate gap={2} testID="farm-closed">

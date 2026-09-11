@@ -1,9 +1,20 @@
 /**
- * Electric Legends dividends (master plan §8.10; plan C3, owner item N7):
- * what there is to claim as a readout, how much of your collection is
- * earning as a bar of the current, the lifetime paid and your share as a
- * stat strip, your pieces as medallions, and the two keys — Activate once,
- * then Claim. Copy is "marketplace fees shared with holders", never yield.
+ * Electric Legends dividends (master plan §8.10, §7.12; plan C3, owner item
+ * N7): the vessel the claimable ETN rises in, what there is to claim as a
+ * readout, how much of your collection is earning as a bar of the current,
+ * the lifetime paid and your share as a stat strip, your pieces as
+ * medallions, and the two keys — Activate once, then Claim. Copy is
+ * "marketplace fees shared with holders", never yield.
+ *
+ * The vessel and the compact card are the same thing, not two designs.
+ * §7.12 names the vessel as a signature moment — "claimable ETN rises as
+ * liquid light in a glass vessel between claims; Claim drains it into the
+ * readout" — and the owner asked for dividends to take less room, so the
+ * vessel is the one element that appears in *both* forms and the only one
+ * that survives the collapse. It costs no height in either: expanded it
+ * stands beside the readout and the earning bar, which are already taller
+ * than it; collapsed it is a slim tube shorter than the Claim key next to
+ * it. What the collapse removes is text, which is what was taking the room.
  */
 import {
   Body,
@@ -17,6 +28,7 @@ import {
   ScrollView,
   Signature,
   StatStrip,
+  Vessel,
 } from '@boltvault/ui'
 import type { LegendsStatus } from '@boltvault/engine'
 import { formatRaw } from '../format'
@@ -41,6 +53,7 @@ export interface DividendsCardProps {
   readonly onClaim?: () => void
   readonly onOpen?: () => void
   readonly onPiece?: (tokenId: string) => void
+  /** Passed to the vessel: reduced motion means the level is set, never poured. */
   readonly reducedMotion?: boolean
   readonly testID?: string
 }
@@ -55,6 +68,7 @@ export function DividendsCard({
   onDetails,
   onOpen,
   onPiece,
+  reducedMotion,
   testID = 'dividends',
 }: DividendsCardProps) {
   const claimable = BigInt(status.claimableWei)
@@ -83,6 +97,23 @@ export function DividendsCard({
     return (
       <Plate role="raised" gap={4} paddingVertical={10} testID={testID}>
         <Row gap="$2" alignItems="center">
+          {/*
+            Slimmer than the Claim key beside it, so the row is no taller than
+            it was — but it is still the vessel, and it still says at a glance
+            whether fees have been arriving since the last claim.
+          */}
+          <Vessel
+            level={status.vesselLevel}
+            width={13}
+            height={40}
+            {...(reducedMotion === undefined ? {} : { reducedMotion })}
+            accessibilityLabel={t({
+              id: 'legends.vessel.a11y',
+              message: '{a} ETN to claim',
+              values: { a: formatRaw(status.claimableWei, 18) },
+            })}
+            testID={`${testID}-vessel`}
+          />
           <Column flex={1} minWidth={0} alignItems="flex-start">
             <Row gap={6} alignItems="baseline">
               <Readout testID={`${testID}-claimable`}>{formatRaw(status.claimableWei, 18)}</Readout>
@@ -150,47 +181,58 @@ export function DividendsCard({
             : t({ id: 'legends.count.many', message: '{n} pieces', values: { n: owned } })}
         </Body>
       </Row>
-      <Row alignItems="flex-end" gap="$2">
-        <Readout hero={!compact} testID={`${testID}-claimable`}>
-          {formatRaw(status.claimableWei, 18)}
-        </Readout>
-        <Body tone="mute" size="caption" marginBottom={compact ? 2 : 6}>
-          {t({ id: 'legends.toclaim', message: 'ETN to claim' })}
-        </Body>
-      </Row>
-      {/* The earning bar: how much of your collection shares in every fee. */}
-      <Column gap={4} testID={`${testID}-earning`}>
-        <Column
-          height={6}
-          borderRadius={3}
-          backgroundColor="rgba(122, 140, 255, 0.16)"
-          overflow="hidden"
-        >
-          <Column
-            width={`${Math.round(share * 100)}%`}
-            height={6}
-            overflow="hidden"
-            position="relative"
-          >
-            <CurrentFill />
+      {/*
+        The vessel is as tall as the readout and the earning bar together, so it
+        reads as the container those two numbers describe rather than as a
+        decoration beside them — and the card is no taller for it.
+      */}
+      <Row alignItems="center" gap="$3">
+        <Vessel
+          level={status.vesselLevel}
+          width={compact ? 22 : 26}
+          height={compact ? 64 : 78}
+          {...(reducedMotion === undefined ? {} : { reducedMotion })}
+          accessibilityLabel={t({
+            id: 'legends.vessel.a11y',
+            message: '{a} ETN to claim',
+            values: { a: formatRaw(status.claimableWei, 18) },
+          })}
+          testID={`${testID}-vessel`}
+        />
+        <Column flex={1} minWidth={0} gap={10}>
+          <Row alignItems="flex-end" gap="$2">
+            <Readout hero={!compact} testID={`${testID}-claimable`}>
+              {formatRaw(status.claimableWei, 18)}
+            </Readout>
+            <Body tone="mute" size="caption" marginBottom={compact ? 2 : 6}>
+              {t({ id: 'legends.toclaim', message: 'ETN to claim' })}
+            </Body>
+          </Row>
+          {/* The earning bar: how much of your collection shares in every fee. */}
+          <Column gap={4} testID={`${testID}-earning`}>
+            <Column height={6} borderRadius={3} backgroundColor="rgba(122, 140, 255, 0.16)" overflow="hidden">
+              <Column width={`${Math.round(share * 100)}%`} height={6} overflow="hidden" position="relative">
+                <CurrentFill />
+              </Column>
+            </Column>
+            <Body tone={needsActivation ? 'ember' : 'mute'} size="caption">
+              {owned === 0
+                ? t({
+                    id: 'legends.earning.none',
+                    message: 'Hold a Legend and it shares a third of every marketplace fee.',
+                  })
+                : earning === owned
+                  ? t({ id: 'legends.earning.all', message: 'Every piece is earning.' })
+                  : t({
+                      id: 'legends.earning.some',
+                      message:
+                        '{e} of {n} pieces earning — activate the rest once and they share every fee from then on.',
+                      values: { e: earning, n: owned },
+                    })}
+            </Body>
           </Column>
         </Column>
-        <Body tone={needsActivation ? 'ember' : 'mute'} size="caption">
-          {owned === 0
-            ? t({
-                id: 'legends.earning.none',
-                message: 'Hold a Legend and it shares a third of every marketplace fee.',
-              })
-            : earning === owned
-              ? t({ id: 'legends.earning.all', message: 'Every piece is earning.' })
-              : t({
-                  id: 'legends.earning.some',
-                  message:
-                    '{e} of {n} pieces earning — activate the rest once and they share every fee from then on.',
-                  values: { e: earning, n: owned },
-                })}
-        </Body>
-      </Column>
+      </Row>
       {!compact ? (
         <StatStrip
           bare

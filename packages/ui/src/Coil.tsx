@@ -80,8 +80,18 @@ export function Coil({ durationMultiplier, boltMultiplier, glow, size = 200, at2
             {`2.0× ${at2x}`}
           </SvgText>
         ) : null}
+        {/*
+          The 2.5× engraving sits INSIDE the ring, not above its tick.
+
+          The tick for 2.5× is at the top of the travel, `outerR + 14` from the
+          centre — two pixels short of the viewBox at the default size — so a
+          label drawn above it was painted outside the canvas and simply never
+          appeared. The one number §7.12 says must be readable at a glance was
+          the one number that could not be read. Inside the ring it is on the
+          same face as the multiplier, with room at every size.
+        */}
         {at25x ? (
-          <SvgText x={t25.x} y={t25.y - 8} fill={paint.mute} fontSize={size * 0.05} textAnchor="middle" fontFamily={fonts.text}>
+          <SvgText x={cx} y={cy - outerR + size * 0.085} fill={paint.mute} fontSize={size * 0.05} textAnchor="middle" fontFamily={fonts.text}>
             {`2.5× ${at25x}`}
           </SvgText>
         ) : null}

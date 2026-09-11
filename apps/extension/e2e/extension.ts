@@ -2,7 +2,7 @@
  * Playwright helpers: launch Chromium with the built extension loaded and find
  * its id from the service worker. Requires `pnpm build` first.
  */
-import { chromium, type BrowserContext, type Page } from '@playwright/test'
+import { chromium, type BrowserContext, type Page, type ViewportSize } from '@playwright/test'
 
 /** Collect page errors and console errors so a failed wait can explain itself. */
 export function collectErrors(page: Page): string[] {
@@ -61,7 +61,19 @@ export interface LoadedExtension {
 /** A stand-in for MetaMask (packages/testing/fixtures/fake-metamask) for coexistence tests. */
 export const FAKE_METAMASK_DIR = fileURLToPath(new URL('../../../packages/testing/fixtures/fake-metamask/', import.meta.url))
 
-export async function launchWithExtension(opts: { extra?: readonly string[]; dir?: string } = {}): Promise<LoadedExtension> {
+/**
+ * Record a video of every page in the context (e2e/clips.spec.ts).
+ *
+ * Playwright fixes the recording size per *context*, not per page, so a job
+ * that wants one clip per body size opens one context per size rather than
+ * resizing a page inside one.
+ */
+export interface RecordVideo {
+  readonly dir: string
+  readonly size?: ViewportSize
+}
+
+export async function launchWithExtension(opts: { extra?: readonly string[]; dir?: string; recordVideo?: RecordVideo } = {}): Promise<LoadedExtension> {
   const extensionDir = opts.dir ?? EXTENSION_DIR
   if (!existsSync(join(extensionDir, 'manifest.json'))) throw new Error(`extension not built at ${extensionDir} — run pnpm build`)
   const userDataDir = await mkdtemp(join(tmpdir(), 'bv-e2e-'))
@@ -79,6 +91,7 @@ export async function launchWithExtension(opts: { extra?: readonly string[]; dir
     channel: 'chromium',
     headless: true,
     args: [`--disable-extensions-except=${dirs}`, `--load-extension=${dirs}`],
+    ...(opts.recordVideo ? { recordVideo: { dir: opts.recordVideo.dir, ...(opts.recordVideo.size ? { size: opts.recordVideo.size } : {}) } } : {}),
   })
   let [worker] = context.serviceWorkers()
   if (!worker) worker = await context.waitForEvent('serviceworker')
@@ -91,6 +104,6 @@ export async function launchWithExtension(opts: { extra?: readonly string[]; dir
  * when no build does — rather than launching one that cannot serve the page
  * and discovering it as a timeout thirty seconds later.
  */
-export async function launchWithHarness(opts: { extra?: readonly string[] } = {}): Promise<LoadedExtension> {
+export async function launchWithHarness(opts: { extra?: readonly string[]; recordVideo?: RecordVideo } = {}): Promise<LoadedExtension> {
   return launchWithExtension({ ...opts, dir: harnessDir() })
 }
