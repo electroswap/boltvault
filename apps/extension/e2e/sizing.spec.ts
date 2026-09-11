@@ -108,3 +108,34 @@ test('no navigation makes the popup document wider than 400px', async () => {
     await ext.context.close()
   }
 })
+
+/**
+ * ...and Home must fit its height too.
+ *
+ * Owner: "it's important that the home screen on the extension remains spaced
+ * in a way that a scrollbar is not required." Home lays itself out from one
+ * interval and a flexible spacer, so a change to either — or one more tile, or
+ * a taller notice — can push it over 600 px without anyone noticing on a phone,
+ * where it simply scrolls. This is the number that cannot drift.
+ */
+test('home fits a 400x600 popup without scrolling', async () => {
+  const ext = await launchWithExtension()
+  try {
+    const page = await ext.context.newPage()
+    await page.setViewportSize({ width: 400, height: 600 })
+    await page.goto(ext.url('harness.html?scenario=funded&screen=home&body=extension-popup&motion=reduced'))
+    await page.waitForFunction(() => document.documentElement.dataset['ready'] === '1', undefined, { timeout: 30_000 })
+    await page.waitForTimeout(900)
+    const m = await page.evaluate(() => {
+      const scroller = Array.from(document.querySelectorAll('div')).find((d) => d.scrollHeight > d.clientHeight + 1 && getComputedStyle(d).overflowY !== 'visible')
+      return {
+        doc: { scroll: document.documentElement.scrollHeight, client: document.documentElement.clientHeight },
+        overflowing: scroller ? { scroll: scroller.scrollHeight, client: scroller.clientHeight, testid: scroller.getAttribute('data-testid') } : null,
+      }
+    })
+    console.log('MEASURE=', JSON.stringify(m))
+    expect(m.overflowing, 'something on Home scrolls in a 400x600 popup').toBeNull()
+  } finally {
+    await ext.context.close()
+  }
+})
