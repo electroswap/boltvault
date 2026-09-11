@@ -85,7 +85,19 @@ export class SendService {
       if (feeWei > nativeBalance) problems.push('Not enough ETN for the network fee.')
     }
     if (account.kind === 'watch') problems.push('Watch-only — import a key or pair a device to send.')
-    const maxRaw = token.address === 'native' ? (nativeBalance > feeWei ? nativeBalance - feeWei : 0n) : balanceRaw
+    /*
+      MAX leaves room for the fee to move.
+
+      It used to subtract exactly the fee this quote measured, which is the fee
+      at the gas price of the moment it asked — so a MAX send that sat in the
+      approval sheet for ten seconds through a rising market could fail for
+      being one wei short of its own gas. A fifth over is a cheap margin against
+      that: it costs a rounding error of ETN and it means MAX sends land. Owner:
+      "clicking MAX should account for the network fee of ETN plus a 20%
+      buffer."
+    */
+    const feeReserve = (feeWei * 120n) / 100n
+    const maxRaw = token.address === 'native' ? (nativeBalance > feeReserve ? nativeBalance - feeReserve : 0n) : balanceRaw
     return {
       to: rcpt.address,
       name: rcpt.name,

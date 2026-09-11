@@ -85,7 +85,8 @@ test('quote with the fee stack, then approve → permit → swap through the she
     await popup.setViewportSize({ width: 400, height: 600 })
     await popup.goto(ext.url('popup.html'))
     await expect(popup.getByTestId('home')).toBeVisible({ timeout: 15_000 })
-    await popup.getByTestId('tabs').getByText('Swap').click()
+    // The dock is gone: Swap is the first tile on Home.
+    await popup.getByTestId('key-swap').click()
     await expect(popup.getByTestId('swap')).toBeVisible()
     // The first-swap coach is an overlay, once (plan B4).
     await expect(popup.getByTestId('swap-coach')).toBeVisible({ timeout: 10_000 })
@@ -170,7 +171,8 @@ test('quote with the fee stack, then approve → permit → swap through the she
     await expect(popup.getByTestId('swap')).toBeVisible()
 
     // Activity carries the swap under its own category.
-    await popup.getByTestId('tabs').getByText('Activity').click()
+    await popup.getByTestId('rail-home').click()
+    await popup.getByTestId('key-activity').click()
     await expect(popup.getByTestId('activity')).toContainText('Swap', { timeout: 10_000 })
   } finally {
     await ext.context.close()

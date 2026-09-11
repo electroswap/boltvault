@@ -145,21 +145,20 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   const tokenCount = portfolio.snapshot ? portfolio.snapshot.rows.filter((r) => !r.hidden).length : 0
   const unpriced = portfolio.snapshot?.unpricedCount ?? 0
 
-  const tiles: readonly Tile[] = [
-    /*
-      Swap and Activity are dock tabs on a phone and tiles here.
+  /*
+    Nine tiles, and no dock anywhere (owner: "I want to get rid of the bottom
+    dock ... replace 'Alerts' with 'Activity', remove 'Search' and add 'Swap'
+    as the first action").
 
-      The full tab has no dock (see TabShell), so without this they would have
-      no door at all — and a tile is the better shape for them anyway: at this
-      size "Swap" beside Send and Receive reads as one of the things you came
-      to do, rather than a third of a strip of icons along the bottom edge.
-    */
-    ...(wide
-      ? ([
-          { id: 'swap', icon: 'swap', label: t({ id: 'tab.swap', message: 'Swap' }), badge: null, onPress: () => router.setTab('swap') },
-          { id: 'activity', icon: 'activity', label: t({ id: 'tab.activity', message: 'Activity' }), badge: pendingTx > 0 ? { text: t({ id: 'home.badge.pending', message: '{n} pending', values: { n: pendingTx } }), tone: 'arc' } : null, onPress: () => router.setTab('activity') },
-        ] as Tile[])
-      : []),
+    Swap leads because it is the thing people come to do; Activity takes the
+    place Alerts had, being the one of the two you open daily. Search goes
+    because every list it reached has its own field, and Alerts keeps a door of
+    its own as the bell beside the settings key — a notification you have not
+    read is a thing that came to you, which is a header's job rather than a
+    tile's.
+  */
+  const tiles: readonly Tile[] = [
+    { id: 'swap', icon: 'swap', label: t({ id: 'tab.swap', message: 'Swap' }), badge: null, onPress: () => router.setTab('swap') },
     { id: 'send', icon: 'send', label: t({ id: 'key.send', message: 'Send' }), badge: null, onPress: () => router.navigate('send') },
     { id: 'receive', icon: 'receive', label: t({ id: 'key.receive', message: 'Receive' }), badge: null, onPress: () => router.navigate('receive') },
     { id: 'bridge', icon: 'bridge', label: t({ id: 'key.bridge', message: 'Bridge' }), badge: bridgeInFlight ? { text: t({ id: 'home.badge.arriving', message: 'Arriving' }), tone: 'arc' } : null, onPress: () => router.navigate('bridge', scope.scope !== 'all' && scope.scope !== ETN ? { chainId: scope.scope } : undefined) },
@@ -167,8 +166,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     { id: 'collectibles', icon: 'nft', label: t({ id: 'key.collectibles', message: 'Collectibles' }), badge: offers > 0 ? { text: t({ id: 'home.badge.offers', message: '{n} offers', values: { n: offers } }), tone: 'ember' } : null, onPress: () => router.navigate('explore', { segment: 'collectibles' }) },
     { id: 'launchpad', icon: 'launch', label: t({ id: 'key.launchpad', message: 'Launchpad' }), badge: live > 0 ? { text: t({ id: 'home.badge.live', message: '{n} live', values: { n: live } }), tone: 'arc' } : null, onPress: () => router.navigate('explore', { segment: 'launch' }) },
     { id: 'farms', icon: 'farm', label: t({ id: 'key.farms', message: 'Farms' }), badge: toCollect > 0n ? { text: t({ id: 'home.badge.collect', message: '{d} DYNO', values: { d: dyno >= 10 ? dyno.toFixed(0) : dyno.toFixed(1) } }), tone: 'surge' } : null, onPress: () => router.navigate('explore', { segment: 'farms' }) },
-    { id: 'search', icon: 'search', label: t({ id: 'key.search', message: 'Search' }), badge: null, onPress: () => router.navigate('explore', { search: true }) },
-    { id: 'alerts', icon: 'bell', label: t({ id: 'key.alerts', message: 'Alerts' }), badge: unread > 0 ? { text: String(unread), tone: 'ember' } : null, onPress: () => router.navigate('alerts') },
+    { id: 'activity', icon: 'activity', label: t({ id: 'tab.activity', message: 'Activity' }), badge: pendingTx > 0 ? { text: t({ id: 'home.badge.pending', message: '{n} pending', values: { n: pendingTx } }), tone: 'arc' } : null, onPress: () => router.setTab('activity') },
   ]
   /*
     ETN's own price does not come from the market list.
@@ -314,6 +312,8 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
             )}
             <Row gap="$1" flexShrink={0}>
               {openInTab ? <IconButton icon="expand" label={t({ id: 'header.expand', message: 'Open in a full tab' })} onPress={() => openInTab()} testID="open-tab" /> : null}
+              {/* Alerts lost its tile to Activity; the bell is the better place for it anyway. */}
+              <IconButton icon="bell" label={t({ id: 'key.alerts', message: 'Alerts' })} badge={unread > 0 ? String(unread) : undefined} onPress={() => router.navigate('alerts')} testID="alerts-key" />
               <IconButton icon="settings" label={t({ id: 'home.settings', message: 'Settings' })} onPress={() => router.navigate('settings')} testID="settings-key" />
             </Row>
           </Row>
@@ -470,11 +470,20 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
                       <Column width={1} backgroundColor="$edge" marginVertical={8} />
                     </>
                   ) : null}
-                  <Pressable onPress={() => router.navigate('explore', { segment: 'tokens' })} accessibilityRole="button" accessibilityLabel={t({ id: 'home.price.a11y', message: 'ETN price' })} testID="home-price" style={{ flexShrink: 0, justifyContent: 'center', paddingHorizontal: 12 }}>
+                  {/*
+                    Straight to ETN's own screen, and it says whose price it is.
+
+                    It used to open the Tokens list — which does not list ETN at
+                    all, so the one tap the strip offers landed you somewhere the
+                    thing you tapped was not. And a bare "$0.001058" beside a
+                    chain mark is a number without a noun: the symbol goes after
+                    it (owner: "show $0.00XXXX ETN").
+                  */}
+                  <Pressable onPress={() => router.navigate('token', { chainId: ETN, address: 'native' })} accessibilityRole="button" accessibilityLabel={t({ id: 'home.price.a11y', message: 'ETN price' })} testID="home-price" style={{ flexShrink: 0, justifyContent: 'center', paddingHorizontal: 12 }}>
                     <Row gap={6} alignItems="center" justifyContent="flex-end">
                       <ChainMark chainId={ETN} size={14} />
                       <Body size="caption" fontWeight="600" numberOfLines={1}>
-                        {etn ? formatPrice(etn.price, 'USD') : '—'}
+                        {etn ? `${formatPrice(etn.price, 'USD')} ETN` : '—'}
                       </Body>
                       {etnChange ? (
                         <Body size="caption" tone={etnChange.startsWith('+') ? 'surge' : etnChange.startsWith('−') ? 'burn' : 'mute'}>

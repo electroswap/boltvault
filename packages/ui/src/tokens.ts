@@ -95,9 +95,15 @@ export const glow = {
 } as const
 
 export const metrics = {
+  /*
+    The page's side margin. A third narrower than it was (20/24), because a
+    phone screen is mostly margin at those numbers — owner: "reduce the
+    left/right margins a bit (by 33% on each side)". Everything is laid out
+    from these two, so the whole product moves together.
+  */
   /** Popup inset; mobile/tab use insetWide. */
-  inset: 20,
-  insetWide: 24,
+  inset: 13,
+  insetWide: 16,
   /**
    * How wide a page may get in the full tab.
    *

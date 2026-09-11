@@ -133,7 +133,7 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
       <ScrollView contentContainerStyle={{ padding: inset, gap: 12 }} testID="activity">
         <Row justifyContent="space-between" alignItems="center" minHeight={metrics.header}>
           {/* A tab root in the full tab has no Back, so it carries the way home. */}
-          <HomeKey show={body === 'extension-tab'} />
+          <HomeKey />
           <Body size="title" flex={1}>{t({ id: 'activity.title', message: 'Activity' })}</Body>
           {scan.error && !scan.refreshing ? (
             <Body tone="mute" size="caption" testID="activity-scan-problem">

@@ -4,9 +4,8 @@
  * screens is replaced by Unlock. A pending dApp approval takes over the
  * popup and the mobile body (the sign window mounts it by route).
  */
-import { Column, Field, MotionProvider, PageLoader, Scrim, ScreenEnter, TabBar, metrics, useInsets, useWindowDimensions, type EnterDirection } from '@boltvault/ui'
+import { Column, Field, MotionProvider, PageLoader, Scrim, ScreenEnter, metrics, useInsets, useWindowDimensions, type EnterDirection } from '@boltvault/ui'
 import { Suspense, lazy, useEffect, useRef } from 'react'
-import { t } from '../i18n'
 import { Approval } from '../screens/Approval'
 import { Home, type HomeProps } from '../screens/Home'
 import { Onboarding } from '../screens/Onboarding'
@@ -22,10 +21,9 @@ import { useWalletState } from '../state/useWalletState'
 import { useScene } from '../state/useScene'
 import { useAnyScreenBusy } from '../state/useScreenBusy'
 import { MotionContext, useReducedMotion } from '../state/useReducedMotion'
-import { useNotifications } from '../hooks/useNotifications'
 import { useChainHead } from '../hooks/useChainHead'
 import { useHolderTier } from '../hooks/useHolderTier'
-import { SCREENS, TABS, TAB_ORDER, type TabId } from './registry'
+import { SCREENS } from './registry'
 import { useAndroidBack } from '../state/useAndroidBack'
 import { useRouter } from './router'
 
@@ -137,7 +135,6 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   const { current, state } = router
   // One answer for every screen (plan A4): the setting, the system preference, or the harness override.
   const reducedMotion = useReducedMotion(reducedMotionOverride)
-  const { unread } = useNotifications()
   // A swap or limit-order flow opens its sheets from here, where nothing unmounts (§8.6).
   useFlowNavigation()
   useFeelEvents()
@@ -148,7 +145,6 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   useEffect(() => {
     prefetchScreens()
   }, [])
-  const items = TAB_ORDER.map((id) => ({ id, label: t({ id: TABS[id].labelId, message: TABS[id].labelMessage }), icon: TABS[id].icon, ...(id === 'activity' && unread > 0 ? { badge: unread } : {}) }))
   const meta = SCREENS[current.screen]
   /*
     The full tab is not a big phone.
@@ -163,19 +159,18 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   */
   const wide = body === 'extension-tab'
   /*
-    No dock before there is a vault.
+    There is no dock.
 
-    Home, Swap and Activity are three places to stand in a wallet that has no
-    accounts, no balances and nothing to show — Swap cannot quote and Activity
-    has nothing to list. Owner: "home/swap/activity should not be available
-    anywhere in the onboarding flow." A first run is one screen with one verb
-    on it until the vault exists; the dock arrives with the wallet.
+    It was a phone's answer to navigation, and it cost a permanent strip of the
+    screen to offer three doors — two of which (Swap, Activity) are things you
+    do rather than places you live. Owner: "I want to get rid of the bottom
+    dock." They are tiles on Home now, alongside Send and Receive, and Swap and
+    Activity carry a way home in their own title row (`HomeKey`), which is what
+    the full tab has always done.
 
-    `loading` is deliberately not a reason to hide it: flickering the dock in
-    on every cold start would be worse than a moment of it on a fresh install.
+    `state.tab` survives: it is still how the router remembers which root you
+    are standing on and which stack belongs to it. Only the strip is gone.
   */
-  const noVault = !loading && !vault?.exists
-  const showTabs = meta.dock && !wide && !noVault
   // How the view arrives (style bible › motion): a push from the right, a pop from the left, a tab change rising in place; the same route never re-animates.
   const depth = state.stack.length
   const prev = useRef({ depth, tab: state.tab, screen: current.screen })
@@ -345,7 +340,7 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
       <Column flex={1} backgroundColor="$void">
         {meta.grid ? (
           <>
-            <Field scene={scene} address={active?.address ?? NO_ACCOUNT_SEED} pulse={head?.live ? 1 : 0} warmth={tier ? Math.min(1, tier.tier / 4) : 0} intensity={current.screen === 'home' ? (body === 'extension-popup' ? 0.75 : 1) : 0.5} quiet={!vault?.unlocked} reducedMotion={reducedMotion} fps={body === 'extension-popup' ? 30 : 60} width={width} height={height} testID="field" />
+            <Field scene={scene} address={active?.address ?? NO_ACCOUNT_SEED} pulse={head?.live ? 1 : 0} warmth={tier ? Math.min(1, tier.tier / 4) : 0} intensity={0.5} quiet={!vault?.unlocked} reducedMotion={reducedMotion} fps={body === 'extension-popup' ? 30 : 60} width={width} height={height} testID="field" />
             {/*
               Dark at the top, the circuit emerging downward — the Unlock
               screen's look, which the owner asked for everywhere the scene
@@ -386,7 +381,7 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
           of every dockless screen sat under the system bar. The owner
           photographed onboarding's "Next" cut in half by it.
         */}
-        <Column flex={1} zIndex={1} overflow="hidden" paddingTop={insets.top} paddingBottom={showTabs ? 0 : insets.bottom}>
+        <Column flex={1} zIndex={1} overflow="hidden" paddingTop={insets.top} paddingBottom={insets.bottom}>
           {/*
             One width for every screen, applied here rather than in each of
             thirty. Home, Portfolio, Swap, the Rack and a handful of others had
@@ -410,7 +405,6 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
           {/* Over the screen, under the tab bar: the page assembles beneath it. */}
           {busy ? <PageLoader overlay reducedMotion={reducedMotion} testID="page-loading" /> : null}
         </Column>
-        {showTabs ? <TabBar items={items} activeId={state.tab} onSelect={(id) => router.setTab(id as TabId)} testID="tabs" /> : null}
         {/* Last child, so a device round trip sheet paints above the tab bar (§7.5). */}
         <HardwarePrompt body={body} reducedMotion={reducedMotion} />
         <UpdateRequired />

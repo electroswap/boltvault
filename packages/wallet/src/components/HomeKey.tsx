@@ -1,9 +1,10 @@
 /**
- * The way home from a tab root, in the full tab.
+ * The way home from a tab root.
  *
- * The dock is a phone's answer to navigation and the full tab does not show it
- * (see TabShell), so Swap and Activity — the two screens you can reach without
- * pushing anything — would otherwise have no way back. Everything else is a
+ * Swap and Activity are the two screens you can reach without pushing
+ * anything, so they have no Back — and with the dock gone (owner: "I want to
+ * get rid of the bottom dock ... make sure every screen has a back or a home
+ * button") they would otherwise be rooms with no door. Everything else is a
  * push and already carries Back in the same corner, which is why this appears
  * on exactly those two: two controls doing one job in one corner is worse than
  * either alone.
@@ -16,9 +17,7 @@ import { IconButton } from '@boltvault/ui'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 
-/** `show` is the caller's body test; false renders nothing at all. */
-export function HomeKey({ show }: { show: boolean }) {
+export function HomeKey() {
   const router = useRouter()
-  if (!show) return null
   return <IconButton icon="home" label={t({ id: 'rail.home', message: 'Home' })} onPress={() => router.setTab('home')} testID="rail-home" />
 }

@@ -406,11 +406,23 @@ export function Collection({
                   value: formatCompact(collection.owners),
                 },
                 {
+                  /*
+                    The count, not the percentage.
+
+                    `percentListed` comes back null from the marketplace — every
+                    collection, every window — while `listings` is populated, so
+                    the row read "—" beside twenty-four live listings. The count
+                    is also the more useful number; the share of supply is a
+                    caption under it when we can work it out, which we can
+                    whenever the supply is known.
+                  */
                   label: t({ id: 'collection.listed', message: 'Listed' }),
-                  value:
-                    collection.percentListed !== null
-                      ? `${Math.round(collection.percentListed)}%`
-                      : '—',
+                  value: formatCompact(collection.listed),
+                  ...(collection.listed !== null && collection.totalSupply
+                    ? { caption: `${Math.max(1, Math.round((collection.listed / collection.totalSupply) * 100))}%` }
+                    : collection.percentListed !== null
+                      ? { caption: `${Math.round(collection.percentListed)}%` }
+                      : {}),
                 },
                 {
                   label: t({ id: 'collection.supply', message: 'Pieces' }),
@@ -440,8 +452,14 @@ export function Collection({
       {/*
         Collapsed until asked for: this page is about the pieces, and the whole
         card — bar, stats, a scroller of medallions — used to sit above them.
+
+        And nothing at all when there is nothing to claim. "0 ETN to claim" is a
+        row that asks for attention to report an absence; a holder with pieces
+        still gets it the moment a fee is shared, and one with unactivated
+        pieces still gets it because that is a thing to do (owner: "do not show
+        the '{n} ETN to claim' card ... if the amount to claim == 0").
       */}
-      {legends && active ? (
+      {legends && active && (BigInt(legends.claimableWei) > 0n || legends.unregisteredTokenIds.length > 0) ? (
         <DividendsCard
           status={legends}
           collapsed={!dividendsOpen}
