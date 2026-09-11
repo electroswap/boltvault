@@ -14,7 +14,7 @@ import { EngineError } from '../errors'
 import type { PriceSource } from '../prices'
 import type { EventBus, NamespaceSpec } from '../host'
 import { multicallAddress, readMany, type ReadCall } from '../multicall'
-import { AccountIdSchema, type PortfolioRow, type PortfolioSnapshot, type TokenView } from '../schema'
+import { AccountIdSchema, type PortfolioPoint, type PortfolioRow, type PortfolioSnapshot, type TokenView } from '../schema'
 // Snapshots and "since you last looked" used to be one plaintext document per
 // account (`bv:local:portfolio.<accountId>`), which put the USD total, every
 // per-token quantity *and* the account id on disk in the clear, readable with
@@ -47,6 +47,35 @@ function refreshEveryMs(chainIds: readonly number[]): number {
   return Math.max(...chainIds.map((c) => pollMs(c, mode)), 1_000)
 }
 const PRICE_BUDGET_MS = 4_000
+
+/**
+ * How coarse the history series is, and how far back it reaches (§8.2).
+ *
+ * One point an hour, five days. Two things force a bucket. The wallet rebuilds
+ * a visible scope every few seconds, so an unbucketed series would be a log of
+ * repaints rather than the shape of a portfolio; and the series rides inside
+ * the sealed snapshot, which is rewritten in full on every one of those
+ * rebuilds, so each point is paid for again every time. An hour is already
+ * finer than a chart 300 pixels wide can draw over five days, and the cap is
+ * what stops a wallet left open on a desk from growing this without end.
+ */
+const HISTORY_BUCKET_MS = 60 * 60 * 1_000
+const HISTORY_CAP = 120
+
+/**
+ * Append one reading to a bounded series, at most one point per bucket.
+ *
+ * Within a bucket the newest reading replaces the older one instead of being
+ * dropped, so the end of the chart is always the number in the hero above it —
+ * a series whose head lags the total it belongs to reads as a fault.
+ *
+ * Pure and exported so the bounding is testable without a chain.
+ */
+export function appendPoint(series: readonly PortfolioPoint[], at: number, total: number | null): PortfolioPoint[] {
+  const bucket = Math.floor(at / HISTORY_BUCKET_MS)
+  const next = [...series.filter((p) => Math.floor(p.at / HISTORY_BUCKET_MS) !== bucket), { at, total }].sort((a, b) => a.at - b.at)
+  return next.length > HISTORY_CAP ? next.slice(next.length - HISTORY_CAP) : next
+}
 
 interface PriceRow {
   readonly price: number
@@ -106,7 +135,21 @@ export class PortfolioService {
     const last = this.lastRefresh.get(k) ?? 0
     if (this.deps.platform.now() - last > refreshEveryMs(chainIds)) void this.refresh(accountId, chainIds).catch(() => undefined)
     if (value) return { ...value, stale: true }
-    return { accountId, chainIds: [...chainIds], currency: 'USD', total: null, change24h: null, unpricedCount: 0, rows: [], observedAt: 0, stale: true }
+    return { accountId, chainIds: [...chainIds], currency: 'USD', total: null, change24h: null, unpricedCount: 0, rows: [], observedAt: 0, stale: true, history: [] }
+  }
+
+  /**
+   * What this wallet has seen the scope's total be, oldest first (§8.2).
+   *
+   * No refresh and no backfill. The series is a record of readings this device
+   * took while it was open, which is the only portfolio history the wallet can
+   * honestly claim: quantities come from the chain but the *value* comes from
+   * display prices (§2.8), and nothing off-device is asked what the total used
+   * to be. A gap in the line is a gap in the looking.
+   */
+  async history(accountId: string, chainIds: readonly number[] = [HOME_CHAIN_ID]): Promise<PortfolioPoint[]> {
+    const snap = await this.deps.snapshots.get(scopeKey(accountId, chainIds))
+    return [...(snap?.history ?? [])]
   }
 
   /**
@@ -213,6 +256,11 @@ export class PortfolioService {
 
   private async build(accountId: string, chainIds: readonly number[]): Promise<PortfolioSnapshot> {
     const d = this.deps
+    const key = scopeKey(accountId, chainIds)
+    // The series belongs to the scope, so it is carried forward from the
+    // scope's own last snapshot — "All chains" and one chain are two different
+    // questions and must not share a line.
+    const stored = await d.snapshots.get(key)
     const account = (await d.vault.accounts()).find((a) => a.id === accountId)
     if (!account) throw new EngineError('not_found', 'no such account')
     const owner = account.address as Hex
@@ -262,6 +310,7 @@ export class PortfolioService {
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
       return Number(b.quantity) - Number(a.quantity)
     })
+    const observedAt = d.platform.now()
     const snapshot: PortfolioSnapshot = {
       accountId,
       chainIds: [...chainIds],
@@ -270,11 +319,12 @@ export class PortfolioService {
       change24h,
       unpricedCount: withShare.filter((r) => r.fiat === null && !r.hidden).length,
       rows: withShare,
-      observedAt: d.platform.now(),
+      observedAt,
       stale: false,
+      history: appendPoint(stored?.history ?? [], observedAt, total),
     }
-    await d.snapshots.set(scopeKey(accountId, chainIds), snapshot)
-    this.lastRefresh.set(scopeKey(accountId, chainIds), d.platform.now())
+    await d.snapshots.set(key, snapshot)
+    this.lastRefresh.set(key, observedAt)
     d.bus.emit({ type: 'portfolio.snapshot', snapshot })
     return snapshot
   }
@@ -372,6 +422,14 @@ export function portfolioNamespace(portfolio: PortfolioService): NamespaceSpec {
       },
     },
     lastLook: { input: z.object({ accountId: AccountIdSchema }), handler: (arg) => portfolio.lastLook((arg as { accountId: string }).accountId) },
+    /** The scope's own series of totals, oldest first (§8.2). */
+    history: {
+      input: z.object({ accountId: AccountIdSchema, chainIds: z.array(z.number().int().positive()).optional() }),
+      handler: (arg) => {
+        const { accountId, chainIds } = arg as { accountId: string; chainIds?: number[] }
+        return portfolio.history(accountId, chainIds ?? [HOME_CHAIN_ID])
+      },
+    },
     cached: {
       input: z.object({ accountId: AccountIdSchema, chainIds: z.array(z.number().int().positive()).optional() }),
       handler: (arg) => {

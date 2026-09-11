@@ -12,7 +12,7 @@ import { z } from 'zod'
 import { EngineError } from '../errors'
 import type { EventBus, NamespaceSpec } from '../host'
 import type { SealedMap } from '../sealed'
-import type { SiteView } from '../schema'
+import { AccountIdSchema, type SiteView } from '../schema'
 import { readDoc, writeDoc, type DocSpec } from '../storage'
 
 export const SiteSchema = z.object({
@@ -70,7 +70,15 @@ function toView(s: ConnectedSite): SiteView {
   }
 }
 
-export type SiteChange = { origin: string; kind: 'disconnected' } | { origin: string; kind: 'chain'; chainId: number }
+export type SiteChange =
+  | { origin: string; kind: 'disconnected' }
+  | { origin: string; kind: 'chain'; chainId: number }
+  /**
+   * The user re-seated this origin on another account. Only the id travels:
+   * the address is the vault's to resolve, and this service has no vault —
+   * whoever emits `accountsChanged` looks it up and records what it sent.
+   */
+  | { origin: string; kind: 'account'; accountId: string }
 
 export class SitesService {
   readonly registry: SiteRegistry
@@ -155,6 +163,53 @@ export class SitesService {
   }
 
   /**
+   * Move one origin to another account (§8.14 Connected sites).
+   *
+   * The screen could always change a site's chain and only ever *showed* its
+   * account, so a user who wanted a dApp on a different address had to
+   * disconnect and reconnect from the site's own button — and hope the site
+   * offered one.
+   *
+   * Nothing here emits `accountsChanged`: that is the provider's, because the
+   * provider is the only thing that knows which ports belong to this origin,
+   * and §4.6 requires the event to reach those and nothing else. This records
+   * the decision and says whose it was; the fan-out follows.
+   */
+  async setAccount(origin: string, accountId: string): Promise<SiteView> {
+    const row = this.registry.get(origin)
+    /*
+      Connected, not merely remembered. A row survives a disconnect so the
+      chain preference does — but a disconnected origin must go on seeing an
+      empty account list, and re-seating one would fan an `accountsChanged`
+      carrying a real address out to a page that has no session.
+    */
+    if (!row?.connected) throw new EngineError('not_found', 'that site is not connected')
+    if (row.accountId === accountId) return toView(row)
+    if (!(await this.registry.setAccount(origin, accountId))) throw new EngineError('not_found', 'that site is not connected')
+    this.emit()
+    for (const l of this.changeListeners) l({ origin, kind: 'account', accountId })
+    const next = this.registry.get(origin)
+    if (!next) throw new EngineError('internal', 'site vanished')
+    return toView(next)
+  }
+
+  /**
+   * Record what an origin was actually told, after the provider has told it.
+   *
+   * Kept separate from `setAccount` because the addresses are resolved by the
+   * caller that holds the vault: `lastAccounts` is a log of what left the
+   * wallet, so it is written by whoever wrote it out.
+   */
+  async noteExposed(origin: string, addresses: readonly string[]): Promise<void> {
+    const row = this.registry.get(origin)
+    if (!row) return
+    const was = row.lastAccounts ?? []
+    if (was.length === addresses.length && was.every((a, i) => a === addresses[i])) return
+    await this.registry.setExposed(origin, addresses)
+    this.emit()
+  }
+
+  /**
    * Set or clear an origin's native spend cap (§4.6). Base units as a decimal
    * string; `null` removes the cap.
    */
@@ -205,6 +260,14 @@ export function sitesNamespace(sites: SitesService): NamespaceSpec {
       handler: (arg) => {
         const { origin, chainId } = arg as { origin: string; chainId: number }
         return sites.setChain(origin, chainId)
+      },
+    },
+    /** §8.14: the account a site sees is the user's to change, not only to read. */
+    setAccount: {
+      input: z.object({ origin: OriginSchema, accountId: AccountIdSchema }),
+      handler: (arg) => {
+        const { origin, accountId } = arg as { origin: string; accountId: string }
+        return sites.setAccount(origin, accountId)
       },
     },
     setBudget: {

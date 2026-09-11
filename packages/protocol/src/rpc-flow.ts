@@ -462,6 +462,20 @@ export class RpcFlow {
     this.ctx.emit(origin, { event: 'chainChanged', payload: hexChainId(chainId) })
   }
 
+  /**
+   * Called by the engine when the user moves a site to another account from
+   * Settings › Connected sites.
+   *
+   * EIP-1193 requires the site to be told, and §4.6 requires it to be told
+   * alone: `emit` is per-origin, so the addresses reach the ports of this
+   * origin and no other surface's session learns anything. An empty array is a
+   * legitimate payload — it is what a site sees when the account it was on has
+   * gone — and reads to the page exactly as a disconnect does.
+   */
+  accountsChanged(origin: string, addresses: readonly string[]): void {
+    this.ctx.emit(origin, { event: 'accountsChanged', payload: [...addresses] })
+  }
+
   dispose(): void {
     for (const off of this.subscriptions.values()) off()
     this.subscriptions.clear()

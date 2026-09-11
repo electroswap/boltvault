@@ -680,29 +680,68 @@ export const recipientRules: Rule = ({ request, decoded, context, chainId, accou
   return null
 }
 
+/** The threshold a wallet with no stored spend policy uses (§3.4 point 6's own example). */
+export const DEFAULT_LARGE_SEND_PERCENT = 10
+
+/**
+ * The large-send step-up (§3.4 point 6, Settings › Spending).
+ *
+ * The threshold was a tenth of the balance written into the comparison, with
+ * no setting behind it — §8.14 lists "large-send step-up threshold (in token
+ * units)" as a Spending row, and there was nothing to turn. It is a share of
+ * the balance of the token being moved, so `amount * 100 > percent * balance`
+ * is arithmetic in that token's own base units: integers throughout, no
+ * division, and no price anywhere near the decision. A fiat threshold would
+ * hand a display-only feed (§2.8) the power to decide when this wallet asks
+ * for a second factor.
+ *
+ * `needsStepUp` in the wallet keys off the CODE, so the sheet keeps asking the
+ * vault to open again whatever the threshold is set to.
+ */
 export const largeSend: Rule = ({ request, decoded, context }) => {
   if (request.kind !== 'transaction' || !decoded) return null
-  if (decoded.kind === 'native_transfer') {
-    const bal = context.balances['native']
-    if (bal !== undefined && bal > 0n && decoded.value * 10n > bal)
-      return {
-        code: 'LARGE_SEND',
-        severity: 'warn',
-        title: 'More than a tenth of your balance',
-        detail: 'Large sends ask for a second look. Confirm the recipient once more.',
-      }
+  const percent = BigInt(context.spendPolicy?.largeSendPercent ?? DEFAULT_LARGE_SEND_PERCENT)
+  const over = (amount: bigint, balance: bigint | undefined): boolean => balance !== undefined && balance > 0n && amount * 100n > percent * balance
+  const moved =
+    decoded.kind === 'native_transfer'
+      ? { amount: decoded.value, balance: context.balances['native'] }
+      : decoded.kind === 'erc20_transfer'
+        ? { amount: decoded.amount, balance: context.balances[decoded.token.toLowerCase()] }
+        : null
+  if (!moved || !over(moved.amount, moved.balance)) return null
+  return {
+    code: 'LARGE_SEND',
+    severity: 'warn',
+    title: `More than ${percent}% of your balance`,
+    detail: 'Large sends ask for a second look. Confirm the recipient once more.',
   }
-  if (decoded.kind === 'erc20_transfer') {
-    const bal = context.balances[decoded.token.toLowerCase()]
-    if (bal !== undefined && bal > 0n && decoded.amount * 10n > bal)
-      return {
-        code: 'LARGE_SEND',
-        severity: 'warn',
-        title: 'More than a tenth of your balance',
-        detail: 'Large sends ask for a second look. Confirm the recipient once more.',
-      }
+}
+
+/**
+ * The send allow-list (§3.4 point 6, Settings › Spending).
+ *
+ * Only transfers the decoder can read as transfers. A contract call has no
+ * recipient in the sense a person means by the word, and refusing every dApp
+ * interaction because a *send* list is on would make the setting something
+ * nobody leaves on — which is worse than not offering it.
+ *
+ * The user's own accounts are always allowed: a list you cannot move your own
+ * money across is a list that gets switched off the first time you try.
+ */
+export const sendAllowList: Rule = ({ request, decoded, context }) => {
+  if (request.kind !== 'transaction' || !decoded) return null
+  const policy = context.spendPolicy
+  if (!policy?.allowListOnly) return null
+  if (decoded.kind !== 'native_transfer' && decoded.kind !== 'erc20_transfer' && decoded.kind !== 'erc721_transfer' && decoded.kind !== 'erc1155_transfer') return null
+  const to = recipientOf(decoded)
+  if (!to) return null
+  if (inSet(to, [...policy.allowList, ...context.own])) return null
+  return {
+    code: 'RECIPIENT_NOT_ALLOWED',
+    severity: 'block',
+    title: 'This address is not on your send list',
+    detail: 'You asked BoltVault to send only to addresses you have listed. Add this one in Settings › Spending if you meant it, or turn the list off there.',
   }
-  return null
 }
 
 /**
@@ -847,6 +886,7 @@ export const ALL_RULES: readonly Rule[] = [
   newContract,
   recipientRules,
   clipboardHijack,
+  sendAllowList,
   largeSend,
   valueExceedsBudget,
   simulationRules,

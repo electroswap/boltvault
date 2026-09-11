@@ -37,6 +37,7 @@ export type RiskCode =
   | 'RECIPIENT_LOOKALIKE'
   | 'RECIPIENT_POISON_SOURCE'
   | 'RECIPIENT_IS_CONTRACT'
+  | 'RECIPIENT_NOT_ALLOWED'
   | 'RECIPIENT_NO_CODE_ON_DEST'
   | 'LARGE_SEND'
   | 'VALUE_EXCEEDS_BUDGET'
@@ -102,6 +103,24 @@ export interface ContractInfo {
   readonly verified?: boolean | null
 }
 
+/**
+ * Settings › Spending (master plan §3.4 point 6) as the firewall sees it.
+ *
+ * Both halves are stated in token units, never in fiat. `largeSendPercent` is
+ * a share of the balance of the token being moved, so the comparison is
+ * `amount` against `balance` in that token's own base units and no price is
+ * consulted — §3.4 is explicit that a threshold "expressed in token units …
+ * never in USD, because prices are display-only".
+ */
+export interface SpendPolicy {
+  /** 1–100. A transfer above this share of that token's balance asks for a step-up. */
+  readonly largeSendPercent: number
+  /** Lowercase addresses a transfer may go to while `allowListOnly` is on. */
+  readonly allowList: readonly Hex[]
+  /** The user turned the allow-list on; an unlisted recipient is refused. */
+  readonly allowListOnly: boolean
+}
+
 /** What the engine knows about the user and the world at assessment time. */
 export interface AssessmentContext {
   /** Addresses the user has sent to, address-book entries, own accounts (§3.6 reference set). */
@@ -118,6 +137,12 @@ export interface AssessmentContext {
   readonly tokens: Readonly<Record<string, TokenInfo>>
   /** Balances by lowercase token address or 'native', for the large-send step-up. */
   readonly balances: Readonly<Record<string, bigint>>
+  /**
+   * The user's spend policy. Absent means the defaults — a tenth of the
+   * balance, and no allow-list — which is what a cold start and every test
+   * that does not care about the policy get.
+   */
+  readonly spendPolicy?: SpendPolicy | null
   /** Address labels (names, known contracts) for statements; lowercase keys. */
   readonly labels: Readonly<Record<string, string>>
   readonly ethSignEnabled: boolean

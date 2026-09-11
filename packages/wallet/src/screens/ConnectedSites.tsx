@@ -1,5 +1,5 @@
-/** Settings › Connected sites (master plan §8.14): origins as plugs, per-site chain, disconnect. */
-import { Body, ChainMark, Column, Input, Key, Pill, Plate, Row, ScrollView, Toggle, metrics, shortAddress } from '@boltvault/ui'
+/** Settings › Connected sites (master plan §8.14): origins as plugs, per-site chain and account, disconnect. */
+import { Body, ChainMark, Column, Input, Key, Pill, Plate, Pressable, Row, ScrollView, Signature, Toggle, metrics, shortAddress } from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
 import type { ChainView, Settings, SiteView, WcSessionView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
@@ -14,6 +14,8 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
   const [sites, setSites] = useState<SiteView[]>([])
   const [chains, setChains] = useState<ChainView[]>([])
   const [editing, setEditing] = useState<string | null>(null)
+  /** The origin whose account rows are open; only one at a time, like the chain editor. */
+  const [seating, setSeating] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [settings, setSettings] = useState<Settings | null>(null)
   const host = useHost()
@@ -48,6 +50,14 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
     } catch {
       return origin
     }
+  }
+
+  const reseat = (origin: string, accountId: string): void => {
+    setError(null)
+    engine.sites.setAccount({ origin, accountId }).then(
+      () => setSeating(null),
+      (err: unknown) => setError(err instanceof Error ? err.message : String(err)),
+    )
   }
 
   return (
@@ -137,10 +147,70 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
               </Body>
               <Pill label={chain?.name ?? String(s.chainId)} icon={<ChainMark chainId={s.chainId} size={14} />} chevron size="sm" onPress={() => setEditing(editing === s.origin ? null : s.origin)} testID={`site-chain-${hostOf(s.origin)}`} />
             </Row>
-            <Body tone="mute" size="caption">
-              {account ? `${account.label} · ${shortAddress(account.address)}` : t({ id: 'sites.noaccount', message: 'No account' })}
-              {s.lastUsed ? ` · ${new Date(s.lastUsed).toLocaleDateString()}` : ''}
-            </Body>
+            {/*
+              The account was a caption — the one fact on this plate the user
+              could read and not change, so moving a dApp to another address
+              meant disconnecting and hoping the site offered a way back in.
+              It opens the same kind of inline editor the chain pill does.
+            */}
+            <Pressable
+              onPress={() => setSeating(seating === s.origin ? null : s.origin)}
+              accessibilityRole="button"
+              accessibilityLabel={t({ id: 'sites.account.a11y', message: 'Change the account this site sees' })}
+              style={{ minHeight: 44, justifyContent: 'center' }}
+              testID={`site-account-${hostOf(s.origin)}`}
+            >
+              <Row gap="$2" alignItems="center">
+                {account ? <Signature address={account.address} size={22} /> : null}
+                <Column flex={1} minWidth={0} alignItems="flex-start">
+                  <Body size="caption" numberOfLines={1}>
+                    {account ? `${account.label} · ${shortAddress(account.address)}` : t({ id: 'sites.noaccount', message: 'No account' })}
+                  </Body>
+                  <Body tone="mute" size="caption">
+                    {s.lastUsed ? t({ id: 'sites.lastused', message: 'Last used {d}', values: { d: new Date(s.lastUsed).toLocaleDateString() } }) : t({ id: 'sites.account.change', message: 'Tap to change' })}
+                  </Body>
+                </Column>
+                <Body tone="arc" size="caption">
+                  {seating === s.origin ? t({ id: 'sites.account.done', message: 'Done' }) : t({ id: 'sites.account.key', message: 'Change' })}
+                </Body>
+              </Row>
+            </Pressable>
+            {seating === s.origin ? (
+              <Column gap={2} testID={`site-accounts-${hostOf(s.origin)}`}>
+                {accounts
+                  .filter((a) => !a.hidden)
+                  .map((a) => (
+                    <Pressable
+                      key={a.id}
+                      onPress={() => reseat(s.origin, a.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={a.label}
+                      style={{ minHeight: 44, justifyContent: 'center' }}
+                      testID={`site-account-${hostOf(s.origin)}-${a.id}`}
+                    >
+                      <Row gap="$3" alignItems="center">
+                        <Signature address={a.address} size={26} />
+                        <Column flex={1} minWidth={0} alignItems="flex-start">
+                          <Body numberOfLines={1} fontWeight={a.id === s.accountId ? '600' : '400'}>
+                            {a.label}
+                          </Body>
+                          <Body tone="mute" size="caption">
+                            {shortAddress(a.address)}
+                          </Body>
+                        </Column>
+                        {a.id === s.accountId ? (
+                          <Body tone="arc" size="caption">
+                            {t({ id: 'sites.account.current', message: 'In use' })}
+                          </Body>
+                        ) : null}
+                      </Row>
+                    </Pressable>
+                  ))}
+                <Body tone="mute" size="caption">
+                  {t({ id: 'sites.account.body', message: 'The site is told straight away, the way it would be if you switched accounts on the site itself. No other site and no other screen is affected.' })}
+                </Body>
+              </Column>
+            ) : null}
             {editing === s.origin ? (
               <Row gap="$2" flexWrap="wrap">
                 {chains.map((c) => (
@@ -168,7 +238,7 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
       {error ? <Body tone="burn">{error}</Body> : null}
       <Column gap="$1">
         <Body tone="mute" size="caption">
-          {t({ id: 'sites.note', message: 'Each site keeps its own chain. Changing the Home chain never changes a site.' })}
+          {t({ id: 'sites.note.v2', message: 'Each site keeps its own account and its own chain. Changing what Home shows never changes a site, and changing a site never tells any other site.' })}
         </Body>
       </Column>
     </ScrollView>

@@ -13,11 +13,44 @@ import { readDoc, writeDoc, type DocSpec } from './storage'
 const V1_DEFAULT_CHAINS = [1, 56, 8453, 42161, 10, 137, 43114]
 const sameSet = (a: readonly unknown[], b: readonly number[]): boolean => a.length === b.length && b.every((x) => a.includes(x))
 
+/** A send allow-list entry as it is stored: one lowercase EVM address. */
+const ADDRESS = /^0x[0-9a-fA-F]{40}$/
+const DEFAULT_LARGE_SEND_PERCENT = 10
+const MAX_ALLOW_LIST = 64
+
+/**
+ * The spend policy's own defaulting (§3.4 point 6).
+ *
+ * `normalizeSettings` belongs to `@boltvault/settings` and returns exactly the
+ * fields *it* declares, so anything added to the engine's schema and passed
+ * through it comes back missing — which would silently reset the allow-list
+ * and the threshold on every unrelated settings write. These two are therefore
+ * clamped here, field by field, in the same spirit.
+ *
+ * Addresses are lowercased and de-duplicated so the firewall's membership test
+ * is a plain comparison, and capped so the list stays something a person can
+ * read through before trusting it.
+ */
+function spendPolicy(raw: Partial<Settings> | null | undefined): Pick<Settings, 'sendAllowList' | 'largeSendPercent'> {
+  const percent = raw?.largeSendPercent
+  const list = Array.isArray(raw?.sendAllowList) ? raw.sendAllowList : []
+  const seen = new Set<string>()
+  for (const entry of list) {
+    if (typeof entry !== 'string' || !ADDRESS.test(entry)) continue
+    seen.add(entry.toLowerCase())
+    if (seen.size >= MAX_ALLOW_LIST) break
+  }
+  return {
+    sendAllowList: [...seen],
+    largeSendPercent: typeof percent === 'number' && Number.isInteger(percent) && percent >= 1 && percent <= 100 ? percent : DEFAULT_LARGE_SEND_PERCENT,
+  }
+}
+
 const SETTINGS_DOC: DocSpec<Settings> = {
   key: 'settings',
   version: 2,
   schema: SettingsSchema,
-  defaultValue: () => normalizeSettings(null),
+  defaultValue: () => ({ ...normalizeSettings(null), ...spendPolicy(null) }),
   migrate: (data, from) => {
     if (from !== 1 || typeof data !== 'object' || data === null) return data
     const d: Record<string, unknown> = { ...(data as Record<string, unknown>) }
@@ -43,7 +76,7 @@ export class SettingsStore {
   async get(): Promise<Settings> {
     if (this.cached) return this.cached
     const { value, migrated } = await readDoc(this.platform.storage.local, SETTINGS_DOC, () => this.platform.now())
-    const normalized = normalizeSettings(value, this.os)
+    const normalized = { ...normalizeSettings(value, this.os), ...spendPolicy(value) }
     this.cached = normalized
     if (migrated) await writeDoc(this.platform.storage.local, SETTINGS_DOC, normalized)
     return normalized
@@ -51,7 +84,8 @@ export class SettingsStore {
 
   async set(patch: Partial<Settings>): Promise<Settings> {
     const current = await this.get()
-    const next = normalizeSettings({ ...current, ...patch }, this.os)
+    const merged = { ...current, ...patch }
+    const next = { ...normalizeSettings(merged, this.os), ...spendPolicy(merged) }
     this.cached = next
     await writeDoc(this.platform.storage.local, SETTINGS_DOC, next)
     this.bus.emit({ type: 'settings.changed', settings: next })

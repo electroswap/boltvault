@@ -97,6 +97,37 @@ export class SiteRegistry {
     await this.persist()
   }
 
+  /**
+   * Move an origin's session to another account (Settings › Connected sites).
+   *
+   * `accounts` is what the site has actually been told. Omitting it clears
+   * `lastAccounts`, which is the truthful state between the re-seat and the
+   * `accountsChanged` that follows it: the registry does not hold the vault,
+   * so it cannot turn an account id into an address, and recording an address
+   * the site has not been given would be a record of something that never
+   * happened.
+   *
+   * A site that has never connected is left alone — there is no session to
+   * re-seat, and inventing a disconnected row here would put an account id
+   * beside an origin the user never linked it to.
+   */
+  async setAccount(origin: string, accountId: string, accounts?: readonly string[]): Promise<boolean> {
+    const row = this.sites[origin]
+    if (!row) return false
+    row.accountId = accountId
+    row.lastAccounts = accounts ? [...accounts] : []
+    await this.persist()
+    return true
+  }
+
+  /** Record what an origin was last told, without touching which account it is on. */
+  async setExposed(origin: string, accounts: readonly string[]): Promise<void> {
+    const row = this.sites[origin]
+    if (!row) return
+    row.lastAccounts = [...accounts]
+    await this.persist()
+  }
+
   async setChain(origin: string, chainId: number): Promise<number> {
     const row = this.sites[origin]
     if (row) {

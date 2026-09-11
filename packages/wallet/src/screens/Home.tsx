@@ -9,6 +9,7 @@ import { ActionGrid, Body, BoltMark, ChainMark, Column, EsWordmark, Icon, IconBu
 import { cacheKey, type BridgeStatus, type CampaignView, type Inventory, type TokenDetailView } from '@boltvault/engine'
 import { useEffect, useRef, useState } from 'react'
 import { ChainScopeSheet, ScopePill, useHomeScope } from '../components/ChainScope'
+import { PortfolioHistory } from '../components/PortfolioHistory'
 import { DappSheet, DappStrip, useDappStatus } from '../components/DappStatus'
 import { useEngine } from '../engine/EngineProvider'
 import { FeeScheduleSheet } from './FeeScheduleSheet'
@@ -451,6 +452,21 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
                     </Column>
                   </Row>
                 </Pressable>
+                {/*
+                  The line under the total (§8.2).
+
+                  Home had a number and one "since you last looked" comparison,
+                  because the portfolio kept exactly one earlier point. The
+                  snapshot now carries a bounded series of the totals this
+                  wallet has actually seen in this scope — which is why it
+                  hangs off `portfolio.snapshot` rather than a second call: it
+                  arrives with the figure it belongs to, on the same event, and
+                  costs the paint path nothing.
+
+                  It draws only once there is a shape to draw; a fresh wallet
+                  gets no empty box in a 600-pixel window.
+                */}
+                <PortfolioHistory points={portfolio.snapshot?.history ?? []} currency={currency} body={body} inset={inset} reducedMotion={reducedMotion} testID="home-history" />
                 <LiveFilament tick={head?.blockNumber ?? null} live={head?.live ?? false} reducedMotion={reducedMotion} testID="filament" />
               </Plate>
             </Ignition>
