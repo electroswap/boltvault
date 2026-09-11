@@ -38,6 +38,12 @@ export interface RawSignature {
 }
 
 const CHUNK = 150
+/**
+ * The APDU data field is one byte of length, so 255 is the hard ceiling. The
+ * EIP-155 tail rule is allowed to run a chunk past `CHUNK`; this is the bound
+ * it may not pass.
+ */
+const APDU_DATA_MAX = 255
 
 function hex(bytes: Uint8Array): `0x${string}` {
   let s = '0x'
@@ -132,9 +138,21 @@ export class LedgerEthApp {
     while (first || offset < raw.length) {
       const max = first ? CHUNK - pathBytes.length : CHUNK
       let size = Math.min(max, raw.length - offset)
-      // Never end a chunk on the EIP-155 marker: the app must see the tail with its predecessor.
+      /*
+        Never end a chunk on the EIP-155 marker: the app must see the tail with
+        its predecessor.
+
+        The clamp that used to follow this line put the chunk straight back to
+        `CHUNK`, undoing the rule in exactly the case it exists for. When the
+        bytes left at a boundary fall in (CHUNK, CHUNK+5], the last APDU
+        carried only the `[chainId, 0, 0]` tail, and the Ethereum app either
+        refuses the transaction or parses one with no chain id — returning a
+        pre-EIP-155 signature that is valid on every chain. Letting the chunk
+        run long is deliberate and safe: the APDU data limit is 255, not
+        `CHUNK`. The bound below is the real one.
+      */
       if (tail !== 0 && offset + size >= tail && offset + size < raw.length) size = raw.length - offset
-      if (size > CHUNK) size = CHUNK
+      if (size > APDU_DATA_MAX - pathBytes.length) throw new LedgerError('unsupported', 0, 'This transaction is too large for the Ethereum app to receive in one piece.')
       const chunk = raw.subarray(offset, offset + size)
       response = await this.send(INS.SIGN_TRANSACTION, first ? 0x00 : 0x80, 0x00, first ? concatBytes(pathBytes, chunk) : chunk)
       offset += size

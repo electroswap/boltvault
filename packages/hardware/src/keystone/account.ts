@@ -4,8 +4,9 @@
  * user scans back. The bridge is the engine's pending-request table; this
  * file only builds requests and assembles what comes back.
  */
-import { hexToBytes, serializeTransaction, toHex, type Hex, type TransactionSerializable, type TypedDataDefinition } from 'viem'
+import { getTypesForEIP712Domain, hexToBytes, serializeTransaction, toHex, type Hex, type TransactionSerializable, type TypedDataDefinition } from 'viem'
 import { toAccount, type LocalAccount } from 'viem/accounts'
+import { yParityFromLedgerV } from '../ledger/v'
 import { asUuidBytes, encodeSignRequest, type KeystoneDataType } from './ur'
 
 export type { KeystoneDataType }
@@ -31,18 +32,23 @@ export interface KeystoneAccountInput {
   readonly bridge: KeystoneBridge
 }
 
-function parity(v: number): 0 | 1 {
-  if (v >= 35) return ((v - 35) % 2) as 0 | 1
-  if (v >= 27) return ((v - 27) % 2) as 0 | 1
-  return (v % 2) as 0 | 1
+/*
+  One implementation of the recovery byte, shared with the Ledger path.
+
+  This file had its own, which subtracted 35 and took the parity of the
+  result. That is right until the byte wraps: for a legacy EIP-155 signature
+  `v` is `(chainId × 2 + 35 + parity) mod 256`, so on any chain where
+  `chainId ≡ 110 (mod 128)` a parity of 1 lands on byte 0 and was then read
+  back as parity 0 — an unrecoverable signature, silently. `yParityFromLedgerV`
+  already does the modulo correctly and says why.
+*/
+function split(sig: Uint8Array, ctx: { chainId: number; legacy: boolean }): { r: Hex; s: Hex; yParity: 0 | 1 } {
+  return { r: toHex(sig.slice(0, 32)), s: toHex(sig.slice(32, 64)), yParity: yParityFromLedgerV(sig[64] ?? 0, ctx) }
 }
 
-function split(sig: Uint8Array): { r: Hex; s: Hex; yParity: 0 | 1 } {
-  return { r: toHex(sig.slice(0, 32)), s: toHex(sig.slice(32, 64)), yParity: parity(sig[64] ?? 0) }
-}
-
+/** Messages and typed data are never EIP-155, so their `v` is 0/1 or 27/28. */
 function toSignature(sig: Uint8Array): Hex {
-  const { r, s, yParity } = split(sig)
+  const { r, s, yParity } = split(sig, { chainId: 0, legacy: false })
   return `0x${r.slice(2)}${s.slice(2)}${(27 + yParity).toString(16)}` as Hex
 }
 
@@ -66,14 +72,27 @@ export function keystoneAccount(input: KeystoneAccountInput): LocalAccount {
       const serialize = options?.serializer ?? serializeTransaction
       const unsigned = await serialize(tx)
       const sig = await ask(legacy ? 'transaction' : 'typed_transaction', hexToBytes(unsigned), chainId)
-      const { r, s, yParity } = split(sig)
+      const { r, s, yParity } = split(sig, { chainId, legacy })
       const v = legacy ? BigInt(chainId) * 2n + 35n + BigInt(yParity) : BigInt(yParity)
       return serialize(tx, { r, s, v, yParity })
     },
     async signTypedData(typedData) {
+      /*
+        Put `EIP712Domain` back before handing the message over.
+
+        `normaliseTypedData` strips it upstream so viem can re-derive it, and
+        the Ledger and Trezor paths rebuild it with viem's own rule so their
+        digest matches the wallet's exactly. This path serialised the stripped
+        object and let the device infer the domain type itself — which may
+        include or exclude `salt`, or order fields differently, producing a
+        digest for a domain separator the wallet never computed.
+      */
       const td = typedData as TypedDataDefinition
-      const json = JSON.stringify(td, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v))
-      return toSignature(await ask('typed_data', new TextEncoder().encode(json)))
+      const domain = (td.domain ?? {}) as Parameters<typeof getTypesForEIP712Domain>[0]['domain']
+      const complete = { ...td, domain: domain ?? {}, types: { EIP712Domain: getTypesForEIP712Domain({ domain }), ...td.types } }
+      const json = JSON.stringify(complete, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v))
+      const chainId = typeof domain?.chainId === 'number' ? domain.chainId : undefined
+      return toSignature(await ask('typed_data', new TextEncoder().encode(json), chainId))
     },
     async sign() {
       throw new Error('A Keystone will not sign a raw hash. Use a signed message or a transaction instead.')

@@ -52,6 +52,23 @@ describe('signing round trips', () => {
     expect(device.log.at(-1)).toBe("transaction:m/44'/60'/0'/0/1")
   })
 
+  /*
+    The recovery byte for a legacy EIP-155 signature is
+    `(chainId × 2 + 35 + parity) mod 256`, and on any chain where
+    `chainId ≡ 110 (mod 128)` that lands a parity of 1 on byte 0. This file's
+    own helper subtracted 35 and took the parity of the result, so byte 0 read
+    back as parity 0 and the signature recovered to the wrong address —
+    silently, since nothing downstream recomputed it. The Ledger path already
+    did the modulo correctly; both use that helper now.
+  */
+  it('recovers the parity on a chain whose EIP-155 v byte wraps', async () => {
+    for (const chainId of [110, 238, 366]) {
+      const raw = await account.signTransaction({ chainId, nonce: 1, to: '0x3333333333333333333333333333333333333333', value: 1n, gas: 21_000n, gasPrice: 10n ** 9n, type: 'legacy' })
+      expect(await recoverTransactionAddress({ serializedTransaction: raw as TransactionSerialized })).toBe(address)
+      expect(parseTransaction(raw).chainId).toBe(chainId)
+    }
+  })
+
   it('shows a 1559 transaction as a typed-transaction request and assembles the bare-parity answer', async () => {
     const raw = await account.signTransaction({ chainId: 8453, nonce: 0, to: '0x2222222222222222222222222222222222222222', value: 1n, gas: 30_000n, maxFeePerGas: 3n * 10n ** 9n, maxPriorityFeePerGas: 10n ** 9n, type: 'eip1559', data: '0x1234' })
     expect(await recoverTransactionAddress({ serializedTransaction: raw as TransactionSerialized })).toBe(address)

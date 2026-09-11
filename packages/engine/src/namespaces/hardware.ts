@@ -229,7 +229,26 @@ export class HardwareService {
     const paths = Array.from({ length: count }, (_, i) => pathFor(input.scheme, from + i))
     try {
       const rows = unwrapTrezor(await c.ethereumGetAddressBundle({ bundle: paths.map((path) => ({ path, showOnTrezor: false as const })) }))
-      return rows.map((r, i) => ({ path: paths[i] ?? '', address: r.address, index: from + i }))
+      /*
+        Pair each address with the path the device says it came from, not with
+        the path at the same array index.
+
+        Trezor Connect runs in a hosted popup — a third-party surface — and it
+        returns `serializedPath` on every row, which the result schema already
+        parses and this code then discarded. Zipping by index meant a reordered
+        or truncated answer stored an address against the wrong derivation path
+        (and `paths[i] ?? ''` turned a short answer into an empty path rather
+        than an error). Every later signature would then come from a different
+        key than the address on screen, and the pair is synced to the user's
+        other devices as well.
+      */
+      if (rows.length !== paths.length) throw new EngineError('internal', 'The device returned a different number of addresses than were asked for.')
+      return rows.map((r, i) => {
+        const expected = paths[i] ?? ''
+        const got = r.serializedPath ?? ''
+        if (got !== expected) throw new EngineError('internal', 'The device answered for a different derivation path than the one requested.')
+        return { path: expected, address: r.address, index: from + i }
+      })
     } catch (err) {
       throw new EngineError('internal', plain(err))
     }
