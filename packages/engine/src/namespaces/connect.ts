@@ -58,8 +58,9 @@ export class ConnectService {
     this.offs.push(kit.on('session_request', (r) => void this.onRequest(r)))
     this.offs.push(kit.on('session_delete', ({ topic }) => void this.onDelete(topic)))
     for (const s of kit.getActiveSessions()) {
-      const origin = peerOrigin(s.peer) ?? `wc:${s.topic}`
-      const dapp = this.deps.dapps.open({ url: origin.startsWith('wc:') ? `https://${s.topic}.walletconnect.invalid` : origin, kind: 'walletconnect', verified: false })
+      // A restored session carries no Verify result, so it is keyed by its own
+      // topic for the same reason a fresh unverified proposal is.
+      const dapp = this.deps.dapps.open({ url: `https://${s.topic}.walletconnect.invalid`, kind: 'walletconnect', verified: false })
       this.live.set(s.topic, { topic: s.topic, sessionId: dapp.sessionId, origin: dapp.origin, session: s })
     }
     this.offs.push(
@@ -89,11 +90,19 @@ export class ConnectService {
     const kit = this.deps.walletKit
     if (!kit) return
     const verified = proposal.verified === 'VALID'
-    const origin = (verified ? proposal.verifiedOrigin : null) ?? peerOrigin(proposal.proposer)
-    if (!origin) {
-      await kit.rejectSession({ id: proposal.id, reason: WC_REASON.userRejected }).catch(() => undefined)
-      return
-    }
+    /*
+      An unverified peer does not get to name itself.
+
+      The origin decides which stored session a request belongs to, and
+      sessions live in one map shared by every transport. Taking it from the
+      peer's own metadata meant a proposal could simply claim an origin the
+      user had already connected in the in-app browser — `app.electroswap.io`
+      is the browser's own home page — and `RpcFlow.connect()` would find that
+      session and return the account with no Connect sheet at all. The claim is
+      still shown to the user as a claim (`view.url`); it is no longer treated
+      as an identity. Only Reown's Verify can supply one.
+    */
+    const origin = verified && proposal.verifiedOrigin ? proposal.verifiedOrigin : `https://${proposal.pairingTopic ?? proposal.id}.walletconnect.invalid`
     const dapp = this.deps.dapps.open({ url: origin, kind: 'walletconnect', verified })
     const view: WcProposalView = { id: proposal.id, name: proposal.proposer.name, url: proposal.proposer.url, icon: proposal.proposer.icons[0] ?? null, origin: dapp.origin, verified, requiredChains: proposal.requiredNamespaces['eip155']?.chains ?? [], optionalChains: proposal.optionalNamespaces['eip155']?.chains ?? [] }
     this.proposals.set(proposal.id, { proposal, view, sessionId: dapp.sessionId })

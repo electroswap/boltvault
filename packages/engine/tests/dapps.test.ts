@@ -102,6 +102,49 @@ describe('external dApp transports', () => {
     expect(await recoverAddress({ hash: hashMessage({ raw: '0x68656c6c6f' }), signature: res.result as Hex })).toBe(address)
   })
 
+  /*
+    The session-inheritance attack. Sessions live in one origin-keyed map
+    shared by every transport, `RpcFlow.connect()` returns an existing one
+    without raising a sheet, and an unverified WalletConnect peer used to be
+    keyed by the origin it declared about itself. So a proposal claiming
+    `app.electroswap.io` — the in-app browser's own home page, and therefore
+    the origin most likely to already be connected — was handed the account
+    and approved as a full signing session with nothing shown to the user.
+
+    An unverified peer is now keyed by its own pairing topic, so it can never
+    land on a session someone else established.
+  */
+  it('an unverified peer claiming a connected origin still has to ask', async () => {
+    const claimed = 'https://app.electroswap.io'
+    const impostor = new FakeWalletKit({ peer: { name: 'ElectroSwap', description: '', url: claimed, icons: [] }, verified: 'INVALID', required: ['eip155:52014'], optional: [] })
+    const e2 = createEngine({ platform: createMemoryPlatform(), kdf: KDF, receiptPollMs: 20, fetch: async () => new Response('', { status: 404 }), electroswapUrl: null, pricesUrl: null, walletKit: impostor })
+    await e2.ready
+    const created = await e2.engine.vault.create({ password: PASSWORD })
+    await e2.chains.setRpc(TESTNET, rpc.url)
+    try {
+      // The victim connects that origin in the in-app browser, and approves it.
+      const web = await e2.engine.dapps.open({ url: claimed, kind: 'webview' })
+      const first = e2.engine.dapps.request({ sessionId: web.sessionId, id: 1, method: 'eth_requestAccounts', params: [] })
+      const consent = await approvalOn(e2, (r) => r.kind === 'connect')
+      await e2.engine.approvals.decide({ id: consent.id, approve: true, data: { accountId: created.accounts[0]?.id ?? '', chainId: TESTNET } })
+      await first
+      expect(e2.sites.get(claimed)?.connected).toBe(true)
+
+      // Now the impostor pairs and proposes, claiming the very same origin.
+      await e2.engine.connect.pair({ uri: 'wc:7777@2?relay-protocol=irn&symKey=ef' })
+      const second = await approvalOn(e2, (r) => r.kind === 'connect')
+      // A sheet was raised rather than the session being inherited silently...
+      expect(second.id).not.toBe(consent.id)
+      // ...and the peer's claim is not the identity it was given.
+      const view = (await e2.engine.connect.status()).proposals[0]
+      expect(view?.verified).toBe(false)
+      expect(view?.origin).not.toBe(claimed)
+      expect(view?.url).toBe(claimed) // still shown to the user, as a claim
+    } finally {
+      e2.dispose()
+    }
+  })
+
   it('marks an unverified peer on every signature and disconnects the site when the peer leaves', async () => {
     const topic = [...kit.sessions.keys()][0] ?? ''
     // A second kit-level proposal from an unverified peer: the firewall warns.
