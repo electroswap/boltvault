@@ -11,7 +11,10 @@
  * `not_implemented`, which the UI renders as an honest empty state.
  */
 import type { Cached } from './cache'
+import type { GovernorSnapshot } from './governor'
+import type { AvailabilityView, PendingRegistration, PriceView, RegistrarView } from './namespaces/names'
 import type { CustomCollection } from './namespaces/nftCustom'
+import type { AssessInput, PreAssessment, SpendPolicyView } from './namespaces/security'
 import type { SyncIncomingItem } from './namespaces/sync'
 import type {
   AboutView,
@@ -52,6 +55,7 @@ import type {
   NotificationView,
   Prefs,
   OffersInbox,
+  PortfolioPoint,
   PortfolioSnapshot,
   Positions,
   RemoteRequest,
@@ -74,6 +78,11 @@ import type {
 } from './schema'
 
 export type { SyncIncomingItem }
+// The views these namespaces answer with are declared beside their service
+// (§schema.ts belongs to the shared shapes); re-exported here so a screen
+// imports them from the contract like everything else it renders.
+export type { AssessInput, AssessRequest, PreAssessment, SpendPolicyView } from './namespaces/security'
+export type { AvailabilityView, CommitmentState, PendingRegistration, PriceView, RegistrarView } from './namespaces/names'
 
 export type Unsubscribe = () => void
 
@@ -152,6 +161,8 @@ export interface SitesNamespace {
   list(): Promise<SiteView[]>
   get(input: { origin: string }): Promise<SiteView | null>
   setChain(input: { origin: string; chainId: number }): Promise<SiteView>
+  /** Move one origin to another account; the site is told via accountsChanged (§8.14, §4.6). */
+  setAccount(input: { origin: string; accountId: AccountId }): Promise<SiteView>
   disconnect(input: { origin: string }): Promise<void>
   /** Per-origin spend cap in base units as a decimal string, or null to clear (§4.6). */
   setBudget(input: { origin: string; budget: string | null }): Promise<SiteView>
@@ -169,6 +180,14 @@ export interface ChainsNamespace {
   rpcs(): Promise<Record<string, { url: string; trace?: string }>>
   /** Set (url) or clear (null) a chain's RPC; validated by eth_chainId. */
   setRpc(input: { chainId: number; url: string | null; trace?: string | null }): Promise<void>
+  /**
+   * Every outside host this session has spoken to, as the rate governor sees
+   * it — budget, cooldown, and `refused` when the host answered 401/403 and has
+   * not accepted a request since. Settings › Networks reads this so a rejected
+   * wallet key reads as "ElectroSwap's API is refusing this wallet" rather than
+   * as a screen of silent failures.
+   */
+  hosts(): Promise<GovernorSnapshot[]>
 }
 
 export interface ApprovalsNamespace {
@@ -199,6 +218,8 @@ export interface PortfolioNamespace {
   lastLook(input: { accountId: AccountId }): Promise<{ previous: { at: number; total: number | null } | null; total: number | null }>
   /** The persisted last-good snapshot, no refresh (plan C1): balances beside an account, badges on Home. */
   cached(input: { accountId: AccountId }): Promise<PortfolioSnapshot | null>
+  /** The totals this wallet has seen in this scope, oldest first and bounded (§8.2). */
+  history(input: { accountId: AccountId; chainIds?: number[] }): Promise<PortfolioPoint[]>
 }
 
 export interface ActivityScanNamespace {
@@ -224,6 +245,42 @@ export interface NamesNamespace {
   lookup(input: { chainId: number; addresses: string[] }): Promise<NameLookup[]>
   /** Live forward resolution for a recipient field. */
   resolve(input: { chainId: number; name: string }): Promise<{ address: string | null }>
+  /** Whether this chain can register a name at all, and — when it cannot — why not, in plain language. */
+  registrar(input: { chainId: number }): Promise<RegistrarView>
+  /** `valid()` and `available()` on the registrar itself (§8.1). */
+  availability(input: { chainId: number; name: string }): Promise<AvailabilityView>
+  /** Rent for a duration, in wei as decimal strings. */
+  price(input: { chainId: number; name: string; durationSeconds?: number }): Promise<PriceView>
+  /**
+   * Step one of the commit–reveal: raises an `internal:names` approval for the
+   * `commit` transaction and persists the commitment, so the mandatory wait
+   * survives a worker restart. `setPrimary` defaults to true.
+   */
+  commit(input: { accountId: AccountId; chainId: number; name: string; durationSeconds?: number; setPrimary?: boolean }): Promise<{ id: string; requestId: string; commitment: string; name: string; waitSeconds: number }>
+  /** Commitments this device holds, with the countdown read off the chain. */
+  pending(input?: { chainId?: number }): Promise<PendingRegistration[]>
+  /** Step two: the payable reveal, again as an approval. */
+  register(input: { id: string }): Promise<{ requestId: string; name: string; priceWei: string; valueWei: string }>
+  /** Forget a commitment held here. */
+  cancel(input: { id: string }): Promise<PendingRegistration[]>
+  /** `ReverseRegistrar.setName` — the primary name every other wallet will show. */
+  setPrimary(input: { accountId: AccountId; chainId: number; name: string }): Promise<{ requestId: string; name: string }>
+}
+
+/**
+ * Security (§2.4 `security: { assess(request); policy(); }`).
+ *
+ * `assess` runs the one firewall pipeline that builds every sheet and returns
+ * what that sheet would carry, without raising an approval. It is advisory and
+ * a lower bound: the real sheet sees the origin, the fee assertion and a fresh
+ * simulation, and §3.4 lets those add rules but never lower one. The origin is
+ * the engine's, never the caller's, and the reply carries no part of the
+ * context the assessment reasoned over.
+ */
+export interface SecurityNamespace {
+  assess(input: AssessInput): Promise<PreAssessment>
+  /** Settings › Spending as the firewall reads it, and the step-up ladder it drives (§3.4 points 5 and 6). */
+  policy(): Promise<SpendPolicyView>
 }
 
 export interface AllowancesNamespace {
@@ -247,10 +304,25 @@ export interface SendNamespace {
 }
 
 /** In-wallet swaps (§8.6): quote on chain, execute as a flow of sheets (approve → permit → swap). */
+/**
+ * Either side of the trade may be the fixed one (§8.6). Exactly one of
+ * `amountIn` / `amountOut` is given, and `tradeType` says which the user typed.
+ */
+export interface SwapArgs {
+  readonly accountId: AccountId
+  readonly chainId: number
+  readonly tokenIn: string
+  readonly tokenOut: string
+  readonly amountIn?: string
+  readonly amountOut?: string
+  readonly tradeType?: 'exactIn' | 'exactOut'
+  readonly slippageBips?: number
+}
+
 export interface SwapNamespace {
-  quote(input: { accountId: AccountId; chainId: number; tokenIn: string; tokenOut: string; amountIn: string; slippageBips?: number }): Promise<SwapQuote>
+  quote(input: SwapArgs): Promise<SwapQuote>
   /** Starts the flow; resolves once the first sheet exists. Progress arrives as `swap.progress` events. */
-  execute(input: { accountId: AccountId; chainId: number; tokenIn: string; tokenOut: string; amountIn: string; slippageBips?: number }): Promise<{ flowId: string; requestId: string | null }>
+  execute(input: SwapArgs): Promise<{ flowId: string; requestId: string | null }>
   flow(input: { flowId: string }): Promise<SwapFlow | null>
   flows(input?: { accountId?: AccountId }): Promise<SwapFlow[]>
 }
@@ -493,6 +565,7 @@ export interface WalletEngine {
   readonly activityScan: ActivityScanNamespace
   readonly tokens: TokensNamespace
   readonly names: NamesNamespace
+  readonly security: SecurityNamespace
   readonly allowances: AllowancesNamespace
   readonly contacts: ContactsNamespace
   readonly send: SendNamespace

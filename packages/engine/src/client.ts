@@ -11,7 +11,7 @@ import type { EngineTransport } from './transport'
 
 // Exhaustive by construction: a namespace added to the contract but missing here is a compile error,
 // not a popup whose `engine.<ns>` is undefined.
-const NAMESPACE_TABLE: Record<NamespaceName, true> = { vault: true, accounts: true, sites: true, chains: true, approvals: true, settings: true, portfolio: true, activity: true, activityScan: true, tx: true, tokens: true, names: true, allowances: true, contacts: true, send: true, sync: true, swap: true, holder: true, limit: true, hardware: true, explore: true, nft: true, legends: true, farm: true, launchpad: true, watchlist: true, positions: true, bridge: true, remote: true, dapps: true, connect: true, flags: true, about: true, notifications: true, prefs: true }
+const NAMESPACE_TABLE: Record<NamespaceName, true> = { vault: true, accounts: true, sites: true, chains: true, approvals: true, settings: true, portfolio: true, activity: true, activityScan: true, tx: true, tokens: true, names: true, security: true, allowances: true, contacts: true, send: true, sync: true, swap: true, holder: true, limit: true, hardware: true, explore: true, nft: true, legends: true, farm: true, launchpad: true, watchlist: true, positions: true, bridge: true, remote: true, dapps: true, connect: true, flags: true, about: true, notifications: true, prefs: true }
 const NAMESPACES = Object.keys(NAMESPACE_TABLE) as readonly NamespaceName[]
 
 type AnyMethod = (arg?: unknown) => Promise<unknown>

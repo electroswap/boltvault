@@ -7,7 +7,7 @@
  */
 import { encodeFunctionData, encodePacked, type Abi, type Hex } from 'viem'
 import { MIXED_ROUTE_QUOTER_ABI, QUOTER_V2_ABI, V2_ROUTER_ABI } from './abis'
-import { V2_FEE_FLAG, type Hop, type SwapRoute } from './encode'
+import { V2_FEE_FLAG, v3PackedPathExactOut, type Hop, type SwapRoute } from './encode'
 
 export const V3_FEES = [100, 500, 3000, 10000] as const
 /** Fee tiers tried for intermediate hops (all four would be 16 combos on their own). */
@@ -55,6 +55,7 @@ function v3PackedPath(hops: readonly Hop[]): Hex {
   }
   return encodePacked(types, values)
 }
+
 
 const eq = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
 
@@ -163,4 +164,68 @@ export async function bestRoute(tokenIn: Hex, tokenOut: Hex, amountIn: bigint, a
 export function quoteCalldata(c: Candidate, amountIn: bigint, a: QuoteAddresses): { to: Hex; data: Hex } {
   const call = callFor(c, amountIn, a)
   return { to: call.address, data: encodeFunctionData({ abi: call.abi, functionName: call.functionName, args: call.args as never }) }
+}
+
+// ─── Exact output ────────────────────────────────────────────────────────────
+
+/** One candidate priced the other way round: the output is fixed, the input is the answer. */
+export interface RouteQuoteExactOut {
+  readonly candidate: Candidate
+  readonly amountIn: bigint
+  readonly gasEstimate: bigint
+}
+
+export interface BestQuoteExactOut {
+  readonly best: RouteQuoteExactOut
+  readonly all: readonly RouteQuoteExactOut[]
+}
+
+function callForExactOut(c: Candidate, amountOut: bigint, a: QuoteAddresses): ReadCall {
+  if (c.kind === 'v2') {
+    const path = [c.route.hops[0]?.tokenIn as Hex, ...c.route.hops.map((h) => h.tokenOut)]
+    return { address: a.v2Router02, abi: V2_ROUTER_ABI, functionName: 'getAmountsIn', args: [amountOut, path] }
+  }
+  const hop = c.route.hops[0]
+  if (c.route.hops.length === 1 && hop && hop.kind === 'v3') {
+    return { address: a.quoterV2, abi: QUOTER_V2_ABI, functionName: 'quoteExactOutputSingle', args: [{ tokenIn: hop.tokenIn, tokenOut: hop.tokenOut, amount: amountOut, fee: hop.fee, sqrtPriceLimitX96: 0n }] }
+  }
+  return { address: a.quoterV2, abi: QUOTER_V2_ABI, functionName: 'quoteExactOutput', args: [v3PackedPathExactOut(c.route.hops), amountOut] }
+}
+
+function parseExactOut(c: Candidate, r: ReadResult): RouteQuoteExactOut | null {
+  if (!r.ok) return null
+  if (c.kind === 'v2') {
+    // `getAmountsIn` answers along the path, so the amount to pay is the first entry.
+    const amounts = r.value as readonly bigint[]
+    const first = amounts[0]
+    return typeof first === 'bigint' && first > 0n ? { candidate: c, amountIn: first, gasEstimate: 120_000n * BigInt(c.route.hops.length) } : null
+  }
+  const tuple = r.value as readonly [bigint, unknown, unknown, bigint]
+  const amountIn = tuple[0]
+  const gas = tuple[3]
+  return typeof amountIn === 'bigint' && amountIn > 0n ? { candidate: c, amountIn, gasEstimate: typeof gas === 'bigint' ? gas : 150_000n } : null
+}
+
+/**
+ * Quote every candidate for a fixed output and pick the one that costs least.
+ *
+ * The mirror of `bestRoute`, and the comparison flips with it: best means the
+ * SMALLEST input, not the largest output. A single-hop route within 0.1 % of
+ * the cheapest still wins, for the same reason as in the other direction — one
+ * hop is less gas and less that can go wrong.
+ *
+ * Mixed routes are absent here for the same reason they are absent there: the
+ * encoder cannot express one, so offering a price for one would be offering a
+ * price the wallet cannot honour.
+ */
+export async function bestRouteExactOut(tokenIn: Hex, tokenOut: Hex, amountOut: bigint, addresses: QuoteAddresses, read: Reader): Promise<BestQuoteExactOut | null> {
+  if (amountOut <= 0n) return null
+  const cands = candidates(tokenIn, tokenOut, addresses)
+  const results = await read(cands.map((c) => callForExactOut(c, amountOut, addresses)))
+  const quotes = cands.map((c, i) => parseExactOut(c, results[i] ?? { ok: false })).filter((q): q is RouteQuoteExactOut => q !== null)
+  if (quotes.length === 0) return null
+  quotes.sort((a, b) => (a.amountIn === b.amountIn ? a.candidate.route.hops.length - b.candidate.route.hops.length : a.amountIn > b.amountIn ? 1 : -1))
+  const top = quotes[0] as RouteQuoteExactOut
+  const single = quotes.find((q) => q.candidate.route.hops.length === 1 && q.amountIn * 1000n <= top.amountIn * 1001n)
+  return { best: single ?? top, all: quotes }
 }

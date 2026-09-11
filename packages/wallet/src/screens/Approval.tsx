@@ -12,9 +12,11 @@ import {
   Icon,
   Input,
   Key,
+  Pill,
   Plate,
   Row,
   ScrollView,
+  Sheet,
   Signature,
   metrics,
   paint,
@@ -22,14 +24,20 @@ import {
   useWindowDimensions,
 } from '@boltvault/ui'
 import {
+  clampPerGas,
+  gasBand,
   parseApprovalPayload,
+  suggestedPerGas,
   type AccountView,
   type ApprovalPayload,
   type ApprovalRequest,
   type AssessmentView,
   type ChainView,
+  type GasDecisionData,
+  type PreparedTx,
   type StatementView,
 } from '@boltvault/engine'
+import { parseUnits } from 'viem'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
@@ -153,6 +161,18 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
     say (§3.4).
   */
   const [showTx, setShowTx] = useState(false)
+  /*
+    The network fee, which was a readout on every sheet in the product.
+
+    `null` means "whatever the node suggested", which is what every signature
+    before this used. A choice is a price per unit of gas, clamped in the engine
+    at the point of signing rather than trusted from here (`applyGasDecision`) —
+    this screen is a page, and a page must not be the last word on what gets
+    signed.
+  */
+  const [gasChoice, setGasChoice] = useState<GasDecisionData | null>(null)
+  const [gasOpen, setGasOpen] = useState(false)
+  const [gasTyped, setGasTyped] = useState('')
 
   const request: ApprovalRequest | undefined = requestId
     ? pending.find((r) => r.id === requestId)
@@ -480,14 +500,47 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   const recipient = payload.kind === 'send_transaction' ? recipientOf(payload.tx) : null
   const verb = verbFor(payload, request.origin)
 
+  /*
+    The fee, as it will actually be signed.
+
+    Every figure on this screen is derived from one price per unit of gas — the
+    user's, if they chose one, and the node's if they did not — so the row, the
+    sheet and the transaction cannot disagree. Multiplying by the gas limit is
+    what turns it into something a person can judge: a fee in the chain's own
+    coin, not a price per unit of something they have never heard of.
+  */
+  const tx: PreparedTx | null = payload.kind === 'send_transaction' ? payload.tx : null
+  const gasLimit = tx ? BigInt(tx.gas) : 0n
+  const band = tx ? gasBand(tx) : null
+  const perGas = tx ? perGasOf(tx, gasChoice) : 0n
+  const feeTotalWei = perGas * gasLimit
+  const feeSymbol = payload.kind === 'send_transaction' ? payload.fee.symbol : ''
+  const totalAt = (p: bigint): string => `${formatWei((p * gasLimit).toString())} ${feeSymbol}`
+  /*
+    What the typed figure asks for, before the clamp has its say. Kept separate
+    from `perGas` so the sheet can tell the user their number is being lifted or
+    trimmed rather than silently doing it.
+  */
+  const typedWei = tx && gasTyped.trim() ? parseCoin(gasTyped) : null
+  const typedPerGas = typedWei !== null && gasLimit > 0n ? typedWei / gasLimit : null
+  const tooLow = band !== null && typedPerGas !== null && typedPerGas < band.floor
+  const tooHigh = band !== null && typedPerGas !== null && typedPerGas > band.ceiling
+
   const decide = async (approve: boolean): Promise<void> => {
     setBusy(true)
     setError(null)
     try {
+      /*
+        The typed decision payload, in the shape the Connect sheet established:
+        the engine parses it where the signature is made and ignores anything it
+        does not recognise. A fee choice rides the same field.
+      */
       const data =
         approve && payload.kind === 'connect' && signer
           ? { accountId: signer.id, chainId }
-          : undefined
+          : approve && payload.kind === 'send_transaction' && gasChoice
+            ? gasChoice
+            : undefined
       const outcome = await engine.approvals.decide({
         id: request.id,
         approve,
@@ -874,12 +927,25 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
             ) : null}
           </Column>
         ) : null}
-        {payload.kind === 'send_transaction' ? (
-          <Row justifyContent="space-between" testID="approval-fee">
+        {payload.kind === 'send_transaction' && tx ? (
+          <Row justifyContent="space-between" alignItems="center" gap="$2" testID="approval-fee">
             <Body tone="mute" size="caption">
               {t({ id: 'approval.fee', message: 'Network fee up to' })}
             </Body>
-            <Body size="caption">{`${formatWei(payload.fee.maxTotalWei)} ${payload.fee.symbol}`}</Body>
+            <Row gap="$2" alignItems="center">
+              <Body size="caption" tone={gasChoice ? 'arc' : 'ink'} testID="approval-fee-total">{`${formatWei(feeTotalWei.toString())} ${feeSymbol}`}</Body>
+              <Pill
+                size="sm"
+                label={t({ id: 'approval.fee.change', message: 'Change' })}
+                selected={gasChoice !== null}
+                onPress={() => {
+                  setGasTyped(formatWei(feeTotalWei.toString()))
+                  setGasOpen(true)
+                }}
+                accessibilityLabel={t({ id: 'approval.fee.change.a11y', message: 'Change the network fee' })}
+                testID="approval-fee-change"
+              />
+            </Row>
           </Row>
         ) : null}
         {payload.kind === 'send_transaction' ? (
@@ -928,7 +994,8 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
                 />
                 <DetailRow
                   label={t({ id: 'tx.maxfee', message: 'Max network fee' })}
-                  value={`${formatWei(payload.fee.maxTotalWei)} ${payload.fee.symbol}`}
+                  /* The chosen fee, not the prepared one — these details are the verification surface. */
+                  value={`${formatWei(feeTotalWei.toString())} ${feeSymbol}`}
                   testID="approval-tx-maxfee"
                 />
                 {payload.tx.data && payload.tx.data !== '0x' ? (
@@ -1187,8 +1254,153 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
           </Body>
         ) : null}
       </Column>
+
+      {/*
+        The fee editor. Everything in it is money in the chain's own coin: what
+        this costs, and what a cheaper one risks. Nobody reads "gwei" here,
+        because nobody has to — the three choices and the field are all totals.
+      */}
+      <Sheet
+        open={gasOpen && tx !== null}
+        onClose={() => setGasOpen(false)}
+        title={t({ id: 'gas.title', message: 'Network fee' })}
+        reducedMotion={reducedMotion}
+        footer={<Key label={t({ id: 'close', message: 'Close' })} kind="secondary" size="compact" onPress={() => setGasOpen(false)} testID="gas-close" />}
+        testID="approval-gas-sheet"
+      >
+        {tx && band ? (
+          <Column gap="$3">
+            <Body tone="mute" size="caption">
+              {t({
+                id: 'gas.body',
+                message: 'This is what the network charges to process your transaction, not a BoltVault fee. It is paid in {sym} whether the transaction succeeds or fails.',
+                values: { sym: feeSymbol },
+              })}
+            </Body>
+            <Row gap="$2" flexWrap="wrap">
+              {GAS_CHOICES.map((choice) => {
+                const at = gasChoiceFor(tx, (suggestedPerGas(tx) * BigInt(choice.percent)) / 100n)
+                const isOn = choice.percent === 100 ? gasChoice === null : perGasOf(tx, gasChoice) === perGasOf(tx, at)
+                return (
+                  <Pill
+                    key={choice.percent}
+                    label={`${choice.label()} · ${totalAt(perGasOf(tx, at))}`}
+                    selected={isOn}
+                    onPress={() => {
+                      setGasChoice(choice.percent === 100 ? null : at)
+                      setGasTyped(formatWei((perGasOf(tx, at) * gasLimit).toString()))
+                    }}
+                    testID={`gas-preset-${choice.percent}`}
+                  />
+                )
+              })}
+            </Row>
+            <Input
+              label={t({ id: 'gas.exact', message: 'Or set the most you will pay ({sym})', values: { sym: feeSymbol } })}
+              value={gasTyped}
+              onChange={(v) => {
+                setGasTyped(v)
+                const wei = parseCoin(v)
+                // An unreadable or empty field means "no choice", not "a fee of nothing".
+                setGasChoice(wei === null || gasLimit === 0n ? null : gasChoiceFor(tx, wei / gasLimit))
+              }}
+              numeric
+              testID="gas-exact"
+            />
+            {/*
+              Said plainly, and said before it is done. The engine clamps this
+              anyway at the moment of signing, so the only question here is
+              whether the user finds out from us or from a transaction that
+              never arrives.
+            */}
+            {tooLow ? (
+              <Body tone="ember" size="caption" testID="gas-too-low">
+                {t({
+                  id: 'gas.tooLow',
+                  message: 'Under {min} {sym} the network will not pick this up at all — it would sit unsent until it expired. BoltVault will use {min} {sym}.',
+                  values: { min: formatWei((band.floor * gasLimit).toString()), sym: feeSymbol },
+                })}
+              </Body>
+            ) : null}
+            {tooHigh ? (
+              <Body tone="ember" size="caption" testID="gas-too-high">
+                {t({
+                  id: 'gas.tooHigh',
+                  message: 'That is far more than this transaction needs. BoltVault will use {max} {sym}, which is already four times the going rate.',
+                  values: { max: formatWei((band.ceiling * gasLimit).toString()), sym: feeSymbol },
+                })}
+              </Body>
+            ) : null}
+            {gasChoice && !tooLow && !tooHigh && perGas < band.suggested ? (
+              <Body tone="ember" size="caption" testID="gas-slower">
+                {t({ id: 'gas.slower', message: 'Paying less than the network suggests means waiting longer, and in a busy hour it may not go through at all.' })}
+              </Body>
+            ) : null}
+            <Row justifyContent="space-between" alignItems="center">
+              <Body tone="mute" size="caption">
+                {t({ id: 'gas.willPay', message: 'You will pay up to' })}
+              </Body>
+              <Body size="caption" testID="gas-total">{`${formatWei(feeTotalWei.toString())} ${feeSymbol}`}</Body>
+            </Row>
+            {/*
+              The gas limit stays a readout. Raising it changes nothing — unused
+              gas comes back — and lowering it below the estimate buys a
+              transaction that runs out halfway and still charges for every unit
+              it burned. It is shown because the sheet is a verification surface,
+              not because it is a setting.
+            */}
+            <Row justifyContent="space-between" alignItems="center">
+              <Body tone="mute" size="caption">
+                {t({ id: 'gas.work', message: 'Work this needs' })}
+              </Body>
+              <Body tone="mute" size="caption" testID="gas-limit">
+                {t({ id: 'gas.work.units', message: '{n} units of gas', values: { n: gasLimit.toString() } })}
+              </Body>
+            </Row>
+          </Column>
+        ) : null}
+      </Sheet>
     </Column>
   )
+}
+
+/** The three fees a person actually wants, as percentages of what the node suggested. */
+const GAS_CHOICES = [
+  { percent: 70, label: () => t({ id: 'gas.slow', message: 'Cheaper' }) },
+  { percent: 100, label: () => t({ id: 'gas.normal', message: 'Suggested' }) },
+  { percent: 150, label: () => t({ id: 'gas.fast', message: 'Faster' }) },
+] as const
+
+const hexOf = (n: bigint): string => `0x${n.toString(16)}`
+
+/** The price per unit of gas this sheet will sign with: the user's choice, or the node's. */
+function perGasOf(tx: PreparedTx, choice: GasDecisionData | null): bigint {
+  const asked = tx.type === 'eip1559' ? choice?.maxFeePerGas : choice?.gasPrice
+  return asked === undefined ? suggestedPerGas(tx) : clampPerGas(tx, BigInt(asked))
+}
+
+/**
+ * A fee choice at a given price per unit of gas, in whichever model this chain
+ * uses. The tip moves with the ceiling: raising only the ceiling costs more
+ * without being any faster, because it is the tip that decides the order.
+ */
+function gasChoiceFor(tx: PreparedTx, perGas: bigint): GasDecisionData {
+  const capped = clampPerGas(tx, perGas)
+  if (tx.type !== 'eip1559') return { gasPrice: hexOf(capped) }
+  const suggested = suggestedPerGas(tx)
+  const tip = suggested > 0n ? (BigInt(tx.maxPriorityFeePerGas ?? '0x0') * capped) / suggested : 0n
+  return { maxFeePerGas: hexOf(capped), maxPriorityFeePerGas: hexOf(tip > capped ? capped : tip) }
+}
+
+/** A typed amount of the chain's own coin, in wei; null when it is not a number. */
+function parseCoin(text: string): bigint | null {
+  const trimmed = text.trim().replace(/,/g, '')
+  if (!trimmed || !/^\d*\.?\d*$/.test(trimmed)) return null
+  try {
+    return parseUnits(trimmed, 18)
+  } catch {
+    return null
+  }
 }
 
 function formatWei(wei: string): string {

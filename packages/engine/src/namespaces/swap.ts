@@ -14,17 +14,23 @@ import {
   PERMIT2_ABI,
   PERMIT_EXPIRY_S,
   bestRoute,
+  bestRouteExactOut,
   detectTax,
   encodeApprovePermit2,
   encodeSwap,
+  encodeSwapExactOut,
   feeAmount,
   deliveredMinimumOut,
+  grossOutForExactOut,
+  maximumIn as maximumInFor,
   netAfterFee,
   permitCovers,
   permitSingleTypedData,
   priceImpactPct,
+  taxOf,
   taxSlippageBips,
   type BestQuote,
+  type Candidate,
   type Hop,
   type PermitInput,
   type QuoteAddresses,
@@ -32,6 +38,7 @@ import {
   type Reader as EsReader,
   type ReadResult as EsReadResult,
   type RouteQuote,
+  type TaxProbe,
 } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
 import { formatUnits, maxUint256, parseUnits, type Hex } from 'viem'
@@ -76,15 +83,43 @@ export interface SwapDeps {
 /** ElectroSwap's project safety levels, as the market data reports them. */
 export type TokenSafetyLevel = 'VERIFIED' | 'MEDIUM_WARNING' | 'STRONG_WARNING' | 'BLOCKED'
 
+/** Which side of the trade the user fixed. §8.6: exact-out is a power toggle, default off. */
+export type TradeType = 'exactIn' | 'exactOut'
+
 export interface SwapInput {
   readonly accountId: string
   readonly chainId: number
   /** 'native' or a token address. */
   readonly tokenIn: string
   readonly tokenOut: string
-  /** Human amount, decimal string. */
-  readonly amountIn: string
+  /** Human amount, decimal string. The amount the user typed when `tradeType` is 'exactIn'. */
+  readonly amountIn?: string
+  /** Human amount, decimal string. The amount the user typed when `tradeType` is 'exactOut'. */
+  readonly amountOut?: string
+  readonly tradeType?: TradeType
   readonly slippageBips?: number
+}
+
+/**
+ * A quote plus the two facts that only exist once a trade can be priced from
+ * either end.
+ *
+ * `SwapQuoteSchema` lives in `schema.ts`, which is owned elsewhere while this
+ * lands, so the extra fields ride on the same object rather than in it. Nothing
+ * validates a handler's *output*, so they survive the wire; the two lines that
+ * would move them into the schema proper are in this change's notes.
+ *
+ * How to read the inherited fields in the exact-out direction:
+ *  - `amountInRaw`    what the swap costs at the quoted price (an estimate).
+ *  - `maximumInRaw`   what it may cost at worst. This is the guaranteed figure.
+ *  - `amountOutRaw`   what the router buys, before the wallet fee (grossed up).
+ *  - `receiveRaw`     exactly what the user typed.
+ *  - `minimumOutRaw`  the same number: in this direction the floor IS the ask.
+ */
+export interface SwapQuoteView extends SwapQuote {
+  readonly tradeType: TradeType
+  /** The most an exact-output swap may spend. `'0'` on an exact-in quote, where the input is already fixed. */
+  readonly maximumInRaw: string
 }
 
 const ZERO = '0x0000000000000000000000000000000000000000' as Hex
@@ -173,8 +208,10 @@ export class SwapService {
     }
   }
 
-  private skeleton(input: SwapInput, inView: TokenView | null, outView: TokenView | null, problems: string[]): SwapQuote {
+  private skeleton(input: SwapInput, inView: TokenView | null, outView: TokenView | null, problems: string[]): SwapQuoteView {
     return {
+      tradeType: input.tradeType ?? 'exactIn',
+      maximumInRaw: '0',
       chainId: input.chainId,
       tokenIn: input.tokenIn,
       tokenOut: input.tokenOut,
@@ -236,7 +273,7 @@ export class SwapService {
     return local ? { quote: local, source: 'onchain' } : null
   }
 
-  async quote(input: SwapInput): Promise<SwapQuote> {
+  async quote(input: SwapInput): Promise<SwapQuoteView> {
     const d = this.deps
     const { chainId } = input
     const { inView, outView } = await this.pair(chainId, input.tokenIn, input.tokenOut)
@@ -256,14 +293,26 @@ export class SwapService {
     const wrappedOut = nativeOut ? wetn : (outView.address as Hex)
     const settings = await d.settings.get()
     const slippageBips = input.slippageBips ?? settings.slippageBips
+    const exactOut = input.tradeType === 'exactOut'
+    /*
+      Only the side the user typed is parsed here; the other is the answer.
+
+      An exact-in quote knows its input and asks what it gets; an exact-out
+      quote knows its output and asks what it costs. `typed` is whichever one
+      came from the keyboard, and it is the one that has to be above zero
+      before anything is worth quoting.
+    */
     let amountIn = 0n
+    let wantOut = 0n
     try {
-      amountIn = parseUnits(input.amountIn.trim() || '0', inView.decimals)
+      if (exactOut) wantOut = parseUnits((input.amountOut ?? '').trim() || '0', outView.decimals)
+      else amountIn = parseUnits((input.amountIn ?? '').trim() || '0', inView.decimals)
     } catch {
       problems.push('That amount is not a number.')
     }
+    const typed = exactOut ? wantOut : amountIn
     if (same(wrappedIn, wrappedOut)) problems.push('Pick two different tokens.')
-    if (amountIn <= 0n) problems.push('Enter an amount above zero.')
+    if (typed <= 0n) problems.push('Enter an amount above zero.')
     if (account.kind === 'watch') problems.push('Watch-only — import a key or pair a device to swap.')
     const status = await d.vault.status()
     if (!status.backupComplete && status.seeds.length > 0 && account.kind === 'hd') problems.push('Back up your recovery phrase before you swap.')
@@ -298,31 +347,88 @@ export class SwapService {
     const nowS = Math.floor(d.platform.now() / 1000)
 
     const base = this.skeleton(input, inView, outView, problems)
-    const withState: SwapQuote = { ...base, amountInRaw: amountIn.toString(), balanceInRaw: balanceIn.toString(), slippageBips, fee: { ...base.fee, bips: tier.bips, tier: tier.tier, name: tier.name, sink: tier.sink, source: tier.source, nextTierAt: tier.nextTierAt, nextTierBips: tier.nextTierBips } }
-    if (problems.length > 0 || amountIn <= 0n) return withState
+    const withState: SwapQuoteView = { ...base, amountInRaw: amountIn.toString(), balanceInRaw: balanceIn.toString(), slippageBips, fee: { ...base.fee, bips: tier.bips, tier: tier.tier, name: tier.name, sink: tier.sink, source: tier.source, nextTierAt: tier.nextTierAt, nextTierBips: tier.nextTierBips } }
+    if (problems.length > 0 || typed <= 0n) return withState
 
-    // Route, spot (for impact) and taxes in as few batches as the reader allows.
     const addresses = quoteAddresses(chainId)
-    const probeIn = amountIn / 1000n
-    const [routed, probe, taxIn, taxOut] = await Promise.all([
-      this.route({ chainId, tokenIn: wrappedIn, tokenOut: wrappedOut, amountIn, recipient: owner }, addresses, read),
-      /*
-        The spot probe stays on chain.
+    const bips = tier.bips
+    const sink = tier.sink
+    // There is no sink contract any more: the fee goes to an address named in
+    // `fees.json`, and a chain that names none has in-wallet swap switched off.
+    if (bips > 0 && !sink) problems.push('In-wallet swaps are off on this network — no fee address is set for it in this build.')
+    /*
+      An exact-output order is grossed up before it is priced.
 
-        It is a thousandth of the trade, quoted only to divide into the real
-        output for the price impact figure, and the routing service allows
-        thirty requests per five minutes — spending two of them per keystroke
-        to price a rounding error would starve the quote that matters.
+      `PAY_PORTION` takes its share of whatever the router is holding, so buying
+      exactly the amount the user asked for would pay the wallet fee out of that
+      amount and hand them less than they typed. Asking the pools for a little
+      more instead means the fee comes off the top and the exact amount survives
+      it — the fee is paid in extra input, and the screen says so.
+    */
+    const grossWanted = exactOut ? grossOutForExactOut(wantOut, bips) : 0n
+    /*
+      The spot probe stays on chain.
+
+      It is a thousandth of the trade, quoted only to divide into the real
+      output for the price impact figure, and the routing service allows
+      thirty requests per five minutes — spending two of them per keystroke
+      to price a rounding error would starve the quote that matters.
+    */
+    const taxes = [
+      same(wrappedIn, wetn) ? Promise.resolve<TaxProbe>(null) : detectTax(A.feeOnTransferDetector as Hex | null, wrappedIn, wetn, read),
+      same(wrappedOut, wetn) ? Promise.resolve<TaxProbe>(null) : detectTax(A.feeOnTransferDetector as Hex | null, wrappedOut, wetn, read),
+    ] as const
+
+    let candidate: Candidate | null = null
+    let source: 'api' | 'onchain' = 'onchain'
+    let gasEstimate = 0n
+    let amountOut = 0n
+    let probeIn = 0n
+    let probe: BestQuote | null = null
+    let taxIn: TaxProbe = null
+    let taxOut: TaxProbe = null
+
+    if (exactOut) {
+      /*
+        The routing service is exact-in only — its request carries an input
+        amount and nothing else — so an exact-output trade is priced by the
+        mini-router alone. That is a narrower search, not a worse guarantee: the
+        number it produces is the *input*, and the input is bounded on chain by
+        `amountInMaximum`, which no router can talk the wallet past.
       */
-      probeIn > 0n ? bestRoute(wrappedIn, wrappedOut, probeIn, addresses, read) : Promise.resolve<BestQuote | null>(null),
-      same(wrappedIn, wetn) ? Promise.resolve(null) : detectTax(A.feeOnTransferDetector as Hex | null, wrappedIn, wetn, read),
-      same(wrappedOut, wetn) ? Promise.resolve(null) : detectTax(A.feeOnTransferDetector as Hex | null, wrappedOut, wetn, read),
-    ])
-    if (!routed) {
+      const [outRoute, tIn, tOut] = await Promise.all([bestRouteExactOut(wrappedIn, wrappedOut, grossWanted, addresses, read), ...taxes])
+      taxIn = tIn
+      taxOut = tOut
+      if (outRoute) {
+        candidate = outRoute.best.candidate
+        gasEstimate = outRoute.best.gasEstimate
+        amountIn = outRoute.best.amountIn
+        amountOut = grossWanted
+      }
+      // The probe divides into the input, and here the input is the answer — so it follows the quote rather than riding with it.
+      probeIn = amountIn / 1000n
+      probe = probeIn > 0n ? await bestRoute(wrappedIn, wrappedOut, probeIn, addresses, read) : null
+    } else {
+      probeIn = amountIn / 1000n
+      const [routed, p, tIn, tOut] = await Promise.all([
+        this.route({ chainId, tokenIn: wrappedIn, tokenOut: wrappedOut, amountIn, recipient: owner }, addresses, read),
+        probeIn > 0n ? bestRoute(wrappedIn, wrappedOut, probeIn, addresses, read) : Promise.resolve<BestQuote | null>(null),
+        ...taxes,
+      ])
+      probe = p
+      taxIn = tIn
+      taxOut = tOut
+      if (routed) {
+        candidate = routed.quote.candidate
+        gasEstimate = routed.quote.gasEstimate
+        amountOut = routed.quote.amountOut
+        source = routed.source
+      }
+    }
+    if (!candidate) {
       problems.push('No route on ElectroSwap for this pair.')
       return { ...withState, problems }
     }
-    const best = routed.quote
     /*
       A probe that could not answer is not a probe that said "no tax" — and it
       is not a reason to refuse the swap either.
@@ -338,12 +444,22 @@ export class SwapService {
     */
     const taxUnknown = taxIn === 'unavailable' || taxOut === 'unavailable'
     const taxBips = taxSlippageBips(taxIn, taxOut)
-    const amountOut = best.amountOut
-    const bips = tier.bips
-    const sink = tier.sink
-    // There is no sink contract any more: the fee goes to an address named in
-    // `fees.json`, and a chain that names none has in-wallet swap switched off.
-    if (bips > 0 && !sink) problems.push('In-wallet swaps are off on this network — no fee address is set for it in this build.')
+    /*
+      A token that charges a fee on transfer cannot honour an exact output, so
+      the wallet refuses rather than promising one.
+
+      Exact-in folds a transfer tax into slippage and reports a smaller "you
+      receive": the floor moves, the promise still holds. Exact-out has no such
+      room. The number in the delivering command is measured on the router's
+      balance *before* the transfer out, so the tax is taken after the check
+      passes and the user is handed less than the exact amount they typed —
+      which is the one thing this mode exists to guarantee. Quoting it anyway
+      would be quoting a trade that cannot happen.
+    */
+    if (exactOut && taxBips > 0) {
+      const taxed = (taxOf(taxOut)?.buyFeeBps ?? 0) > 0 ? outView.symbol : inView.symbol
+      problems.push(`${taxed} charges a fee every time it moves, so BoltVault cannot promise you an exact amount of it. Set the amount you pay instead.`)
+    }
     /*
       Slippage and the token's transfer tax were summed with no ceiling. At
       10 000 bps `minimumOut` computes to exactly zero — the swap would accept
@@ -355,29 +471,49 @@ export class SwapService {
     const effectiveSlippage = Math.min(slippageBips + taxBips, MAX_EFFECTIVE_SLIPPAGE_BPS)
     if (slippageBips + taxBips >= BIPS_CEILING)
       problems.push('This token’s transfer tax plus your slippage would leave no minimum received. BoltVault will not sign a swap with no floor.')
-    // What actually lands: the quoter's output, less the wallet fee, less the
-    // token's own transfer tax. The tax used to widen slippage only, so the
-    // "you receive" figure was the pre-tax number.
-    const receive = (netAfterFee(amountOut, bips) * BigInt(10_000 - Math.min(taxBips, 9_999))) / 10_000n
-    // The figure the router will enforce, not a parallel computation of it:
-    // the same function the encoder writes into the delivering command.
-    const minOut = deliveredMinimumOut(amountOut, bips, effectiveSlippage)
+    /*
+      The two guarantees, and which direction each one guards.
+
+      Exact in: the output floats, so the promise is a floor under it —
+      `deliveredMinimumOut`, the very number the encoder writes into the
+      delivering command, after the fee and the token's own transfer tax.
+
+      Exact out: the output is the number the user typed, so there is nothing to
+      floor; the promise is a ceiling over the *input* instead. `maximumIn` is
+      what the router enforces as `amountInMaximum`, and it is the figure the
+      screen and the sheet have to show, because it is the one the user is
+      committing to.
+    */
+    const receive = exactOut ? wantOut : (netAfterFee(amountOut, bips) * BigInt(10_000 - Math.min(taxBips, 9_999))) / 10_000n
+    const minOut = exactOut ? wantOut : deliveredMinimumOut(amountOut, bips, effectiveSlippage)
+    const maxIn = exactOut ? maximumInFor(amountIn, effectiveSlippage) : 0n
     const spot = probe ? rateOf(probeIn, probe.best.amountOut, inView.decimals, outView.decimals) : null
     const impact = priceImpactPct(amountIn, amountOut, spot, inView.decimals, outView.decimals)
 
+    /*
+      What the allowance and the balance have to cover is what the swap CAN
+      spend, not what it is expected to. In the exact-in direction those are the
+      same number; in the exact-out direction the estimate is smaller than the
+      ceiling, and sizing the Permit2 permit off the estimate would leave the
+      router unable to pull the last few percent — a revert, after three
+      signatures, for a swap the wallet had said was fine.
+    */
+    const spendCeiling = exactOut ? maxIn : amountIn
     const steps: SwapStep[] = []
     if (!nativeIn) {
-      if (erc20Allowance < amountIn) steps.push('approve')
-      if (!p2 || !permitCovers({ amount: p2[0], expiration: Number(p2[1]), nonce: Number(p2[2]) }, amountIn, nowS)) steps.push('permit')
+      if (erc20Allowance < spendCeiling) steps.push('approve')
+      if (!p2 || !permitCovers({ amount: p2[0], expiration: Number(p2[1]), nonce: Number(p2[2]) }, spendCeiling, nowS)) steps.push('permit')
     }
     steps.push('swap')
-    const gas = best.gasEstimate + 90_000n + (steps.includes('approve') ? 55_000n : 0n) + (steps.includes('permit') ? 35_000n : 0n)
+    const gas = gasEstimate + 90_000n + (steps.includes('approve') ? 55_000n : 0n) + (steps.includes('permit') ? 35_000n : 0n)
     const feeWei = gas * gasPrice
-    if (amountIn > balanceIn) problems.push(`Not enough ${inView.symbol}.`)
-    if ((nativeIn ? amountIn : 0n) + feeWei > nativeBalance) problems.push('Not enough ETN for the network fee.')
+    if (spendCeiling > balanceIn) problems.push(`Not enough ${inView.symbol}.`)
+    if ((nativeIn ? spendCeiling : 0n) + feeWei > nativeBalance) problems.push('Not enough ETN for the network fee.')
 
     return {
       ...withState,
+      amountInRaw: amountIn.toString(),
+      maximumInRaw: maxIn.toString(),
       amountOutRaw: amountOut.toString(),
       receiveRaw: receive.toString(),
       minimumOutRaw: minOut.toString(),
@@ -386,7 +522,7 @@ export class SwapService {
       taxBips,
       taxUnknown,
       fee: { ...withState.fee, amountRaw: feeAmount(amountOut, bips).toString() },
-      route: { label: best.candidate.label, source: routed.source, hops: best.candidate.route.hops.map((h) => (h.kind === 'v3' ? { kind: 'v3' as const, tokenIn: h.tokenIn, tokenOut: h.tokenOut, fee: h.fee } : { kind: 'v2' as const, tokenIn: h.tokenIn, tokenOut: h.tokenOut })) },
+      route: { label: candidate.label, source, hops: candidate.route.hops.map((h) => (h.kind === 'v3' ? { kind: 'v3' as const, tokenIn: h.tokenIn, tokenOut: h.tokenOut, fee: h.fee } : { kind: 'v2' as const, tokenIn: h.tokenIn, tokenOut: h.tokenOut })) },
       gasEstimate: gas.toString(),
       steps,
       quotedAt: d.platform.now(),
@@ -413,7 +549,18 @@ export class SwapService {
     const nativeIn = input.tokenIn === 'native'
     const nativeOut = input.tokenOut === 'native'
     const tokenIn = nativeIn ? wetn : (input.tokenIn as Hex)
+    const exactOut = first.tradeType === 'exactOut'
     const amountIn = BigInt(first.amountInRaw)
+    /*
+      The allowance and the permit are sized to the ceiling, not the estimate.
+
+      In the exact-out direction the router decides how much it actually needs
+      when it touches the pools, and it may need anything up to `maximumIn`. A
+      permit for the quoted amount would be a permit for slightly too little,
+      and the swap would revert at the last step after the user had already
+      signed twice.
+    */
+    const spendCeiling = exactOut ? BigInt(first.maximumInRaw) : amountIn
     const settings = await d.settings.get()
     const tag = d.platform.now().toString(36)
     let permit: PermitInput | undefined
@@ -429,7 +576,7 @@ export class SwapService {
             origin: 'internal:swap:approve',
             chainId,
             accountId: input.accountId,
-            tx: { from: owner, to: tokenIn, value: '0x0', data: encodeApprovePermit2(permit2, settings.exactApprovals ? amountIn : maxUint256).data },
+            tx: { from: owner, to: tokenIn, value: '0x0', data: encodeApprovePermit2(permit2, settings.exactApprovals ? spendCeiling : maxUint256).data },
             clientRequestId: `swap:${tag}:approve`,
           }),
       })
@@ -441,10 +588,10 @@ export class SwapService {
           const [r] = await readMany(d.chains, chainId, [{ address: permit2, abi: PERMIT2_ABI, functionName: 'allowance', args: [owner, tokenIn, ur] }])
           const nonce = r?.ok && Array.isArray(r.value) ? Number((r.value as [bigint, number, number])[2]) : 0
           const nowS = Math.floor(d.platform.now() / 1000)
-          const typed = permitSingleTypedData({ chainId, permit2, token: tokenIn, amount: amountIn, nonce, spender: ur, nowSeconds: nowS })
+          const typed = permitSingleTypedData({ chainId, permit2, token: tokenIn, amount: spendCeiling, nonce, spender: ur, nowSeconds: nowS })
           const { requestId, result } = await d.provider.runInternal({ kind: 'sign_typed_data', origin: 'internal:swap:permit', chainId, accountId: input.accountId, from: owner, typedData: typed, version: 'v4', clientRequestId: `swap:${tag}:permit` })
           const settled = result.then((sig) => {
-            permit = { token: tokenIn, amount: amountIn, expiration: nowS + PERMIT_EXPIRY_S, nonce, spender: ur, sigDeadline: BigInt(nowS + PERMIT_EXPIRY_S), signature: sig as Hex }
+            permit = { token: tokenIn, amount: spendCeiling, expiration: nowS + PERMIT_EXPIRY_S, nonce, spender: ur, sigDeadline: BigInt(nowS + PERMIT_EXPIRY_S), signature: sig as Hex }
             return sig
           })
           settled.catch(() => undefined)
@@ -477,12 +624,20 @@ export class SwapService {
             bound: a move inside it is what they said they would accept, and a
             move beyond it is a different trade that needs asking again.
           */
-          const before = BigInt(first.amountOutRaw)
-          const now = BigInt(quote.amountOutRaw)
-          if (before > 0n && now < before) {
-            const droppedBips = ((before - now) * 10_000n) / before
-            if (droppedBips > BigInt(first.slippageBips))
-              throw new EngineError('invalid_argument', `The price moved by ${(Number(droppedBips) / 100).toFixed(2)}% while this swap was being set up, which is more than your slippage allows. Start it again to see the new price.`)
+          /*
+            And "worse" means the opposite thing in the two directions. An
+            exact-in swap gets worse when the output falls; an exact-out swap
+            gets worse when the input rises, because the output is fixed and
+            the cost is what moves. Comparing outputs in the exact-out
+            direction would compare two identical numbers and never fire.
+          */
+          const before = exactOut ? BigInt(first.amountInRaw) : BigInt(first.amountOutRaw)
+          const now = exactOut ? BigInt(quote.amountInRaw) : BigInt(quote.amountOutRaw)
+          const worse = exactOut ? now > before : now < before
+          if (before > 0n && worse) {
+            const movedBips = (((exactOut ? now - before : before - now) * 10_000n) / before)
+            if (movedBips > BigInt(first.slippageBips))
+              throw new EngineError('invalid_argument', `The price moved by ${(Number(movedBips) / 100).toFixed(2)}% while this swap was being set up, which is more than your slippage allows. Start it again to see the new price.`)
           }
           d.flows.setQuote(flowId, quote)
         }
@@ -490,11 +645,8 @@ export class SwapService {
         const sink = (quote.fee.sink ?? null) as Hex | null
         if (bips > 0 && !sink) throw new EngineError('invalid_argument', 'In-wallet swaps are off on this network — no fee address is set for it in this build.')
         const nowS = Math.floor(d.platform.now() / 1000)
-        const enc = encodeSwap({
+        const shared = {
           route: { hops: quote.route.hops.map((h) => encodableHop(h)) },
-          amountIn,
-          quotedOut: BigInt(quote.amountOutRaw),
-          slippageBips: quote.slippageBips + quote.taxBips,
           nativeIn,
           nativeOut,
           wrappedNative: wetn,
@@ -503,7 +655,22 @@ export class SwapService {
           ...(permit ? { permit } : {}),
           deadline: BigInt(nowS + DEADLINE_S),
           universalRouter: ur,
-        })
+        }
+        /*
+          The encoded ceiling can never exceed what was actually authorised.
+
+          A re-quote inside the user's slippage can raise the cost slightly, and
+          its own ceiling with it — but the Permit2 signature and the ERC-20
+          approval were given for the ceiling of the FIRST quote, minutes ago.
+          Writing the larger number into `amountInMaximum` would promise the
+          router money Permit2 will not release: the same revert, but discovered
+          in the pool instead of in the wallet, and with the user believing they
+          had agreed to the larger figure.
+        */
+        const ceiling = BigInt(quote.maximumInRaw)
+        const enc = exactOut
+          ? encodeSwapExactOut({ ...shared, amountOut: BigInt(quote.receiveRaw), maximumIn: ceiling < spendCeiling ? ceiling : spendCeiling })
+          : encodeSwap({ ...shared, amountIn, quotedOut: BigInt(quote.amountOutRaw), slippageBips: quote.slippageBips + quote.taxBips })
         return d.provider.runInternal({
           kind: 'send_transaction',
           origin: 'internal:swap',
@@ -528,14 +695,26 @@ export class SwapService {
   }
 }
 
-const InputSchema = z.object({
-  accountId: AccountIdSchema,
-  chainId: z.number().int().positive(),
-  tokenIn: z.string(),
-  tokenOut: z.string(),
-  amountIn: z.string().max(80),
-  slippageBips: z.number().int().min(1).max(5_000).optional(),
-})
+/*
+  One schema for both directions. `amountIn` stays optional rather than
+  required-but-ignored: an exact-out caller has no input amount to send, and a
+  field that must be present and must not be read is a field that will one day
+  be read.
+*/
+const InputSchema = z
+  .object({
+    accountId: AccountIdSchema,
+    chainId: z.number().int().positive(),
+    tokenIn: z.string(),
+    tokenOut: z.string(),
+    amountIn: z.string().max(80).optional(),
+    amountOut: z.string().max(80).optional(),
+    tradeType: z.enum(['exactIn', 'exactOut']).optional(),
+    slippageBips: z.number().int().min(1).max(5_000).optional(),
+  })
+  .refine((v) => (v.tradeType === 'exactOut' ? v.amountOut !== undefined : v.amountIn !== undefined), {
+    message: 'Say which amount you fixed: amountIn for an exact-in swap, amountOut for an exact-out one.',
+  })
 
 export function swapNamespace(swap: SwapService): NamespaceSpec {
   return {

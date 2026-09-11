@@ -11,6 +11,14 @@ export const QUOTER_V2_ABI = parseAbi([
   'function quoteExactInputSingle((address tokenIn, address tokenOut, uint256 amountIn, uint24 fee, uint160 sqrtPriceLimitX96) params) returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)',
   'function quoteExactInput(bytes path, uint256 amountIn) returns (uint256 amountOut, uint160[] sqrtPriceX96AfterList, uint32[] initializedTicksCrossedList, uint256 gasEstimate)',
   'function quoteExactOutputSingle((address tokenIn, address tokenOut, uint256 amount, uint24 fee, uint160 sqrtPriceLimitX96) params) returns (uint256 amountIn, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)',
+  /*
+    The multi-hop exact-output quote. Its `path` runs OUTPUT first — V3 walks an
+    exact-output path backwards, from the token you want to the token you pay —
+    which is the opposite of `quoteExactInput`'s. `v3PackedPathExactOut` is the
+    only place that reversal is expressed, so the quoter and the router are
+    always handed the same bytes.
+  */
+  'function quoteExactOutput(bytes path, uint256 amountOut) returns (uint256 amountIn, uint160[] sqrtPriceX96AfterList, uint32[] initializedTicksCrossedList, uint256 gasEstimate)',
 ])
 
 /** Uniswap's MixedRouteQuoterV1: V2 hops carry the fee sentinel 0x800000 in the path. */
@@ -18,7 +26,11 @@ export const MIXED_ROUTE_QUOTER_ABI = parseAbi([
   'function quoteExactInput(bytes path, uint256 amountIn) returns (uint256 amountOut, uint160[] v3SqrtPriceX96AfterList, uint32[] v3InitializedTicksCrossedList, uint256 v3SwapGasEstimate)',
 ])
 
-export const V2_ROUTER_ABI = parseAbi(['function getAmountsOut(uint256 amountIn, address[] path) view returns (uint256[] amounts)'])
+export const V2_ROUTER_ABI = parseAbi([
+  'function getAmountsOut(uint256 amountIn, address[] path) view returns (uint256[] amounts)',
+  /** V2's exact-output quote. Unlike V3's, its `path` stays in trade order — input first. */
+  'function getAmountsIn(uint256 amountOut, address[] path) view returns (uint256[] amounts)',
+])
 
 export const V2_FACTORY_ABI = parseAbi(['function getPair(address tokenA, address tokenB) view returns (address pair)'])
 export const V3_FACTORY_ABI = parseAbi(['function getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)'])

@@ -73,6 +73,16 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
   const [filter, setFilter] = useState<Filter>('all')
   const [open, setOpen] = useState<ActivityEntry | null>(null)
   const [chains, setChains] = useState<ChainView[]>([])
+  /*
+    Whether the open row can still be replaced, and why not when it cannot
+    (§8.12). The engine answers both in one call, and the reason is shown rather
+    than the control hidden: on Electroneum a block is five seconds, so there is
+    genuinely nothing to speed up, and a user who has just watched a transaction
+    sit for a minute deserves to be told that instead of finding no button.
+  */
+  const [replace, setReplace] = useState<{ can: boolean; why: string | null } | null>(null)
+  const [replaceBusy, setReplaceBusy] = useState(false)
+  const [replaceError, setReplaceError] = useState<string | null>(null)
   // Clearing is irreversible, so it costs a deliberate second press (§8.12).
   const [clearing, setClearing] = useState(false)
   const [clearError, setClearError] = useState<string | null>(null)
@@ -87,6 +97,45 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
   useEffect(() => {
     engine.chains.list().then(setChains, () => undefined)
   }, [engine])
+
+  // Asked only of a row that is still waiting: a settled transaction has nothing to replace, and saying so on every row is noise.
+  useEffect(() => {
+    setReplace(null)
+    setReplaceError(null)
+    if (!open || open.status !== 'pending') return
+    let alive = true
+    engine.tx.replaceable({ id: open.id }).then(
+      (r) => alive && setReplace(r),
+      () => undefined,
+    )
+    return () => {
+      alive = false
+    }
+  }, [engine, open])
+
+  /*
+    Both verbs are the same move — a new transaction at the same nonce, priced
+    to evict the old one — and both go through the ordinary signing sheet, so
+    the user sees what they are signing and the firewall sees it too. Nothing is
+    signed here; this only raises the sheet.
+  */
+  const replaceWith = (how: 'speedUp' | 'cancel'): void => {
+    if (!open) return
+    setReplaceBusy(true)
+    setReplaceError(null)
+    const started = how === 'speedUp' ? engine.tx.speedUp({ id: open.id }) : engine.tx.cancel({ id: open.id })
+    started.then(
+      (r) => {
+        setReplaceBusy(false)
+        setOpen(null)
+        router.navigate('sign', { requestId: r.requestId })
+      },
+      (err: unknown) => {
+        setReplaceBusy(false)
+        setReplaceError(err instanceof Error ? err.message : String(err))
+      },
+    )
+  }
 
   // Inbound transfers: the engine scans every enabled chain in turn, debounced and on an alarm (plan A2).
   const scan = useCached<ScanSummary>({
@@ -311,6 +360,41 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
               <Body tone="mute" size="caption" numberOfLines={1}>
                 {open.hash}
               </Body>
+            ) : null}
+            {/*
+              Still waiting (§8.12). Speed up repeats the same call at the same
+              place in the queue for a higher fee; cancel puts an empty
+              transaction there instead, so the original can never land. Only
+              one of the two can win, and either way it costs a fee.
+            */}
+            {open.status === 'pending' && replace ? (
+              <Plate gap="$2" testID="activity-replace">
+                <Body size="caption">{t({ id: 'activity.stuck', message: 'Still waiting' })}</Body>
+                {replace.can ? (
+                  <>
+                    <Body tone="mute" size="caption">
+                      {t({
+                        id: 'activity.stuck.body',
+                        message: 'It has been sent but no block has taken it yet. You can offer the network more to pick it up sooner, or replace it with an empty transaction so it never happens. Each costs its own network fee, and only one of them can win.',
+                      })}
+                    </Body>
+                    <Row gap="$2" flexWrap="wrap">
+                      <Key label={t({ id: 'activity.speedUp', message: 'Speed up' })} kind="secondary" size="compact" disabled={replaceBusy} onPress={() => replaceWith('speedUp')} testID="activity-speed-up" />
+                      <Key label={t({ id: 'approval.cancel', message: 'Cancel' })} kind="danger" size="compact" disabled={replaceBusy} onPress={() => replaceWith('cancel')} testID="activity-cancel-tx" />
+                    </Row>
+                  </>
+                ) : (
+                  // The reason, not an absent control: a missing button explains nothing.
+                  <Body tone="mute" size="caption" testID="activity-replace-why">
+                    {replace.why ?? t({ id: 'activity.stuck.no', message: 'There is nothing to replace on this one.' })}
+                  </Body>
+                )}
+                {replaceError ? (
+                  <Body tone="burn" size="caption" testID="activity-replace-error">
+                    {replaceError}
+                  </Body>
+                ) : null}
+              </Plate>
             ) : null}
             {explorerFor(open) && host.openUrl ? <Key label={t({ id: 'activity.explorer', message: 'Open in explorer' })} kind="secondary" size="compact" onPress={() => void host.openUrl?.(explorerFor(open) ?? '')} testID="activity-explorer" /> : null}
           </Column>

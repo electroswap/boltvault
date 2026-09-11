@@ -192,7 +192,38 @@ export const SettingsSchema = z.object({
   pushEnabled: z.boolean(),
   /** Crash reports (§3.7): off by default; scrubbed; only to ElectroSwap. */
   crashReports: z.boolean(),
+  /**
+   * The send allow-list is on (§3.4 point 6, Settings › Spending).
+   *
+   * It was declared, stored, and read by nothing at all — the one setting in
+   * here that named a safeguard the product did not perform. It is now the
+   * switch behind `sendAllowList`, and the firewall refuses a transfer to an
+   * address that is not on it.
+   */
   sendWhitelist: z.boolean(),
+  /**
+   * The addresses a transfer may go to while `sendWhitelist` is on. Lowercase
+   * and de-duplicated by the store; capped because a list nobody can read
+   * through is not a list anybody can trust.
+   *
+   * `.default([])`, not required: the settings document is validated on every
+   * read and a required key would quarantine every existing user's settings
+   * back to the defaults on first launch after this shipped.
+   */
+  sendAllowList: z
+    .array(z.string().regex(/^0x[0-9a-fA-F]{40}$/))
+    .max(64)
+    .default([]),
+  /**
+   * When a send asks the user to unlock again (§3.4 point 6): a share of the
+   * balance of the token being moved, 1–100.
+   *
+   * A percentage of a balance *is* an amount in token units — the comparison
+   * is `amount` against `balance`, both in that token's own base units, and no
+   * price is consulted. A fiat threshold would put a display-only feed (§2.8)
+   * in charge of deciding when the wallet asks for a second factor.
+   */
+  largeSendPercent: z.number().int().min(1).max(100).default(10),
   autoLock: AutoLockSchema,
   displayCurrency: z.enum(['USD', 'ETN']),
   reducedMotion: z.boolean(),
@@ -232,6 +263,21 @@ export const PortfolioRowSchema = z.object({
 })
 export type PortfolioRow = z.infer<typeof PortfolioRowSchema>
 
+/**
+ * One reading of a scope's display total (§8.2 "History chart").
+ *
+ * It is a record of what this wallet has *shown*, not a ledger: the value is
+ * the sum of the priced rows at that moment, and prices are display-only
+ * (§2.8). A point exists only where the wallet was open and a refresh landed,
+ * so gaps in the series are real gaps in the looking, never interpolation.
+ */
+export const PortfolioPointSchema = z.object({
+  at: z.number().int().nonnegative(),
+  /** The display total at `at`; null when nothing in the scope had a price. */
+  total: z.number().nullable(),
+})
+export type PortfolioPoint = z.infer<typeof PortfolioPointSchema>
+
 export const PortfolioSnapshotSchema = z.object({
   accountId: AccountIdSchema,
   chainIds: z.array(z.number().int().positive()),
@@ -245,6 +291,14 @@ export const PortfolioSnapshotSchema = z.object({
   observedAt: z.number().int().nonnegative(),
   /** True when this came from the last-good snapshot rather than a fresh read. */
   stale: z.boolean(),
+  /**
+   * What the total has been in this scope, oldest first and bounded (§8.2).
+   *
+   * Optional on purpose. The snapshot store is one sealed blob validated as a
+   * whole, so a key that older stored snapshots lack would fail the parse and
+   * silently empty every account's last-good snapshot on upgrade.
+   */
+  history: z.array(PortfolioPointSchema).optional(),
 })
 export type PortfolioSnapshot = z.infer<typeof PortfolioSnapshotSchema>
 
@@ -512,6 +566,14 @@ export const SwapQuoteSchema = z.object({
    * cached before this field still parse.
    */
   taxUnknown: z.boolean().default(false),
+  /** Which side of the trade the user fixed (§8.6). Defaulted so quotes cached before this field still parse. */
+  tradeType: z.enum(['exactIn', 'exactOut']).default('exactIn'),
+  /**
+   * Exact-out only: the most the swap may spend. Slippage guards the input in
+   * that direction — there is no floor to put under an output the user typed.
+   * '0' on an exact-in quote.
+   */
+  maximumInRaw: z.string().default('0'),
   fee: z.object({
     bips: z.number().int().nonnegative(),
     tier: z.number().int().nonnegative(),

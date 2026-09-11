@@ -9,8 +9,10 @@ import type { WalletKitLike } from '@boltvault/connect'
 import { ElectroSwapClient } from '@boltvault/electroswap'
 import { isElectroneumChainId } from '@boltvault/chains'
 import type { Platform } from '@boltvault/platform'
+import type { ApprovalIntent } from '@boltvault/protocol'
 import { z } from 'zod'
 import { ActivityStore } from './activityStore'
+import type { ApprovalPayload } from './approvalPayloads'
 import { createSealedStores } from './blobs'
 import { FeeLadders } from './feeLadder'
 import { migrateSealed } from './migrateSealed'
@@ -27,6 +29,7 @@ import { AllowancesService, allowancesNamespace } from './namespaces/allowances'
 import { chainsNamespace, ChainsService, type HeadSource } from './namespaces/chains'
 import { ContactsStore, contactsNamespace } from './namespaces/contacts'
 import { NamesService, namesNamespace } from './namespaces/names'
+import { SecurityService, securityNamespace } from './namespaces/security'
 import { PortfolioService, portfolioNamespace } from './namespaces/portfolio'
 import { BridgeService, bridgeNamespace } from './namespaces/bridge'
 import { Governor, governedFetch } from './governor'
@@ -141,6 +144,7 @@ export interface Engine {
   readonly tokens: TokensService
   readonly portfolio: PortfolioService
   readonly names: NamesService
+  readonly security: SecurityService
   readonly allowances: AllowancesService
   readonly contacts: ContactsStore
   readonly send: SendService
@@ -277,7 +281,9 @@ export function createEngine(deps: EngineDeps): Engine {
   })
   const approvals = new ApprovalStore(deps.platform, host.events)
   const sites = new SitesService(deps.platform, host.events, sealed.sites)
-  const chains = new ChainsService(deps.platform, host.events, deps.heads, rpcFetch)
+  // The governor is handed over so Settings › Networks can say which host is
+  // cooling and which has refused this wallet outright (`hosts()`).
+  const chains = new ChainsService(deps.platform, host.events, deps.heads, rpcFetch, undefined, governor)
   const activity = new ActivityStore(deps.platform, host.events, dek)
   const contacts = new ContactsStore(deps.platform, host.events, dek)
   const relayFor =
@@ -420,7 +426,18 @@ export function createEngine(deps: EngineDeps): Engine {
     snapshots: sealed.portfolio,
     looks: sealed.looks,
   })
-  const names = new NamesService(chains, () => deps.platform.now())
+  const names = new NamesService({ platform: deps.platform, chains, vault, provider })
+  /*
+    The pre-assessment reaches the firewall through the provider's own payload
+    builder — the function that builds every sheet — rather than through a
+    second copy of the pipeline. `payloadFor` is private to `ProviderService`
+    because nothing outside the approval path had ever needed it; narrowing the
+    service to that one call here keeps the preview and the sheet provably the
+    same code, which is the property §3.4 cares about. Opening the method up
+    properly is a one-line change in provider.ts.
+  */
+  const payloadFor = (provider as unknown as { payloadFor(intent: ApprovalIntent): Promise<ApprovalPayload> }).payloadFor.bind(provider)
+  const security = new SecurityService({ vault, chains, settings, payloadFor })
   const allowances = new AllowancesService({
     platform: deps.platform,
     bus: host.events,
@@ -760,6 +777,7 @@ export function createEngine(deps: EngineDeps): Engine {
   host.register('tokens', tokensNamespace(tokens))
   host.register('portfolio', portfolioNamespace(portfolio))
   host.register('names', namesNamespace(names))
+  host.register('security', securityNamespace(security))
   host.register('allowances', allowancesNamespace(allowances))
   host.register('contacts', contactsNamespace(contacts))
   host.register('send', sendNamespace(send))
@@ -815,6 +833,7 @@ export function createEngine(deps: EngineDeps): Engine {
     tokens,
     portfolio,
     names,
+    security,
     allowances,
     contacts,
     send,

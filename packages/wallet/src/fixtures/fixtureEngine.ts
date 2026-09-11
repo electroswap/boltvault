@@ -196,6 +196,9 @@ export async function createFixtureEngine(scenario: FixtureScenario, options: Fi
         amountOutRaw: amountOut.toString(),
         receiveRaw: receive.toString(),
         minimumOutRaw: minOut.toString(),
+        // The harness quotes exact-in; exact-out has no ceiling to report.
+        tradeType: 'exactIn' as const,
+        maximumInRaw: '0',
         rate: 0.00296,
         priceImpactPct: 0.12,
         slippageBips: Number(slippage),

@@ -56,6 +56,7 @@ import type { ActivityStore } from '../activityStore'
 import {
   WatchAssetOptionsSchema,
   ConnectDecisionDataSchema,
+  applyGasDecision,
   type ApprovalPayload,
   type AssessmentView,
   type PreparedTx,
@@ -235,8 +236,25 @@ export class ProviderService {
       if (change.kind === 'disconnected') {
         void this.flow.disconnected(change.origin)
         void deps.approvals.rejectAll((r) => r.origin === change.origin)
-      } else this.flow.chainChanged(change.origin, change.chainId)
+      } else if (change.kind === 'account') void this.reseat(change.origin, change.accountId)
+      else this.flow.chainChanged(change.origin, change.chainId)
     })
+  }
+
+  /**
+   * The user moved a site to another account (Settings › Connected sites).
+   *
+   * The address is resolved here rather than handed in by the screen: the
+   * addresses a dApp is given are the vault's word, never the UI's. The event
+   * goes to the ports of this origin alone (§4.6) — the Home tab's seat and
+   * every other site's session are untouched — and an account that has since
+   * gone yields an empty array, which is the honest thing to tell a page.
+   */
+  private async reseat(origin: string, accountId: string): Promise<void> {
+    const account = (await this.deps.vault.accounts().catch(() => [])).find((a) => a.id === accountId)
+    const addresses = account ? [account.address] : []
+    this.flow.accountsChanged(origin, addresses)
+    await this.deps.sites.noteExposed(origin, addresses).catch(() => undefined)
   }
 
   /** Serve one dApp channel. The origin comes from the transport, never from a message. */
@@ -823,6 +841,20 @@ export class ProviderService {
       balances,
       nftFloors: await this.nftFloors(chainId, request),
       ethSignEnabled: settings.ethSignEnabled,
+      /*
+        Settings › Spending, in token units (§3.4 point 6).
+
+        The threshold used to be a tenth of the balance written into the rule
+        with no setting behind it, and `sendWhitelist` was stored and read by
+        nothing. Both arrive here now, and the rules do the rest. Nothing in
+        this object is a fiat amount: a price feed must never be what decides
+        whether a signature needs a second factor.
+      */
+      spendPolicy: {
+        largeSendPercent: settings.largeSendPercent,
+        allowList: settings.sendAllowList as Hex[],
+        allowListOnly: settings.sendWhitelist,
+      },
       now: d.platform.now(),
       // Our own swap must pay exactly what the schedule said (T10); anything else never sees the field.
       ...(origin === 'internal:swap' ? { expectedFee } : {}),
@@ -1352,8 +1384,18 @@ export class ProviderService {
       }
       case 'send_transaction': {
         const payload = request.payload as Extract<ApprovalPayload, { kind: 'send_transaction' }>
-        if (intent.signOnly) return this.signOnly(intent, payload.tx)
-        return this.broadcast(intent, request, payload.tx, payload.assessment)
+        /*
+          The sheet may change the price of gas and nothing else. It is clamped
+          and filtered here rather than trusted, because this is the last point
+          before a signature: a decision payload carrying `to`, `value`, `data`
+          or `nonce` must not be able to reach the signer through this door.
+          `prepare` runs before the approval exists, so a choice made on the
+          sheet can only arrive this way.
+        */
+        const fee = applyGasDecision(payload.tx, data)
+        const tx = fee ? { ...payload.tx, ...fee } : payload.tx
+        if (intent.signOnly) return this.signOnly(intent, tx)
+        return this.broadcast(intent, request, tx, payload.assessment)
       }
     }
   }

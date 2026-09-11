@@ -1,15 +1,16 @@
 /**
  * The sheets behind the account rail (plan C2): the row menu, the technical
- * details, a confirm for anything destructive, rename, and the recovery
- * phrase reveal (password re-verified; secrets-allowed surfaces only).
+ * details, a confirm for anything destructive, and rename.
+ *
+ * The recovery-phrase reveal used to live here too. It moved to Accounts.tsx
+ * when it learned to take any factor the vault is wrapped under, not only the
+ * password.
  */
-import { Body, Column, Icon, IconButton, Input, Key, Pressable, Row, Sheet, WordGrid, paint, shortAddress, type IconName } from '@boltvault/ui'
+import { Body, Column, Icon, IconButton, Input, Key, Pressable, Row, Sheet, paint, shortAddress, type IconName } from '@boltvault/ui'
 import type { AccountView, SeedView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
-import { useEngine } from '../../engine/EngineProvider'
 import { useHost } from '../../host'
 import { t } from '../../i18n'
-import { useSecretGuard } from '../../screens/onboarding/useSecretGuard'
 import { derivationLabel, kindLabel } from './AccountRow'
 
 export interface MenuItem {

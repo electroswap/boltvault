@@ -124,6 +124,91 @@ export const ConnectDecisionDataSchema = z.object({
 })
 export type ConnectDecisionData = z.infer<typeof ConnectDecisionDataSchema>
 
+/**
+ * What the signing sheet sends back when the user changed the network fee
+ * (master plan §8.4, §8.15).
+ *
+ * The same shape as the Connect decision: a typed object on
+ * `ApprovalDecision.data`, parsed where the signature is made rather than
+ * trusted from a page. The transaction is prepared before the sheet exists —
+ * that is what gives the firewall something to assess and the sheet something
+ * to render — so a fee chosen at decision time is applied to the prepared
+ * record on the way to the signer, and to nothing else. Only the price of gas
+ * moves; `to`, `value`, `data` and `nonce` are the bytes the user was shown and
+ * cannot be touched from here.
+ *
+ * The gas LIMIT is deliberately absent. Raising it changes nothing (unused gas
+ * is refunded) and lowering it below the estimate buys an out-of-gas revert
+ * that still costs the whole limit — a control whose only working setting is
+ * the one it already has is not a control.
+ */
+export const GasDecisionDataSchema = z.object({
+  maxFeePerGas: HexSchema.optional(),
+  maxPriorityFeePerGas: HexSchema.optional(),
+  gasPrice: HexSchema.optional(),
+})
+export type GasDecisionData = z.infer<typeof GasDecisionDataSchema>
+
+/**
+ * How far below the node's own suggestion a hand-set fee may go.
+ *
+ * The suggestion for an EIP-1559 chain is `baseFee × 2 + tip`, so half of it is
+ * a shade above the current base fee — which is the real boundary, because a
+ * ceiling under the base fee is not a slow transaction, it is one no block can
+ * ever include. Below half, the wallet is no longer letting someone save money;
+ * it is letting them sign something that will sit in a pool until it is dropped.
+ */
+export const GAS_FLOOR_PERCENT = 50
+/**
+ * And how far above, before a hurry becomes a typo. Four times the going rate
+ * is more than any congestion here has ever asked for, and the difference
+ * between 4× and 400× is a decimal point in a hurry.
+ */
+export const GAS_CEILING_PERCENT = 400
+
+const hexOf = (n: bigint): string => `0x${n.toString(16)}`
+
+/** The price per unit of gas the node itself suggested, whichever fee model this chain uses. */
+export function suggestedPerGas(tx: PreparedTx): bigint {
+  return BigInt((tx.type === 'eip1559' ? tx.maxFeePerGas : tx.gasPrice) ?? '0x0')
+}
+
+/** The band a hand-set price per unit of gas has to stay inside. */
+export function gasBand(tx: PreparedTx): { floor: bigint; suggested: bigint; ceiling: bigint } {
+  const suggested = suggestedPerGas(tx)
+  return { floor: (suggested * BigInt(GAS_FLOOR_PERCENT)) / 100n, suggested, ceiling: (suggested * BigInt(GAS_CEILING_PERCENT)) / 100n }
+}
+
+/** Bring a chosen price per unit of gas inside the band. */
+export function clampPerGas(tx: PreparedTx, chosen: bigint): bigint {
+  const { floor, ceiling } = gasBand(tx)
+  return chosen < floor ? floor : chosen > ceiling ? ceiling : chosen
+}
+
+/**
+ * The fee fields to sign with, given whatever the sheet sent back.
+ *
+ * Null means "nothing was chosen" — a decision from some other sheet, a
+ * malformed payload, or a decision that named no fee — and the caller signs the
+ * prepared transaction unchanged. The clamp is applied HERE rather than trusted
+ * from the sheet, because the sheet is a page and this is the last place before
+ * a signature.
+ */
+export function applyGasDecision(tx: PreparedTx, data: unknown): Pick<PreparedTx, 'maxFeePerGas' | 'maxPriorityFeePerGas' | 'gasPrice'> | null {
+  const parsed = GasDecisionDataSchema.safeParse(data)
+  if (!parsed.success) return null
+  const choice = parsed.data
+  if (tx.type === 'eip1559') {
+    if (choice.maxFeePerGas === undefined) return null
+    const max = clampPerGas(tx, BigInt(choice.maxFeePerGas))
+    // A tip is paid out of the ceiling it sits under, so it can never exceed it.
+    const wanted = choice.maxPriorityFeePerGas !== undefined ? BigInt(choice.maxPriorityFeePerGas) : BigInt(tx.maxPriorityFeePerGas ?? '0x0')
+    return { maxFeePerGas: hexOf(max), maxPriorityFeePerGas: hexOf(wanted > max ? max : wanted) }
+  }
+  if (choice.gasPrice === undefined) return null
+  return { gasPrice: hexOf(clampPerGas(tx, BigInt(choice.gasPrice))) }
+}
+
 export function parseApprovalPayload(payload: unknown): ApprovalPayload | null {
   const r = ApprovalPayloadSchema.safeParse(payload)
   return r.success ? r.data : null

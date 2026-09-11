@@ -110,6 +110,51 @@ export function routerMinimumOut(quotedOut: bigint, slippageBips: number): bigin
   return quotedOut - (quotedOut * BigInt(slippageBips)) / BIPS
 }
 
+/*
+  ─── Exact output ────────────────────────────────────────────────────────────
+
+  Everything above answers "I am spending this much; what do I get, at worst?"
+  Exact output asks the opposite question, and two things invert with it.
+
+  1. Slippage protects the other side. Exact-in guarantees a MINIMUM received
+     and lets the input stand; exact-out fixes the output and guarantees a
+     MAXIMUM spent. `deliveredMinimumOut` is meaningless in this direction —
+     the delivered amount is the number the user typed — and `maximumIn` takes
+     its place as the figure the router enforces and the sheet must show.
+
+  2. The wallet fee is charged on top, not out of the middle. `PAY_PORTION`
+     takes its bips of whatever the router is holding, so if the router bought
+     exactly the amount asked for, the fee would come out of it and the user
+     would receive less than the exact amount they typed — which is the one
+     promise this whole mode makes. (The universal-router SDK does exactly that:
+     for an exact-output trade with a fee it subtracts the fee from
+     `minimumAmountOut` and sweeps the remainder.) So the router is asked for a
+     grossed-up amount instead, the fee is taken from the gross, and what is
+     left is the exact amount. The fee bips and the sink are untouched — the
+     firewall's FEE_SINK/FEE_TIER assertion sees the same single PAY_PORTION at
+     the same pinned sink — but the fee is now paid in extra input, which is why
+     the screen says so out loud.
+*/
+
+/**
+ * What the router must produce so that, after the wallet fee is taken from it,
+ * the user is still left with `exactOut`.
+ *
+ * Rounded UP: rounding down would leave the user a wei short of the exact
+ * amount, which is precisely the thing the mode exists to prevent.
+ */
+export function grossOutForExactOut(exactOut: bigint, feeBips: number): bigint {
+  if (feeBips <= 0) return exactOut
+  if (feeBips >= Number(BIPS)) throw new Error('fee bips out of range')
+  const denominator = BIPS - BigInt(feeBips)
+  return (exactOut * BIPS + denominator - 1n) / denominator
+}
+
+/** The most an exact-output swap may spend: the quoted input plus the slippage the user accepted. */
+export function maximumIn(quotedIn: bigint, slippageBips: number): bigint {
+  return quotedIn + (quotedIn * BigInt(slippageBips)) / BIPS
+}
+
 /** Price impact in percent from spot (mid) and executed prices; null when spot is unknown. */
 export function priceImpactPct(amountIn: bigint, amountOut: bigint, spotOutPerIn: number | null, decimalsIn: number, decimalsOut: number): number | null {
   if (spotOutPerIn === null || amountIn === 0n) return null

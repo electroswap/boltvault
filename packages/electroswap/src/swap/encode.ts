@@ -12,7 +12,7 @@
  */
 import { concatHex, encodeAbiParameters, encodeFunctionData, encodePacked, parseAbiParameters, type Hex } from 'viem'
 import { UNIVERSAL_ROUTER_ABI } from './abis'
-import { BIPS, feeAmount } from './fee'
+import { BIPS, feeAmount, grossOutForExactOut } from './fee'
 
 export const COMMAND = {
   V3_SWAP_EXACT_IN: 0x00,
@@ -91,6 +91,26 @@ function v3Path(hops: readonly Hop[]): Hex {
   return encodePacked(types, values)
 }
 
+/**
+ * The same path walked backwards, which is what V3 wants for an exact output.
+ *
+ * `exactOutput` starts from the token you asked for and works back to the one
+ * you pay, so its packed path runs output → … → input. Handing it a forward
+ * path does not fail loudly: it addresses different pools, quotes a different
+ * trade, or finds nothing at all. The quoter and the router read the same
+ * bytes, so the reversal is expressed once, here.
+ */
+export function v3PackedPathExactOut(hops: readonly Hop[]): Hex {
+  const reversed = [...hops].reverse()
+  const types: string[] = ['address']
+  const values: unknown[] = [reversed[0]?.tokenOut]
+  for (const h of reversed) {
+    types.push('uint24', 'address')
+    values.push(h.kind === 'v3' ? h.fee : V2_FEE_FLAG, h.tokenIn)
+  }
+  return encodePacked(types, values)
+}
+
 /** Split a route into runs of the same kind (the SDK encodes a mixed route as one V3-style path through the mixed quoter / UR). */
 function classify(route: SwapRoute): 'v2' | 'v3' | 'mixed' {
   const kinds = new Set(route.hops.map((h) => h.kind))
@@ -161,6 +181,122 @@ export function encodeSwap(input: EncodeSwapInput): EncodedSwap {
   const commandBytes = concatHex(commands.map((c) => `0x${c.toString(16).padStart(2, '0')}` as Hex))
   const data = encodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commandBytes, inputs, input.deadline] })
   return { to: input.universalRouter, data, value: input.nativeIn ? input.amountIn : 0n, commands, minimumOut }
+}
+
+export interface EncodeSwapExactOutInput {
+  readonly route: SwapRoute
+  /** What the user must end up holding. Not a floor and not an estimate: the number they typed. */
+  readonly amountOut: bigint
+  /**
+   * The most this swap may spend — `maximumIn(quotedIn, slippage)`, which is
+   * all slippage does in this direction.
+   *
+   * Passed in rather than derived here, because the caller has a constraint the
+   * encoder cannot see: a Permit2 signature already given for a particular
+   * amount. A re-quote at signing time can move the cost a little, and the
+   * encoded `amountInMaximum` must never promise the router more than the user
+   * has actually authorised it to pull.
+   */
+  readonly maximumIn: bigint
+  readonly nativeIn: boolean
+  readonly nativeOut: boolean
+  readonly wrappedNative: Hex
+  readonly recipient: Hex
+  /** The wallet fee; `null` only when the schedule says 0 bips (PAY_PORTION reverts on 0). */
+  readonly fee: { readonly sink: Hex; readonly bips: number } | null
+  readonly permit?: PermitInput
+  readonly deadline: bigint
+  readonly universalRouter: Hex
+}
+
+export interface EncodedSwapExactOut {
+  readonly to: Hex
+  readonly data: Hex
+  readonly value: bigint
+  readonly commands: readonly number[]
+  /** Exactly what the user receives — the figure written into the delivering command. */
+  readonly exactOut: bigint
+  /** The most the swap can take. Slippage guards this side now, not the output. */
+  readonly maximumIn: bigint
+  /** What the router buys, so the fee comes off the top and the user's exact amount survives it. */
+  readonly grossOut: bigint
+}
+
+/**
+ * Universal Router calldata for a swap priced by its output (master plan §8.6,
+ * "exact-out is a power toggle").
+ *
+ *   [PERMIT2_PERMIT]  [WRAP_ETH(router, maxIn)]
+ *   V2/V3_SWAP_EXACT_OUT(recipient, grossOut, maxIn, path, payerIsUser)
+ *   [PAY_PORTION(outputWrapped, sink, bips)]
+ *   SWEEP(output, recipient, exactOut) | UNWRAP_WETH(recipient, exactOut)
+ *   [UNWRAP_WETH(recipient, 0)]        ← native input: hand back the change
+ *
+ * Two things differ from the exact-in plan beyond the command byte.
+ *
+ * The router is asked for `grossOut`, not `amountOut`: `PAY_PORTION` takes its
+ * bips of what the router is holding, so buying exactly what the user asked for
+ * would pay the fee out of the user's exact amount. Grossing up first means the
+ * fee is paid in extra input and the delivered amount is exact — which is the
+ * whole promise of the mode. The `PAY_PORTION` command itself is untouched: one
+ * portion, the pinned sink, the tier's bips, so the firewall's FEE_SINK /
+ * FEE_TIER assertion reads exactly what it reads for an exact-in swap.
+ *
+ * And a native input has to be refunded. `WRAP_ETH` wraps the whole maximum
+ * because the router cannot know the real cost until the pools answer, so
+ * whatever is left over is WETN sitting in the router — a trailing
+ * `UNWRAP_WETH(recipient, 0)` returns it. Without it the change is a tip to
+ * whoever sweeps the router next.
+ */
+export function encodeSwapExactOut(input: EncodeSwapExactOutInput): EncodedSwapExactOut {
+  if (input.route.hops.length === 0) throw new Error('empty route')
+  // The same refusal as `encodeSwap`, for the same reason: the `0x800000` V2
+  // sentinel is a quoter convention the Universal Router does not read.
+  if (classify(input.route) === 'mixed') throw new Error('mixed route')
+  if (input.amountOut <= 0n) throw new Error('empty output')
+  if (input.maximumIn <= 0n) throw new Error('no spending ceiling')
+  const commands: number[] = []
+  const inputs: Hex[] = []
+  let payerIsUser = true
+  const push = (cmd: number, data: Hex): void => {
+    commands.push(cmd)
+    inputs.push(data)
+  }
+
+  const grossOut = grossOutForExactOut(input.amountOut, input.fee?.bips ?? 0)
+  const maxIn = input.maximumIn
+
+  if (input.permit) {
+    const p = input.permit
+    push(COMMAND.PERMIT2_PERMIT, encodeAbiParameters(parseAbiParameters('((address token, uint160 amount, uint48 expiration, uint48 nonce) details, address spender, uint256 sigDeadline) permit, bytes signature'), [{ details: { token: p.token, amount: p.amount, expiration: p.expiration, nonce: p.nonce }, spender: p.spender, sigDeadline: p.sigDeadline }, p.signature]))
+  }
+  if (input.nativeIn) {
+    push(COMMAND.WRAP_ETH, encodeAbiParameters(parseAbiParameters('address recipient, uint256 amount'), [ROUTER_AS_RECIPIENT, maxIn]))
+    payerIsUser = false
+  }
+
+  const routerMustCustody = input.fee !== null || input.nativeOut
+  const swapRecipient = routerMustCustody ? ROUTER_AS_RECIPIENT : input.recipient
+  const kind = classify(input.route)
+  if (kind === 'v2') {
+    const path = [input.route.hops[0]?.tokenIn as Hex, ...input.route.hops.map((h) => h.tokenOut)]
+    push(COMMAND.V2_SWAP_EXACT_OUT, encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountOut, uint256 amountInMax, address[] path, bool payerIsUser'), [swapRecipient, grossOut, maxIn, path, payerIsUser]))
+  } else {
+    push(COMMAND.V3_SWAP_EXACT_OUT, encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountOut, uint256 amountInMax, bytes path, bool payerIsUser'), [swapRecipient, grossOut, maxIn, v3PackedPathExactOut(input.route.hops), payerIsUser]))
+  }
+
+  const outputToken = input.route.hops[input.route.hops.length - 1]?.tokenOut as Hex
+  if (routerMustCustody) {
+    if (input.fee) push(COMMAND.PAY_PORTION, encodeAbiParameters(parseAbiParameters('address token, address recipient, uint256 bips'), [outputToken, input.fee.sink, BigInt(input.fee.bips)]))
+    // The floor is the exact amount itself — grossing up is what makes that safe.
+    if (input.nativeOut) push(COMMAND.UNWRAP_WETH, encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountMin'), [input.recipient, input.amountOut]))
+    else push(COMMAND.SWEEP, encodeAbiParameters(parseAbiParameters('address token, address recipient, uint256 amountMin'), [outputToken, input.recipient, input.amountOut]))
+  }
+  if (input.nativeIn) push(COMMAND.UNWRAP_WETH, encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountMin'), [input.recipient, 0n]))
+
+  const commandBytes = concatHex(commands.map((c) => `0x${c.toString(16).padStart(2, '0')}` as Hex))
+  const data = encodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commandBytes, inputs, input.deadline] })
+  return { to: input.universalRouter, data, value: input.nativeIn ? maxIn : 0n, commands, exactOut: input.amountOut, maximumIn: maxIn, grossOut }
 }
 
 /** ERC-20 approve(Permit2, amount) — the one-time step before permits (§8.6). */
