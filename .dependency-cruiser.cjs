@@ -16,7 +16,23 @@ module.exports = {
       comment: 'packages/wallet composes @boltvault/ui primitives so the DOM fallback stays possible (§2.6).',
       severity: 'error',
       from: { path: '^packages/wallet/' },
-      to: { path: '^node_modules/(react-native|expo|expo-[^/]+)(/|$)' },
+      to: { path: '^node_modules/(react-native|react-native-[^/]+|@react-native/[^/]+|expo|expo-[^/]+)(/|$)' },
+    },
+    {
+      /*
+        The extension is already running in a browser; it must never carry one.
+        Four things kept `react-native-webview` out of that bundle and not one
+        of them said so: the `.native.tsx` split Vite cannot resolve, the
+        dependency nobody declared, the absent `host.browser` capability, and
+        the popup size gate. All four are true today and all four are
+        incidental — a single import in a shared package would end them
+        quietly. This is the sentence that has to fail instead.
+      */
+      name: 'extension-carries-no-webview',
+      comment: 'apps/extension runs inside a browser and never bundles one (§5.3, master plan §4.1).',
+      severity: 'error',
+      from: { path: '^apps/extension/' },
+      to: { path: '^node_modules/react-native-webview(/|$)' },
     },
     {
       name: 'ui-consumers-not-engine-internals',

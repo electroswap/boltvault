@@ -489,9 +489,29 @@ msgid "Sent"
 msgstr "Sent"
 
 #: packages/wallet/src/screens/Activity.tsx
+msgctxt "activity.speedUp"
+msgid "Speed up"
+msgstr "Speed up"
+
+#: packages/wallet/src/screens/Activity.tsx
 msgctxt "activity.status"
 msgid "Status"
 msgstr "Status"
+
+#: packages/wallet/src/screens/Activity.tsx
+msgctxt "activity.stuck"
+msgid "Still waiting"
+msgstr "Still waiting"
+
+#: packages/wallet/src/screens/Activity.tsx
+msgctxt "activity.stuck.body"
+msgid "It has been sent but no block has taken it yet. You can offer the network more to pick it up sooner, or replace it with an empty transaction so it never happens. Each costs its own network fee, and only one of them can win."
+msgstr "It has been sent but no block has taken it yet. You can offer the network more to pick it up sooner, or replace it with an empty transaction so it never happens. Each costs its own network fee, and only one of them can win."
+
+#: packages/wallet/src/screens/Activity.tsx
+msgctxt "activity.stuck.no"
+msgid "There is nothing to replace on this one."
+msgstr "There is nothing to replace on this one."
 
 #: packages/wallet/src/screens/shells.tsx
 msgctxt "activity.title"
@@ -824,6 +844,16 @@ msgid "Network fee up to"
 msgstr "Network fee up to"
 
 #: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.fee.change"
+msgid "Change"
+msgstr "Change"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "approval.fee.change.a11y"
+msgid "Change the network fee"
+msgstr "Change the network fee"
+
+#: packages/wallet/src/screens/Approval.tsx
 msgctxt "approval.firstTime"
 msgid "First time here"
 msgstr "First time here"
@@ -1037,6 +1067,16 @@ msgstr "This recovery phrase has a BIP-39 passphrase. These words alone will not
 msgctxt "backup.show"
 msgid "Show words"
 msgstr "Show words"
+
+#: packages/wallet/src/screens/Backup.tsx
+msgctxt "backup.show.biometric"
+msgid "Show with biometrics"
+msgstr "Show with biometrics"
+
+#: packages/wallet/src/screens/Backup.tsx
+msgctxt "backup.show.passkey"
+msgid "Show with passkey"
+msgstr "Show with passkey"
 
 #: packages/wallet/src/screens/Backup.tsx
 msgctxt "backup.title"
@@ -1428,7 +1468,7 @@ msgctxt "campaign.yours"
 msgid "Your contribution"
 msgstr "Your contribution"
 
-#: packages/wallet/src/screens/Networks.tsx
+#: packages/wallet/src/screens/Rack.tsx
 msgctxt "cancel"
 msgid "Cancel"
 msgstr "Cancel"
@@ -1724,6 +1764,61 @@ msgid "Scan the other device’s code"
 msgstr "Scan the other device’s code"
 
 #: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.move.body"
+msgid "On the device that holds the vault, open Security and show the export. Read every frame of the moving code with the camera here, then type the six words it shows. BoltVault never shows those words on this side."
+msgstr "On the device that holds the vault, open Security and show the export. Read every frame of the moving code with the camera here, then type the six words it shows. BoltVault never shows those words on this side."
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.move.code"
+msgid "The six words from the other device"
+msgstr "The six words from the other device"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.move.done"
+msgid "The vault is here — {n} accounts. Delete the export on the other device when you are sure."
+msgstr "The vault is here — {n} accounts. Delete the export on the other device when you are sure."
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.move.frames"
+msgid "{seen} of {total} frames read."
+msgstr "{seen} of {total} frames read."
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.move.go"
+msgid "Bring the vault here"
+msgstr "Bring the vault here"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.move.occupied"
+msgid "This device already holds a vault, and a move only lands on one that does not. Do it while setting the device up, or remove this vault first."
+msgstr "This device already holds a vault, and a move only lands on one that does not. Do it while setting the device up, or remove this vault first."
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.move.password"
+msgid "A password for this device"
+msgstr "A password for this device"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.move.paste"
+msgid "Paste every frame, separated by spaces"
+msgstr "Paste every frame, separated by spaces"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.move.scan"
+msgid "Read the moving code"
+msgstr "Read the moving code"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.move.scan.more"
+msgid "Keep reading"
+msgstr "Keep reading"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.move.title"
+msgid "Move a vault here"
+msgstr "Move a vault here"
+
+#: packages/wallet/src/screens/Devices.tsx
 msgctxt "devices.none"
 msgid "None yet."
 msgstr "None yet."
@@ -1859,9 +1954,44 @@ msgid "Use code"
 msgstr "Use code"
 
 #: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.waiting"
+msgid "Waiting for you to confirm"
+msgstr "Waiting for you to confirm"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.waiting.body"
+msgid "Names and tokens another device sent. Until you confirm one here, BoltVault will not treat it as a name it knows or a token it recognises — so a device that is not yours cannot put a name on an address or pass one token off as another."
+msgstr "Names and tokens another device sent. Until you confirm one here, BoltVault will not treat it as a name it knows or a token it recognises — so a device that is not yours cannot put a name on an address or pass one token off as another."
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.waiting.confirm"
+msgid "Confirm"
+msgstr "Confirm"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.waiting.from"
+msgid "from {device}, {date}"
+msgstr "from {device}, {date}"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.waiting.name"
+msgid "Name: {label}"
+msgstr "Name: {label}"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.waiting.reject"
+msgid "Remove it"
+msgstr "Remove it"
+
+#: packages/wallet/src/screens/Devices.tsx
+msgctxt "devices.waiting.token"
+msgid "Token: {label}"
+msgstr "Token: {label}"
+
+#: packages/wallet/src/screens/Devices.tsx
 msgctxt "devices.what"
-msgid "Paired devices share settings, per-site chains and watch/hardware accounts. Seeds and keys never sync — move a vault with the export code in Security."
-msgstr "Paired devices share settings, per-site chains and watch/hardware accounts. Seeds and keys never sync — move a vault with the export code in Security."
+msgid "Paired devices share your address book, account names, custom and hidden tokens, per-site chains, settings, and watch-only and hardware accounts. Seeds and keys never sync — move a vault with the code below."
+msgstr "Paired devices share your address book, account names, custom and hidden tokens, per-site chains, settings, and watch-only and hardware accounts. Seeds and keys never sync — move a vault with the code below."
 
 #: packages/wallet/src/components/SlippageSheet.tsx
 msgctxt "done"
@@ -2259,6 +2389,11 @@ msgid "In-wallet swaps are off on this network — no fee address is set for it 
 msgstr "In-wallet swaps are off on this network — no fee address is set for it in this build."
 
 #: packages/wallet/src/screens/FeeScheduleSheet.tsx
+msgctxt "fee.recipient.testnet"
+msgid "Swaps on testnet pay no fee at all — there is no fee address here and nothing worth collecting."
+msgstr "Swaps on testnet pay no fee at all — there is no fee address here and nothing worth collecting."
+
+#: packages/wallet/src/screens/FeeScheduleSheet.tsx
 msgctxt "fee.sheet.body.v2"
 msgid "Every in-wallet swap pays a fee on what you receive. The more BOLT and DYNO you hold, the less you pay — five rungs, from Static to Reactor. The ladder ships inside the wallet, so it is the same at signing time as it is here."
 msgstr "Every in-wallet swap pays a fee on what you receive. The more BOLT and DYNO you hold, the less you pay — five rungs, from Static to Reactor. The ladder ships inside the wallet, so it is the same at signing time as it is here."
@@ -2563,6 +2698,66 @@ msgctxt "from.account"
 msgid "from {a}"
 msgstr "from {a}"
 
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "gas.body"
+msgid "This is what the network charges to process your transaction, not a BoltVault fee. It is paid in {sym} whether the transaction succeeds or fails."
+msgstr "This is what the network charges to process your transaction, not a BoltVault fee. It is paid in {sym} whether the transaction succeeds or fails."
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "gas.exact"
+msgid "Or set the most you will pay ({sym})"
+msgstr "Or set the most you will pay ({sym})"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "gas.fast"
+msgid "Faster"
+msgstr "Faster"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "gas.normal"
+msgid "Suggested"
+msgstr "Suggested"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "gas.slow"
+msgid "Cheaper"
+msgstr "Cheaper"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "gas.slower"
+msgid "Paying less than the network suggests means waiting longer, and in a busy hour it may not go through at all."
+msgstr "Paying less than the network suggests means waiting longer, and in a busy hour it may not go through at all."
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "gas.title"
+msgid "Network fee"
+msgstr "Network fee"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "gas.tooHigh"
+msgid "That is far more than this transaction needs. BoltVault will use {max} {sym}, which is already four times the going rate."
+msgstr "That is far more than this transaction needs. BoltVault will use {max} {sym}, which is already four times the going rate."
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "gas.tooLow"
+msgid "Under {min} {sym} the network will not pick this up at all — it would sit unsent until it expired. BoltVault will use {min} {sym}."
+msgstr "Under {min} {sym} the network will not pick this up at all — it would sit unsent until it expired. BoltVault will use {min} {sym}."
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "gas.willPay"
+msgid "You will pay up to"
+msgstr "You will pay up to"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "gas.work"
+msgid "Work this needs"
+msgstr "Work this needs"
+
+#: packages/wallet/src/screens/Approval.tsx
+msgctxt "gas.work.units"
+msgid "{n} units of gas"
+msgstr "{n} units of gas"
+
 #: packages/wallet/src/components/HardwarePickers.tsx
 msgctxt "hardware.more"
 msgid "{n} more"
@@ -2712,6 +2907,36 @@ msgstr "This is Electroneum Smart Chain (52014). Send ETN here from an exchange 
 msgctxt "home.fund.title"
 msgid "Receive ETN to get started"
 msgstr "Receive ETN to get started"
+
+#: packages/wallet/src/components/PortfolioHistory.tsx
+msgctxt "home.history.caption"
+msgid "What you have been holding, over {span}"
+msgstr "What you have been holding, over {span}"
+
+#: packages/wallet/src/components/PortfolioHistory.tsx
+msgctxt "home.history.day"
+msgid "the last day"
+msgstr "the last day"
+
+#: packages/wallet/src/components/PortfolioHistory.tsx
+msgctxt "home.history.days"
+msgid "the last {n} days"
+msgstr "the last {n} days"
+
+#: packages/wallet/src/components/PortfolioHistory.tsx
+msgctxt "home.history.hour"
+msgid "the last hour"
+msgstr "the last hour"
+
+#: packages/wallet/src/components/PortfolioHistory.tsx
+msgctxt "home.history.hours"
+msgid "the last {n} hours"
+msgstr "the last {n} hours"
+
+#: packages/wallet/src/components/PortfolioHistory.tsx
+msgctxt "home.history.range"
+msgid "{low} – {high}"
+msgstr "{low} – {high}"
 
 #: packages/wallet/src/screens/Home.tsx
 msgctxt "home.locked.body"
@@ -2897,6 +3122,11 @@ msgstr "Swap"
 msgctxt "key.tokens"
 msgid "Tokens"
 msgstr "Tokens"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "key.web"
+msgid "Web"
+msgstr "Web"
 
 #: packages/wallet/src/components/HardwarePrompt.tsx
 msgctxt "keystone.body"
@@ -3183,6 +3413,11 @@ msgctxt "legends.toclaim"
 msgid "ETN to claim"
 msgstr "ETN to claim"
 
+#: packages/wallet/src/components/DividendsCard.tsx
+msgctxt "legends.vessel.a11y"
+msgid "{a} ETN to claim"
+msgstr "{a} ETN to claim"
+
 #: packages/wallet/src/screens/Legends.tsx
 msgctxt "legends.working"
 msgid "Working…"
@@ -3274,14 +3509,204 @@ msgid "One more"
 msgstr "One more"
 
 #: packages/wallet/src/screens/Moments.tsx
-msgctxt "moments.discharge"
-msgid "Fire discharge"
-msgstr "Fire discharge"
+msgctxt "moments.acceptance"
+msgid "Acceptance"
+msgstr "Acceptance"
 
 #: packages/wallet/src/screens/Moments.tsx
-msgctxt "moments.roll"
-msgid "Roll digits"
-msgstr "Roll digits"
+msgctxt "moments.coil.accrue"
+msgid "Accrue a day"
+msgstr "Accrue a day"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.coil.block"
+msgid "Block"
+msgstr "Block"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.coil.collect"
+msgid "Collect"
+msgstr "Collect"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.coil.collected"
+msgid "Collected"
+msgstr "Collected"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.coil.pending"
+msgid "DYNO to collect"
+msgstr "DYNO to collect"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.criterion.coil"
+msgid "Farms: the ring hums brighter as DYNO accrues, dates are engraved on the ring, and Collect discharges the coil into the readout while the DYNO bar rolls. Acceptance: the multiplier and the date to 2.5× are readable at a glance; nothing twitches per block except the pending-reward digits."
+msgstr "Farms: the ring hums brighter as DYNO accrues, dates are engraved on the ring, and Collect discharges the coil into the readout while the DYNO bar rolls. Acceptance: the multiplier and the date to 2.5× are readable at a glance; nothing twitches per block except the pending-reward digits."
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.criterion.ignition"
+msgid "Unlock: the Field fades in from black around the seat avatar, the filament draws left→right, the readout digits settle from blurred to sharp; 400 ms total; must feel like a device powering on, not a page loading."
+msgstr "Unlock: the Field fades in from black around the seat avatar, the filament draws left→right, the readout digits settle from blurred to sharp; 400 ms total; must feel like a device powering on, not a page loading."
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.criterion.legends"
+msgid "Electric Legends dividends: claimable ETN rises as liquid light in a glass vessel between claims; Claim drains it into the readout. Acceptance: a holder understands \"marketplace fees are paying me\" from the plate alone; the vessel never animates when nothing has changed."
+msgstr "Electric Legends dividends: claimable ETN rises as liquid light in a glass vessel between claims; Claim drains it into the readout. Acceptance: a holder understands \"marketplace fees are paying me\" from the plate alone; the vessel never animates when nothing has changed."
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.criterion.qr"
+msgid "Receive on mobile: the QR reads as etched into glass with gyroscope parallax on the light across it (Reanimated + device motion), static on web; it must scan first time at 30 cm."
+msgstr "Receive on mobile: the QR reads as etched into glass with gyroscope parallax on the light across it (Reanimated + device motion), static on web; it must scan first time at 30 cm."
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.criterion.rack"
+msgid "Collectibles: pieces sit on glass shelves with depth, contact shadows and a specular edge from the Field; opening a piece is a shared-element move into a view where the artwork is lit by a single slow light sweep; buying a piece lands it on your shelf with a Discharge. Acceptance: a first-time viewer can tell which pieces are listed and which have offers without reading text."
+msgstr "Collectibles: pieces sit on glass shelves with depth, contact shadows and a specular edge from the Field; opening a piece is a shared-element move into a view where the artwork is lit by a single slow light sweep; buying a piece lands it on your shelf with a Discharge. Acceptance: a first-time viewer can tell which pieces are listed and which have offers without reading text."
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.discharge.activity"
+msgid "Activity"
+msgstr "Activity"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.discharge.clear"
+msgid "Clear the list"
+msgstr "Clear the list"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.discharge.now"
+msgid "just now"
+msgstr "just now"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.discharge.older"
+msgid "Received 250 ETN"
+msgstr "Received 250 ETN"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.discharge.older.when"
+msgid "Tuesday"
+msgstr "Tuesday"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.discharge.row"
+msgid "Swapped 4,200 BOLT → 2.31 USDC"
+msgstr "Swapped 4,200 BOLT → 2.31 USDC"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.discharge.sign"
+msgid "Sign"
+msgstr "Sign"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.discharge.total"
+msgid "Total"
+msgstr "Total"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.ignition.plate"
+msgid "The plates arrive last, 400 ms after the first light."
+msgstr "The plates arrive last, 400 ms after the first light."
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.ignition.replay"
+msgid "Replay ignition"
+msgstr "Replay ignition"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.ignition.seat"
+msgid "volt.etn"
+msgstr "volt.etn"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.ignition.seat.caption"
+msgid "The Field comes up around the seat"
+msgstr "The Field comes up around the seat"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.legends.claimed"
+msgid "Claimed into the readout"
+msgstr "Claimed into the readout"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.legends.compact"
+msgid "The collection page — collapsed by default; the vessel stays."
+msgstr "The collection page — collapsed by default; the vessel stays."
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.legends.fee"
+msgid "A fee arrives"
+msgstr "A fee arrives"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.legends.full"
+msgid "The Legends screen — the vessel at full size."
+msgstr "The Legends screen — the vessel at full size."
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.legends.poll"
+msgid "Poll — nothing changed"
+msgstr "Poll — nothing changed"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.legends.polls"
+msgid "Polls with no change: {n}"
+msgstr "Polls with no change: {n}"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.name.coil"
+msgid "The Coil"
+msgstr "The Coil"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.name.discharge"
+msgid "Discharge"
+msgstr "Discharge"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.name.ignition"
+msgid "Ignition"
+msgstr "Ignition"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.name.legends"
+msgid "The Legends vault"
+msgstr "The Legends vault"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.name.qr"
+msgid "The engraved QR"
+msgstr "The engraved QR"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.name.rack"
+msgid "The Rack"
+msgstr "The Rack"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.qr.chain"
+msgid "Electroneum · 52014"
+msgstr "Electroneum · 52014"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.qr.note"
+msgid "The light across the engraving follows the phone on native (device motion); on the web it is static by design. Scan it from 30 cm to review the criterion."
+msgstr "The light across the engraving follows the phone on native (device motion); on the web it is static by design. Scan it from 30 cm to review the criterion."
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.rack.buy"
+msgid "Buy a piece"
+msgstr "Buy a piece"
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.rack.note"
+msgid "Press a piece to take the shared-element move into it, where the artwork is lit by one slow light sweep."
+msgstr "Press a piece to take the shared-element move into it, where the artwork is lit by one slow light sweep."
+
+#: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.rack.reset"
+msgid "Empty the shelf again"
+msgstr "Empty the shelf again"
 
 #: packages/wallet/src/screens/Moments.tsx
 msgctxt "moments.title"
@@ -3818,7 +4243,7 @@ msgctxt "piece.custom"
 msgid "From a collection you added: read from the contract, not on the marketplace."
 msgstr "From a collection you added: read from the contract, not on the marketplace."
 
-#: packages/wallet/src/screens/Piece.tsx
+#: packages/wallet/src/screens/Rack.tsx
 msgctxt "piece.days"
 msgid "{d} days"
 msgstr "{d} days"
@@ -4024,6 +4449,81 @@ msgid "All collections"
 msgstr "All collections"
 
 #: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.bulk.body"
+msgid "One signature for each piece. Signing a listing is free; it costs nothing on the network until somebody buys."
+msgstr "One signature for each piece. Signing a listing is free; it costs nothing on the network until somebody buys."
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.bulk.body.permission.v2"
+msgid "{p} of these pieces come from a collection the marketplace has not been allowed to hand over yet, so each of them also asks for a transaction that allows it — and those cost a network fee. Listing fewer of them at a time, or listing one first, costs you less."
+msgstr "{p} of these pieces come from a collection the marketplace has not been allowed to hand over yet, so each of them also asks for a transaction that allows it — and those cost a network fee. Listing fewer of them at a time, or listing one first, costs you less."
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.bulk.counting"
+msgid "Counting what you will be asked to sign…"
+msgstr "Counting what you will be asked to sign…"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.bulk.key"
+msgid "List {n}"
+msgstr "List {n}"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.bulk.none"
+msgid "Pick the pieces to sell"
+msgstr "Pick the pieces to sell"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.bulk.note"
+msgid "Each piece is its own order and its own signature. Pick the ones to sell, then set one price for all of them."
+msgstr "Each piece is its own order and its own signature. Pick the ones to sell, then set one price for all of them."
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.bulk.price"
+msgid "Price in ETN, for each piece"
+msgstr "Price in ETN, for each piece"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.bulk.proceeds"
+msgid "You receive {a} ETN per piece after the 3% marketplace fee, less any creator royalty on that collection."
+msgstr "You receive {a} ETN per piece after the 3% marketplace fee, less any creator royalty on that collection."
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.bulk.queueing"
+msgid "Preparing {d} of {n}…"
+msgstr "Preparing {d} of {n}…"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.bulk.reject"
+msgid "You will see a sheet for each one in turn. Refusing one leaves that piece unlisted and the rest stay in the queue."
+msgstr "You will see a sheet for each one in turn. Refusing one leaves that piece unlisted and the rest stay in the queue."
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.bulk.row"
+msgid "{i}. {name}"
+msgstr "{i}. {name}"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.bulk.sigs"
+msgid "{n} signatures"
+msgstr "{n} signatures"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.bulk.sigs.plus"
+msgid "{n} sheets — {o} listings and {p} permissions"
+msgstr "{n} sheets — {o} listings and {p} permissions"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.bulk.start"
+msgid "Start signing"
+msgstr "Start signing"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.bulk.title"
+msgid "List {n} pieces"
+msgstr "List {n} pieces"
+
+#: packages/wallet/src/screens/Rack.tsx
 msgctxt "rack.collection"
 msgid "Collection"
 msgstr "Collection"
@@ -4092,6 +4592,11 @@ msgstr "Collection"
 msgctxt "rack.pick.floor"
 msgid "floor {f} ETN"
 msgstr "floor {f} ETN"
+
+#: packages/wallet/src/screens/Rack.tsx
+msgctxt "rack.select"
+msgid "Select several"
+msgstr "Select several"
 
 #: packages/wallet/src/screens/Rack.tsx
 msgctxt "rack.sort"
@@ -4268,22 +4773,47 @@ msgctxt "remove"
 msgid "Remove"
 msgstr "Remove"
 
-#: packages/wallet/src/components/accounts/AccountSheets.tsx
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "reveal.biometric"
+msgid "Reveal with biometrics"
+msgstr "Reveal with biometrics"
+
+#: packages/wallet/src/screens/Backup.tsx
+msgctxt "reveal.biometric.fail"
+msgid "That did not open the vault. Use your password."
+msgstr "That did not open the vault. Use your password."
+
+#: packages/wallet/src/screens/Backup.tsx
+msgctxt "reveal.biometric.reason"
+msgid "Show your recovery phrase"
+msgstr "Show your recovery phrase"
+
+#: packages/wallet/src/screens/Accounts.tsx
 msgctxt "reveal.body"
 msgid "Enter your password. Make sure nobody can see your screen."
 msgstr "Enter your password. Make sure nobody can see your screen."
 
-#: packages/wallet/src/components/accounts/AccountSheets.tsx
+#: packages/wallet/src/screens/Accounts.tsx
 msgctxt "reveal.hide"
 msgid "Hide"
 msgstr "Hide"
 
-#: packages/wallet/src/components/accounts/AccountSheets.tsx
+#: packages/wallet/src/screens/Accounts.tsx
 msgctxt "reveal.key"
 msgid "Reveal"
 msgstr "Reveal"
 
-#: packages/wallet/src/components/accounts/AccountSheets.tsx
+#: packages/wallet/src/screens/Accounts.tsx
+msgctxt "reveal.passkey"
+msgid "Reveal with passkey"
+msgstr "Reveal with passkey"
+
+#: packages/wallet/src/screens/Backup.tsx
+msgctxt "reveal.passkey.fail"
+msgid "The passkey did not open the vault. Use your password."
+msgstr "The passkey did not open the vault. Use your password."
+
+#: packages/wallet/src/screens/Accounts.tsx
 msgctxt "reveal.title"
 msgid "Recovery phrase · {label}"
 msgstr "Recovery phrase · {label}"
@@ -4654,6 +5184,36 @@ msgid "Accept"
 msgstr "Accept"
 
 #: packages/wallet/src/screens/ConnectedSites.tsx
+msgctxt "sites.account.a11y"
+msgid "Change the account this site sees"
+msgstr "Change the account this site sees"
+
+#: packages/wallet/src/screens/ConnectedSites.tsx
+msgctxt "sites.account.body"
+msgid "The site is told straight away, the way it would be if you switched accounts on the site itself. No other site and no other screen is affected."
+msgstr "The site is told straight away, the way it would be if you switched accounts on the site itself. No other site and no other screen is affected."
+
+#: packages/wallet/src/screens/ConnectedSites.tsx
+msgctxt "sites.account.change"
+msgid "Tap to change"
+msgstr "Tap to change"
+
+#: packages/wallet/src/screens/ConnectedSites.tsx
+msgctxt "sites.account.current"
+msgid "In use"
+msgstr "In use"
+
+#: packages/wallet/src/screens/ConnectedSites.tsx
+msgctxt "sites.account.done"
+msgid "Done"
+msgstr "Done"
+
+#: packages/wallet/src/screens/ConnectedSites.tsx
+msgctxt "sites.account.key"
+msgid "Change"
+msgstr "Change"
+
+#: packages/wallet/src/screens/ConnectedSites.tsx
 msgctxt "sites.compat"
 msgid "Answer to sites that only support MetaMask"
 msgstr "Answer to sites that only support MetaMask"
@@ -4679,6 +5239,11 @@ msgid "Disconnect"
 msgstr "Disconnect"
 
 #: packages/wallet/src/screens/ConnectedSites.tsx
+msgctxt "sites.lastused"
+msgid "Last used {d}"
+msgstr "Last used {d}"
+
+#: packages/wallet/src/screens/ConnectedSites.tsx
 msgctxt "sites.noaccount"
 msgid "No account"
 msgstr "No account"
@@ -4689,9 +5254,9 @@ msgid "No site is connected. When a site asks to connect, it appears here with t
 msgstr "No site is connected. When a site asks to connect, it appears here with the account and chain it sees."
 
 #: packages/wallet/src/screens/ConnectedSites.tsx
-msgctxt "sites.note"
-msgid "Each site keeps its own chain. Changing the Home chain never changes a site."
-msgstr "Each site keeps its own chain. Changing the Home chain never changes a site."
+msgctxt "sites.note.v2"
+msgid "Each site keeps its own account and its own chain. Changing what Home shows never changes a site, and changing a site never tells any other site."
+msgstr "Each site keeps its own account and its own chain. Changing what Home shows never changes a site, and changing a site never tells any other site."
 
 #: packages/wallet/src/screens/ConnectedSites.tsx
 msgctxt "sites.reload"
@@ -4764,6 +5329,46 @@ msgid "Starting soon"
 msgstr "Starting soon"
 
 #: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.allow"
+msgid "Only send to addresses I have listed"
+msgstr "Only send to addresses I have listed"
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.allow.add"
+msgid "Add"
+msgstr "Add"
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.allow.add.label"
+msgid "Add an address"
+msgstr "Add an address"
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.allow.body"
+msgid "This covers sends of coins, tokens and collectibles. Swapping, bridging and anything a site asks you to sign go through the usual review instead — a list of people you pay says nothing about a contract."
+msgstr "This covers sends of coins, tokens and collectibles. Swapping, bridging and anything a site asks you to sign go through the usual review instead — a list of people you pay says nothing about a contract."
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.allow.book"
+msgid "From your address book"
+msgstr "From your address book"
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.allow.empty"
+msgid "The list is empty, so only your own accounts can be sent to. Add the addresses you use."
+msgstr "The list is empty, so only your own accounts can be sent to. Add the addresses you use."
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.allow.hint"
+msgid "Off. With it on, a send to anything not on the list below is refused — there is no way past it in the moment, which is the point. Your own accounts are always allowed."
+msgstr "Off. With it on, a send to anything not on the list below is refused — there is no way past it in the moment, which is the point. Your own accounts are always allowed."
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.allow.remove"
+msgid "Remove"
+msgstr "Remove"
+
+#: packages/wallet/src/screens/Spending.tsx
 msgctxt "spending.exact"
 msgid "Exact token approvals"
 msgstr "Exact token approvals"
@@ -4819,14 +5424,29 @@ msgid "Step-ups"
 msgstr "Step-ups"
 
 #: packages/wallet/src/screens/Spending.tsx
-msgctxt "spending.stepups.body.v2"
-msgid "A recipient you have never sent to holds the key for ten seconds, with the whole address on screen to check. A send above a tenth of your balance of that token asks you to unlock again — your face, your fingerprint or your password — before the key opens."
-msgstr "A recipient you have never sent to holds the key for ten seconds, with the whole address on screen to check. A send above a tenth of your balance of that token asks you to unlock again — your face, your fingerprint or your password — before the key opens."
+msgctxt "spending.stepups.body.v3"
+msgid "A recipient you have never sent to holds the key for ten seconds, with the whole address on screen to check. A large send asks you to unlock again — your face, your fingerprint or your password — before the key opens."
+msgstr "A recipient you have never sent to holds the key for ten seconds, with the whole address on screen to check. A large send asks you to unlock again — your face, your fingerprint or your password — before the key opens."
 
 #: packages/wallet/src/screens/Spending.tsx
 msgctxt "spending.stepups.limits"
 msgid "Both are always on for a transfer BoltVault can read. A contract call it cannot decode gets the full review sheet instead, because a pause on a transaction nobody can explain would be a comfort, not a check."
 msgstr "Both are always on for a transfer BoltVault can read. A contract call it cannot decode gets the full review sheet instead, because a pause on a transaction nobody can explain would be a comfort, not a check."
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.threshold"
+msgid "Large means more than"
+msgstr "Large means more than"
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.threshold.body"
+msgid "Measured against how much of that token you hold, never against a price. A quarter of your ETN is a quarter of your ETN whatever the market is doing."
+msgstr "Measured against how much of that token you hold, never against a price. A quarter of your ETN is a quarter of your ETN whatever the market is doing."
+
+#: packages/wallet/src/screens/Spending.tsx
+msgctxt "spending.threshold.pill"
+msgid "{p}% of that token"
+msgstr "{p}% of that token"
 
 #: packages/wallet/src/screens/Spending.tsx
 msgctxt "spending.tier.v2"
@@ -4904,6 +5524,16 @@ msgid "Swapped"
 msgstr "Swapped"
 
 #: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.exactOut"
+msgid "Exact amount"
+msgstr "Exact amount"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.exactOut.a11y"
+msgid "Set the exact amount you receive"
+msgstr "Set the exact amount you receive"
+
+#: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.fee"
 msgid "Wallet fee"
 msgstr "Wallet fee"
@@ -4932,6 +5562,11 @@ msgstr "{p} · {name}"
 msgctxt "swap.fee.next"
 msgid "hold {n} BOLT-eq for {p}"
 msgstr "hold {n} BOLT-eq for {p}"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.fee.onTop"
+msgid "added to what you pay, so you receive the full amount"
+msgstr "added to what you pay, so you receive the full amount"
 
 #: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.fee.zero.v2"
@@ -4999,6 +5634,11 @@ msgid "No lock data"
 msgstr "No lock data"
 
 #: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.max"
+msgid "Most you will pay"
+msgstr "Most you will pay"
+
+#: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.min"
 msgid "Minimum received"
 msgstr "Minimum received"
@@ -5017,6 +5657,11 @@ msgstr "Swap"
 msgctxt "swap.pay"
 msgid "You pay"
 msgstr "You pay"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.pay.estimated"
+msgid "You pay about"
+msgstr "You pay about"
 
 #: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.pick"
@@ -5059,6 +5704,11 @@ msgid "You receive"
 msgstr "You receive"
 
 #: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.receive.exact"
+msgid "You receive exactly"
+msgstr "You receive exactly"
+
+#: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.slippage"
 msgid "Slippage {p}"
 msgstr "Slippage {p}"
@@ -5097,6 +5747,11 @@ msgstr "Re-quoting…"
 msgctxt "swap.summary"
 msgid "{a} {s} → at least {b} {u}"
 msgstr "{a} {s} → at least {b} {u}"
+
+#: packages/wallet/src/screens/Swap.tsx
+msgctxt "swap.summary.exactOut"
+msgid "at most {a} {s} → {b} {u}"
+msgstr "at most {a} {s} → {b} {u}"
 
 #: packages/wallet/src/screens/Swap.tsx
 msgctxt "swap.tax"

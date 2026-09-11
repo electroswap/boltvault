@@ -3,6 +3,7 @@
  * The same lines feed VoiceOver and the hardware "what your device shows"
  * panel. Plain language, the closed verb set, no jargon.
  */
+import { feeRecipient } from '@boltvault/chains'
 import { formatUnits, type Hex } from 'viem'
 import { decodeCalldata, decodeMessage, type DecodedCall, type ParsedTypedData } from './decode'
 import { knownContract } from './registry'
@@ -89,6 +90,30 @@ function amount(ctx: AssessmentContext, token: 'native' | Hex, raw: bigint, chai
   // Wrapped ETN is known by role even when the universe has not loaded (offers are priced in it).
   if (knownContract(chainId, token)?.role === 'wrapped_native') return `${trim(formatUnits(abs, 18))} WETN`
   return `${abs.toString()} of ${who(ctx, chainId, token)}`
+}
+
+/**
+ * What a `PAY_PORTION` is, in words (master plan §8.6, §7.10).
+ *
+ * The sheet used to say "0.30% of the output goes to 0xD6Cf…69d0" for every
+ * portion, which reads as a stranger taking a cut — and once ElectroSwap's own
+ * site encodes our fee, that anonymous line is the *only* thing a user would
+ * see about the money we are charging them. So a portion paid to the chain's
+ * pinned recipient names itself, and names the rung when the assessment knows
+ * it. Keyed on the recipient rather than on the origin, so our own Swap screen,
+ * the web UI in the in-app browser and a WalletConnect peer all describe the
+ * same bytes the same way.
+ */
+function payPortionText(ctx: AssessmentContext, chainId: number, recipient: Hex, bips: bigint): string {
+  const pct = `${(Number(bips) / 100).toFixed(2)}%`
+  const ours = feeRecipient(chainId)
+  if (!ours || recipient.toLowerCase() !== ours.toLowerCase()) {
+    return `${pct} of the output goes to ${who(ctx, chainId, recipient)}`
+  }
+  const tier = ctx.walletFee?.tier
+  return tier
+    ? `BoltVault wallet fee ${pct} of the output · ${untrusted(tier, 16)} tier`
+    : `BoltVault wallet fee ${pct} of the output`
 }
 
 function trim(s: string): string {
@@ -285,7 +310,7 @@ export function explainCall(decoded: DecodedCall, ctx: AssessmentContext, chainI
               out.push({ text: `Allow ${who(ctx, chainId, c.spender)} to move ${amount(ctx, d.token, d.amount, chainId)} until the permit expires`, tone: 'neutral' })
             break
           case 'PAY_PORTION':
-            out.push({ text: `${(Number(c.bips) / 100).toFixed(2)}% of the output goes to ${who(ctx, chainId, c.recipient)}`, tone: 'out' })
+            out.push({ text: payPortionText(ctx, chainId, c.recipient, c.bips), tone: 'out' })
             break
           case 'WRAP_ETH':
             out.push({ text: `Wrap ${amount(ctx, 'native', c.amount, chainId)}`, tone: 'neutral' })

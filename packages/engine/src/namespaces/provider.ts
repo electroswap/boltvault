@@ -32,6 +32,7 @@ import {
   clampNewContractDays,
   emptyContext,
   estimateSimulation,
+  isFirstPartyOrigin,
   NO_SIMULATION,
   parseTypedData,
   decodeMessage,
@@ -91,6 +92,21 @@ export interface ProviderDeps {
   ) => Promise<Record<string, { symbol: string; decimals: number; name?: string }>>
   /** Put a new request in front of the user (the extension opens sign.html). Internal origins never call this. */
   readonly openApproval?: (request: ApprovalRequest) => void
+  /**
+   * This account's wallet fee on a chain — the sink and the tier's bips
+   * (§8.6, §8.18).
+   *
+   * Two callers, one answer: `boltvault_feePolicy` hands it to ElectroSwap's
+   * own site so the site encodes the same `PAY_PORTION` our Swap screen would,
+   * and the firewall reads it back to say whose fee a sheet is showing. A thunk
+   * for the same reason `counterpartyNames` is one — the holder service is
+   * built after this one — and it must only run while a sheet or a first-party
+   * request is being served.
+   */
+  readonly walletFeePolicy?: (
+    chainId: number,
+    accountId: string,
+  ) => Promise<{ sink: Hex; bips: number; tier: string } | null>
   readonly clientVersion: string
   /** Signed statics: the scam-origin list for the firewall (§3.6). */
   readonly statics?: { scamOrigins(): readonly string[] }
@@ -452,24 +468,58 @@ export class ProviderService {
         },
       },
       knownChain: (chainId) => d.chains.known(chainId),
-      session: async (origin) => {
-        const row = d.sites.registry.get(origin)
-        if (!row?.connected) return null
-        const status = await d.vault.status()
-        if (!status.unlocked) return null
-        const account = (await d.vault.accounts()).find((a) => a.id === row.accountId)
-        if (!account) {
-          await d.sites.disconnect(origin)
-          return null
-        }
-        return { accountId: account.id, addresses: [account.address] }
-      },
+      session: (origin) => this.sessionFor(origin),
       executeSafe: (chainId, method, params) => d.chains.rpc(chainId, method, params),
       approve: (intent) => this.approve(intent),
       emit: (origin, event) => {
         for (const l of this.ports.get(origin) ?? []) l(event)
       },
       subscribeHeads: (origin, chainId, id) => this.subscribeHeads(origin, chainId, id),
+      feePolicy: (origin, chainId) => this.feePolicyFor(origin, chainId),
+    }
+  }
+
+  /** The account a connected origin is seated on, or null while locked, disconnected or re-seated away. */
+  private async sessionFor(origin: string): Promise<{ accountId: string; addresses: readonly string[] } | null> {
+    const d = this.deps
+    const row = d.sites.registry.get(origin)
+    if (!row?.connected) return null
+    const status = await d.vault.status()
+    if (!status.unlocked) return null
+    const account = (await d.vault.accounts()).find((a) => a.id === row.accountId)
+    if (!account) {
+      await d.sites.disconnect(origin)
+      return null
+    }
+    return { accountId: account.id, addresses: [account.address] }
+  }
+
+  /**
+   * The fee policy an origin may read (§8.6). Only ElectroSwap's own sites,
+   * and only once connected — the flow has already required the session, and
+   * `isFirstPartyOrigin` requires https, so a cleartext page an attacker can
+   * rewrite never gets an answer to encode with.
+   *
+   * Everything else, including a failure to read the tier, is `null`. A site
+   * that cannot learn the fee encodes none, which costs us the fee on that
+   * swap; the alternative — guessing a tier — would overcharge someone.
+   */
+  /** `{ walletFee }` for a first-party sheet, or `{}` so the context key stays absent for everyone else. */
+  private async walletFeeFor(origin: string, chainId: number): Promise<{ walletFee?: { sink: Hex; bips: number; tier: string } }> {
+    const policy = await this.feePolicyFor(origin, chainId)
+    return policy ? { walletFee: policy } : {}
+  }
+
+  private async feePolicyFor(origin: string, chainId: number): Promise<{ sink: Hex; bips: number; tier: string } | null> {
+    if (!isFirstPartyOrigin(origin)) return null
+    const policy = this.deps.walletFeePolicy
+    if (!policy) return null
+    const session = await this.sessionFor(origin)
+    if (!session) return null
+    try {
+      return await policy(chainId, session.accountId)
+    } catch {
+      return null
     }
   }
 
@@ -911,6 +961,18 @@ export class ProviderService {
       now: d.platform.now(),
       // Our own swap must pay exactly what the schedule said (T10); anything else never sees the field.
       ...(origin === 'internal:swap' ? { expectedFee } : {}),
+      /*
+        What we would have charged, for a sheet ElectroSwap's own site raised
+        (§8.6). It lets the statement name the fee and the rung instead of an
+        anonymous address, and lets `walletFeeOvercharge` see a site charging
+        above the rung.
+
+        Only first-party origins, so this is one cached tier read on sheets
+        raised by one site — not a chain call on every dApp signature. It is a
+        reading and never an assertion: a failure answers null, the sheet says
+        nothing about a wallet fee, and nothing is blocked for want of it.
+      */
+      ...(await this.walletFeeFor(origin, chainId)),
       ...(origin === 'internal:bridge' ? { bridgeRecipient } : {}),
       originBudget: this.originBudget(origin, activity),
       lastCopiedAddress: this.lastCopiedAddress(),

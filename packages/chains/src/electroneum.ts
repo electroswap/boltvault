@@ -106,8 +106,9 @@ export const ELECTRONEUM_ADDRESSES: Record<52014 | 5201420, ElectroSwapAddresses
 /*
   The fee sink and schedule contracts are gone from the wallet's path — the fee
   recipient and the holder ladder are configuration now (`fees.json`, read
-  through `./fees.ts`). The Solidity in contracts/ still exists and the deployed
-  instances are still owned; nothing here reads them. See fees.ts for why.
+  through `./fees.ts`). Their Solidity has been deleted from this repo too; the
+  deployed instances are still owned, and git history keeps the source. Nothing
+  here reads them. See fees.ts for why.
 */
 
 export const GRAPHQL_URL = 'https://electroswap.io/graphql'

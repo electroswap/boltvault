@@ -6,6 +6,34 @@
 /** The names a phisher imitates. Subdomains of these are fine; lookalikes are not. */
 export const PROTECTED_HOSTS: readonly string[] = ['electroswap.io', 'electroneum.com', 'ens.electroneum.com', 'hyperlane.xyz', 'metamask.io', 'ledger.com', 'trezor.io', 'walletconnect.com']
 
+/**
+ * ElectroSwap's own web surfaces — the sites that are us rather than a dApp.
+ *
+ * Two things key off this and nothing else should: the wallet answers
+ * `boltvault_feePolicy` only here (an account's tier is a reading of what it
+ * holds, and any site being able to ask would be a fingerprint), and the
+ * firewall reads a `PAY_PORTION` to our own sink from here as our wallet fee
+ * rather than as a third party's tip.
+ *
+ * It is deliberately a suffix match over one registrable name, not a list of
+ * hosts: `app.`, `www.` and whatever ops serves next are all ElectroSwap, and a
+ * list that has to be edited per subdomain is a list that will be wrong. It is
+ * not a trust grant — a first-party origin still goes through every rule, and
+ * `typosquat` above is what stops `electroswap.io.evil.net` reaching here.
+ */
+export const FIRST_PARTY_HOSTS: readonly string[] = ['electroswap.io']
+
+/** True for ElectroSwap's own origins (and their subdomains) over https. */
+export function isFirstPartyOrigin(origin: string, firstParty: readonly string[] = FIRST_PARTY_HOSTS): boolean {
+  // http:// is never us. The in-app browser upgrades what a user types, but a
+  // cleartext page is one an attacker can rewrite in flight, and handing it the
+  // fee policy — or believing its fee — would be trusting the rewrite.
+  if (!origin.toLowerCase().startsWith('https://')) return false
+  const host = hostOf(origin)
+  if (!host) return false
+  return firstParty.some((p) => host === p || host.endsWith(`.${p}`))
+}
+
 /** `scheme://host[:port]` for http(s); null for anything a session may not be keyed by. */
 export function registrableOrigin(url: string): string | null {
   let u: URL

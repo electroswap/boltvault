@@ -154,6 +154,17 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     its own as the bell beside the settings key — a notification you have not
     read is a thing that came to you, which is a header's job rather than a
     tile's.
+
+    Nine stays nine on the phone, where Web takes Activity's cell.
+
+    The browser was built at M9 and then had one door: an icon in the header of
+    Explore's tokens segment. A dApp browser nobody can find is a dApp browser
+    nobody has, so it needs a tile — but a tenth breaks the 3×3 into a row of
+    one, and `ActionGrid` is three columns by design. Activity is the cell that
+    can go, because it is also the third tab in the dock: losing the tile costs
+    a tap from one screen, while the browser had no other way in at all. On the
+    extension nothing moves — there is no in-app browser there, since the
+    extension already lives in one.
   */
   const tiles: readonly Tile[] = [
     { id: 'swap', icon: 'swap', label: t({ id: 'tab.swap', message: 'Swap' }), badge: null, onPress: () => router.setTab('swap') },
@@ -164,7 +175,9 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     { id: 'collectibles', icon: 'nft', label: t({ id: 'key.collectibles', message: 'Collectibles' }), badge: offers > 0 ? { text: t({ id: 'home.badge.offers', message: '{n} offers', values: { n: offers } }), tone: 'ember' } : null, onPress: () => router.navigate('explore', { segment: 'collectibles' }) },
     { id: 'launchpad', icon: 'launch', label: t({ id: 'key.launchpad', message: 'Launchpad' }), badge: live > 0 ? { text: t({ id: 'home.badge.live', message: '{n} live', values: { n: live } }), tone: 'arc' } : null, onPress: () => router.navigate('explore', { segment: 'launch' }) },
     { id: 'farms', icon: 'farm', label: t({ id: 'key.farms', message: 'Farms' }), badge: toCollect > 0n ? { text: t({ id: 'home.badge.collect', message: '{d} DYNO', values: { d: dyno >= 10 ? dyno.toFixed(0) : dyno.toFixed(1) } }), tone: 'surge' } : null, onPress: () => router.navigate('explore', { segment: 'farms' }) },
-    { id: 'activity', icon: 'activity', label: t({ id: 'tab.activity', message: 'Activity' }), badge: pendingTx > 0 ? { text: t({ id: 'home.badge.pending', message: '{n} pending', values: { n: pendingTx } }), tone: 'arc' } : null, onPress: () => router.setTab('activity') },
+    host.browser
+      ? { id: 'web', icon: 'globe', label: t({ id: 'key.web', message: 'Web' }), badge: null, onPress: () => router.navigate('browser') }
+      : { id: 'activity', icon: 'activity', label: t({ id: 'tab.activity', message: 'Activity' }), badge: pendingTx > 0 ? { text: t({ id: 'home.badge.pending', message: '{n} pending', values: { n: pendingTx } }), tone: 'arc' } : null, onPress: () => router.setTab('activity') },
   ]
   /*
     ETN's own price does not come from the market list.

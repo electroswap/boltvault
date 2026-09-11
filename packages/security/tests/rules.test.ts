@@ -1,4 +1,4 @@
-import { ELECTRONEUM_ADDRESSES } from '@boltvault/chains'
+import { ELECTRONEUM_ADDRESSES, feeRecipient } from '@boltvault/chains'
 import { encodeAbiParameters, encodeFunctionData, maxUint256, parseAbiParameters, type Hex } from 'viem'
 import { describe, expect, it } from 'vitest'
 import { ERC20_ABI, ERC721_ABI, MULTICALL3_ABI, UNIVERSAL_ROUTER_ABI } from '../src/abis'
@@ -417,5 +417,87 @@ describe('our own swap fee (T10)', () => {
       expect(a.severity).not.toBe('danger')
       expect(a.presentation.typedConfirmation).toBeNull()
     })
+  })
+})
+
+/*
+  The wallet fee arriving from ElectroSwap's own site (§8.6, §8.18).
+
+  Until the site encoded it, every `PAY_PORTION` from a dApp origin meant a
+  stranger taking a cut, and the sheet said so. Now our own site encodes our
+  own sink, so the same bytes mean the ordinary wallet fee — and the two must
+  not be told apart by the origin, which a fork or a mirror could change, but
+  by the recipient, which is pinned in the build.
+*/
+describe("the wallet fee from ElectroSwap's own site", () => {
+  const OURS = feeRecipient(52014) as Hex
+  const urData = (recipient: Hex, bips: bigint): Hex => {
+    const commands = `0x${UR_COMMAND.V3_SWAP_EXACT_IN.toString(16).padStart(2, '0')}${UR_COMMAND.PAY_PORTION.toString(16).padStart(2, '0')}` as Hex
+    const inputs = [
+      encodeAbiParameters(parseAbiParameters('address, uint256, uint256, bytes, bool'), ['0x0000000000000000000000000000000000000002', 1n, 1n, '0x', true]),
+      encodeAbiParameters(parseAbiParameters('address, address, uint256'), [TOKEN, recipient, bips]),
+    ]
+    return encodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commands, inputs, 1n] })
+  }
+  const SITE = 'https://app.electroswap.io'
+  const tier = { sink: OURS, bips: 30, tier: 'Magneto' }
+
+  it('a portion to our own sink is our fee, not a third party tip', () => {
+    const a = run(tx(A.universalRouter as Hex, urData(OURS, 30n)), { walletFee: tier }, SITE)
+    expect(codes(a)).not.toContain('DAPP_TIPS_THIRD_PARTY')
+    expect(codes(a)).not.toContain('WALLET_FEE_OVERCHARGE')
+  })
+
+  it('a portion to anyone else is still a third party tip', () => {
+    const a = run(tx(A.universalRouter as Hex, urData(UNKNOWN, 30n)), { walletFee: tier }, SITE)
+    expect(codes(a)).toContain('DAPP_TIPS_THIRD_PARTY')
+  })
+
+  /*
+    The disclosure the owner asked for. The old line named an address and a
+    percentage and left the user to work out whose money it was; a fee we
+    charge has to say that it is ours and which rung it came from.
+  */
+  it('names the fee and the rung in the statements instead of a bare address', () => {
+    const a = run(tx(A.universalRouter as Hex, urData(OURS, 30n)), { walletFee: tier }, SITE)
+    expect(a.statements.map((s) => s.text)).toContain('BoltVault wallet fee 0.30% of the output · Magneto tier')
+  })
+
+  it('says whose fee it is even when the rung could not be read', () => {
+    const a = run(tx(A.universalRouter as Hex, urData(OURS, 50n)), {}, SITE)
+    expect(a.statements.map((s) => s.text)).toContain('BoltVault wallet fee 0.50% of the output')
+    expect(codes(a)).not.toContain('DAPP_TIPS_THIRD_PARTY')
+  })
+
+  it('charging above the rung is danger, and takes a typed confirmation', () => {
+    const a = run(tx(A.universalRouter as Hex, urData(OURS, 50n)), { walletFee: tier }, SITE)
+    expect(codes(a)).toContain('WALLET_FEE_OVERCHARGE')
+    expect(a.severity).toBe('danger')
+    expect(a.presentation.typedConfirmation).toBe('app.electroswap.io')
+  })
+
+  /*
+    Under-charging is our problem, not the user's. A wallet that warned about
+    paying less than it hoped for would be reading as a shakedown, and §7.10
+    does not allow the sheet to lobby.
+  */
+  it('charging below the rung, or not at all, says nothing', () => {
+    expect(codes(run(tx(A.universalRouter as Hex, urData(OURS, 10n)), { walletFee: tier }, SITE))).not.toContain('WALLET_FEE_OVERCHARGE')
+    const commands = `0x${UR_COMMAND.V3_SWAP_EXACT_IN.toString(16).padStart(2, '0')}` as Hex
+    const inputs = [encodeAbiParameters(parseAbiParameters('address, uint256, uint256, bytes, bool'), ['0x0000000000000000000000000000000000000002', 1n, 1n, '0x', true])]
+    const none = encodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commands, inputs, 1n] })
+    const a = run(tx(A.universalRouter as Hex, none), { walletFee: tier }, SITE)
+    expect(codes(a)).not.toContain('WALLET_FEE_OVERCHARGE')
+    expect(codes(a)).not.toContain('DAPP_TIPS_THIRD_PARTY')
+  })
+
+  /*
+    T10 is a separate rule with a separate field, and it stays that way: the
+    reading must never become the assertion our own Swap screen is held to.
+  */
+  it('our own swap is still judged by expectedFee, not by this', () => {
+    const a = run(tx(A.universalRouter as Hex, urData(OURS, 50n)), { walletFee: tier }, 'internal:swap')
+    expect(codes(a)).not.toContain('WALLET_FEE_OVERCHARGE')
+    expect(codes(a)).toContain('FEE_SINK_MISMATCH')
   })
 })

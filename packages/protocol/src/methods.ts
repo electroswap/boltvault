@@ -31,6 +31,7 @@ export const SAFE_METHODS: ReadonlySet<string> = new Set([
   'eth_accounts',
   'eth_subscribe',
   'eth_unsubscribe',
+  'boltvault_feePolicy',
 ])
 
 /**
@@ -68,6 +69,15 @@ export const SESSION_METHODS: ReadonlySet<string> = new Set([
   'eth_call',
   'eth_estimateGas',
   'eth_getBalance',
+  /*
+    The wallet fee ElectroSwap's own site should charge for this account
+    (master plan §8.6, §8.18). It is here rather than in PUBLIC_METHODS
+    because the answer is a reading of what the account holds: the tier is a
+    BOLT/DYNO balance in four buckets, and a page that could ask before
+    connecting would learn it of anyone who merely visited. `RpcFlow.safe`
+    narrows it further — only ElectroSwap's own origins get an answer at all.
+  */
+  'boltvault_feePolicy',
   'eth_getCode',
   'eth_getStorageAt',
   'eth_getLogs',

@@ -64,7 +64,27 @@ export default tseslint.config(
   {
     files: ['packages/wallet/**/*.ts', 'packages/wallet/**/*.tsx'],
     rules: {
-      'no-restricted-imports': ['error', { patterns: [{ group: ['react-native', 'expo', 'expo-*'], message: 'packages/wallet composes @boltvault/ui primitives only (master plan §2.6).' }] }],
+      // `react-native-*` matters as much as `react-native` itself: the whole
+      // point of the seam is that a native module reaches the screens through
+      // a `@boltvault/ui` primitive with a web half, and `react-native-webview`
+      // imported here would compile into the extension.
+      'no-restricted-imports': ['error', { patterns: [{ group: ['react-native', 'react-native-*', '@react-native/*', 'expo', 'expo-*'], message: 'packages/wallet composes @boltvault/ui primitives only (master plan §2.6).' }] }],
+    },
+  },
+  {
+    /*
+      The extension is already a browser; it must never bundle one.
+
+      dependency-cruiser carries the same rule, but it can only see an import
+      it can resolve — and `react-native-webview` is not a dependency of this
+      workspace, so the import it is meant to catch resolves to nothing and
+      passes. ESLint matches the specifier as written, which is what the
+      mistake actually looks like: someone reaches for the WebView in the
+      extension's own code and finds out here rather than at review.
+    */
+    files: ['apps/extension/**/*.ts', 'apps/extension/**/*.tsx'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [{ group: ['react-native', 'react-native-*', '@react-native/*'], message: 'apps/extension runs inside a browser and never bundles one — the WebView is the phone’s (master plan §5.3).' }] }],
     },
   },
   {

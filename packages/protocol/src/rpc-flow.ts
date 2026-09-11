@@ -66,6 +66,15 @@ export interface RpcContext {
   readonly settings: { readonly ethSignEnabled: boolean }
   /** Fan a chain's heads out as `message` events to this origin; returns the unsubscribe. */
   subscribeHeads?(origin: string, chainId: number, subscriptionId: Hex): () => void
+  /**
+   * The wallet fee ElectroSwap's own site should encode for this origin's
+   * account (master plan §8.6), or null for every other origin.
+   *
+   * The flow only asks; the host decides who counts as first-party and what
+   * the tier is, because both answers live behind the engine. Absent in hosts
+   * that have no fee to serve, which answers null the same way.
+   */
+  feePolicy?(origin: string, chainId: number): Promise<{ sink: Hex; bips: number; tier: string } | null>
   /** The client name reported by web3_clientVersion. */
   readonly clientVersion: string
 }
@@ -209,6 +218,23 @@ export class RpcFlow {
         if (!s) throw new RpcError(RPC.UNAUTHORIZED, 'Not connected.')
         return { [hexChainId(chainId)]: { atomic: { status: 'unsupported' } } }
       }
+      /*
+        What ElectroSwap's own site should charge for this account (§8.6).
+
+        The site asks rather than computing it because it cannot compute it:
+        the DYNO leg of the score is a measured seven-day weight, and the
+        ladder can be lowered at runtime by a served override the wallet
+        refuses if it would ever charge more. A site working from its own copy
+        of the rungs would drift, and drift here either overcharges the user or
+        mismatches the firewall on every swap.
+
+        `null` is the honest answer for everyone else and for a chain with no
+        recipient configured — not an error, because "there is no fee here" is
+        a fact a caller is entitled to, and a throw would read as a failure to
+        retry.
+      */
+      case 'boltvault_feePolicy':
+        return (await this.ctx.feePolicy?.(origin, chainId)) ?? null
       case 'eth_subscribe': {
         const type = param(params, 0)
         if (type !== 'newHeads') throw new RpcError(RPC.UNSUPPORTED_METHOD, `Subscription type ${String(type)} is not supported.`)

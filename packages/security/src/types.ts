@@ -47,6 +47,7 @@ export type RiskCode =
   | 'SIM_UNAVAILABLE'
   | 'FEE_SINK_MISMATCH'
   | 'FEE_TIER_MISMATCH'
+  | 'WALLET_FEE_OVERCHARGE'
   | 'DAPP_TIPS_THIRD_PARTY'
   | 'ORIGIN_UNVERIFIED'
   | 'ORIGIN_TYPOSQUAT'
@@ -189,6 +190,22 @@ export interface AssessmentContext {
    * it and there is nothing left in the calldata to recompute it from.
    */
   readonly expectedFee?: { readonly sink: Hex; readonly bips: number; readonly onInput?: { readonly token: Hex; readonly amount: bigint } | null } | null
+  /**
+   * This account's wallet fee, for a swap ElectroSwap's own site built
+   * (master plan §8.6, §8.18).
+   *
+   * Not `expectedFee`, and deliberately not reusing it. `expectedFee` is an
+   * assertion: our Swap screen encoded these exact bytes and the sheet refuses
+   * anything else (T10, `feeSinkRules`). This is a *reading*: the site encoded
+   * something, and this says what we would have charged so the statement can
+   * name the fee and the rung instead of an anonymous address, and so a site
+   * charging more than the rung allows is caught.
+   *
+   * Populated only for ElectroSwap's own origins, and null everywhere else —
+   * including when the tier could not be read. Absent means the sheet says
+   * nothing about a wallet fee, which is the honest answer when we do not know.
+   */
+  readonly walletFee?: { readonly sink: Hex; readonly bips: number; readonly tier: string } | null
 }
 
 export interface AssetDelta {

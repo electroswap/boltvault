@@ -3,6 +3,7 @@
  * decoded request and the context; each has a code, a severity and copy in
  * the §7.10 voice. Fixtures from real drainer payloads live in the tests.
  */
+import { feeRecipient } from '@boltvault/chains'
 import { formatUnits, type Hex } from 'viem'
 import { decodeCalldata, decodeMessage, parseTypedData, type DecodedCall, type ParsedTypedData } from './decode'
 import { typosquat, hostOf, isScamOrigin } from './origin'
@@ -494,23 +495,69 @@ export const bridgeRecipientRule: Rule = ({ request, decoded, context }) => {
   }
 }
 
+/** The first `PAY_PORTION` in a decoded Universal Router call, or null. */
+function firstPortion(decoded: DecodedCall | null): { recipient: Hex; bips: bigint } | null {
+  if (!decoded || decoded.kind !== 'universal_router') return null
+  for (const c of decoded.decoded.commands) {
+    if (c.type === 'PAY_PORTION') return { recipient: c.recipient, bips: c.bips }
+  }
+  return null
+}
+
 export const dappTipsThirdParty: Rule = ({ request, decoded, origin, chainId, context }) => {
-  if (
-    request.kind !== 'transaction' ||
-    !decoded ||
-    decoded.kind !== 'universal_router' ||
-    isInternal(origin)
-  )
-    return null
-  const portions = decoded.decoded.commands.filter((c) => c.type === 'PAY_PORTION')
-  if (portions.length === 0) return null
-  const p = portions[0]
-  if (!p || p.type !== 'PAY_PORTION') return null
+  if (request.kind !== 'transaction' || isInternal(origin)) return null
+  const p = firstPortion(decoded)
+  if (!p) return null
+  /*
+    Our own sink is not a third party, whoever built the calldata.
+
+    ElectroSwap's site encodes this fee itself when BoltVault is the connected
+    wallet (§8.6), so the bytes that used to mean "some site is tipping a
+    stranger" are now the ordinary shape of a swap made on our own web UI.
+    Saying "that is the site's fee, not BoltVault's" over our own sink would be
+    a plain untruth on the sheet, and §7.10 does not allow one.
+
+    Compared against the chain's pinned recipient rather than against
+    `context.walletFee`, so it is right even when the tier could not be read,
+    and so a swap from some *other* site that pays our sink is not slandered
+    either — it is still our fee, arriving by an unusual road.
+  */
+  const ours = feeRecipient(chainId)
+  if (ours && sameAddress(p.recipient, ours)) return null
   return {
     code: 'DAPP_TIPS_THIRD_PARTY',
     severity: 'warn',
     title: 'This swap pays a fee to a third party',
     detail: `${(Number(p.bips) / 100).toFixed(2)}% of the output goes to ${label(context, chainId, p.recipient)}. That is the site's fee, not BoltVault's.`,
+  }
+}
+
+/**
+ * A site charging our fee at more than this account's rung (§8.6, §8.18).
+ *
+ * The mirror of T10. Our own Swap screen is held to the schedule exactly, and
+ * a site that encodes our sink is claiming to do the same — so a portion above
+ * what the rung allows is either a stale build, a fork, or someone who has
+ * worked out that the sink address is worth over-paying into. All three take
+ * the difference out of the user's output, which is the firewall's business.
+ *
+ * `danger` rather than `block`: the user's own funds, their own decision, and
+ * a typed confirmation is enough to make it deliberate. Under-charging raises
+ * nothing at all — that costs us revenue, not the user, and a wallet that
+ * nagged about paying *less* would be reading as a shakedown.
+ */
+export const walletFeeOvercharge: Rule = ({ request, decoded, origin, context }) => {
+  if (request.kind !== 'transaction' || isInternal(origin)) return null
+  const expected = context.walletFee
+  if (!expected) return null
+  const p = firstPortion(decoded)
+  if (!p || !sameAddress(p.recipient, expected.sink)) return null
+  if (p.bips <= BigInt(expected.bips)) return null
+  return {
+    code: 'WALLET_FEE_OVERCHARGE',
+    severity: 'danger',
+    title: 'This site is charging more than your fee tier',
+    detail: `The swap pays ${(Number(p.bips) / 100).toFixed(2)}% to the BoltVault fee sink. Your ${expected.tier} tier is ${(expected.bips / 100).toFixed(2)}%. Swapping in the wallet charges the tier.`,
   }
 }
 
@@ -973,6 +1020,7 @@ export const ALL_RULES: readonly Rule[] = [
   feeSinkRules,
   bridgeRecipientRule,
   dappTipsThirdParty,
+  walletFeeOvercharge,
   urRecipientNotSelf,
   swapMinOutImplausible,
   multicallOpaque,

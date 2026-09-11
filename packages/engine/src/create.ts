@@ -4,6 +4,7 @@
  * tests). `ready` resolves once persisted state is hydrated.
  */
 import { fromHex, type Argon2idParams } from '@boltvault/core'
+import type { Hex } from 'viem'
 import type { HidProvider, LedgerTransportProvider, TrezorConnectLike } from '@boltvault/hardware'
 import type { WalletKitLike } from '@boltvault/connect'
 import { ElectroSwapClient, fetchContractFacts } from '@boltvault/electroswap'
@@ -338,6 +339,25 @@ export function createEngine(deps: EngineDeps): Engine {
       if (!electroswap) return null
       const facts = await fetchContractFacts(electroswap, chainId, address, deps.platform.now())
       return facts ? { deployedAt: facts.deployedAt, verified: facts.verified, newAfterDays: facts.newAfterDays } : null
+    },
+    /*
+      One answer for "what does this account pay", read by both the site and
+      the sheet (§8.6, §8.18).
+
+      `holder` is built further down, like `electroswap` above; the arrow only
+      runs once a first-party site asks or a sheet is being assessed. It is the
+      same `tier()` the Swap screen quotes with, so the site cannot be handed a
+      rung the wallet would not itself charge.
+
+      A chain with no recipient, or a zero rung, is null rather than zero bips:
+      `PAY_PORTION` reverts on zero, so "no fee" has to mean "encode no fee
+      command at all", and a site handed `bips: 0` would build a swap that
+      cannot execute.
+    */
+    walletFeePolicy: async (chainId, accountId) => {
+      const tier = await holder.tier(accountId, chainId)
+      if (!tier.sink || tier.bips <= 0) return null
+      return { sink: tier.sink as Hex, bips: tier.bips, tier: tier.name }
     },
     tokenMetadata: (chainId, address) => tokens.metadata(chainId, address),
     watchAsset: (i) =>

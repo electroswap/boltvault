@@ -7,7 +7,7 @@ const ADDR = '0x1111111111111111111111111111111111111111'
 const A = 'https://a.example'
 const B = 'https://b.example'
 
-function harness(opts: { approve?: (intent: ApprovalIntent) => Promise<unknown>; ethSign?: boolean } = {}) {
+function harness(opts: { approve?: (intent: ApprovalIntent) => Promise<unknown>; ethSign?: boolean; feePolicy?: RpcContext['feePolicy'] } = {}) {
   let now = 1_000_000
   const events: Array<{ origin: string; event: ProviderEvent }> = []
   const safe: Array<{ chainId: number; method: string }> = []
@@ -35,6 +35,7 @@ function harness(opts: { approve?: (intent: ApprovalIntent) => Promise<unknown>;
     settings: { ethSignEnabled: opts.ethSign ?? false },
     clientVersion: 'BoltVault/test',
     subscribeHeads: () => () => undefined,
+    ...(opts.feePolicy ? { feePolicy: opts.feePolicy } : {}),
   }
   const flow = new RpcFlow(ctx)
   return { flow, events, safe, intents, sites, tick: (ms: number) => (now += ms) }
@@ -240,5 +241,51 @@ describe('approvals', () => {
     const h = harness({ approve: async (i) => (i.kind === 'connect' ? { accountId: 'acct', addresses: [ADDR], chainId: 52014 } : Promise.reject(new RpcError(4001, 'User rejected the request.'))) })
     await req(h, A, 'eth_requestAccounts')
     await expect(req(h, A, 'personal_sign', ['0x00', ADDR])).rejects.toMatchObject({ code: 4001 })
+  })
+})
+
+/*
+  `boltvault_feePolicy` (§8.6): what ElectroSwap's own site should charge this
+  account, so the site encodes the same `PAY_PORTION` our Swap screen would
+  rather than working the rung out from a copy of the ladder that will drift.
+
+  The flow's whole job here is the gate. Who counts as first-party, and what
+  the rung is, are the host's answers — these tests pin that the method needs a
+  session, that a host with nothing to say answers null rather than throwing,
+  and that the answer is passed through untouched.
+*/
+describe('boltvault_feePolicy', () => {
+  const policy = { sink: '0x00000000000000000000000000000000000051ab' as const, bips: 30, tier: 'Magneto' }
+
+  it('needs a session — a page that never connected cannot read the rung', async () => {
+    const h = harness({ feePolicy: async () => policy })
+    await expect(req(h, A, 'boltvault_feePolicy')).rejects.toMatchObject({ code: RPC.UNAUTHORIZED })
+  })
+
+  it('answers the host verbatim once connected', async () => {
+    const h = harness({ feePolicy: async () => policy })
+    await req(h, A, 'eth_requestAccounts')
+    expect(await req(h, A, 'boltvault_feePolicy')).toEqual(policy)
+  })
+
+  /*
+    Null, not a throw. "There is no fee here" is a fact the caller is entitled
+    to — on a chain with no recipient configured, and for every origin that is
+    not ours — and an error would read as a failure worth retrying.
+  */
+  it('answers null when the host declines, and when there is no host hook at all', async () => {
+    const declining = harness({ feePolicy: async () => null })
+    await req(declining, A, 'eth_requestAccounts')
+    expect(await req(declining, A, 'boltvault_feePolicy')).toBeNull()
+    const bare = harness()
+    await req(bare, A, 'eth_requestAccounts')
+    expect(await req(bare, A, 'boltvault_feePolicy')).toBeNull()
+  })
+
+  it('never reaches the node', async () => {
+    const h = harness({ feePolicy: async () => policy })
+    await req(h, A, 'eth_requestAccounts')
+    await req(h, A, 'boltvault_feePolicy')
+    expect(h.safe.map((s) => s.method)).not.toContain('boltvault_feePolicy')
   })
 })
