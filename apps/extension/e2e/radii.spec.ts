@@ -14,7 +14,7 @@
  *   RADII=1 pnpm exec playwright test e2e/radii.spec.ts
  */
 import { expect, test } from '@playwright/test'
-import { launchWithExtension } from './extension'
+import { launchWithHarness } from './extension'
 
 test.skip(process.env['RADII'] !== '1', 'RADII is unset')
 
@@ -30,7 +30,7 @@ interface Offender {
 
 test('no square box sits flush inside a rounded one', async () => {
   test.setTimeout(240_000)
-  const ext = await launchWithExtension()
+  const ext = await launchWithHarness()
   const found: Offender[] = []
   try {
     for (const screen of SCREENS) {

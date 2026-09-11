@@ -10,7 +10,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { PNG } from 'pngjs'
 import pixelmatch from 'pixelmatch'
-import { collectErrors, launchWithExtension } from './extension'
+import { collectErrors, launchWithHarness } from './extension'
 
 const BASELINES = join(process.cwd(), 'e2e', 'baselines')
 const OUT = join(process.cwd(), 'screenshots')
@@ -93,7 +93,7 @@ const CASES: Array<{ screen: string; scenario: string; sizes: Array<keyof typeof
 
 test('every screen renders in every size and matches its baseline', async () => {
   test.setTimeout(240_000)
-  const ext = await launchWithExtension()
+  const ext = await launchWithHarness()
   await mkdir(OUT, { recursive: true })
   await mkdir(BASELINES, { recursive: true })
   const failures: string[] = []

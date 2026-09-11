@@ -53,11 +53,27 @@ export default defineConfig({
     a reason, and one more page in the attack surface than the product needs.
 
     Excluded from a release build only. `pnpm build` still produces it, because
-    `e2e/screens.spec.ts`, `e2e/shot.spec.ts` and `e2e/radii.spec.ts` all load
-    `harness.html` out of the same `.output/chrome-mv3` — taking it out of the
-    default build would break the screenshot loop rather than the release.
+    `e2e/screens.spec.ts`, `e2e/sizing.spec.ts`, `e2e/shot.spec.ts`,
+    `e2e/radii.spec.ts`, `e2e/coldstart.spec.ts` and `e2e/landing-shots.mjs` all
+    navigate to `harness.html` — taking it out of the default build would break
+    the screenshot loop rather than the release.
   */
   filterEntrypoints: process.env['BOLTVAULT_HARNESS'] === '0' ? ['background', 'content-isolated', 'content-main', 'popup', 'sign', 'tab'] : undefined,
+  /*
+    CI has to hold both properties at once: the artifact that ships carries no
+    harness page, and the visual-regression specs still have one to point a
+    browser at. One build cannot do both, so CI makes two — and they must not
+    overwrite each other.
+
+    `.output/chrome-mv3` stays the release artifact, because tools/zip-store.mjs,
+    tools/build-manifest.mjs, the reproducible-build hash and every product spec
+    already name it. `BOLTVAULT_HARNESS_BUILD=1` (see `pnpm build:harness`) puts
+    the harness build in a suffixed sibling, `.output/chrome-mv3-harness`
+    instead. WXT clears only the directory it is about to write, so the two
+    builds never touch each other's output, and the sibling is still under the
+    already-ignored `.output`.
+  */
+  outDirTemplate: process.env['BOLTVAULT_HARNESS_BUILD'] === '1' ? '{{browser}}-mv{{manifestVersion}}{{modeSuffix}}-harness' : undefined,
   // Firefox 128+ is MV3 too: an event page instead of a worker, the same CSP (§4.7).
   manifestVersion: 3,
   manifest: ({ browser }) => ({

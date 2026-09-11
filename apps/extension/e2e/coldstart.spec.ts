@@ -13,7 +13,7 @@
  *   COLD=1 pnpm exec playwright test e2e/coldstart.spec.ts
  */
 import { test } from '@playwright/test'
-import { launchWithExtension } from './extension'
+import { launchWithHarness } from './extension'
 import { createVault, engineCall } from './flows'
 
 test.skip(process.env['COLD'] !== '1', 'COLD is unset')
@@ -39,7 +39,7 @@ const WATCH = `
   requestAnimationFrame(tick)
 `
 
-async function openAndMeasure(ext: Awaited<ReturnType<typeof launchWithExtension>>, label: string, url: string): Promise<void> {
+async function openAndMeasure(ext: Awaited<ReturnType<typeof launchWithHarness>>, label: string, url: string): Promise<void> {
   const p = await ext.context.newPage()
   await p.setViewportSize({ width: 400, height: 600 })
   await p.addInitScript(WATCH)
@@ -55,7 +55,7 @@ async function openAndMeasure(ext: Awaited<ReturnType<typeof launchWithExtension
 
 test('cold open, close, reopen', async () => {
   test.setTimeout(240_000)
-  const ext = await launchWithExtension()
+  const ext = await launchWithHarness()
   try {
     const { tab } = await createVault(ext)
     // The ES Deployer, from the repo's own deploy config — a public address

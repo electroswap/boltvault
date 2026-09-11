@@ -1,8 +1,12 @@
 // BoltVault home-screen widget (master plan §7.13): the account's Field
 // signature with its name and tier, the total when the user opted in, and a
 // Live Activity for a bridge in flight. Reads the snapshot the app writes to
-// the App Group container; never a key, never an address book. Built as a
-// WidgetKit extension target by the config plugin (apps/mobile/plugins).
+// the App Group container (src/widget.ts); never a key, never an address book.
+//
+// It lives here, beside expo-target.config.js, because @bacons/apple-targets
+// compiles every file in a `targets/<name>/` directory into that target — a
+// source outside it is silently not built, which is how a widget ships blank.
+// See native/README.md: registering that plugin is still outstanding.
 import ActivityKit
 import SwiftUI
 import WidgetKit

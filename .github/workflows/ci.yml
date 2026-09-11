@@ -58,12 +58,26 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # Reproducible build (§3.7): build twice, the manifests must match; Firefox MV3 builds too.
+      # `build:repro` is BOLTVAULT_HARNESS=0, so `.output/chrome-mv3` is the
+      # artifact that ships — no screenshot harness in it, and the hash below is
+      # over exactly those bytes.
       - run: pnpm build:repro
       - run: cp apps/extension/.output/chrome-mv3.manifest.json /tmp/first.json
       - run: pnpm build:repro
       - run: cmp /tmp/first.json apps/extension/.output/chrome-mv3.manifest.json
+      # ...which leaves the visual-regression specs with no harness page to open.
+      # So build it separately, into `.output/chrome-mv3-harness`: the release
+      # artifact and its hash are untouched (WXT clears only the directory it
+      # writes), and e2e/extension.ts points the screenshot specs at the sibling.
+      # Both properties hold at once — nothing ships the harness, everything
+      # still gets photographed.
+      - run: pnpm build:harness
       - run: pnpm --filter @boltvault/extension exec playwright install --with-deps chromium
-      - run: pnpm --filter @boltvault/extension e2e
+      # BOLTVAULT_RELEASE_BUILD=1 tells gate.spec.ts that `.output/chrome-mv3` is
+      # meant to be a release: without it the size gate SKIPS itself on a build
+      # that contains a harness, which on CI would hide the harness shipping
+      # again behind a green run.
+      - run: BOLTVAULT_RELEASE_BUILD=1 pnpm --filter @boltvault/extension e2e
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -109,3 +123,30 @@ jobs:
             fi
             echo "::warning::placeholder values above must be filled in before release"
           fi
+      # The iOS home-screen widget is a second Xcode target, generated at prebuild
+      # by @bacons/apple-targets from apps/mobile/targets/widget. Nothing in the JS
+      # toolchain compiles it, so its absence is invisible until someone installs a
+      # build and finds no widget — while the app writes a snapshot (src/widget.ts)
+      # into an App Group container that no extension is there to read.
+      # Same idiom as the placeholders above: warn while it is outstanding, fail on
+      # a release ref. Steps to close it: apps/mobile/native/README.md.
+      - name: iOS widget target is registered
+        env:
+          RELEASE_REF: ${{ startsWith(github.ref, 'refs/tags/') || startsWith(github.ref, 'refs/heads/release/') }}
+        run: |
+          node -e '
+            const fs = require("node:fs")
+            const app = require("./apps/mobile/app.json").expo
+            const pkg = require("./apps/mobile/package.json")
+            const deps = { ...pkg.dependencies, ...pkg.devDependencies }
+            const plugins = (app.plugins ?? []).map((p) => (Array.isArray(p) ? p[0] : p))
+            const gaps = []
+            if (!deps["@bacons/apple-targets"]) gaps.push("@bacons/apple-targets is not a dependency of apps/mobile")
+            if (!plugins.includes("@bacons/apple-targets")) gaps.push("@bacons/apple-targets is not in expo.plugins (apps/mobile/app.json)")
+            if (!app.ios?.appleTeamId) gaps.push("expo.ios.appleTeamId is unset, so the widget extension has no team to sign against")
+            if (!fs.readdirSync("apps/mobile/targets/widget").some((f) => f.endsWith(".swift"))) gaps.push("no .swift source in apps/mobile/targets/widget, and apple-targets compiles only that directory")
+            if (gaps.length === 0) process.exit(0)
+            const release = process.env.RELEASE_REF === "true"
+            console.log(`::${release ? "error" : "warning"}::iOS widget target will not be built by expo prebuild: ${gaps.join("; ")} — see apps/mobile/native/README.md`)
+            process.exit(release ? 1 : 0)
+          '

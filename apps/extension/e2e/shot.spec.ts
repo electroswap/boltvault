@@ -27,7 +27,7 @@
 import { test } from '@playwright/test'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { collectErrors, launchWithExtension } from './extension'
+import { collectErrors, launchWithHarness } from './extension'
 
 const SIZES = {
   popup: { body: 'extension-popup', width: 400, height: 600 },
@@ -42,7 +42,7 @@ test.skip(!SHOTS, 'SHOTS is unset')
 
 test('shots', async () => {
   test.setTimeout(240_000)
-  const ext = await launchWithExtension()
+  const ext = await launchWithHarness()
   await mkdir(OUT, { recursive: true })
   const small: string[] = []
   try {

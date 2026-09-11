@@ -18,7 +18,7 @@
  *
  * Run it from the extension package, which is where Playwright resolves:
  *
- *   pnpm --filter @boltvault/extension build       # once, if .output is stale
+ *   pnpm build:harness                             # once, if .output is stale
  *   cd apps/extension && node e2e/landing-shots.mjs --out /tmp/shots
  *   cd apps/extension && node e2e/landing-shots.mjs --out /tmp/shots --only home,legends
  *
@@ -27,12 +27,24 @@
  * `VAULT.screens` (apps/docs/src/landing/facts.ts).
  */
 import { chromium } from '@playwright/test'
+import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const EXTENSION_DIR = fileURLToPath(new URL('../.output/chrome-mv3/', import.meta.url))
+/**
+ * The build with `harness.html` in it. A release build strips the harness
+ * (wxt.config.ts `filterEntrypoints`), so `pnpm build:harness` puts one in a
+ * suffixed sibling; a plain `pnpm build` still writes it into `.output/chrome-mv3`.
+ * Say which is missing outright rather than opening a page that is not there.
+ */
+const CANDIDATES = ['../.output/chrome-mv3-harness/', '../.output/chrome-mv3/'].map((p) => fileURLToPath(new URL(p, import.meta.url)))
+const EXTENSION_DIR = CANDIDATES.find((dir) => existsSync(join(dir, 'harness.html')))
+if (!EXTENSION_DIR) {
+  process.stderr.write(`no harness page in either build:\n${CANDIDATES.map((d) => `  ${join(d, 'harness.html')}`).join('\n')}\nRun \`pnpm build:harness\` first.\n`)
+  process.exit(2)
+}
 
 /** The app area, in the phone's own logical pixels, and the scale to render it at. */
 export const SHOT_WIDTH = 390

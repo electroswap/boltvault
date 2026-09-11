@@ -15,7 +15,7 @@
  * not actionable.
  */
 import { expect, test } from '@playwright/test'
-import { launchWithExtension } from './extension'
+import { launchWithExtension, launchWithHarness } from './extension'
 import { createVault } from './flows'
 
 const WIDTH = 400
@@ -119,7 +119,7 @@ test('no navigation makes the popup document wider than 400px', async () => {
  * where it simply scrolls. This is the number that cannot drift.
  */
 test('home fits a 400x600 popup without scrolling', async () => {
-  const ext = await launchWithExtension()
+  const ext = await launchWithHarness()
   try {
     const page = await ext.context.newPage()
     await page.setViewportSize({ width: 400, height: 600 })

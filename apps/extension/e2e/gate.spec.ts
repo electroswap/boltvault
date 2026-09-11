@@ -66,9 +66,19 @@ test('bundle: popup ≤ 600 KB gzip, no eval / new Function anywhere', async () 
     into the shared chunk — so measuring one would be measuring development
     scaffolding. Say which build this is rather than failing a developer's loop
     for a number that was never about them.
+
+    On CI that skip would be the hole. CI builds the release into this exact
+    directory and runs the suite against it, so if the harness ever shipped
+    again the gate would quietly stop measuring instead of going red — the
+    failure would look like a pass. `BOLTVAULT_RELEASE_BUILD=1` says outright
+    which build this is meant to be, and turns the skip back into the assertion
+    it was standing in for: a release carries no harness, full stop.
   */
-  const isRelease = !files.some((f) => f.includes('harness'))
-  if (!isRelease) {
+  const harnessFiles = files.filter((f) => f.includes('harness')).map((f) => f.replace(EXTENSION_DIR, ''))
+  if (process.env['BOLTVAULT_RELEASE_BUILD'] === '1') {
+    expect(harnessFiles, 'this build was declared a release; a release ships no screenshot harness (wxt.config.ts filterEntrypoints)').toEqual([])
+  }
+  if (harnessFiles.length > 0) {
     console.log(`skipping the size assertion: this is a development build (${(popupGz / 1024).toFixed(0)} KB includes the harness). Run \`pnpm build:release\` to measure what ships.`)
     test.skip(true, 'development build — run pnpm build:release to measure the shipped bundle')
     return
