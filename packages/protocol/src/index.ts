@@ -5,5 +5,7 @@ export { RpcFlow, hexChainId, toDecChainId, type RpcContext, type ProviderEvent,
 export * from './wire'
 export { startBridge, mintNonce, hasOpaqueOrigin, type Bridge, type BridgeDeps, type BridgePort, type BridgeWindow } from './bridge'
 export { installProvider, windowTransport, BoltVaultProvider, ProviderRpcError, type ProviderConfig, type PageTransport, type WindowLike, type InstallResult, type Eip6963Info, type RequestArguments } from './page-provider'
+export { installFromChannel, type MainWorldOptions, type MainWorldWindow } from './main-world'
+export { mainWorldDeclared, pageProviderWebAccessible, injectPageProvider, PAGE_PROVIDER_FILE, type InjectableDocument, type InjectableRoot, type InjectableScript, type ManifestContentScript, type ManifestLike, type ManifestWebAccessibleResource } from './fallback'
 export { BOLTVAULT_ICON, BOLTVAULT_NAME, BOLTVAULT_PROVIDER_UUID, BOLTVAULT_RDNS } from './identity'
 export { webviewTransport, webviewInpageMessage, parseWebviewRequest, WEBVIEW_CHANNEL_GLOBAL, type WebViewWindowLike } from './webview'

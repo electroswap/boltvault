@@ -3,6 +3,7 @@ import { createRequire } from 'node:module'
 import { dirname } from 'node:path'
 import { defineConfig } from 'wxt'
 import type { Plugin } from 'vite'
+import { buildPageProvider } from '../../tools/build-page-provider.mjs'
 
 /**
  * Prebuilt dependencies (the Keystone UR registry, Trezor Connect) carry
@@ -94,8 +95,54 @@ export default defineConfig({
       extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
     },
     action: { default_title: 'BoltVault' },
-    ...(browser === 'firefox' ? { browser_specific_settings: { gecko: { id: 'boltvault@electroswap.io', strict_min_version: '128.0' } } } : {}),
+    ...(browser === 'firefox'
+      ? {
+          browser_specific_settings: { gecko: { id: 'boltvault@electroswap.io', strict_min_version: '128.0' } },
+          /*
+            The AMO fallback's provider script (§4.7), and the one crack in
+            §3.5's "web_accessible_resources empty".
+
+            The trade, stated plainly: a web-accessible resource is reachable
+            from any page that knows the extension's origin, so on a page where
+            the fallback fires, `moz-extension://<uuid>/page-provider.js` shows
+            up as a subresource and the per-install UUID becomes learnable by
+            that page. That is a fingerprinting surface the Chrome build does
+            not have — which is exactly why this key exists only on the Firefox
+            manifest, where the fallback is the difference between a wallet and
+            no wallet. Chrome ≥ 117 honours `world: 'MAIN'` in the manifest
+            unconditionally, so its build keeps the property intact and ships no
+            web-accessible resource at all.
+
+            Scoped as tightly as Gecko allows: one file, and only to http(s)
+            pages — the same set the content scripts already match, and the only
+            set that can ever need it. Chrome's `use_dynamic_url` (a per-session
+            resource URL) would narrow it further but is not implemented in
+            Firefox; Firefox's own per-install random `moz-extension://<uuid>`
+            origin is the equivalent defence, and it is why the leak above is an
+            install-scoped identifier rather than a constant that identifies
+            BoltVault users to everyone.
+          */
+          web_accessible_resources: [{ resources: ['page-provider.js'], matches: ['http://*/*', 'https://*/*'] }],
+        }
+      : {}),
   }),
+  hooks: {
+    /*
+      `page-provider.js`, the self-contained IIFE the isolated bridge injects
+      when a browser rejects the manifest's MAIN-world content script (§4.7).
+      Built by the same tool and from the same `packages/protocol` source as the
+      phone's copy, so the three bodies cannot drift; the tool holds the 25 KB
+      budget and the no-eval gate (§4.2).
+
+      Emitted only where it is declared web-accessible. A file nobody can load
+      is dead weight in the Chrome artifact and one more thing in the
+      reproducible-build hash.
+    */
+    'build:publicAssets': async (wxt, files) => {
+      if (wxt.config.browser !== 'firefox') return
+      files.push({ relativeDest: 'page-provider.js', contents: await buildPageProvider('extension') })
+    },
+  },
   vite: () => ({
     plugins: [react(), noFunctionGlobal()],
     resolve: {

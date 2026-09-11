@@ -5,11 +5,11 @@
  * technical details, reorders, hides or removes; the header's Add opens the
  * four ways in. Nothing technical is printed on a row — it lives in Details.
  */
-import { Body, Column, Dot, Icon, IconButton, Input, Key, Pill, Plate, Pressable, Row, ScrollView, metrics, paint } from '@boltvault/ui'
+import { Body, Column, Dot, Icon, IconButton, Input, Key, Pill, Plate, Pressable, Row, ScrollView, Sheet, WordGrid, metrics, paint } from '@boltvault/ui'
 import type { AccountView, SeedView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { AccountRow } from '../components/accounts/AccountRow'
-import { AccountDetailsSheet, ConfirmSheet, MenuSheet, RenameSheet, RevealSheet, type MenuItem } from '../components/accounts/AccountSheets'
+import { AccountDetailsSheet, ConfirmSheet, MenuSheet, RenameSheet, type MenuItem } from '../components/accounts/AccountSheets'
 import { AddAccountSheet } from '../components/accounts/AddAccountSheet'
 import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
@@ -18,6 +18,7 @@ import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { useReducedMotion } from '../state/useReducedMotion'
 import { useWalletState } from '../state/useWalletState'
+import { useSecretGuard } from './onboarding/useSecretGuard'
 
 type Group = { id: string; title: string; icon: 'key' | 'lock' | 'hardware' | 'eye'; items: AccountView[]; seed?: SeedView }
 type SheetState = { kind: 'menu' | 'details' | 'rename' | 'confirm'; account: AccountView } | { kind: 'seedMenu' | 'renameSeed' | 'reveal'; seed: SeedView } | { kind: 'add' } | null
@@ -236,8 +237,135 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
         reducedMotion={reducedMotion}
         testID="confirm-remove"
       />
-      <RevealSheet open={sheet?.kind === 'reveal'} onClose={() => setSheet(null)} seed={sheet?.kind === 'reveal' ? sheet.seed : null} reducedMotion={reducedMotion} />
+      <SeedRevealSheet open={sheet?.kind === 'reveal'} onClose={() => setSheet(null)} seed={sheet?.kind === 'reveal' ? sheet.seed : null} reducedMotion={reducedMotion} />
       <AddAccountSheet open={sheet?.kind === 'add'} onClose={() => setSheet(null)} onAdded={refresh} reducedMotion={reducedMotion} />
     </Column>
+  )
+}
+
+/**
+ * The recovery-phrase reveal (master plan §3.2, §8.1). Opened from a wallet's
+ * menu, and only on a surface where secrets may render — the menu entry itself
+ * is gated on `host.secretsAllowed`, so this never reaches the popup.
+ *
+ * Any factor the vault is wrapped under opens it, not only the password: the
+ * engine's `vault.reveal` takes a password, a passkey PRF secret or a device
+ * key, and `wraps` (readable while locked) says which of those this vault
+ * actually has. A factor that is not enrolled is not offered, and nothing here
+ * weakens the password, which is always present and always first.
+ *
+ * It lives in this screen rather than with the other account sheets because it
+ * is the only one that touches a secret and the only one that needs the host's
+ * authenticators.
+ */
+function SeedRevealSheet({ open, onClose, seed, reducedMotion = false }: { open: boolean; onClose: () => void; seed: SeedView | null; reducedMotion?: boolean }) {
+  const engine = useEngine()
+  const host = useHost()
+  const { vault } = useWalletState()
+  const [password, setPassword] = useState('')
+  const [words, setWords] = useState<string[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [passkeyOk, setPasskeyOk] = useState(false)
+  const [biometricOk, setBiometricOk] = useState(false)
+  const passkeyIds = (vault?.wraps ?? []).filter((w) => w.by === 'prf').map((w) => w.id)
+  const deviceWrapped = (vault?.wraps ?? []).some((w) => w.by === 'device')
+  // Arms screenshot blocking while the phrase is on screen; must run before the
+  // `!seed` early return so the hook order stays stable.
+  const { masked } = useSecretGuard(words !== null)
+
+  useEffect(() => {
+    if (!open) {
+      setPassword('')
+      setWords(null)
+      setError(null)
+    }
+  }, [open])
+
+  useEffect(() => {
+    let alive = true
+    if (passkeyIds.length && host.passkeys) host.passkeys.supported().then((ok) => alive && setPasskeyOk(ok), () => undefined)
+    return () => {
+      alive = false
+    }
+  }, [host.passkeys, passkeyIds.length])
+
+  // A device wrap can outlive its key: changing the enrolled biometric set
+  // invalidates the keystore entry, so ask the keystore, not just the vault.
+  useEffect(() => {
+    let alive = true
+    if (deviceWrapped && host.deviceKey) host.deviceKey.available().then((ok) => alive && setBiometricOk(ok), () => undefined)
+    return () => {
+      alive = false
+    }
+  }, [host.deviceKey, deviceWrapped])
+
+  if (!seed) return null
+
+  /** `failure` replaces the engine's message where a raw one would be noise (a cancelled prompt, a passkey that is not this vault's). */
+  const show = async (read: () => Promise<{ mnemonic: string } | null>, failure?: string): Promise<void> => {
+    setBusy(true)
+    setError(null)
+    try {
+      const r = await read()
+      // Null is a cancelled prompt — a choice, not a failure worth shouting about.
+      if (!r) return
+      setWords(r.mnemonic.split(' '))
+      setPassword('')
+    } catch (err) {
+      setError(failure ?? (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const reveal = (): Promise<void> => show(() => engine.vault.reveal({ seedId: seed.id, password }))
+  const revealWithPasskey = (): Promise<void> =>
+    show(async () => {
+      if (!host.passkeys) return null
+      const k = await host.passkeys.get(passkeyIds)
+      return engine.vault.reveal({ seedId: seed.id, credentialId: k.credentialId, prfSecretHex: k.prfSecretHex })
+    }, t({ id: 'reveal.passkey.fail', message: 'The passkey did not open the vault. Use your password.' }))
+  const revealWithBiometric = (): Promise<void> =>
+    show(async () => {
+      const deviceKey = host.deviceKey
+      if (!deviceKey) return null
+      const keyHex = await deviceKey.read(t({ id: 'reveal.biometric.reason', message: 'Show your recovery phrase' }))
+      if (keyHex === null) return null
+      return engine.vault.reveal({ seedId: seed.id, keyId: deviceKey.id, keyHex })
+    }, t({ id: 'reveal.biometric.fail', message: 'That did not open the vault. Use your password.' }))
+
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={t({ id: 'reveal.title', message: 'Recovery phrase · {label}', values: { label: seed.label } })}
+      quiet
+      reducedMotion={reducedMotion}
+      footer={words ? <Key label={t({ id: 'reveal.hide', message: 'Hide' })} kind="secondary" size="compact" onPress={onClose} /> : <Key label={t({ id: 'reveal.key', message: 'Reveal' })} size="compact" disabled={busy || !password} onPress={() => void reveal()} testID="reveal-submit" />}
+      testID="reveal"
+    >
+      {words ? (
+        /* Screenshot-blocked while shown, masked the moment this stops being the active surface — the same treatment Backup gives the same secret. */
+        masked ? (
+          <Column minHeight={168} alignItems="center" justifyContent="center" gap="$2" testID="reveal-masked">
+            <Icon name="eyeOff" size={20} color={paint.mute} />
+            <Body tone="mute" size="caption">
+              {t({ id: 'secret.masked', message: 'Hidden while this window is not in front' })}
+            </Body>
+          </Column>
+        ) : (
+          <WordGrid words={words} />
+        )
+      ) : (
+        <Column gap="$2">
+          <Body tone="mute">{t({ id: 'reveal.body', message: 'Enter your password. Make sure nobody can see your screen.' })}</Body>
+          <Input value={password} onChange={setPassword} secure autoFocus onSubmit={() => void reveal()} testID="reveal-password" />
+          {passkeyOk ? <Key label={t({ id: 'reveal.passkey', message: 'Reveal with passkey' })} kind="secondary" size="compact" disabled={busy} onPress={() => void revealWithPasskey()} testID="reveal-passkey" /> : null}
+          {biometricOk ? <Key label={t({ id: 'reveal.biometric', message: 'Reveal with biometrics' })} kind="secondary" size="compact" disabled={busy} onPress={() => void revealWithBiometric()} testID="reveal-biometric" /> : null}
+          {error ? <Body tone="burn">{error}</Body> : null}
+        </Column>
+      )}
+    </Sheet>
   )
 }

@@ -27,10 +27,41 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
 
+  /*
+    The gate takes any factor this vault is wrapped under, not only the
+    password (§3.2). `wraps` is on the vault status and readable while locked,
+    so "is a passkey enrolled" is answered without asking the engine to open
+    anything; a factor that is not in `wraps` is never offered, and the
+    password path is untouched either way. Same shape as Unlock.
+  */
+  const passkeyIds = (vault?.wraps ?? []).filter((w) => w.by === 'prf').map((w) => w.id)
+  const [passkeyOk, setPasskeyOk] = useState(false)
+  const deviceWrapped = (vault?.wraps ?? []).some((w) => w.by === 'device')
+  const [biometricOk, setBiometricOk] = useState(false)
+
   // Secrets never render in the popup (§3.2): hand off to tab.html once mounted.
   useEffect(() => {
     if (!host.secretsAllowed) host.openSecretScreen?.('backup')
   }, [host])
+
+  useEffect(() => {
+    let alive = true
+    if (passkeyIds.length && host.passkeys) host.passkeys.supported().then((ok) => alive && setPasskeyOk(ok), () => undefined)
+    return () => {
+      alive = false
+    }
+  }, [host.passkeys, passkeyIds.length])
+
+  // A device wrap can outlive its key: changing the enrolled biometric set
+  // invalidates the keystore entry, so ask the keystore, not just the vault.
+  useEffect(() => {
+    let alive = true
+    if (deviceWrapped && host.deviceKey) host.deviceKey.available().then((ok) => alive && setBiometricOk(ok), () => undefined)
+    return () => {
+      alive = false
+    }
+  }, [host.deviceKey, deviceWrapped])
+
   if (!host.secretsAllowed) return null
 
   const run = async (fn: () => Promise<void>): Promise<void> => {
@@ -46,6 +77,49 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
   }
 
   const id = seedId ?? pending[0]?.id ?? null
+
+  /*
+    Deliberately no auto-prompt, unlike Unlock. There the biometric prompt is
+    the whole screen's purpose; here the user came to a page that is safe to
+    look at and the words must not appear until they ask for them — a phrase
+    that shows itself the moment the screen mounts is a phrase shown to
+    whoever is standing behind you.
+  */
+  const revealWithPasskey = async (): Promise<void> => {
+    if (!host.passkeys || !id) return
+    setBusy(true)
+    setError(null)
+    try {
+      const k = await host.passkeys.get(passkeyIds)
+      const r = await engine.vault.reveal({ seedId: id, credentialId: k.credentialId, prfSecretHex: k.prfSecretHex })
+      setWords(r.mnemonic.split(' '))
+      setPassword('')
+    } catch {
+      setError(t({ id: 'reveal.passkey.fail', message: 'The passkey did not open the vault. Use your password.' }))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const revealWithBiometric = async (): Promise<void> => {
+    const deviceKey = host.deviceKey
+    if (!deviceKey || !id) return
+    setBusy(true)
+    setError(null)
+    try {
+      const keyHex = await deviceKey.read(t({ id: 'reveal.biometric.reason', message: 'Show your recovery phrase' }))
+      // A cancelled prompt is a choice, not a failure; the password field is right there.
+      if (keyHex === null) return
+      const r = await engine.vault.reveal({ seedId: id, keyId: deviceKey.id, keyHex })
+      setWords(r.mnemonic.split(' '))
+      setPassword('')
+    } catch {
+      setError(t({ id: 'reveal.biometric.fail', message: 'That did not open the vault. Use your password.' }))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <Column flex={1} backgroundColor="$void" testID="backup">
       <Backdrop scene={scene} width={width} height={height} reducedMotion={reducedMotion} />
@@ -82,6 +156,8 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
             <Body tone="mute">{t({ id: 'backup.body', message: 'Enter your password to show the words, write them down, then confirm three of them.' })}</Body>
             <Input value={password} onChange={setPassword} secure autoFocus error={error} testID="backup-password" />
             <Key label={t({ id: 'backup.show', message: 'Show words' })} disabled={busy || !password} onPress={() => run(async () => { const r = await engine.vault.reveal({ seedId: id, password }); setWords(r.mnemonic.split(' ')); setPassword('') })} testID="backup-show" />
+            {passkeyOk ? <Key label={t({ id: 'backup.show.passkey', message: 'Show with passkey' })} kind="secondary" disabled={busy} onPress={() => void revealWithPasskey()} testID="backup-show-passkey" /> : null}
+            {biometricOk ? <Key label={t({ id: 'backup.show.biometric', message: 'Show with biometrics' })} kind="secondary" disabled={busy} onPress={() => void revealWithBiometric()} testID="backup-show-biometric" /> : null}
           </Column>
         ) : !quiz ? (
           <Column gap="$3">
