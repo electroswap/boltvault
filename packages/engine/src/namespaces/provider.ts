@@ -96,6 +96,12 @@ export interface ProviderDeps {
   /** Device signers (Ledger over HID from the worker); absent in bodies without one. */
   readonly hardware?: HardwareService
   readonly fetch?: typeof fetch
+  /**
+   * The API's shared answer for a contract's deploy instant and whether its
+   * source is verified (§3.4). Absent in a build with no API; an answer of null,
+   * or one that knows neither fact, falls through to the explorer.
+   */
+  readonly contractFacts?: (chainId: number, address: Hex) => Promise<ContractFactsAt | null>
   /** Our own API, for the trace the public RPCs cannot do (§9.2). */
   readonly apiOrigin?: string
   /** The wallet key. `POST /api/wallet/trace` is key-gated; without one there is no preview off a self-hosted node. */
@@ -140,7 +146,23 @@ const FLOOR_TTL_MS = 5 * 60 * 1000
 /** Hard ceiling on the explorer detour: a signature never waits on it. */
 const EXPLORER_TIMEOUT_MS = 1_500
 
-const UNKNOWN_CONTRACT_FACTS = { ageDays: null, verified: null } as const
+/**
+ * What an explorer or the API told us about a contract, in a form that does not
+ * rot in a cache: the instant the code was deployed, never an age.
+ *
+ * An age cached for six hours is wrong by up to six hours, and the rule it
+ * feeds cares about a seven-day boundary — so a contract cached at 6.9 days
+ * still reads as 6.9 days tomorrow, and the warning silently stops firing at
+ * exactly the wrong moment. The instant is a fact; the age is a calculation,
+ * and it belongs at the point of use.
+ */
+export interface ContractFactsAt {
+  /** Epoch milliseconds of the creation transaction, or null when unknown. */
+  readonly deployedAt: number | null
+  readonly verified: boolean | null
+}
+
+const UNKNOWN_CONTRACT_FACTS: ContractFactsAt = { deployedAt: null, verified: null }
 
 /** Blockscout v2, only the fields §3.4 asks for, all of them optional. */
 const ExplorerAddressSchema = z.object({
@@ -202,10 +224,7 @@ export class ProviderService {
   /** Origins whose transport could not vouch for them (WalletConnect without Verify). */
   private unverified = new Set<string>()
   /** Explorer answers by `chainId:address`; failures are cached too, so a dead explorer is asked once. */
-  private readonly contractFactsCache = new Map<
-    string,
-    { at: number; facts: { ageDays: number | null; verified: boolean | null } }
-  >()
+  private readonly contractFactsCache = new Map<string, { at: number; facts: ContractFactsAt }>()
   /** Collection floors in base units by `chainId:address`; `null` means the index has none. */
   private readonly floorCache = new Map<string, { at: number; wei: bigint | null }>()
   private marketClient: ElectroSwapClient | null = null
@@ -927,16 +946,39 @@ export class ProviderService {
     const key = `${chainId}:${address.toLowerCase()}`
     const now = this.deps.platform.now()
     const hit = this.contractFactsCache.get(key)
-    if (hit && now - hit.at < CONTRACT_FACTS_TTL_MS) return hit.facts
-    const facts = await this.readExplorer(chainId, address).catch(() => UNKNOWN_CONTRACT_FACTS)
-    this.contractFactsCache.set(key, { at: now, facts })
-    return facts
+    const facts =
+      hit && now - hit.at < CONTRACT_FACTS_TTL_MS ? hit.facts : await this.lookUpContract(chainId, address)
+    if (!hit || now - hit.at >= CONTRACT_FACTS_TTL_MS) this.contractFactsCache.set(key, { at: now, facts })
+    // Derived on every read, never stored: see `ContractFactsAt`.
+    return { ageDays: this.ageDaysOf(facts.deployedAt), verified: facts.verified }
   }
 
-  private async readExplorer(
-    chainId: number,
-    address: Hex,
-  ): Promise<{ ageDays: number | null; verified: boolean | null }> {
+  /** Epoch milliseconds to whole-and-fractional days, against this device's clock. */
+  private ageDaysOf(deployedAt: number | null): number | null {
+    if (deployedAt === null) return null
+    return Math.max(0, (this.deps.platform.now() - deployedAt) / 86_400_000)
+  }
+
+  /**
+   * The API first, the explorer second.
+   *
+   * The API answers from a shared cache, so the same contract is not fetched
+   * once per wallet, and it is the only source the web interface can reach —
+   * one lookup, one answer, both surfaces. It is also the only one that can
+   * ever know about a contract the explorer has not indexed.
+   *
+   * The explorer stays as the fallback because the API is Electroneum-only and
+   * can be unreachable, and because a wallet that cannot answer this question
+   * silently stops warning about new contracts. Both paths answer "unknown" on
+   * failure, which the rule reads as nothing to say.
+   */
+  private async lookUpContract(chainId: number, address: Hex): Promise<ContractFactsAt> {
+    const fromApi = await this.deps.contractFacts?.(chainId, address).catch(() => null)
+    if (fromApi && (fromApi.deployedAt !== null || fromApi.verified !== null)) return fromApi
+    return this.readExplorer(chainId, address).catch(() => UNKNOWN_CONTRACT_FACTS)
+  }
+
+  private async readExplorer(chainId: number, address: Hex): Promise<ContractFactsAt> {
     const base = getChain(chainId)?.explorer?.url?.replace(/\/+$/, '')
     if (!base) return UNKNOWN_CONTRACT_FACTS
     const f = this.deps.fetch ?? globalThis.fetch
@@ -953,7 +995,7 @@ export class ProviderService {
       const verified = info.data.is_verified ?? null
       // Blockscout renamed this field; both spellings are in the wild.
       const creation = info.data.creation_transaction_hash ?? info.data.creation_tx_hash ?? null
-      let ageDays: number | null = null
+      let deployedAt: number | null = null
       if (creation) {
         const txRes = await f(`${base}/api/v2/transactions/${creation}`, {
           signal: abort.signal,
@@ -962,11 +1004,10 @@ export class ProviderService {
         if (txRes.ok) {
           const tx = ExplorerTxSchema.safeParse(await txRes.json())
           const at = tx.success && tx.data.timestamp ? Date.parse(tx.data.timestamp) : Number.NaN
-          if (Number.isFinite(at))
-            ageDays = Math.max(0, (this.deps.platform.now() - at) / 86_400_000)
+          if (Number.isFinite(at)) deployedAt = at
         }
       }
-      return { ageDays, verified }
+      return { deployedAt, verified }
     } finally {
       clearTimeout(deadline)
     }
