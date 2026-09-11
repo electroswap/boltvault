@@ -25,8 +25,49 @@ export interface TraceFrame {
   readonly error?: string
   readonly revertReason?: string
   readonly gasUsed?: Hex
+  readonly input?: Hex
+  readonly output?: Hex
   readonly logs?: readonly TraceLog[]
   readonly calls?: readonly TraceFrame[]
+}
+
+/** ERC-20 mutators allowed to report failure by returning false rather than reverting. */
+const BOOL_RETURNING: ReadonlySet<string> = new Set([
+  '0xa9059cbb', // transfer(address,uint256)
+  '0x23b872dd', // transferFrom(address,address,uint256)
+  '0x095ea7b3', // approve(address,uint256)
+])
+
+/**
+ * The first call that answered `false`.
+ *
+ * ERC-20's original sin: `transfer` is allowed to report failure by returning
+ * false instead of reverting. The trace then carries no error, `eth_estimateGas`
+ * succeeds, no `Transfer` log is emitted — and a preview that only looks for a
+ * revert reads a transfer that did not happen as a clean one. That is exactly
+ * the case a user most needs told about, because the transaction still costs a
+ * fee and still looks confirmed on the explorer.
+ *
+ * A token that returns NOTHING is not a failure. The USDT class is
+ * non-compliant in the other direction — void where the ABI says bool — and
+ * treating an empty answer as false would flag every ordinary USDT transfer.
+ * Only 32 bytes of explicit zero counts.
+ */
+function falseReturningCall(frame: TraceFrame): TraceFrame | null {
+  const selector = frame.input?.slice(0, 10).toLowerCase()
+  const output = frame.output
+  if (selector && BOOL_RETURNING.has(selector) && typeof output === 'string' && output.length === 66 && !frame.error) {
+    try {
+      if (decodeAbiParameters(BOOL, output as Hex)[0] === false) return frame
+    } catch {
+      // Not a bool after all; the token is doing something else entirely.
+    }
+  }
+  for (const child of frame.calls ?? []) {
+    const hit = falseReturningCall(child)
+    if (hit) return hit
+  }
+  return null
 }
 
 function topicAddress(topic: Hex | undefined): Hex | null {
@@ -116,6 +157,17 @@ function safeDecode<T extends readonly unknown[]>(params: Parameters<typeof deco
 export function simulationFromTrace(trace: TraceFrame, account: Hex): Simulation {
   if (trace.error) {
     return { mode: 'trace', ok: false, revertReason: trace.revertReason ?? trace.error, deltas: [], approvals: [], ...(trace.gasUsed ? { gas: BigInt(trace.gasUsed) } : {}) }
+  }
+  const refused = falseReturningCall(trace)
+  if (refused) {
+    return {
+      mode: 'trace',
+      ok: false,
+      revertReason: `${refused.to ?? 'The token'} refused the transfer and returned false instead of failing. The transaction would succeed and move nothing.`,
+      deltas: [],
+      approvals: [],
+      ...(trace.gasUsed ? { gas: BigInt(trace.gasUsed) } : {}),
+    }
   }
   const { deltas, approvals } = deltasFromTrace(trace, account)
   return { mode: 'trace', ok: true, deltas: mergeDeltas(deltas), approvals, ...(trace.gasUsed ? { gas: BigInt(trace.gasUsed) } : {}) }

@@ -17,6 +17,7 @@ import { AccountIdSchema, type LimitOrderView, type LimitQuote, type SwapStep, t
 import type { SettingsStore } from '../settingsStore'
 import type { ChainsService } from './chains'
 import type { FlowStepRun, FlowStore } from './flows'
+import type { TokenSafetyLevel } from './swap'
 import type { ProviderService } from './provider'
 import { quoteAddresses, rateOf, readerFor } from './swap'
 import type { TokensService } from './tokens'
@@ -35,6 +36,12 @@ export interface LimitDeps {
   readonly flows: FlowStore
   /** Build feature flag: off by default (`features.limitOrders` in EngineDeps). */
   readonly enabled: boolean
+  /**
+   * ElectroSwap's project safety level for a token (§8.3), same source the swap
+   * gate reads. Optional: a build with no API cannot answer, and silence must
+   * never be read as "blocked".
+   */
+  readonly safety?: { level(chainId: number, address: string): Promise<TokenSafetyLevel | null> }
 }
 
 export interface LimitInput {
@@ -58,6 +65,16 @@ export class LimitService {
 
   private manager(chainId: number): Hex | null {
     return isEtn(chainId) ? ((ELECTRONEUM_ADDRESSES[chainId].limitOrders as Hex | null) ?? null) : null
+  }
+
+  /** Fail-soft: an unreachable API, an unrated token, or the native coin all answer "not blocked". */
+  private async isBlocked(chainId: number, address: string): Promise<boolean> {
+    if (address === 'native' || !this.deps.safety) return false
+    try {
+      return (await this.deps.safety.level(chainId, address)) === 'BLOCKED'
+    } catch {
+      return false
+    }
   }
 
   private skeleton(input: LimitInput, inView: TokenView | null, outView: TokenView | null, problems: string[]): LimitQuote {
@@ -115,6 +132,11 @@ export class LimitService {
     if (account.kind === 'watch') problems.push('Watch-only — import a key or pair a device to place orders.')
     const status = await d.vault.status()
     if (!status.backupComplete && status.seeds.length > 0 && account.kind === 'hd') problems.push('Back up your recovery phrase before you place orders.')
+    // The same refusal the swap path makes. A limit order is a swap with a
+    // delay, and leaving this out would be a second door into the same trade.
+    for (const side of [inView, outView]) {
+      if (await this.isBlocked(input.chainId, side.address)) problems.push(`${side.symbol} is marked unsafe by ElectroSwap. BoltVault will not trade it.`)
+    }
 
     const read = readerFor(d.chains, chainId)
     const nativeBalance = BigInt(String((await d.chains.rpc(chainId, 'eth_getBalance', [owner, 'latest']).catch(() => '0x0')) ?? '0x0'))
