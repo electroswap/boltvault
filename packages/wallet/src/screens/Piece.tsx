@@ -5,7 +5,7 @@
  * Accept offer · Transfer; visitor: Buy · Offer. A Legend says what it
  * earns. Every verb runs through the sheet and lands here as a Discharge.
  */
-import { Artwork, Body, Chip, Column, Icon, Input, Key, Pill, Plate, Row, ScrollView, Sheet, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
+import { Artwork, Body, Chip, Column, Icon, Input, Key, Pill, Plate, Row, ScrollView, SharedElement, Sheet, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
 import type { AssetView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
@@ -16,6 +16,7 @@ import { useHost } from '../host'
 import { formatRaw } from '../format'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
+import { pieceSharedId } from '../navigation/transitions'
 import { useSwapFlow } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
 
@@ -90,7 +91,10 @@ export function Piece({ body, chainId, address, tokenId, reducedMotion = false }
       ) : null}
       {asset ? (
         <>
-          <Artwork uri={asset.imageUrl ?? asset.smallImageUrl} label={asset.name} size={{ width, height: Math.round(width * 0.9) }} sweep reducedMotion={reducedMotion} testID="piece-art" />
+          {/* Where the thumb from the Rack lands, before the slow light sweep runs over it (§7.7). */}
+          <SharedElement id={pieceSharedId(chainId, address, tokenId)}>
+            <Artwork uri={asset.imageUrl ?? asset.smallImageUrl} label={asset.name} size={{ width, height: Math.round(width * 0.9) }} sweep reducedMotion={reducedMotion} testID="piece-art" />
+          </SharedElement>
           <Column gap={2}>
             <Row gap="$2" alignItems="center">
               <Body size="title" numberOfLines={1} testID="piece-name">

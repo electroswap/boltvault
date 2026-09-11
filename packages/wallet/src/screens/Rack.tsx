@@ -7,7 +7,7 @@
  * pill in the header. The last visit's shelves paint at once and refresh
  * behind (plan A2); a first visit shows skeleton tiles.
  */
-import { Artwork, Body, Column, Icon, Key, Pill, Plate, Pressable, Row, ScrollView, Segmented, Sheet, StatStrip, TileGrid, metrics, paint } from '@boltvault/ui'
+import { Artwork, Body, Column, Icon, Key, Pill, Plate, Pressable, Row, ScrollView, Segmented, SharedElement, Sheet, StatStrip, TileGrid, metrics, paint } from '@boltvault/ui'
 import { cacheKey, type AssetView, type Inventory } from '@boltvault/engine'
 import { useState } from 'react'
 import { AddCollectionSheet } from '../components/AddCollectionSheet'
@@ -16,6 +16,7 @@ import { PageHeader } from '../components/PageHeader'
 import { useCached } from '../hooks/useCached'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
+import { pieceSharedId } from '../navigation/transitions'
 import { useReducedMotion } from '../state/useReducedMotion'
 import { useWalletState } from '../state/useWalletState'
 import { useScreenBusy } from '../state/useScreenBusy'
@@ -71,10 +72,13 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
         {rows.map((row, i) => (
           <Column key={i} gap={0}>
             <Row gap={8} alignItems="flex-end">
+              {/* The thumb on the shelf and the artwork on the piece's page are one object (§7.7, §7.12 "the Rack"). */}
               {row.map((a) => (
-                <Pressable key={`${a.address}:${a.tokenId}`} onPress={() => router.navigate('nft', { chainId: ETN, address: a.address, tokenId: a.tokenId })} accessibilityRole="button" accessibilityLabel={a.name} testID={`rack-piece-${a.tokenId}`}>
-                  <Artwork uri={a.smallImageUrl} label={a.name} size={layout.size} badge={a.listing?.priceEtn !== null && a.listing?.priceEtn !== undefined ? { text: `${a.listing.priceEtn} ETN`, tone: 'arc' } : a.bids.length ? { text: t({ id: 'rack.offer', message: 'Offer' }), tone: 'ember' } : null} />
-                </Pressable>
+                <SharedElement key={`${a.address}:${a.tokenId}`} id={pieceSharedId(ETN, a.address, a.tokenId)}>
+                  <Pressable onPress={() => router.navigate('nft', { chainId: ETN, address: a.address, tokenId: a.tokenId })} accessibilityRole="button" accessibilityLabel={a.name} testID={`rack-piece-${a.tokenId}`}>
+                    <Artwork uri={a.smallImageUrl} label={a.name} size={layout.size} badge={a.listing?.priceEtn !== null && a.listing?.priceEtn !== undefined ? { text: `${a.listing.priceEtn} ETN`, tone: 'arc' } : a.bids.length ? { text: t({ id: 'rack.offer', message: 'Offer' }), tone: 'ember' } : null} />
+                  </Pressable>
+                </SharedElement>
               ))}
             </Row>
             {/* The shelf: a lit glass edge with a soft contact shadow beneath. */}

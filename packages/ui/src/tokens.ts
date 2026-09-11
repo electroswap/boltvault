@@ -203,6 +203,15 @@ export const motion = {
   micro: 160,
   /** The highlight that sweeps a primary key once per press. */
   charge: 260,
+  /**
+   * A shared element travelling between two screens (§7.7): the bus bar into
+   * the token dossier's header, the thumb into the piece, the cell into the
+   * campaign. Longer than a plain screen enter because the eye is following
+   * one object rather than accepting a new plate, and a hair under the
+   * browser's own 250 ms default so the pair lands before the cross-fade of
+   * everything around it ends.
+   */
+  shared: 240,
 } as const
 
 export type PaintToken = keyof typeof paint

@@ -4,7 +4,7 @@
  * Positions, and "since you last looked". Reached from the Home console; the
  * dock stays underneath.
  */
-import { Body, BusBar, Column, Icon, LiveFilament, Pill, Plate, Row, RollingReadout, ScrollView, Segmented, metrics, paint } from '@boltvault/ui'
+import { Body, BusBar, Column, Icon, LiveFilament, Pill, Plate, Row, RollingReadout, ScrollView, Segmented, SharedElement, metrics, paint } from '@boltvault/ui'
 import { useEffect, useState } from 'react'
 import { AddTokenSheet } from '../components/AddTokenSheet'
 import { ChainScopeSheet, ScopePill, useHomeScope } from '../components/ChainScope'
@@ -17,6 +17,7 @@ import { usePortfolio } from '../hooks/usePortfolio'
 import { usePositions } from '../hooks/usePositions'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
+import { tokenSharedId } from '../navigation/transitions'
 import { useReducedMotion } from '../state/useReducedMotion'
 import { useSwapFlow } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
@@ -128,22 +129,24 @@ export function Portfolio({ body }: { body: BodyKind }) {
         {segment === 'tokens' ? (
           rows.length > 0 ? (
             <Column gap="$2" testID="bus-bars">
+              {/* The bus bar is the token dossier's header, seen from further away (§7.7). */}
               {rows.map((r) => (
-                <BusBar
-                  key={`${r.chainId}:${r.address}`}
-                  variant="card"
-                  chainId={r.chainId}
-                  address={r.address === 'native' ? '0x0000000000000000000000000000000000000000' : r.address}
-                  symbol={r.symbol}
-                  amount={formatQuantity(r.quantity)}
-                  value={r.fiat === null ? null : formatFiat(r.fiat, currency)}
-                  change={formatChange(r.change24h)}
-                  share={r.share}
-                  logoUri={r.logoUri}
-                  chainBadge={scope.chainIds.length > 1}
-                  mark={r.custom ? t({ id: 'home.mark.custom', message: 'Custom' }) : null}
-                  onPress={() => router.navigate('token', { chainId: r.chainId, address: r.address })}
-                />
+                <SharedElement key={`${r.chainId}:${r.address}`} id={tokenSharedId(r.chainId, r.address)}>
+                  <BusBar
+                    variant="card"
+                    chainId={r.chainId}
+                    address={r.address === 'native' ? '0x0000000000000000000000000000000000000000' : r.address}
+                    symbol={r.symbol}
+                    amount={formatQuantity(r.quantity)}
+                    value={r.fiat === null ? null : formatFiat(r.fiat, currency)}
+                    change={formatChange(r.change24h)}
+                    share={r.share}
+                    logoUri={r.logoUri}
+                    chainBadge={scope.chainIds.length > 1}
+                    mark={r.custom ? t({ id: 'home.mark.custom', message: 'Custom' }) : null}
+                    onPress={() => router.navigate('token', { chainId: r.chainId, address: r.address })}
+                  />
+                </SharedElement>
               ))}
               <Row justifyContent="space-between" alignItems="center" gap="$2">
                 <Body tone="mute" size="caption" testID="portfolio-hidden">

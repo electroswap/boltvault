@@ -13,6 +13,7 @@
 import { createContext, useCallback, useContext, useMemo, useSyncExternalStore, type ReactNode } from 'react'
 import type { ScreenId, ScreenParams, TabId } from './registry'
 import { TABS } from './registry'
+import { routeTag, withSharedTransition } from './transitions'
 
 export interface Route<S extends ScreenId = ScreenId> {
   readonly screen: S
@@ -135,17 +136,32 @@ export function useRouter(): Router {
     () => store.get(),
     () => store.get(),
   )
-  return useMemo<Router>(
-    () => ({
+  const current = currentRoute(state)
+  return useMemo<Router>(() => {
+    /*
+      Shared-element transitions (§7.7) wrap the three moves that carry one
+      thing between two screens, in both directions: opening a token, a piece
+      or a campaign uses the destination's identity, and coming back uses the
+      one we are standing on. Everything else — tab changes, the rest of the
+      stack — mutates the store directly, exactly as before.
+
+      `setTab`, `reset` and `backTab` stay unwrapped on purpose. They are never
+      one of the three moments, and `backTab` has to answer "was there an
+      earlier tab" synchronously for Android's back button, which a transition
+      callback (it runs at the browser's next rendering opportunity, not now)
+      could not do.
+    */
+    const here = routeTag(current.screen, current.params)
+    const move = (there: string | null, update: () => void): void => withSharedTransition(there ?? here, update)
+    return {
       state,
-      current: currentRoute(state),
-      navigate: (screen, params) => store.navigate(params === undefined ? { screen } : { screen, params }),
-      replace: (screen, params) => store.replace(params === undefined ? { screen } : { screen, params }),
-      back: () => store.back(),
+      current,
+      navigate: (screen, params) => move(routeTag(screen, params), () => store.navigate(params === undefined ? { screen } : { screen, params })),
+      replace: (screen, params) => move(routeTag(screen, params), () => store.replace(params === undefined ? { screen } : { screen, params })),
+      back: () => move(null, () => store.back()),
       setTab: (tab, params) => store.setTab(tab, params),
       reset: () => store.reset(),
       backTab: () => store.backTab(),
-    }),
-    [state, store],
-  )
+    }
+  }, [state, current, store])
 }

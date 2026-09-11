@@ -8,7 +8,7 @@
  * link pills with real labels; the referral card. The alert control shows
  * only before launch, or while live and already followed.
  */
-import { Artwork, Body, Column, CurrentFill, Icon, Input, Key, Pill, Plate, Pressable, RollingReadout, Row, ScrollView, Sheet, StatStrip, TokenAvatar, metrics, paint, shortAddress, type IconName } from '@boltvault/ui'
+import { Artwork, Body, Column, CurrentFill, Icon, Input, Key, Pill, Plate, Pressable, RollingReadout, Row, ScrollView, SharedElement, Sheet, StatStrip, TokenAvatar, metrics, paint, shortAddress, type IconName } from '@boltvault/ui'
 import type { CampaignView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { alertable, PhasePill, RaiseBar } from '../components/cards/CampaignCard'
@@ -22,6 +22,7 @@ import { t } from '../i18n'
 import { useSwapFlow } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
 import { useScreenBusy } from '../state/useScreenBusy'
+import { campaignSharedId } from '../navigation/transitions'
 
 type BodyKind = 'extension-popup' | 'extension-tab' | 'mobile'
 const LINKS: Array<{ key: 'website' | 'twitter' | 'telegram' | 'discord'; icon: IconName; label: () => string }> = [
@@ -107,33 +108,35 @@ export function Campaign({ body, chainId, pool, reducedMotion = false }: { body:
         {error && !c ? <Body tone="burn">{error}</Body> : null}
         {c ? (
           <>
-            {/* The hero: the banner (or a wash of the current), the logo overlapping its edge. */}
-            <Column testID="campaign-hero">
-              <Column height={72} borderRadius={14} overflow="hidden" position="relative" backgroundColor="rgba(55, 166, 255, 0.10)">
-                {c.bannerUrl ? (
-                  <Artwork uri={c.bannerUrl} label={c.token.name} size={{ width: 1000, height: 72 }} radius={0} />
-                ) : (
-                  <Column position="absolute" left={0} right={0} top={0} bottom={0} opacity={0.35}>
-                    <CurrentFill />
-                  </Column>
-                )}
-                <Column position="absolute" left={0} right={0} bottom={0} height={36} backgroundColor="rgba(7,10,31,0.6)" />
-              </Column>
-              <Row gap="$3" alignItems="flex-end" marginTop={-28} paddingHorizontal={12}>
-                <TokenAvatar chainId={chainId} address={c.token.address ?? pool} symbol={c.token.symbol} logoUri={c.logoUrl} size={56} />
-                <Column flex={1} alignItems="flex-start" paddingBottom={4}>
-                  <Body size="title" numberOfLines={1} testID="campaign-name">
-                    {c.token.name}
-                  </Body>
-                  <Row gap="$2" alignItems="center">
-                    <Pill label={c.token.symbol} size="sm" />
-                    <Body tone="mute" size="caption" numberOfLines={1}>
-                      {t({ id: 'campaign.by', message: 'by {a}', values: { a: c.creatorName ?? shortAddress(c.creator) } })}
-                    </Body>
-                  </Row>
+            {/* The hero: the banner (or a wash of the current), the logo overlapping its edge. Where the cell from the Sky lands (§7.7). */}
+            <SharedElement id={campaignSharedId(chainId, pool)}>
+              <Column testID="campaign-hero">
+                <Column height={72} borderRadius={14} overflow="hidden" position="relative" backgroundColor="rgba(55, 166, 255, 0.10)">
+                  {c.bannerUrl ? (
+                    <Artwork uri={c.bannerUrl} label={c.token.name} size={{ width: 1000, height: 72 }} radius={0} />
+                  ) : (
+                    <Column position="absolute" left={0} right={0} top={0} bottom={0} opacity={0.35}>
+                      <CurrentFill />
+                    </Column>
+                  )}
+                  <Column position="absolute" left={0} right={0} bottom={0} height={36} backgroundColor="rgba(7,10,31,0.6)" />
                 </Column>
-              </Row>
-            </Column>
+                <Row gap="$3" alignItems="flex-end" marginTop={-28} paddingHorizontal={12}>
+                  <TokenAvatar chainId={chainId} address={c.token.address ?? pool} symbol={c.token.symbol} logoUri={c.logoUrl} size={56} />
+                  <Column flex={1} alignItems="flex-start" paddingBottom={4}>
+                    <Body size="title" numberOfLines={1} testID="campaign-name">
+                      {c.token.name}
+                    </Body>
+                    <Row gap="$2" alignItems="center">
+                      <Pill label={c.token.symbol} size="sm" />
+                      <Body tone="mute" size="caption" numberOfLines={1}>
+                        {t({ id: 'campaign.by', message: 'by {a}', values: { a: c.creatorName ?? shortAddress(c.creator) } })}
+                      </Body>
+                    </Row>
+                  </Column>
+                </Row>
+              </Column>
+            </SharedElement>
 
             {/* The status console. */}
             <Plate role="console" gap="$2" padding={12} testID="campaign-status">

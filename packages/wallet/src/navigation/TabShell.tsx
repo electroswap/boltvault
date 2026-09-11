@@ -26,6 +26,7 @@ import { useHolderTier } from '../hooks/useHolderTier'
 import { SCREENS } from './registry'
 import { useAndroidBack } from '../state/useAndroidBack'
 import { useRouter } from './router'
+import { setSharedTransitions, sharedTransitionActive } from './transitions'
 
 const ETN = 52014
 
@@ -145,6 +146,11 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   useEffect(() => {
     prefetchScreens()
   }, [])
+  // Reduced motion skips the shared move entirely, so the router stops asking
+  // the browser for one (§7.6). The primitive drops its names to match.
+  useEffect(() => {
+    setSharedTransitions(!reducedMotion)
+  }, [reducedMotion])
   const meta = SCREENS[current.screen]
   /*
     The full tab is not a big phone.
@@ -174,7 +180,13 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   // How the view arrives (style bible › motion): a push from the right, a pop from the left, a tab change rising in place; the same route never re-animates.
   const depth = state.stack.length
   const prev = useRef({ depth, tab: state.tab, screen: current.screen })
-  const direction: EnterDirection = state.tab !== prev.current.tab ? 'tab' : depth > prev.current.depth ? 'push' : depth < prev.current.depth ? 'pop' : current.screen !== prev.current.screen ? 'push' : 'none'
+  /*
+    One move at a time (§7.7). While a shared element is travelling between
+    two screens the arriving screen holds still: the slide and the shared
+    move are two animations disagreeing about where the same pixels are, and
+    the element the eye is following is the one that should win.
+  */
+  const direction: EnterDirection = sharedTransitionActive() ? 'none' : state.tab !== prev.current.tab ? 'tab' : depth > prev.current.depth ? 'push' : depth < prev.current.depth ? 'pop' : current.screen !== prev.current.screen ? 'push' : 'none'
   useEffect(() => {
     prev.current = { depth, tab: state.tab, screen: current.screen }
   })

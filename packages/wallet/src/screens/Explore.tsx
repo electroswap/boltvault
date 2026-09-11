@@ -5,7 +5,7 @@
  * (plan A2); a first visit shows skeletons, never a blank body. On a token
  * list the star is the pin (plan A5).
  */
-import { Body, Column, Icon, IconButton, Input, Pill, Plate, Row, ScrollView, Segmented, TokenAvatar, metrics, paint } from '@boltvault/ui'
+import { Body, Column, Icon, IconButton, Input, Pill, Plate, Row, ScrollView, Segmented, SharedElement, TokenAvatar, metrics, paint } from '@boltvault/ui'
 import { cacheKey, type CampaignView, type CollectionView, type CollectionWindow, type ExploreToken, type FarmView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { AddCollectionSheet } from '../components/AddCollectionSheet'
@@ -23,6 +23,7 @@ import { useNotifications } from '../hooks/useNotifications'
 import { formatChange, formatFiat, formatPrice } from '../format'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
+import { tokenSharedId } from '../navigation/transitions'
 import { useReducedMotion } from '../state/useReducedMotion'
 import { useSwapFlow } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
@@ -265,29 +266,33 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
 export function TokenRow({ token, onPress, onPin }: { token: ExploreToken; onPress: () => void; onPin: () => void }) {
   const change = formatChange(token.change24h === null ? null : token.change24h / 100)
   return (
-    <Row gap="$2" alignItems="center" minHeight={52} testID={`explore-token-${token.symbol}`}>
-      <Row flex={1} gap="$3" alignItems="center" onPress={onPress} cursor="pointer" minHeight={44}>
-        <TokenAvatar chainId={token.chainId} address={token.address} symbol={token.symbol} logoUri={token.logoUri} size={28} />
-        <Column flex={1}>
-          <Row gap="$2" alignItems="center">
-            <Body>{token.symbol}</Body>
-            {token.safety === 'BLOCKED' || token.safety === 'STRONG_WARNING' ? <Body tone="burn" size="caption">!</Body> : null}
-          </Row>
-          <Body tone="mute" size="caption" numberOfLines={1}>
-            {token.volume24h !== null ? t({ id: 'explore.vol', message: 'Vol {v}', values: { v: formatFiat(token.volume24h, 'USD') } }) : token.name}
-          </Body>
-        </Column>
-        <Column alignItems="flex-end">
-          <Body>{formatPrice(token.price, 'USD')}</Body>
-          {change ? (
-            <Body tone={change.startsWith('+') ? 'surge' : change.startsWith('−') ? 'burn' : 'mute'} size="caption">
-              {change}
+    // The row and the dossier's header are the same token (§7.7); the pin is
+    // outside the shared box because it stays on this screen.
+    <SharedElement id={tokenSharedId(token.chainId, token.address)}>
+      <Row gap="$2" alignItems="center" minHeight={52} testID={`explore-token-${token.symbol}`}>
+        <Row flex={1} gap="$3" alignItems="center" onPress={onPress} cursor="pointer" minHeight={44}>
+          <TokenAvatar chainId={token.chainId} address={token.address} symbol={token.symbol} logoUri={token.logoUri} size={28} />
+          <Column flex={1}>
+            <Row gap="$2" alignItems="center">
+              <Body>{token.symbol}</Body>
+              {token.safety === 'BLOCKED' || token.safety === 'STRONG_WARNING' ? <Body tone="burn" size="caption">!</Body> : null}
+            </Row>
+            <Body tone="mute" size="caption" numberOfLines={1}>
+              {token.volume24h !== null ? t({ id: 'explore.vol', message: 'Vol {v}', values: { v: formatFiat(token.volume24h, 'USD') } }) : token.name}
             </Body>
-          ) : null}
-        </Column>
+          </Column>
+          <Column alignItems="flex-end">
+            <Body>{formatPrice(token.price, 'USD')}</Body>
+            {change ? (
+              <Body tone={change.startsWith('+') ? 'surge' : change.startsWith('−') ? 'burn' : 'mute'} size="caption">
+                {change}
+              </Body>
+            ) : null}
+          </Column>
+        </Row>
+        <IconButton icon="pin" label={token.pinned ? t({ id: 'pin.off', message: 'Unpin from Home' }) : t({ id: 'pin.on', message: 'Pin to Home' })} active={token.pinned} onPress={onPin} testID={`star-token-${token.symbol}`} />
       </Row>
-      <IconButton icon="pin" label={token.pinned ? t({ id: 'pin.off', message: 'Unpin from Home' }) : t({ id: 'pin.on', message: 'Pin to Home' })} active={token.pinned} onPress={onPin} testID={`star-token-${token.symbol}`} />
-    </Row>
+    </SharedElement>
   )
 }
 

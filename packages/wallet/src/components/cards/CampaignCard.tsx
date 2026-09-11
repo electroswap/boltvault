@@ -5,10 +5,11 @@
  * star shows only where an alert makes sense — before it goes live, or
  * while live and already followed (owner item L4).
  */
-import { Body, Column, CurrentFill, IconButton, Pill, Plate, Row, TokenAvatar } from '@boltvault/ui'
+import { Body, Column, CurrentFill, IconButton, Pill, Plate, Row, SharedElement, TokenAvatar } from '@boltvault/ui'
 import type { CampaignView } from '@boltvault/engine'
 import { formatRaw } from '../../format'
 import { t } from '../../i18n'
+import { campaignSharedId } from '../../navigation/transitions'
 
 export function phaseLabel(c: CampaignView, now = Math.floor(Date.now() / 1000)): string {
   const countdown = (): string => {
@@ -65,32 +66,35 @@ export function alertable(c: CampaignView): boolean {
 
 export function CampaignCard({ campaign: c, onPress, onStar }: { campaign: CampaignView; onPress: () => void; onStar?: () => void }) {
   return (
-    <Plate role="card" gap="$2" onPress={onPress} cursor="pointer" testID={`sky-${c.pool}`}>
-      <Row gap="$3" alignItems="center">
-        <TokenAvatar chainId={c.chainId} address={c.token.address ?? c.pool} symbol={c.token.symbol} logoUri={c.logoUrl} size={44} />
-        <Column flex={1} minWidth={0} alignItems="stretch">
-          <Row gap="$2" alignItems="center" alignSelf="stretch">
-            <Body fontWeight="600" numberOfLines={1} flexShrink={1} minWidth={0}>
-              {c.token.name}
+    // The cell becomes the campaign's hero (§7.7).
+    <SharedElement id={campaignSharedId(c.chainId, c.pool)}>
+      <Plate role="card" gap="$2" onPress={onPress} cursor="pointer" testID={`sky-${c.pool}`}>
+        <Row gap="$3" alignItems="center">
+          <TokenAvatar chainId={c.chainId} address={c.token.address ?? c.pool} symbol={c.token.symbol} logoUri={c.logoUrl} size={44} />
+          <Column flex={1} minWidth={0} alignItems="stretch">
+            <Row gap="$2" alignItems="center" alignSelf="stretch">
+              <Body fontWeight="600" numberOfLines={1} flexShrink={1} minWidth={0}>
+                {c.token.name}
+              </Body>
+              <Body tone="mute" size="caption">
+                {c.token.symbol}
+              </Body>
+            </Row>
+            <Body tone={phaseTone(c.phase)} size="caption" numberOfLines={1}>
+              {phaseLabel(c)}
             </Body>
-            <Body tone="mute" size="caption">
-              {c.token.symbol}
-            </Body>
-          </Row>
-          <Body tone={phaseTone(c.phase)} size="caption" numberOfLines={1}>
-            {phaseLabel(c)}
+          </Column>
+          {onStar && alertable(c) ? <IconButton icon="star" label={c.starred ? t({ id: 'watch.unstar', message: 'Stop alerts' }) : t({ id: 'campaign.star.short', message: 'Tell me when it goes live' })} active={c.starred} onPress={onStar} testID={`star-campaign-${c.pool}`} /> : null}
+        </Row>
+        <Row gap="$2" alignItems="center">
+          <Column flex={1}>
+            <RaiseBar fill={c.fill} />
+          </Column>
+          <Body tone="mute" size="caption">
+            {t({ id: 'sky.raised', message: '{r} / {t} ETN', values: { r: formatRaw(c.raisedWei, 18), t: formatRaw(c.minEtnToLaunchWei, 18) } })}
           </Body>
-        </Column>
-        {onStar && alertable(c) ? <IconButton icon="star" label={c.starred ? t({ id: 'watch.unstar', message: 'Stop alerts' }) : t({ id: 'campaign.star.short', message: 'Tell me when it goes live' })} active={c.starred} onPress={onStar} testID={`star-campaign-${c.pool}`} /> : null}
-      </Row>
-      <Row gap="$2" alignItems="center">
-        <Column flex={1}>
-          <RaiseBar fill={c.fill} />
-        </Column>
-        <Body tone="mute" size="caption">
-          {t({ id: 'sky.raised', message: '{r} / {t} ETN', values: { r: formatRaw(c.raisedWei, 18), t: formatRaw(c.minEtnToLaunchWei, 18) } })}
-        </Body>
-      </Row>
-    </Plate>
+        </Row>
+      </Plate>
+    </SharedElement>
   )
 }

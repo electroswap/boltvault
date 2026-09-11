@@ -1,6 +1,5 @@
 export * from './client'
 export * from './portfolio'
-export * from './logos'
 export * from './bridge'
 export * from './queries'
 export * from './market'
