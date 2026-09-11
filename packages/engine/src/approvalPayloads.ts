@@ -39,6 +39,12 @@ export const AssessmentViewSchema = z.object({
     blocked: z.boolean(),
   }),
   simulationMode: z.enum(['trace', 'estimate', 'none']),
+  /**
+   * When the preview was taken. It runs once, at payload-build time, and is
+   * never re-run — so a sheet left open shows a picture of a state that may
+   * have moved on. Defaulted so approvals stored before this field still read.
+   */
+  simulatedAt: z.number().int().nonnegative().default(0),
 })
 export type AssessmentView = z.infer<typeof AssessmentViewSchema>
 

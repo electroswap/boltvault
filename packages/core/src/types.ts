@@ -138,6 +138,14 @@ export interface BoltVaultSettings {
   metaMaskCompat: boolean
   /** Dangerous legacy eth_sign (default off). */
   ethSignEnabled: boolean
+  /**
+   * Where a transaction preview comes from. `'api'` (default) asks
+   * ElectroSwap's trace node — the only way to see what a transaction moves on
+   * a chain whose public RPCs cannot trace, and it means the address and the
+   * calldata leave the device. `'off'` keeps them local and leaves only the
+   * gas-estimate revert check.
+   */
+  txPreview: 'api' | 'off'
   /** Approve exact amounts instead of max (default on). */
   exactApprovals: boolean
   /** Default swap slippage in bips (0.5 % = 50). */
@@ -170,6 +178,9 @@ export interface BoltVaultSettings {
 export const DEFAULT_SETTINGS: BoltVaultSettings = {
   defaultWallet: false,
   metaMaskCompat: false,
+  // On by default: a real preview is a real safety feature, and the trade-off
+  // is stated in Settings rather than assumed.
+  txPreview: 'api',
   ethSignEnabled: false,
   exactApprovals: true,
   slippageBips: 50,

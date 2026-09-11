@@ -53,6 +53,23 @@ export function Spending({ body }: { body: 'extension-popup' | 'extension-tab' |
         <Toggle value={settings?.exactApprovals ?? true} onChange={(v) => set({ exactApprovals: v })} label={t({ id: 'spending.exact', message: 'Exact token approvals' })} hint={t({ id: 'spending.exact.hint', message: 'Allow Permit2 only the amount of each swap. Safer; one more transaction per swap of that token.' })} testID="spending-exact-toggle" />
       </Plate>
 
+      {/*
+        Getting a preview means posting the signing address and the full
+        calldata of every dApp transaction to ElectroSwap's trace node, before
+        anything is signed. That is what it costs to see what a transaction
+        moves on a chain whose public RPCs cannot trace — worth paying by
+        default, not worth charging silently.
+      */}
+      <Plate gap="$2" testID="spending-preview">
+        <Toggle
+          value={(settings?.txPreview ?? 'api') === 'api'}
+          onChange={(v) => set({ txPreview: v ? 'api' : 'off' })}
+          label={t({ id: 'spending.preview', message: 'Preview what a transaction moves' })}
+          hint={t({ id: 'spending.preview.hint', message: 'Electroneum’s public nodes cannot simulate, so the preview is done by ElectroSwap: your address and the transaction’s data are sent there before you sign. Turn this off to keep them on your device — you will still be warned when a transaction would fail.' })}
+          testID="spending-preview-toggle"
+        />
+      </Plate>
+
       <Plate role="raised" gap="$2" onPress={() => setSheet(true)} cursor="pointer" testID="spending-fee">
         <Row justifyContent="space-between" alignItems="center">
           <Body size="title">{t({ id: 'spending.fee', message: 'Wallet fee schedule' })}</Body>

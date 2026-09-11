@@ -183,6 +183,18 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
     const id = setTimeout(() => setNow(Date.now()), enableAt - now + 10)
     return () => clearTimeout(id)
   }, [now, enableAt])
+  /*
+    Keep the clock running while the sheet is open.
+
+    `now` previously stopped advancing the moment the primary armed, which is
+    fine for a countdown and wrong for anything that ages — the preview's "taken
+    N seconds ago" would have been frozen at the age it had when the button
+    became live, which is to say it would never have appeared at all.
+  */
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 5_000)
+    return () => clearInterval(id)
+  }, [])
 
   /*
     An already-permitted site only needed the unlock: decide without asking again.
@@ -523,6 +535,21 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
                 <Body tone="mute" size="caption">
                   {t({ id: 'approval.preview', message: 'Preview of what moves' })}
                 </Body>
+                {/*
+                  The preview runs once, when the request arrives, and is never
+                  re-run — so a sheet left open shows a picture of a state that
+                  may have moved on. Say how old it is rather than let it pass
+                  for current.
+                */}
+                {assessment.simulatedAt > 0 && now - assessment.simulatedAt > 30_000 ? (
+                  <Body tone="ember" size="caption" testID="approval-preview-age">
+                    {t({
+                      id: 'approval.preview.age',
+                      message: 'Taken {n} seconds ago — the chain may have moved since.',
+                      values: { n: Math.round((now - assessment.simulatedAt) / 1000) },
+                    })}
+                  </Body>
+                ) : null}
                 {assessment.changes.map((s, i) => (
                   <Body key={i} tone={toneOf(s.tone)} size="caption">
                     {s.text}

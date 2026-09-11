@@ -145,15 +145,30 @@ describe('connect', () => {
 })
 
 describe('chains', () => {
-  it('switches a connected site silently on a known chain; only that origin hears it', async () => {
+  /*
+    `wallet_addEthereumChain` prompted and `wallet_switchEthereumChain` did
+    not, so a connected site could move the session to a chain the user does
+    not use and then ask for a transaction on it — never asked, and the site
+    choosing what the signature binds to. The `switch_chain` payload and its
+    sheet already existed and were unreachable from here.
+
+    Once per network, though, not once per call: a site flipping between two
+    chains it has already been allowed would otherwise produce a prompt the
+    user learns to dismiss, which is worse than not asking at all.
+  */
+  it('asks before moving a connected site to another chain, once per chain; only that origin hears it', async () => {
     const h = harness()
     await req(h, A, 'eth_requestAccounts')
     await req(h, B, 'eth_requestAccounts')
     expect(await req(h, A, 'wallet_switchEthereumChain', [{ chainId: '0x4f5e0c' }])).toBeNull()
+    expect(h.intents.filter((i) => i.kind === 'switch_chain')).toHaveLength(1)
     expect(await req(h, A, 'eth_chainId')).toBe('0x4f5e0c')
     expect(await req(h, B, 'eth_chainId')).toBe('0xcb2e')
     expect(h.events.filter((e) => e.event.event === 'chainChanged').map((e) => e.origin)).toEqual([A])
-    expect(h.intents.filter((i) => i.kind !== 'connect')).toEqual([])
+    // Back and forth over chains already agreed: no further sheets.
+    expect(await req(h, A, 'wallet_switchEthereumChain', [{ chainId: '0xcb2e' }])).toBeNull()
+    expect(await req(h, A, 'wallet_switchEthereumChain', [{ chainId: '0x4f5e0c' }])).toBeNull()
+    expect(h.intents.filter((i) => i.kind === 'switch_chain')).toHaveLength(2)
   })
   it('unknown chains are 4902 and a dApp cannot add one', async () => {
     const h = harness()

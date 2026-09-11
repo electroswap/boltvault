@@ -10,7 +10,10 @@
  * - Coexistence: define `window.ethereum` only if absent (configurable so
  *   another wallet can still take over unless the user chose "default").
  * - Approval-class requests wait while the tab is hidden.
- * - The object is frozen after construction; the transport is not reachable.
+ * - The object is frozen after construction and its internals are `#`-private,
+ *   so page script can neither reassign its methods nor read its transport,
+ *   its pending map or its window handle. The channel nonce is not a secret
+ *   from the page and never was — see `wire.ts`.
  */
 import { needsUserAttention } from './methods'
 import { CONFIG_EVENT, CONTENT_TARGET, INPAGE_TARGET, isInpageMessage, type InpageMessage, type InpageRequest, type RpcErrorShape } from './wire'
@@ -42,6 +45,16 @@ export interface ProviderConfig {
   /** Settings › "BoltVault is my default wallet". */
   readonly defaultWallet?: boolean
   readonly initialChainId?: string
+  /**
+   * Fetch the chain id at install time so the deprecated synchronous mirrors
+   * (`chainId`, `networkVersion`) are warm. Off by default: priming opens a
+   * service-worker Port from every http(s) frame on every page at
+   * `document_start`, whether or not anything ever touches the wallet — which
+   * defeats the lazy-Port design, tells the worker about every page the user
+   * visits, and creates a rate-limiter bucket per origin. EIP-1193 permits
+   * `null` for those mirrors and every modern library calls `request`.
+   */
+  readonly prime?: boolean
 }
 
 export class ProviderRpcError extends Error {
@@ -58,11 +71,11 @@ export class ProviderRpcError extends Error {
 type Listener = (...args: unknown[]) => void
 
 class Emitter {
-  private readonly listeners = new Map<string, Set<Listener>>()
+  readonly #listeners = new Map<string, Set<Listener>>()
   on(event: string, fn: Listener): this {
-    const set = this.listeners.get(event) ?? new Set<Listener>()
+    const set = this.#listeners.get(event) ?? new Set<Listener>()
     set.add(fn)
-    this.listeners.set(event, set)
+    this.#listeners.set(event, set)
     return this
   }
   once(event: string, fn: Listener): this {
@@ -73,22 +86,22 @@ class Emitter {
     return this.on(event, wrapped)
   }
   removeListener(event: string, fn: Listener): this {
-    this.listeners.get(event)?.delete(fn)
+    this.#listeners.get(event)?.delete(fn)
     return this
   }
   off(event: string, fn: Listener): this {
     return this.removeListener(event, fn)
   }
   removeAllListeners(event?: string): this {
-    if (event) this.listeners.delete(event)
-    else this.listeners.clear()
+    if (event) this.#listeners.delete(event)
+    else this.#listeners.clear()
     return this
   }
   listenerCount(event: string): number {
-    return this.listeners.get(event)?.size ?? 0
+    return this.#listeners.get(event)?.size ?? 0
   }
   protected emit(event: string, ...args: unknown[]): boolean {
-    const set = this.listeners.get(event)
+    const set = this.#listeners.get(event)
     if (!set || set.size === 0) return false
     for (const fn of [...set]) {
       try {
@@ -129,7 +142,7 @@ interface ProviderState {
   selectedAddress: string | null
   connected: boolean
   nextId: number
-  readonly pending: Map<number, { resolve: (v: unknown) => void; reject: (e: ProviderRpcError) => void }>
+  readonly pending: Map<number, { resolve: (v: unknown) => void; reject: (e: ProviderRpcError) => void; method: string; epoch: number }>
 }
 
 export class BoltVaultProvider extends Emitter {
@@ -137,17 +150,39 @@ export class BoltVaultProvider extends Emitter {
   readonly isBoltWallet = true as const
   readonly isRabby = false as const
   providers?: unknown[]
-  private readonly state: ProviderState & { isMetaMask: boolean }
-  private readonly transport: PageTransport
-  private readonly channel: string
-  private readonly win: WindowLike
+  /*
+    `#`-private, not TypeScript `private`.
+
+    TypeScript's `private` is erased at compile time: these were ordinary own
+    properties on the instance, so page script could read
+    `window.ethereum.transport`, `.channel` and `.state.pending` despite the
+    freeze — and the comment at the top of this file said the transport was
+    unreachable. `Object.freeze` stops reassignment, not reading. The nonce was
+    never a secret from the page (the provider runs in the page's own world and
+    `wire.ts` says so), but the pending map is another matter: reaching it means
+    resolving another script's in-flight request with a value of your choosing.
+  */
+  readonly #state: ProviderState & { isMetaMask: boolean }
+  readonly #transport: PageTransport
+  readonly #channel: string
+  readonly #win: WindowLike
+  #primed = false
+  /*
+    Bumped by every event that moves the mirrors.
+
+    A reply and an event can cross: a slow `eth_accounts` answer landing after
+    an `accountsChanged` would otherwise overwrite the newer value with the
+    older one, and the page would read a stale account. A request remembers the
+    epoch it was sent in and declines to mirror if anything has moved since.
+  */
+  #epoch = 0
 
   constructor(config: ProviderConfig) {
     super()
-    this.transport = config.transport
-    this.channel = config.channel
-    this.win = config.win
-    this.state = {
+    this.#transport = config.transport
+    this.#channel = config.channel
+    this.#win = config.win
+    this.#state = {
       isMetaMask: config.isMetaMask === true,
       chainId: config.initialChainId ?? null,
       networkVersion: config.initialChainId ? String(parseInt(config.initialChainId, 16)) : null,
@@ -156,32 +191,55 @@ export class BoltVaultProvider extends Emitter {
       nextId: 1,
       pending: new Map(),
     }
-    this.transport.onMessage((m) => this.receive(m))
+    this.#transport.onMessage((m) => this.receive(m))
   }
 
   /** Settings › "Pretend to be MetaMask" — only legacy sniffers care (§4.5). */
   get isMetaMask(): boolean {
-    return this.state.isMetaMask
+    return this.#state.isMetaMask
   }
 
   /** Apply settings that arrive after install (the isolated script reads storage asynchronously). */
   applyConfig(config: { isMetaMask?: boolean }): void {
-    if (typeof config.isMetaMask === 'boolean') this.state.isMetaMask = config.isMetaMask
+    if (typeof config.isMetaMask === 'boolean') this.#state.isMetaMask = config.isMetaMask
   }
 
   /** Synchronous mirrors (§4.3), updated from events. */
+  /*
+    The deprecated synchronous mirrors, primed on first interest.
+
+    `prime()` used to run from `installProvider`, so every http(s) frame on
+    every page opened a service-worker Port at `document_start` — whether or
+    not anything ever touched the wallet. That defeats the lazy-Port design,
+    tells the worker about every page the user visits, and leaves a
+    rate-limiter bucket per origin. Reading one of these getters, or a page
+    asking for providers over EIP-6963, is the first evidence that the page
+    cares; the round trip starts there instead. The first read still answers
+    `null`, which EIP-1193 permits and every modern library avoids by calling
+    `request`.
+  */
   get chainId(): string | null {
-    return this.state.chainId
+    this.primeOnce()
+    return this.#state.chainId
   }
   get networkVersion(): string | null {
-    return this.state.networkVersion
+    this.primeOnce()
+    return this.#state.networkVersion
   }
   get selectedAddress(): string | null {
-    return this.state.selectedAddress
+    this.primeOnce()
+    return this.#state.selectedAddress
+  }
+
+  /** At most one priming round trip per provider, started by the first sign of interest. */
+  primeOnce(): void {
+    if (this.#primed) return
+    this.#primed = true
+    this.prime()
   }
 
   isConnected(): boolean {
-    return this.state.connected
+    return this.#state.connected
   }
 
   async request(args: RequestArguments): Promise<unknown> {
@@ -189,15 +247,15 @@ export class BoltVaultProvider extends Emitter {
     const { method, params } = args
     if (typeof method !== 'string' || method.length === 0) throw new ProviderRpcError(-32600, "'args.method' must be a non-empty string.")
     if (params !== undefined && !Array.isArray(params) && (typeof params !== 'object' || params === null)) throw new ProviderRpcError(-32600, "'args.params' must be an object or array if provided.")
-    if (needsUserAttention(method) && this.win.document.hidden) await this.untilVisible()
+    if (needsUserAttention(method) && this.#win.document.hidden) await this.untilVisible()
     return new Promise<unknown>((resolve, reject) => {
-      const id = this.state.nextId++
-      this.state.pending.set(id, { resolve, reject })
-      const msg: InpageRequest = { target: INPAGE_TARGET, channel: this.channel, id, method, ...(params === undefined ? {} : { params }) }
+      const id = this.#state.nextId++
+      this.#state.pending.set(id, { resolve, reject, method, epoch: this.#epoch })
+      const msg: InpageRequest = { target: INPAGE_TARGET, channel: this.#channel, id, method, ...(params === undefined ? {} : { params }) }
       try {
-        this.transport.post(msg)
+        this.#transport.post(msg)
       } catch (err) {
-        this.state.pending.delete(id)
+        this.#state.pending.delete(id)
         reject(new ProviderRpcError(4900, err instanceof Error ? err.message : 'transport failed'))
       }
     })
@@ -244,50 +302,70 @@ export class BoltVaultProvider extends Emitter {
   private untilVisible(): Promise<void> {
     return new Promise((resolve) => {
       const check = (): void => {
-        if (!this.win.document.hidden) resolve()
-        else this.win.document.addEventListener('visibilitychange', check, { once: true })
+        if (!this.#win.document.hidden) resolve()
+        else this.#win.document.addEventListener('visibilitychange', check, { once: true })
       }
       check()
     })
   }
 
   private receive(m: InpageMessage): void {
-    if (!isInpageMessage(m, this.channel)) return
+    if (!isInpageMessage(m, this.#channel)) return
     if (m.kind === 'response') {
-      const p = this.state.pending.get(m.id)
+      const p = this.#state.pending.get(m.id)
       if (!p) return
-      this.state.pending.delete(m.id)
+      this.#state.pending.delete(m.id)
       if (m.error) p.reject(new ProviderRpcError(m.error.code, m.error.message, m.error.data))
-      else p.resolve(m.result)
+      else {
+        /*
+          The synchronous mirrors follow real traffic, not an eager probe.
+
+          `connected`, `chainId` and `selectedAddress` used to be set only by
+          `prime()`, which is why priming had to run in every frame of every
+          page at document_start. Any answered request is the provider
+          demonstrably talking to the wallet — which is what EIP-1193 means by
+          connected — and a request that asked the chain or the accounts has
+          just been told the answer. Reading it here makes the probe one way of
+          warming the mirrors rather than the only way.
+        */
+        this.mirror(p.method, m.result, p.epoch)
+        if (!this.#state.connected) {
+          this.#state.connected = true
+          this.emit('connect', { chainId: this.#state.chainId })
+        }
+        p.resolve(m.result)
+      }
       return
     }
     switch (m.event) {
       case 'accountsChanged': {
         const accounts = Array.isArray(m.payload) ? (m.payload as string[]) : []
-        this.state.selectedAddress = accounts[0] ?? null
+        this.#epoch += 1
+        this.#state.selectedAddress = accounts[0] ?? null
         this.emit('accountsChanged', accounts)
         break
       }
       case 'chainChanged': {
         const chainId = String(m.payload)
-        this.state.chainId = chainId
-        this.state.networkVersion = String(parseInt(chainId, 16))
+        this.#epoch += 1
+        this.#state.chainId = chainId
+        this.#state.networkVersion = String(parseInt(chainId, 16))
         this.emit('chainChanged', chainId)
-        this.emit('networkChanged', this.networkVersion)
+        this.emit('networkChanged', this.#state.networkVersion)
         break
       }
       case 'connect': {
         const payload = m.payload as { chainId?: string }
         if (payload?.chainId) {
-          this.state.chainId = payload.chainId
-          this.state.networkVersion = String(parseInt(payload.chainId, 16))
+          this.#state.chainId = payload.chainId
+          this.#state.networkVersion = String(parseInt(payload.chainId, 16))
         }
-        this.state.connected = true
-        this.emit('connect', { chainId: this.chainId })
+        this.#state.connected = true
+        this.emit('connect', { chainId: this.#state.chainId })
         break
       }
       case 'disconnect': {
-        this.state.connected = false
+        this.#state.connected = false
         const e = m.payload as RpcErrorShape
         this.emit('disconnect', new ProviderRpcError(e?.code ?? 4900, e?.message ?? 'disconnected'))
         break
@@ -300,23 +378,33 @@ export class BoltVaultProvider extends Emitter {
     }
   }
 
+  /** Keep the deprecated synchronous mirrors in step with any answer that carries them. */
+  private mirror(method: string, result: unknown, epoch: number): void {
+    // An event has moved the mirrors since this request went out; it wins.
+    if (epoch !== this.#epoch) return
+    if (method === 'eth_chainId' && typeof result === 'string') {
+      this.#state.chainId = result
+      this.#state.networkVersion = String(parseInt(result, 16))
+      return
+    }
+    if ((method === 'eth_accounts' || method === 'eth_requestAccounts') && Array.isArray(result)) {
+      const first = result[0]
+      this.#state.selectedAddress = typeof first === 'string' ? first : null
+    }
+  }
+
   /** Prime the synchronous mirrors with SAFE calls; failures are silent. */
   prime(): void {
-    void this.request({ method: 'eth_chainId' })
-      .then((c) => {
-        if (typeof c === 'string') {
-          this.state.chainId = c
-          this.state.networkVersion = String(parseInt(c, 16))
-          this.state.connected = true
-          this.emit('connect', { chainId: c })
-        }
-      })
-      .catch(() => undefined)
-    void this.request({ method: 'eth_accounts' })
-      .then((a) => {
-        if (Array.isArray(a)) this.state.selectedAddress = (a[0] as string | undefined) ?? null
-      })
-      .catch(() => undefined)
+    /*
+      Just the two requests; `mirror()` records the answers.
+
+      These handlers used to write the mirrors themselves, which put them
+      outside the epoch guard — a slow probe reply landing after an
+      `accountsChanged` overwrote the newer account with the older one, and the
+      page then read a stale address. One writer, one rule.
+    */
+    void this.request({ method: 'eth_chainId' }).catch(() => undefined)
+    void this.request({ method: 'eth_accounts' }).catch(() => undefined)
   }
 }
 
@@ -333,6 +421,17 @@ export interface InstallResult {
   /** Where `window.ethereum` ended up: ours, another wallet's, or shared through `providers`. */
   readonly windowEthereum: 'ours' | 'theirs' | 'providers'
 }
+
+/*
+  Freeze the prototypes, not just the instances.
+
+  `Object.freeze(provider)` stops properties being added or replaced on the
+  object; it does nothing about its prototype, so page script could still
+  overwrite `BoltVaultProvider.prototype.request` and intercept every call any
+  other script on the page makes through `window.ethereum`.
+*/
+Object.freeze(BoltVaultProvider.prototype)
+Object.freeze(Emitter.prototype)
 
 export function installProvider(config: ProviderConfig): InstallResult {
   const win = config.win
@@ -374,7 +473,12 @@ export function installProvider(config: ProviderConfig): InstallResult {
     const detail = Object.freeze({ info, provider })
     win.dispatchEvent(new win.CustomEvent('eip6963:announceProvider', { detail }))
   }
-  win.addEventListener('eip6963:requestProvider', announce)
+  // A page asking for providers is the page taking an interest, so the
+  // synchronous mirrors are worth warming at that point — and only then.
+  win.addEventListener('eip6963:requestProvider', () => {
+    announce()
+    provider.primeOnce()
+  })
   win.addEventListener(CONFIG_EVENT, (ev) => {
     const detail = (ev as { detail?: { isMetaMask?: boolean; defaultWallet?: boolean } }).detail
     if (!detail) return
@@ -390,7 +494,7 @@ export function installProvider(config: ProviderConfig): InstallResult {
     }
   })
   announce()
-  provider.prime()
+  if (config.prime) provider.primeOnce()
   return { provider, info, windowEthereum }
 }
 

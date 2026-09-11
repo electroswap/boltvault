@@ -345,6 +345,28 @@ export class SwapService {
         if (tier.bips !== first.fee.bips || d.platform.now() - first.quotedAt > 8_000) {
           quote = await this.quote({ ...input, slippageBips: first.slippageBips })
           if (!quote.ok) throw new EngineError('invalid_argument', quote.problems[0] ?? 'the quote changed')
+          /*
+            Stop if the price has moved further than the slippage the user
+            accepted.
+
+            The steps run strictly in sequence — an approve receipt and a permit
+            signature both have to land first — so more than eight seconds has
+            essentially always passed, and this re-quote is the one that gets
+            encoded. The only test on it was that it succeeded. An adverse move
+            or a deliberate pool manipulation between the two could therefore
+            take the output well below what the user agreed to and still
+            proceed, raising a sheet for the new figure on a screen they had
+            already committed to. Their own slippage tolerance is the right
+            bound: a move inside it is what they said they would accept, and a
+            move beyond it is a different trade that needs asking again.
+          */
+          const before = BigInt(first.amountOutRaw)
+          const now = BigInt(quote.amountOutRaw)
+          if (before > 0n && now < before) {
+            const droppedBips = ((before - now) * 10_000n) / before
+            if (droppedBips > BigInt(first.slippageBips))
+              throw new EngineError('invalid_argument', `The price moved by ${(Number(droppedBips) / 100).toFixed(2)}% while this swap was being set up, which is more than your slippage allows. Start it again to see the new price.`)
+          }
           d.flows.setQuote(flowId, quote)
         }
         const bips = quote.fee.bips

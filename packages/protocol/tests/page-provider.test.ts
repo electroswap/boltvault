@@ -147,6 +147,8 @@ describe('page provider through the bridge', () => {
     const w = wire((m) => ok(m.id, []))
     w.startIsolated()
     const { provider } = await w.installMain()
+    // The Port opens on first use, so ask something before reaching for it.
+    await provider.request({ method: 'eth_accounts' })
     const seen: Array<[string, unknown]> = []
     provider.on('accountsChanged', (a) => seen.push(['accountsChanged', a]))
     provider.on('chainChanged', (c) => seen.push(['chainChanged', c]))
@@ -178,6 +180,8 @@ describe('page provider through the bridge', () => {
     expect(await provider.send('eth_chainId', [])).toBe('0xcb2e')
     const res = await new Promise<unknown>((resolve) => provider.sendAsync({ jsonrpc: '2.0', id: 7, method: 'eth_chainId', params: [] }, (_e, r) => resolve(r)))
     expect(res).toEqual({ id: 7, jsonrpc: '2.0', result: '0xcb2e' })
+    // The synchronous form answers from the mirrors, which follow real traffic.
+    await provider.request({ method: 'eth_accounts' })
     await new Promise((r) => setTimeout(r, 0))
     expect(provider.send({ id: 1, method: 'eth_accounts' })).toEqual({ id: 1, jsonrpc: '2.0', result: ['0xabc'] })
   })
@@ -185,7 +189,9 @@ describe('page provider through the bridge', () => {
   it('ignores a spoofed postMessage with the wrong channel and any message not from this window', async () => {
     const w = wire((m) => ok(m.id, 'answered'))
     w.startIsolated()
-    await w.installMain()
+    const { provider } = await w.installMain()
+    // The Port opens on first use, so ask something before reaching for it.
+    await provider.request({ method: 'eth_accounts' })
     await new Promise((r) => setTimeout(r, 0))
     const before = w.ports[0]?.sent.length ?? 0
     w.win.postMessage({ target: INPAGE_TARGET, channel: 'guess', id: 999, method: 'eth_requestAccounts', params: [] }, '*')
@@ -197,6 +203,8 @@ describe('page provider through the bridge', () => {
     const w = wire((m) => ok(m.id, ['0xabc']))
     w.startIsolated()
     const { provider } = await w.installMain()
+    // The Port opens on first use, so ask something before reaching for it.
+    await provider.request({ method: 'eth_accounts' })
     await new Promise((r) => setTimeout(r, 0))
     w.win.hidden = true
     const sentBefore = w.ports[0]?.sent.length ?? 0
@@ -245,5 +253,47 @@ describe('page provider through the bridge', () => {
     const { provider } = await w.installMain()
     await provider.request({ method: 'eth_blockNumber' })
     expect(seen.every((m) => m.channel === 'abc123')).toBe(true)
+  })
+})
+
+/*
+  `Object.freeze` stops a property being replaced; it does not stop one being
+  read. TypeScript's `private` is erased at compile time, so the transport, the
+  channel nonce and the pending map were ordinary own properties on
+  `window.ethereum` — and the file's own header said the transport was
+  unreachable. Reaching the pending map means resolving another script's
+  in-flight request with a value of your choosing.
+*/
+describe('the provider keeps its internals to itself', () => {
+  it('exposes no internals to page script', () => {
+    const win = fakeWindow()
+    const { provider } = installProvider({ transport: windowTransport(win as never, 'nonce'), channel: 'nonce', win: win as unknown as WindowLike, uuid: 'u', icon: 'i' })
+    const keys = Object.keys(provider)
+    for (const name of ['transport', 'channel', 'win', 'state', 'listeners']) expect(keys).not.toContain(name)
+    for (const name of ['transport', 'channel', 'win', 'state']) expect((provider as unknown as Record<string, unknown>)[name]).toBeUndefined()
+  })
+
+  it('does not let page script replace a prototype method', () => {
+    const win = fakeWindow()
+    const { provider } = installProvider({ transport: windowTransport(win as never, 'n2'), channel: 'n2', win: win as unknown as WindowLike, uuid: 'u', icon: 'i' })
+    expect(Object.isFrozen(Object.getPrototypeOf(provider))).toBe(true)
+  })
+})
+
+/*
+  `prime()` ran from `installProvider`, so every http(s) frame of every page
+  opened a service-worker Port at document_start — whether or not anything ever
+  touched the wallet. That defeats the lazy-Port design, tells the worker about
+  every page the user visits, and leaves a rate-limiter bucket per origin.
+*/
+describe('a page that never touches the wallet costs nothing', () => {
+  it('opens no Port until the page asks for something', async () => {
+    const w = wire((m) => ok(m.id, '0xcb2e'))
+    w.startIsolated()
+    const { provider } = await w.installMain()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(w.ports).toHaveLength(0)
+    await provider.request({ method: 'eth_chainId' })
+    expect(w.ports).toHaveLength(1)
   })
 })

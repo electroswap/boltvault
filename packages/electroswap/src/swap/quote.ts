@@ -64,14 +64,34 @@ export function candidates(tokenIn: Hex, tokenOut: Hex, addresses: QuoteAddresse
   out.push({ kind: 'v2', label: 'V2', route: { hops: [{ kind: 'v2', tokenIn, tokenOut }] } })
   for (const fee of V3_FEES) out.push({ kind: 'v3', label: `V3 ${fee / 10_000}%`, route: { hops: [{ kind: 'v3', tokenIn, tokenOut, fee }] } })
   const bases = addresses.bases.filter((b) => !eq(b, tokenIn) && !eq(b, tokenOut))
-  for (const base of bases) {
-    out.push({ kind: 'v2', label: 'V2 via', route: { hops: [{ kind: 'v2', tokenIn, tokenOut: base }, { kind: 'v2', tokenIn: base, tokenOut }] } })
+  /*
+    Breadth-first across the bases, not base by base.
+
+    Candidates used to be generated one base at a time and then sliced to the
+    cap — five direct plus five per base against a cap of sixteen, so the first
+    base was quoted in full, the second partially, and the last two never at
+    all. A pair whose liquidity sits in the USDT or BOLT pool was quoted a
+    materially worse price than the site, with the wallet calling it the best
+    route. Round-robin means the cap trims the tail of every base evenly
+    instead of eliminating whole bases.
+  */
+  const perBase: Candidate[][] = bases.map((base) => {
+    const forBase: Candidate[] = [{ kind: 'v2', label: 'V2 via', route: { hops: [{ kind: 'v2', tokenIn, tokenOut: base }, { kind: 'v2', tokenIn: base, tokenOut }] } }]
     for (const f1 of HOP_FEES) {
       for (const f2 of HOP_FEES) {
-        out.push({ kind: 'v3', label: `V3 ${f1 / 10_000}% → ${f2 / 10_000}%`, route: { hops: [{ kind: 'v3', tokenIn, tokenOut: base, fee: f1 }, { kind: 'v3', tokenIn: base, tokenOut, fee: f2 }] } })
+        forBase.push({ kind: 'v3', label: `V3 ${f1 / 10_000}% → ${f2 / 10_000}%`, route: { hops: [{ kind: 'v3', tokenIn, tokenOut: base, fee: f1 }, { kind: 'v3', tokenIn: base, tokenOut, fee: f2 }] } })
       }
     }
-    /*
+    return forBase
+  })
+  const deepest = perBase.reduce((m, b) => Math.max(m, b.length), 0)
+  for (let rank = 0; rank < deepest; rank++) {
+    for (const forBase of perBase) {
+      const c = forBase[rank]
+      if (c) out.push(c)
+    }
+  }
+  /*
       Mixed V2/V3 routes are quoted but not generated, because the encoder
       cannot express them.
 
@@ -86,8 +106,7 @@ export function candidates(tokenIn: Hex, tokenOut: Hex, addresses: QuoteAddresse
       contiguous same-protocol section, the honest thing is not to offer a
       price the wallet cannot honour. Re-enable alongside that change.
     */
-    void addresses.mixedRouteQuoter
-  }
+  void addresses.mixedRouteQuoter
   return out.slice(0, MAX_CANDIDATES)
 }
 

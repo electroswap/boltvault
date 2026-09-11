@@ -61,6 +61,7 @@ export function normalizeSettings(
     defaultWallet: bool('defaultWallet', DEFAULT_SETTINGS.defaultWallet),
     metaMaskCompat: bool('metaMaskCompat', DEFAULT_SETTINGS.metaMaskCompat),
     ethSignEnabled: bool('ethSignEnabled', DEFAULT_SETTINGS.ethSignEnabled),
+    txPreview: obj.txPreview === 'off' ? 'off' : DEFAULT_SETTINGS.txPreview,
     exactApprovals: bool('exactApprovals', DEFAULT_SETTINGS.exactApprovals),
     slippageBips: typeof obj.slippageBips === 'number' && Number.isInteger(obj.slippageBips) && obj.slippageBips >= 1 && obj.slippageBips <= 5_000 ? obj.slippageBips : DEFAULT_SETTINGS.slippageBips,
     enabledChains: Array.isArray(obj.enabledChains) ? obj.enabledChains.filter((c): c is number => typeof c === 'number' && Number.isInteger(c) && c > 0) : [...DEFAULT_SETTINGS.enabledChains],

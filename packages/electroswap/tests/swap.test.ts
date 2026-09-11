@@ -120,6 +120,22 @@ describe('mini-router', () => {
     */
     expect(c.some((x) => x.kind === 'mixed')).toBe(false)
   })
+
+  /*
+    Candidates used to be generated base by base and then sliced to the cap, so
+    the first base was quoted in full, the second partially, and the last two
+    never at all. A pair whose liquidity sits in the USDT or BOLT pool was
+    quoted a worse price than the site, with the wallet calling it the best
+    route available.
+  */
+  it('quotes through every base, not just the first ones in the list', () => {
+    const c = candidates(BOLT, USDC, addresses)
+    const viaBases = new Set(c.filter((x) => x.route.hops.length > 1).map((x) => x.route.hops[0]?.tokenOut?.toLowerCase()))
+    for (const base of addresses.bases) {
+      if (base.toLowerCase() === BOLT.toLowerCase() || base.toLowerCase() === USDC.toLowerCase()) continue
+      expect(viaBases.has(base.toLowerCase())).toBe(true)
+    }
+  })
   it('picks the best output and prefers a single hop within 0.1 %', async () => {
     const answers = (calls: readonly { functionName: string; args: readonly unknown[] }[]): ReadResult[] =>
       calls.map((call) => {

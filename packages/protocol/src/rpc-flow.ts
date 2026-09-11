@@ -142,6 +142,8 @@ export class RpcFlow {
     preference the lifetime it deserves — this session, and no disk.
   */
   private readonly pendingChain = new Map<string, number>()
+  /** `origin#chainId` the user has already agreed this session may move to. */
+  private readonly allowedChains = new Set<string>()
   private readonly subscriptions = new Map<string, () => void>()
   private subCounter = 0
 
@@ -268,6 +270,16 @@ export class RpcFlow {
     })
   }
 
+  /** Bounded the same way as the pending-chain map. */
+  private rememberAllowedChain(key: string): void {
+    this.allowedChains.add(key)
+    while (this.allowedChains.size > 256) {
+      const oldest = this.allowedChains.values().next().value
+      if (oldest === undefined) break
+      this.allowedChains.delete(oldest)
+    }
+  }
+
   /** Bounded: oldest entry evicted, so the map cannot be grown without limit either. */
   private rememberPendingChain(origin: string, chainId: number): void {
     this.pendingChain.delete(origin)
@@ -294,9 +306,31 @@ export class RpcFlow {
     }
     if (requested === chainId) return null
     const session = await this.ctx.session(origin)
-    if (session && method === 'wallet_addEthereumChain') {
-      // Known chain: the add is a switch, with a prompt because the site is changing the session.
-      await this.exclusive(origin, clientRequestId, () => this.ctx.approve({ kind: 'add_chain', origin, chainId: requested, clientRequestId }))
+    /*
+      A connected site asking to move the session to another network is asked
+      about, once per network.
+
+      `wallet_addEthereumChain` prompted and `wallet_switchEthereumChain` did
+      not, so a site could silently move the session to a chain the user does
+      not use and then ask for a transaction on it. The chain binding of the
+      signature was sound and the sheet named the network correctly — but the
+      user was never asked, and the site chose what the signature would bind
+      to. The `switch_chain` payload and its sheet already existed and were
+      simply unreachable from here.
+
+      Once per network, not once per call: a site that flips between two chains
+      it has already been allowed would otherwise generate a prompt the user
+      learns to dismiss, which is worse than not asking. The record is
+      in-memory, so a restart asks again.
+    */
+    if (session) {
+      const key = `${origin}#${requested}`
+      if (!this.allowedChains.has(key)) {
+        await this.exclusive(origin, clientRequestId, () =>
+          this.ctx.approve({ kind: method === 'wallet_addEthereumChain' ? 'add_chain' : 'switch_chain', origin, chainId: requested, clientRequestId }),
+        )
+        this.rememberAllowedChain(key)
+      }
     }
     /*
       Only a site the wallet already has a row for gets that row written to.

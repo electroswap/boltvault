@@ -164,6 +164,14 @@ export const SettingsSchema = z.object({
   defaultWallet: z.boolean(),
   metaMaskCompat: z.boolean(),
   ethSignEnabled: z.boolean(),
+  /**
+   * Where a transaction preview comes from. `'api'` asks ElectroSwap's trace
+   * node, which is the only way to see what a transaction moves on a chain
+   * whose public RPCs cannot trace — and which means the address and the
+   * calldata leave the device. `'off'` falls back to the local gas-estimate
+   * check, which catches a revert and nothing else.
+   */
+  txPreview: z.enum(['api', 'off']),
   exactApprovals: z.boolean(),
   /** Default swap slippage in bips (§8.14 Spending). */
   slippageBips: z.number().int().min(1).max(5_000),

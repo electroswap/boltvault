@@ -518,7 +518,7 @@ export class ProviderService {
           from: intent.from,
           message: intent.message,
           text: decodeMessage(intent.message).text,
-          assessment: toView(assessment),
+          assessment: toView(assessment, this.deps.platform.now()),
           clientRequestId: intent.clientRequestId,
         }
       }
@@ -534,7 +534,7 @@ export class ProviderService {
           kind: 'eth_sign',
           from: intent.from,
           hash: intent.hash,
-          assessment: toView(assessment),
+          assessment: toView(assessment, this.deps.platform.now()),
           clientRequestId: intent.clientRequestId,
         }
       }
@@ -564,7 +564,7 @@ export class ProviderService {
           version: intent.version,
           domainName: parsed?.domain.name ?? null,
           primaryType: parsed?.primaryType ?? 'unknown',
-          assessment: toView(assessment),
+          assessment: toView(assessment, this.deps.platform.now()),
           clientRequestId: intent.clientRequestId,
         }
       }
@@ -607,7 +607,7 @@ export class ProviderService {
             maxTotalWei: (perGas * BigInt(prepared.tx.gas)).toString(),
             symbol,
           },
-          assessment: toView(assessment),
+          assessment: toView(assessment, this.deps.platform.now()),
           clientRequestId: intent.clientRequestId,
         }
       }
@@ -761,12 +761,25 @@ export class ProviderService {
             id: 1,
             method: 'debug_traceCall',
             params: [
+              /*
+                The traced call is the transaction, fields and all.
+
+                `nonce` and the fee fields were left out, so the node simulated
+                a slightly different call from the one about to be broadcast —
+                and a contract that reads `tx.gasprice`, or behaves differently
+                at a particular nonce, previews as one thing and executes as
+                another. They cost nothing to include.
+              */
               {
                 from: prepared.tx.from,
                 to: prepared.tx.to,
                 value: prepared.tx.value,
                 data: prepared.tx.data,
                 gas: prepared.tx.gas,
+                nonce: `0x${prepared.tx.nonce.toString(16)}`,
+                ...(prepared.tx.maxFeePerGas ? { maxFeePerGas: prepared.tx.maxFeePerGas } : {}),
+                ...(prepared.tx.maxPriorityFeePerGas ? { maxPriorityFeePerGas: prepared.tx.maxPriorityFeePerGas } : {}),
+                ...(prepared.tx.gasPrice ? { gasPrice: prepared.tx.gasPrice } : {}),
               },
               'latest',
               { tracer: 'callTracer', tracerConfig: { withLog: true } },
@@ -793,6 +806,18 @@ export class ProviderService {
     const d = this.deps
     // The route is key-gated, and a build with no key has no business asking.
     if (!d.apiOrigin || !d.clientKey) return null
+    /*
+      The preview is opt-out.
+
+      Getting one means posting the signing address and the full calldata of
+      every dApp transaction to ElectroSwap's API — before anything is signed,
+      and whether or not the transaction is ever sent. That is the price of
+      seeing what a transaction moves on a chain whose public RPCs cannot
+      trace, and it is a price worth paying by default; it is not one to charge
+      silently. Turned off, the local gas-estimate check still catches a
+      revert.
+    */
+    if ((await d.settings.get()).txPreview === 'off') return null
     // A deploy has no `to`, which the route requires — and a trace of a
     // constructor would not tell the signer anything the code does not.
     const to = prepared.tx.to
@@ -800,7 +825,8 @@ export class ProviderService {
     const f = d.fetch ?? globalThis.fetch
     try {
       const url = `${d.apiOrigin}/api/wallet/trace`
-      const body = JSON.stringify({ chainId, from: prepared.tx.from, to, value: prepared.tx.value, data: prepared.tx.data, gas: prepared.tx.gas })
+      // Same fields as the direct trace above: the preview must describe the transaction that will be sent.
+      const body = JSON.stringify({ chainId, from: prepared.tx.from, to, value: prepared.tx.value, data: prepared.tx.data, gas: prepared.tx.gas, nonce: `0x${prepared.tx.nonce.toString(16)}`, ...(prepared.tx.maxFeePerGas ? { maxFeePerGas: prepared.tx.maxFeePerGas } : {}), ...(prepared.tx.maxPriorityFeePerGas ? { maxPriorityFeePerGas: prepared.tx.maxPriorityFeePerGas } : {}), ...(prepared.tx.gasPrice ? { gasPrice: prepared.tx.gasPrice } : {}) })
       const res = await f(url, {
         method: 'POST',
         // A signature over this exact call, not the key (§9.1): a header lifted
@@ -1205,8 +1231,9 @@ function toSerializable(
   }
 }
 
-function toView(a: Assessment): AssessmentView {
+function toView(a: Assessment, now = 0): AssessmentView {
   return {
+    simulatedAt: now,
     severity: a.severity,
     rules: a.rules.map((r) => ({
       code: r.code,
