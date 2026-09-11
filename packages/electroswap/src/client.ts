@@ -12,7 +12,8 @@
  *   - headers: Content-Type, Referer=<interface url>/, and X-BoltVault-Key when
  *     an API key is configured.
  *   - native ETN address is the sentinel 'NATIVE', not 0x0.
- *   - batched market reads use aliased token(...) fields (chunk 12).
+ *   - batched market reads pass their addresses as VARIABLES to `tokens(...)`
+ *     (chunk 12); see BOLT_BATCH for why they are not pasted into the query.
  *
  * No runtime deps: a thin fetch client with an injectable `fetchImpl` so tests
  * run offline (design: live calls gated by SKIP_LIVE).
@@ -28,6 +29,27 @@ export const ELECTRONEUM_MAINNET = 52014
 export const ELECTRONEUM_TESTNET = 5201420
 
 export const DEFAULT_GRAPHQL_URL = 'https://electroswap.io/graphql'
+
+/**
+ * Batched token markets. One document, whatever is being asked for.
+ *
+ * This used to be built per call: an aliased `token(...)` field per address,
+ * with the ADDRESSES PASTED INTO THE QUERY TEXT. That made the document itself
+ * different for every set of tokens a wallet happened to hold, which meant the
+ * API could not put it on its operation allow-list (there is no finite list of
+ * them), could not cache it, and could not read it in a log without seeing
+ * someone's holdings in the query.
+ *
+ * The addresses are variables now, so the text is constant. `tokens(...)`
+ * answers in the order asked, holding a null for anything it does not know —
+ * which is what lets the caller line the answers up with the chunk it sent.
+ */
+const BOLT_BATCH = `query BoltBatch($contracts: [ContractInput!]!) {
+  tokens(contracts: $contracts) {
+    address symbol name decimals
+    market(currency: USD) { price { value currency } }
+  }
+}`
 export const INTERFACE_REFERER = 'https://app.electroswap.io/'
 
 /** Native ETN address → GraphQL sentinel (design: never query 0x0 for ETN). */
@@ -267,8 +289,11 @@ export class ElectroSwapClient {
   }
 
   /**
-   * Batch token markets via aliased token(...) fields (fork convention, chunk 12).
-   * Returns a Map keyed by the lowercased display address.
+   * Batch token markets (chunk 12). Returns a Map keyed by the lowercased
+   * display address.
+   *
+   * The chunk bounds the request, not the document: `tokens(...)` is capped
+   * server-side, and twelve stays well inside it.
    */
   async tokenMarkets(
     chainId: number,
@@ -280,14 +305,13 @@ export class ElectroSwapClient {
     const CHUNK = 12
     for (let i = 0; i < tokenAddresses.length; i += CHUNK) {
       const chunk = tokenAddresses.slice(i, i + CHUNK)
-      const parts = chunk.map((addr, idx) => {
-        const alias = `t${idx}`
-        return `${alias}: token(address: "${resolveTokenAddress(addr)}", chain: $chain) { address symbol name decimals market(currency: USD) { price { value currency } } }`
-      })
-      const query = `query BoltBatch($chain: Chain!) { ${parts.join('\n')} }`
-      const data = await this.query<Record<string, TokenMarketData | null>>(query, { chain })
+      const contracts = chunk.map((addr) => ({ chain, address: resolveTokenAddress(addr) }))
+      const data = await this.query<{ tokens: (TokenMarketData | null)[] | null }>(BOLT_BATCH, { contracts })
+      // Positional by contract: the nth answer is the nth address we asked for,
+      // and a null means that one is unknown rather than that the list shifted.
+      const rows = data.tokens ?? []
       chunk.forEach((addr, idx) => {
-        const row = data[`t${idx}`]
+        const row = rows[idx]
         out.set(addr.toLowerCase(), row ? normalizeToken(row, chain) : emptyToken(addr, chain))
       })
     }
