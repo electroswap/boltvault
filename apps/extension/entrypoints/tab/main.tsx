@@ -6,6 +6,7 @@ import { connectEngine } from '../../src/engine-client'
 import { prewarmTokenLogos } from '@boltvault/ui'
 import { installImageCache } from '../../src/image-cache'
 import { extensionUiHost } from '../../src/ui-host'
+import { HostPermissionsGate } from '../../src/permissions'
 
 installImageCache()
 // Get the bundled token marks decoded before a list asks for fifteen at once.
@@ -33,4 +34,10 @@ if (p && initialScreen) {
 
 const engine = connectEngine()
 installActivityTouch(engine, window)
-createRoot(root).render(<App engine={engine} body="extension-tab" host={extensionUiHost('extension-tab')} {...(initialTab ? { initialTab } : {})} {...(initialScreen ? { initialScreen } : {})} {...(initialParams !== undefined ? { initialParams } : {})} />)
+// The tab is the only surface allowed to show secrets — onboarding and backup
+// both live here — so it gets the same gate the popup has. It did not have one.
+createRoot(root).render(
+  <HostPermissionsGate>
+    <App engine={engine} body="extension-tab" host={extensionUiHost('extension-tab')} {...(initialTab ? { initialTab } : {})} {...(initialScreen ? { initialScreen } : {})} {...(initialParams !== undefined ? { initialParams } : {})} />
+  </HostPermissionsGate>,
+)
