@@ -417,13 +417,11 @@ describe('swap on the testnet mock', () => {
    * somebody types an amount, and spending them to check an answer already in
    * hand buys a comparison rather than a price.
    *
-   * One thing is still checked, because it is a blind spot rather than a
-   * disagreement: the service prices from a pool list (`GET /api/pools/3`)
-   * rather than from the chain, so a pool missing from that list is missing at
-   * every size. The five DIRECT pools are therefore priced alongside a served
-   * answer — one call, not fifteen — and the better of the two wins. The
-   * multi-hop search is the part the service is genuinely better at, and this
-   * does not second-guess it.
+   * Nothing corroborates the served price, deliberately. The routing logic is
+   * meant to be one implementation shared by the wallet, the interface and the
+   * service, so a second opinion computed only in the wallet would be a second
+   * implementation — and a pool the service cannot see is a defect to fix where
+   * the pools are chosen, not to paper over per client.
    */
   describe('the routing service', () => {
     /**
@@ -517,71 +515,53 @@ describe('swap on the testnet mock', () => {
       The budget, which is the whole point of asking the service first.
 
       A full candidate search is fifteen simulated swaps here — five direct plus
-      five through each of the two bases — and it does not run when the service
-      answers. What runs instead is `bestDirect`: the V2 pair and the four V3
-      tiers, at the real size, in one call. `quoteExactInput` takes a packed path
-      and is only ever made for a multi-hop candidate, so its absence is what
-      says the search did not happen.
+      five through each of the two bases — and none of them run when the service
+      answers. The only thing the chain is asked is the impact probe, on the
+      winning route at a thousandth of the size.
     */
-    it('prices the five direct pools and nothing else when the service answers', async () => {
+    it('does not ask the chain to price the trade at all when the service answers', async () => {
       // Ten per cent above what the chain's own quoter says, so the figure in the
-      // quote can only have come from the service and no direct pool displaces it.
+      // quote can only have come from the service.
       const apiOut = (ONCHAIN_OUT * 11_000n) / 10_000n
       const { quote } = await withQuoter({ serve: () => routingQuote([[v3hop(TOKEN, WETN, '3000')]], apiOut) })
       forgetQuotes()
       const q = await quote()
       expect(q.route.source).toBe('api')
       expect(q.amountOutRaw).toBe(apiOut.toString())
-      expect(atFullSize()).toHaveLength(5)
-      expect(atFullSize().filter((c) => c.kind === 'v2')).toHaveLength(1)
-      expect(atFullSize().filter((c) => c.kind === 'v3-single').map((c) => c.fee)).toEqual([100, 500, 3000, 10_000])
-      expect(quoted.some((c) => c.kind === 'v3-path')).toBe(false)
-      // Everything else the chain was asked is the impact probe, on the winning
-      // route at a thousandth of the size — one call, not a second search.
+      expect(atFullSize()).toEqual([])
       expect(atProbeSize()).toEqual([{ kind: 'v3-single', amountIn: ONE_FIX / 1000n, fee: 3000 }])
-      expect(quoted).toHaveLength(6)
+      expect(quoted).toHaveLength(1)
     })
 
     /*
-      The defect this check exists for, in the shape it was measured in.
+      What the wallet gives up by not checking, recorded so it is a decision and
+      not a surprise.
 
-      On 2026-09-11 `GET /api/pools/3` listed eleven V3 pools and named only the
-      0.3 % WETN/BOLT pool, so the service answered WETN→BOLT with a V2 route
-      paying 1297115670894749461 while the 0.05 % pool beside it paid
-      1332394001904452715 — 2.64 % more, an order of magnitude above the wallet's
-      own fee, on the pair most people trade. A fee tier either has a pool or
-      reverts, so the chain cannot have that blind spot. This is not a divergence
-      band and not a second opinion on routing: it is the five pools the service
-      may simply not know about.
+      The service prices from a pool list (`GET /api/pools/3`) rather than from
+      the chain, so a pool missing from that list is missing at every size. On
+      2026-09-11 the list held eleven V3 pools and named only the 0.3 % WETN/BOLT
+      pool, and the service answered WETN→BOLT with a V2 route paying
+      1297115670894749461 while the 0.05 % pool beside it paid
+      1332394001904452715 — though only at sizes small enough for a pool that
+      thin to matter. The wallet takes the served answer anyway, because the fix
+      belongs where the pools are chosen: a second opinion computed only here
+      would be a second routing implementation, and one shared brain is the
+      point. This test is the tripwire for that decision changing by accident.
     */
-    it('is overruled by a direct pool it could not see, because it prices from a pool list and not from the chain', async () => {
+    it('takes the served price even when a pool it could quote itself would pay more', async () => {
       const { quote } = await withQuoter({ serve: () => routingQuote([[v2hop(TOKEN, WETN)]], shortBy(264n)) })
       const q = await quote()
-      expect(q.route.source).toBe('onchain')
-      expect(q.amountOutRaw).toBe(ONCHAIN_OUT.toString())
-      // Not just the better number — the better route. The served answer was a
-      // V2 pair; what the user gets is the V3 pool the chain could prove.
-      expect(q.route.label).toBe('V3 0.3%')
-      // Cased as the registry spells it, because this hop came off the chain and not through the service's lowercasing parse.
-      expect(q.route.hops.map((h) => ({ ...h, tokenIn: h.tokenIn.toLowerCase(), tokenOut: h.tokenOut.toLowerCase() }))).toEqual([{ kind: 'v3', tokenIn: TOKEN.toLowerCase(), tokenOut: WETN.toLowerCase(), fee: 3000 }])
+      expect(q.route.source).toBe('api')
+      expect(q.amountOutRaw).toBe(shortBy(264n).toString())
+      expect(q.route.label).toBe('V2')
+      expect(atFullSize()).toEqual([])
     })
 
     /*
-      And the limit of it: strictly better, or the service's answer stands.
-
-      The service walks the whole pool graph and finds multi-hop routes fifteen
-      fixed candidates cannot. Swapping one of those for a direct pool that
-      merely ties would throw away the reason for asking, so the comparison is
-      `>` and not `>=`.
+      A multi-hop win, of the kind fifteen fixed candidates cannot reach, is the
+      reason the service is asked at all.
     */
-    it('keeps the service’s route when a direct pool ties it, or pays less', async () => {
-      // Exactly the on-chain direct price: a tie, and the service still wins.
-      const tie = await withQuoter({ serve: () => routingQuote([[v3hop(TOKEN, WETN, '500')]], ONCHAIN_OUT) })
-      const tied = await tie.quote()
-      expect(tied.route.source).toBe('api')
-      expect(tied.route.label).toBe('V3 0.05%')
-      expect(tied.amountOutRaw).toBe(ONCHAIN_OUT.toString())
-      // And a genuine multi-hop win, of the kind no direct pool can reach.
+    it('takes a multi-hop route the mini-router has no candidate for', async () => {
       const multi = await withQuoter({ serve: () => routingQuote([[v3hop(TOKEN, MID, '500'), v3hop(MID, WETN, '3000')]], ONCHAIN_OUT * 2n) })
       const q = await multi.quote()
       expect(q.route.source).toBe('api')

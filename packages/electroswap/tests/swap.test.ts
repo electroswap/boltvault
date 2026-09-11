@@ -5,7 +5,7 @@ import type { Hex } from 'viem'
 import { describe, expect, it } from 'vitest'
 import { FOT_DETECTOR_ABI } from '../src/swap/abis'
 import { detectTax } from '../src/swap/fot'
-import { bestDirect, bestRoute, bestRouteExactOut, candidates, deliveredMinimumOut, encodeSwap, encodeSwapExactOut, feeAmount, minimumOut, permitCovers, permitSingleTypedData, protocolRuns, quoteOne, tierFor, DYNO_WEIGHT_ONE, FALLBACK_SCHEDULE, MAX_CANDIDATES, taxSlippageBips, encodeSubmitOrder, encodeCloseOrder, COMMAND, CONTRACT_BALANCE, ROUTER_AS_RECIPIENT, V2_FEE_FLAG, V3_FEES, type Candidate, type Hop, type QuoteAddresses, type ReadCall, type ReadResult } from '../src/swap'
+import { bestRoute, bestRouteExactOut, candidates, deliveredMinimumOut, encodeSwap, encodeSwapExactOut, feeAmount, minimumOut, permitCovers, permitSingleTypedData, protocolRuns, quoteOne, tierFor, DYNO_WEIGHT_ONE, FALLBACK_SCHEDULE, MAX_CANDIDATES, taxSlippageBips, encodeSubmitOrder, encodeCloseOrder, COMMAND, CONTRACT_BALANCE, ROUTER_AS_RECIPIENT, V2_FEE_FLAG, V3_FEES, type Candidate, type Hop, type QuoteAddresses, type ReadCall, type ReadResult } from '../src/swap'
 
 const A = ELECTRONEUM_ADDRESSES[52014]
 const UR = A.universalRouter as Hex
@@ -484,75 +484,6 @@ describe('quoteOne', () => {
     expect(await quoteOne(v3Candidate, 1_000n, addresses, async () => [])).toBeNull()
     // A quote of zero is not a price.
     expect(await quoteOne(v2Candidate, 1_000n, addresses, async () => [{ ok: true, value: [1_000n, 0n] }])).toBeNull()
-  })
-})
-
-/*
-  The five direct pools, priced on chain, as a check on somebody else's answer.
-
-  The routing service prices from a pool list (`GET /api/pools/3`) rather than
-  from the chain, so a pool missing from that list is invisible to it at every
-  size — on 2026-09-11 the list held eleven V3 pools and named only the 0.3%
-  WETN/BOLT pool, while the 0.05% pool beside it paid 2.64% more on a 3 ETN
-  swap. A fee tier either has a pool or reverts, so the chain cannot have that
-  blind spot. `bestDirect` is the narrowest question that closes it: one call,
-  five single-hop candidates, at the real size.
-*/
-describe('bestDirect', () => {
-  /** Every direct pool answers; `tiers` says what each V3 tier pays, `v2` the pair. */
-  const pools = (tiers: Partial<Record<number, bigint>>, v2: bigint | null) =>
-    async (calls: readonly ReadCall[]): Promise<ReadResult[]> =>
-      calls.map((call) => {
-        if (call.functionName === 'getAmountsOut') return v2 === null ? { ok: false } : { ok: true, value: [1_000_000n, v2] }
-        const fee = (call.args[0] as { fee: number }).fee
-        const out = tiers[fee]
-        return out === undefined ? { ok: false } : { ok: true, value: [out, 0n, 0, 90_000n] }
-      })
-
-  it('quotes the five direct candidates at the real size, and no multi-hop one', async () => {
-    const seen: ReadCall[] = []
-    await bestDirect(BOLT, USDC, 1_000_000n, addresses, async (calls) => {
-      seen.push(...calls)
-      return pools({ 3000: 500_000n }, 490_000n)(calls)
-    })
-    // One batch of five: the V2 pair and the four V3 tiers.
-    expect(seen).toHaveLength(5)
-    // `quoteExactInput` is the packed-path call, which only a multi-hop route makes.
-    expect(seen.map((c) => c.functionName)).toEqual(['getAmountsOut', 'quoteExactInputSingle', 'quoteExactInputSingle', 'quoteExactInputSingle', 'quoteExactInputSingle'])
-    expect(seen.some((c) => c.functionName === 'quoteExactInput')).toBe(false)
-    expect(seen.some((c) => c.address === addresses.mixedRouteQuoter)).toBe(false)
-    expect((seen[0]?.args[1] as readonly Hex[]).map((t) => t.toLowerCase())).toEqual([BOLT, USDC].map((t) => t.toLowerCase()))
-    expect(seen.slice(1).map((c) => (c.args[0] as { fee: number }).fee)).toEqual([...V3_FEES])
-    // The full amount, not the thousandth the impact probe uses.
-    expect(seen[0]?.args[0]).toBe(1_000_000n)
-    expect(seen.slice(1).every((c) => (c.args[0] as { amountIn: bigint }).amountIn === 1_000_000n)).toBe(true)
-  })
-
-  it('takes the deepest tier that answers, which is the pool the service could not see', async () => {
-    // The shape of the real finding: the service's list names only 0.3%, and the
-    // 0.05% pool beside it pays more.
-    const best = await bestDirect(BOLT, USDC, 1_000_000n, addresses, pools({ 500: 1_332_394n, 3000: 1_297_115n }, 1_000_000n))
-    expect(best?.candidate.label).toBe('V3 0.05%')
-    expect(best?.amountOut).toBe(1_332_394n)
-    expect(best?.candidate.route.hops).toHaveLength(1)
-    // No single-hop preference to apply here — every candidate is a single hop,
-    // so the largest output simply wins, V2 included.
-    const v2Wins = await bestDirect(BOLT, USDC, 1_000_000n, addresses, pools({ 500: 900n, 3000: 800n }, 1_000n))
-    expect(v2Wins?.candidate.label).toBe('V2')
-    expect(v2Wins?.amountOut).toBe(1_000n)
-  })
-
-  it('says null when no direct pool answers, and null rather than throwing when the reader does not', async () => {
-    expect(await bestDirect(BOLT, USDC, 1_000_000n, addresses, pools({}, null))).toBeNull()
-    // A pool that quotes zero is not a pool that quoted.
-    expect(await bestDirect(BOLT, USDC, 1_000_000n, addresses, pools({ 3000: 0n }, null))).toBeNull()
-    /*
-      A rejecting reader must be `null`, not a throw: this runs on the path where
-      the routing service already answered, and an RPC that is down must cost the
-      wallet its cross-check, never the quote.
-    */
-    await expect(bestDirect(BOLT, USDC, 1_000_000n, addresses, () => Promise.reject(new Error('rpc down')))).resolves.toBeNull()
-    expect(await bestDirect(BOLT, USDC, 1_000_000n, addresses, async () => [])).toBeNull()
   })
 })
 

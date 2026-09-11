@@ -13,7 +13,6 @@ import {
   ERC20_ABI,
   PERMIT2_ABI,
   PERMIT_EXPIRY_S,
-  bestDirect,
   bestRoute,
   quoteOne,
   bestRouteExactOut,
@@ -232,26 +231,7 @@ export class SwapService {
     const quoter = this.deps.quoter
     if (quoter) {
       const served = await quoter.route(input)
-      if (served.kind === 'route') {
-        /*
-          The service's answer, unless this pair has a pool it cannot see.
-
-          It prices from a pool list rather than from the chain, so a pool
-          missing from that list is missing at every size — and on 2026-09-11 the
-          list held eleven V3 pools and named only the 0.3% WETN/BOLT pool, while
-          the 0.05% pool beside it paid 2.64% more on a 3 ETN swap. That is an
-          order of magnitude more than the wallet's own fee, on the pair most
-          people trade.
-
-          So the five direct pools are priced too — one call, not the twenty-four
-          of a full search, because the multi-hop routing is the part the service
-          is genuinely better at and this does not second-guess it. It is a check
-          against a blind spot, not a second opinion.
-        */
-        const direct = await bestDirect(input.tokenIn, input.tokenOut, input.amountIn, addresses, read)
-        if (direct && direct.amountOut > served.quote.amountOut) return { quote: direct, source: 'onchain' }
-        return { quote: served.quote, source: 'api' }
-      }
+      if (served.kind === 'route') return { quote: served.quote, source: 'api' }
     }
     /*
       Only now, and only because the service could not answer.

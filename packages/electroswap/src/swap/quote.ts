@@ -155,30 +155,6 @@ function parse(c: Candidate, r: ReadResult): RouteQuote | null {
 }
 
 /**
- * The pools this pair has directly, priced at the real size.
- *
- * Five candidates — the V2 pair and the four V3 tiers — quoted in one call, as
- * a check on an answer that came from somewhere else. It exists because the
- * routing service prices from a pool list (`GET /api/pools/3`) rather than from
- * the chain, and a pool missing from that list is invisible to it at any size:
- * on 2026-09-11 the list held eleven V3 pools and named only the 0.3% WETN/BOLT
- * pool, while the 0.05% pool beside it paid 2.64% more on a 3 ETN swap. The
- * chain cannot have that blind spot, because a fee tier either has a pool or
- * reverts.
- *
- * Deliberately only the direct pools. Re-running the whole candidate set would
- * be quoting the trade twice, which is what asking the service was meant to
- * stop; the multi-hop search is what the service is genuinely better at, and
- * this does not second-guess it.
- */
-export async function bestDirect(tokenIn: Hex, tokenOut: Hex, amountIn: bigint, addresses: QuoteAddresses, read: Reader): Promise<RouteQuote | null> {
-  const direct = candidates(tokenIn, tokenOut, addresses).filter((c) => c.route.hops.length === 1)
-  const results = await read(direct.map((c) => callFor(c, amountIn, addresses))).catch(() => direct.map(() => ({ ok: false }) as ReadResult))
-  const quotes = direct.map((c, i) => parse(c, results[i] ?? { ok: false })).filter((q): q is RouteQuote => q !== null)
-  return quotes.reduce<RouteQuote | null>((best, q) => (best === null || q.amountOut > best.amountOut ? q : best), null)
-}
-
-/**
  * One route, quoted.
  *
  * The spot probe behind the price-impact figure used to re-run the whole
