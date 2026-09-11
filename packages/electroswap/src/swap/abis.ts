@@ -56,25 +56,31 @@ export const FEE_SCHEDULE_ABI = parseAbi([
   'function baseBips() view returns (uint16)',
 ])
 
-/** Uniswap's FeeOnTransferDetector (the interface's useSwapTaxes). */
-/*
-  The detector ElectroSwap actually deployed, which returns two fields.
-
-  This ABI used to declare five — `feeTakenOnTransfer`, `externalTransferFailed`
-  and `sellReverted` as well — which is the shape of a *later* Uniswap
-  FeeOnTransferDetector. The deployed contract
-  (`contracts/electroswap/ElectroSwapV3`, verified) returns
-  `TokenFees{buyFeeBps, sellFeeBps}` and nothing else, so every decode of a
-  two-word return against a five-field tuple failed and the probe has never
-  once succeeded. The three extra fields were always `undefined`, which is why
-  the `sellReverted` guard never fired either.
-
-  It matches `packages/electroswap/abis/FeeOnTransferDetector.json`, which is
-  synced from the interface and had it right all along.
-*/
+/**
+ * FeeOnTransferDetectorV2 (`contracts/electroswap/FeeOnTransferDetectorV2`).
+ *
+ * `validate` is the surface of the detector this replaces, kept so a caller can
+ * be re-pointed by address alone; `inspect` is the one the wallet uses, because
+ * two numbers could not say three things that decide whether a swap is safe:
+ *
+ *   - `status` — a probe that could not measure is not a token with no fee, and
+ *     the old shape had no way to say which had happened. Every failure was a
+ *     revert, so a caller that caught it recorded "untaxed" for a token it never
+ *     measured.
+ *   - `sellReverted` — the old contract caught a failing sell and reported
+ *     `sellFeeBps = buyFeeBps`, so a token nobody can sell came back looking
+ *     like an ordinary 3% one and the wallet would help somebody buy it.
+ *   - `externalTransferFailed` / `feeTakenOnTransfer` — whether the tax and the
+ *     refusals apply to a plain transfer, which is what the extra hop through
+ *     the router's custody actually is.
+ *
+ * `status` is an enum: 0 measured, 1 no pair against the base, 2 pair too thin
+ * to lend the probe, 3 the probe itself reverted.
+ */
 export const FOT_DETECTOR_ABI = parseAbi([
   'function validate(address token, address baseToken, uint256 amountToBorrow) returns ((uint256 buyFeeBps, uint256 sellFeeBps) fees)',
-  'function batchValidate(address[] tokens, address baseToken, uint256 amountToBorrow) returns ((uint256 buyFeeBps, uint256 sellFeeBps)[] fotResults)',
+  'function inspect(address token, address baseToken, uint256 amountToBorrow) returns ((uint8 status, uint256 buyFeeBps, uint256 sellFeeBps, bool sellReverted, bool externalTransferFailed, bool feeTakenOnTransfer) report)',
+  'function batchInspect(address[] tokens, address baseToken, uint256 amountToBorrow) returns ((uint8 status, uint256 buyFeeBps, uint256 sellFeeBps, bool sellReverted, bool externalTransferFailed, bool feeTakenOnTransfer)[] reports)',
 ])
 
 /** EsLimitOrderManagerV1 (apps/interface/src/abis/limit-orders.json, synced). */

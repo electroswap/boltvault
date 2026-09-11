@@ -301,4 +301,121 @@ describe('our own swap fee (T10)', () => {
     expect(run(tx(A.universalRouter as Hex, urData(SINK, 30n)), {}, 'internal:swap').presentation.blocked).toBe(true)
     expect(codes(run(tx(A.universalRouter as Hex, urData(SINK, 30n)), { expectedFee: { sink: SINK, bips: 0 } }, 'internal:swap'))).toContain('FEE_TIER_MISMATCH')
   })
+
+  /*
+    The other place the same fee can be: out of the token the user is spending.
+
+    For an output token that charges on transfer, `PAY_PORTION` is not safe —
+    it needs the router to custody the output, and the hop from the router to
+    the user is taxed after `Payments.sweep` has already checked its minimum
+    against the router's own balance. The encoder pays the sink first instead,
+    out of the input, and lets the swap deliver straight to the user. The shape
+    on the wire is a `PERMIT2_TRANSFER_FROM` (or a `TRANSFER`, when the input
+    was just wrapped) of an exact amount to the pinned sink, and no portion of
+    the output at all.
+
+    Built the way `encodeSwap` builds it: `address token, address recipient,
+    uint160 amount` for the transfer, the swap paying the user directly.
+    `packages/electroswap/tests/swap.test.ts` checks the real encoder's bytes
+    against this rule from the other side of the layering, which is where the
+    two shapes are pinned to each other.
+  */
+  describe('taken out of the input instead', () => {
+    const ONE = 10n ** 18n
+    /** 30 bips of one whole token. */
+    const FEE = 3_000_000_000_000_000n
+    const expectedOnInput = { sink: SINK, bips: 30, onInput: { token: TOKEN, amount: FEE } }
+
+    /** `[PERMIT2_TRANSFER_FROM → sink] V2_SWAP_EXACT_IN(user) [PAY_PORTION]`, as the encoder writes it. */
+    const onInputData = (opts: { paid?: { to: Hex; amount: bigint }; portion?: boolean } = { paid: { to: SINK, amount: FEE } }): Hex => {
+      const bytes: number[] = []
+      const inputs: Hex[] = []
+      if (opts.paid) {
+        bytes.push(UR_COMMAND.PERMIT2_TRANSFER_FROM)
+        inputs.push(encodeAbiParameters(parseAbiParameters('address, address, uint160'), [TOKEN, opts.paid.to, opts.paid.amount]))
+      }
+      bytes.push(UR_COMMAND.V2_SWAP_EXACT_IN)
+      inputs.push(encodeAbiParameters(parseAbiParameters('address, uint256, uint256, address[], bool'), [ME, ONE - (opts.paid?.amount ?? 0n), ONE / 2n, [TOKEN, A.wetn as Hex], true]))
+      if (opts.portion) {
+        bytes.push(UR_COMMAND.PAY_PORTION)
+        inputs.push(encodeAbiParameters(parseAbiParameters('address, address, uint256'), [A.wetn as Hex, SINK, 30n]))
+      }
+      const commands = `0x${bytes.map((b) => b.toString(16).padStart(2, '0')).join('')}` as Hex
+      return encodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commands, inputs, 1n] })
+    }
+
+    it('the pinned sink, in the input token, at the exact amount the tier says, is clean', () => {
+      const a = run(tx(A.universalRouter as Hex, onInputData()), { expectedFee: expectedOnInput }, 'internal:swap')
+      expect(codes(a)).not.toContain('FEE_SINK_MISMATCH')
+      expect(codes(a)).not.toContain('FEE_TIER_MISMATCH')
+      expect(a.presentation.blocked).toBe(false)
+    })
+
+    /*
+      A swap that pays the wallet nothing is not a favour to the user.
+
+      It is the same assertion as the output side's missing `PAY_PORTION`: the
+      encoder said a fee was due, and bytes that do not pay it are bytes nobody
+      in this wallet produced.
+    */
+    it('no transfer to the sink at all is the fee missing', () => {
+      const a = run(tx(A.universalRouter as Hex, onInputData({})), { expectedFee: expectedOnInput }, 'internal:swap')
+      expect(codes(a)).toContain('FEE_SINK_MISMATCH')
+      expect(a.presentation.blocked).toBe(true)
+    })
+
+    it('a transfer of the right amount to the wrong address is not the fee', () => {
+      const a = run(tx(A.universalRouter as Hex, onInputData({ paid: { to: UNKNOWN, amount: FEE } })), { expectedFee: expectedOnInput }, 'internal:swap')
+      expect(codes(a)).toContain('FEE_SINK_MISMATCH')
+      expect(a.presentation.blocked).toBe(true)
+    })
+
+    /*
+      The amount is asserted, not the bips, because there are no bips in these
+      bytes to read: the swap command's `amountIn` is already net of the fee, so
+      the firewall is given the exact figure the schedule produced and compares
+      it whole. A single wei over is a different fee.
+    */
+    it('the wrong amount is the wrong tier', () => {
+      const a = run(tx(A.universalRouter as Hex, onInputData({ paid: { to: SINK, amount: FEE + 1n } })), { expectedFee: expectedOnInput }, 'internal:swap')
+      expect(codes(a)).toContain('FEE_TIER_MISMATCH')
+      expect(a.presentation.blocked).toBe(true)
+      // Ten times the fee to the right address is the same refusal.
+      expect(codes(run(tx(A.universalRouter as Hex, onInputData({ paid: { to: SINK, amount: FEE * 10n } })), { expectedFee: expectedOnInput }, 'internal:swap'))).toContain('FEE_TIER_MISMATCH')
+    })
+
+    /*
+      Both at once is the one shape neither side's assertion would have caught.
+
+      The input-side fee is paid, so the transfer check passes; a `PAY_PORTION`
+      on top of it is a second fee out of the output, and the user pays the
+      wallet twice for one swap. The old rule only ever counted portions, so it
+      would have read this as the ordinary output-side plan and approved it.
+    */
+    it('an input-side fee and a portion of the output as well is paying twice', () => {
+      const a = run(tx(A.universalRouter as Hex, onInputData({ paid: { to: SINK, amount: FEE }, portion: true })), { expectedFee: expectedOnInput }, 'internal:swap')
+      expect(codes(a)).toContain('FEE_TIER_MISMATCH')
+      expect(a.presentation.blocked).toBe(true)
+      expect(a.rules.find((r) => r.code === 'FEE_TIER_MISMATCH')?.title).toMatch(/twice/)
+    })
+
+    /*
+      The wallet's own fee is not a stranger taking the user's money.
+
+      `urRecipientNotSelf` reads the recipient of every command that moves
+      something — `PERMIT2_TRANSFER_FROM` and `TRANSFER` among them — and calls
+      anything that is not one of the user's own accounts "This swap sends the
+      output somewhere else". `PAY_PORTION` is exempt precisely because the fee
+      sink has its own pinned rules; the input-side fee is that same fee to that
+      same pinned address through a different command, and it is exempt from
+      nothing. So the wallet's own correct swap accuses itself, at `danger`,
+      with a typed confirmation the user has to type out to swap at all.
+    */
+    it('is not read as a swap that pays a stranger', () => {
+      const a = run(tx(A.universalRouter as Hex, onInputData()), { expectedFee: expectedOnInput }, 'internal:swap')
+      expect(codes(a)).not.toContain('UR_RECIPIENT_NOT_SELF')
+      expect(a.severity).not.toBe('danger')
+      expect(a.presentation.typedConfirmation).toBeNull()
+    })
+  })
 })

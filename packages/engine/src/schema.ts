@@ -584,6 +584,14 @@ export const SwapQuoteSchema = z.object({
     source: z.enum(['config', 'fallback']),
     nextTierAt: z.string().nullable(),
     nextTierBips: z.number().int().nonnegative().nullable(),
+    /**
+     * The fee comes out of what you spend, not what you receive, because the
+     * output token charges on every transfer and the router handing it on would
+     * be charged again — after the only on-chain check. `amountRaw` is then
+     * denominated in the input token. Defaulted so quotes cached before this
+     * field existed still parse.
+     */
+    onInput: z.boolean().default(false),
   }),
   route: z.object({
     label: z.string(),

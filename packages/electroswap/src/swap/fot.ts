@@ -1,8 +1,7 @@
 /**
  * Fee-on-transfer detection (master plan §8.6): the same detector the
- * interface uses. A tax on either side is folded into slippage; when the
- * probe reverts or the split cannot meet `minOut`, the wallet disables the
- * swap with honest copy rather than guessing.
+ * interface uses. A tax on either side is priced into the quote, and a token
+ * the wallet cannot get a user back out of is refused rather than sold to them.
  */
 import type { Hex } from 'viem'
 import { FOT_DETECTOR_ABI } from './abis'
@@ -11,16 +10,24 @@ import type { ReadCall, Reader } from './quote'
 export interface TokenTax {
   readonly buyFeeBps: number
   readonly sellFeeBps: number
+  /**
+   * The token refused to be sold back at all.
+   *
+   * Not a large fee — a token nobody can get out of. The detector this replaced
+   * caught the failing sell and reported `sellFeeBps = buyFeeBps`, so a
+   * honeypot came back looking like an ordinary 3% token and every client
+   * priced it as tradeable.
+   */
+  readonly sellReverted: boolean
+  /** A transfer to an ordinary address was refused, though trading against the pair was not. */
+  readonly externalTransferFailed: boolean
+  /** The fee applies to a plain transfer, not only to trading against the pair. */
+  readonly feeTakenOnTransfer: boolean
 }
 
 /**
  * "There is no detector on this chain" and "the detector did not answer" are
  * different facts, and both used to come back as `null`.
- *
- * `'unavailable'` is not evidence of a tax, and must not stop a swap: the
- * detector reverts `PairLookupFailed` for any token with no V2 pair against
- * the base, which is an ordinary thing for a token to be. It is a reason to
- * say the tax is unknown, not a reason to refuse.
  *
  * They mean opposite things. The first says the wallet was never going to
  * know; the second says it asked about this particular token and could not
@@ -29,6 +36,9 @@ export interface TokenTax {
  * "no tax": a reverting probe, a malformed answer, a rate-limited node.
  */
 export type TaxProbe = TokenTax | 'unavailable' | null
+
+/** `ProbeStatus.Measured` — anything else means the fees are not a measurement. */
+const MEASURED = 0
 
 /*
   Probe one token against the wrapped native.
@@ -44,17 +54,69 @@ export type TaxProbe = TokenTax | 'unavailable' | null
 */
 export async function detectTax(detector: Hex | null, token: Hex, baseToken: Hex, read: Reader, amountToBorrow = 1000n): Promise<TaxProbe> {
   if (!detector) return null
-  const call: ReadCall = { address: detector, abi: FOT_DETECTOR_ABI, functionName: 'validate', args: [token, baseToken, amountToBorrow] }
+  const call: ReadCall = { address: detector, abi: FOT_DETECTOR_ABI, functionName: 'inspect', args: [token, baseToken, amountToBorrow] }
   const [r] = await read([call]).catch(() => [undefined])
   if (!r?.ok || !r.value || typeof r.value !== 'object') return 'unavailable'
-  const v = r.value as { buyFeeBps: bigint; sellFeeBps: bigint }
+  const v = r.value as { status: number; buyFeeBps: bigint; sellFeeBps: bigint; sellReverted: boolean; externalTransferFailed: boolean; feeTakenOnTransfer: boolean }
   if (typeof v.buyFeeBps !== 'bigint' || typeof v.sellFeeBps !== 'bigint') return 'unavailable'
-  return { buyFeeBps: Number(v.buyFeeBps), sellFeeBps: Number(v.sellFeeBps) }
+  /*
+    A status the wallet did not ask for is not a measurement.
+
+    The detector answers `NoPair`, `PairTooThin` and `ProbeReverted` as ordinary
+    return values rather than reverts, so the call succeeds and the fees come
+    back as zero. Reading those zeros would be the one mistake this whole type
+    exists to prevent: a token nobody could measure, reported as a token with no
+    fee.
+  */
+  if (Number(v.status) !== MEASURED) return 'unavailable'
+  return {
+    buyFeeBps: Number(v.buyFeeBps),
+    sellFeeBps: Number(v.sellFeeBps),
+    sellReverted: v.sellReverted === true,
+    externalTransferFailed: v.externalTransferFailed === true,
+    feeTakenOnTransfer: v.feeTakenOnTransfer === true,
+  }
 }
 
 /** A probe that produced an actual measurement, or null. */
 export function taxOf(probe: TaxProbe): TokenTax | null {
   return probe === 'unavailable' ? null : probe
+}
+
+/** The token could be bought and then not sold. Measured, not guessed. */
+export function sellsAreRefused(probe: TaxProbe): boolean {
+  return taxOf(probe)?.sellReverted === true
+}
+
+/**
+ * Handing this token through the router's custody is not safe.
+ *
+ * `PAY_PORTION` and `SWEEP` need the router to hold the output, which puts one
+ * more transfer between the pool and the user — and it happens *after*
+ * `Payments.sweep` has compared its minimum against the router's own balance,
+ * so nothing on chain covers it.
+ *
+ * Deliberately any measured fee, not only `feeTakenOnTransfer`. The flag is
+ * measured by moving an eighth of a probe of a thousand wei to a fresh address
+ * and looking for a shortfall, and a small percentage of a very small number
+ * truncates to nothing — so `false` means "no shortfall was visible at that
+ * size", which is weaker than "this token does not charge". PDY is the case
+ * that settles it: it reports `feeTakenOnTransfer: false` and
+ * `externalTransferFailed: true`, because the transfer did not survive to be
+ * measured at all. A token that refuses an ordinary address outright breaks the
+ * custody path just as thoroughly as one that taxes it, and keying on the fee
+ * itself catches both without relying on a flag measured in wei.
+ *
+ * The cost of being wrong in this direction is that the wallet takes its fee
+ * from the input token for a swap that would have been fine either way. The
+ * cost of being wrong in the other direction is a user who receives less than
+ * the minimum they were shown, or a transaction that reverts after three
+ * signatures.
+ */
+export function custodyIsUnsafe(probe: TaxProbe): boolean {
+  const tax = taxOf(probe)
+  if (tax === null) return false
+  return tax.buyFeeBps > 0 || tax.sellFeeBps > 0 || tax.externalTransferFailed || tax.feeTakenOnTransfer
 }
 
 /** Slippage the user must accept to cover the taxes on this pair, in bips. */

@@ -175,8 +175,20 @@ export interface AssessmentContext {
   readonly boltToken?: Hex
   /** For `internal:bridge`: whether the recipient is a contract on the origin and on the destination (§8.7). */
   readonly bridgeRecipient?: { readonly hasCodeOnOrigin: boolean; readonly hasCodeOnDestination: boolean | null } | null
-  /** For `internal:swap`: the fee the encoder must have written (T10). `bips: 0` means no PAY_PORTION at all. */
-  readonly expectedFee?: { readonly sink: Hex; readonly bips: number } | null
+  /**
+   * For `internal:swap`: the fee the encoder must have written (T10). `bips: 0`
+   * means no `PAY_PORTION` at all.
+   *
+   * `onInput` says the fee was taken from the token being spent, before the
+   * swap, rather than as a portion of the output — which is what the encoder
+   * does when the output token charges on transfer, so the router never holds it
+   * and the swap's own minimum is measured on the user. The shape on the wire is
+   * then a `PERMIT2_TRANSFER_FROM` (or a `TRANSFER`, when the input was just
+   * wrapped) to the sink, and no portion at all. The exact amount is given
+   * rather than derived, because the swap command's `amountIn` is already net of
+   * it and there is nothing left in the calldata to recompute it from.
+   */
+  readonly expectedFee?: { readonly sink: Hex; readonly bips: number; readonly onInput?: { readonly token: Hex; readonly amount: bigint } | null } | null
 }
 
 export interface AssetDelta {

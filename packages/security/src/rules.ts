@@ -402,6 +402,48 @@ export const feeSinkRules: Rule = ({ request, decoded, origin, context }) => {
         'In-wallet swaps are off on this network — no fee address is set for it in this build.',
     }
   const portions = decoded.decoded.commands.filter((c) => c.type === 'PAY_PORTION')
+  /*
+    The fee on the input side: one transfer to the sink before anything is
+    swapped, and no portion of the output at all.
+
+    The assertion is the same one — exactly the pinned recipient, exactly the
+    amount the schedule says — moved to the token the user is spending. What it
+    must also refuse is a transaction carrying both: a portion of the output as
+    well, which would charge the user twice.
+  */
+  const onInput = expected.onInput
+  if (onInput) {
+    if (portions.length !== 0)
+      return {
+        code: 'FEE_TIER_MISMATCH',
+        severity: 'block',
+        title: 'This swap would pay the fee twice',
+        detail: 'The fee is being taken from what you are spending and from what you receive. BoltVault will not sign it.',
+      }
+    const paid = decoded.decoded.commands.filter(
+      (c) =>
+        (c.type === 'PERMIT2_TRANSFER_FROM' || c.type === 'TRANSFER') &&
+        sameAddress(c.token, onInput.token) &&
+        sameAddress(c.recipient, expected.sink),
+    )
+    const one = paid[0]
+    if (paid.length !== 1 || one === undefined)
+      return {
+        code: 'FEE_SINK_MISMATCH',
+        severity: 'block',
+        title: 'The wallet fee is missing',
+        detail: 'This swap does not pay the wallet fee to the pinned recipient. BoltVault will not sign it.',
+      }
+    const amount = one.type === 'PERMIT2_TRANSFER_FROM' || one.type === 'TRANSFER' ? one.amount : 0n
+    if (amount !== onInput.amount)
+      return {
+        code: 'FEE_TIER_MISMATCH',
+        severity: 'block',
+        title: 'The fee does not match your tier',
+        detail: 'The amount this swap would pay the wallet is not the amount your tier says. Re-quote and try again.',
+      }
+    return null
+  }
   if (expected.bips === 0) {
     return portions.length === 0
       ? null
@@ -592,8 +634,22 @@ const UR_SENTINELS = new Set(['0x0000000000000000000000000000000000000001', '0x0
  */
 export const urRecipientNotSelf: Rule = ({ decoded, context, chainId, account }) => {
   if (decoded?.kind !== 'universal_router') return null
+  /*
+    The wallet's own fee is not a stranger, whichever command carries it.
+
+    `PAY_PORTION` was exempt because `feeSinkRules` pins it exactly — the right
+    reasoning, applied to only one of the two shapes the fee can take. When the
+    output token cannot safely pass through the router's custody the fee is paid
+    out of the input instead, by a `PERMIT2_TRANSFER_FROM` or a `TRANSFER` to
+    that same pinned sink, and this rule read it as the swap paying somebody
+    else — raising a typed confirmation the user had to type out to make their
+    own swap. The exemption is the same one, and it is narrow: only the address
+    `expectedFee` names, and only when it named one.
+  */
+  const feeSink = context.expectedFee?.onInput ? context.expectedFee.sink : null
   const recipients: Hex[] = []
   for (const c of decoded.decoded.commands) {
+    if (feeSink && (c.type === 'PERMIT2_TRANSFER_FROM' || c.type === 'TRANSFER') && sameAddress(c.recipient, feeSink)) continue
     switch (c.type) {
       case 'V2_SWAP_EXACT_IN':
       case 'V2_SWAP_EXACT_OUT':

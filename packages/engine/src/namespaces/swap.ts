@@ -17,11 +17,14 @@ import {
   quoteOne,
   bestRouteExactOut,
   detectTax,
+  sellsAreRefused,
+  custodyIsUnsafe,
   encodeApprovePermit2,
   encodeSwap,
   encodeSwapExactOut,
   feeAmount,
   deliveredMinimumOut,
+  routerMinimumOut,
   grossOutForExactOut,
   maximumIn as maximumInFor,
   netAfterFee,
@@ -206,7 +209,7 @@ export class SwapService {
       slippageBips: input.slippageBips ?? DEFAULT_SLIPPAGE_BIPS,
       taxBips: 0,
       taxUnknown: false,
-      fee: { bips: 0, tier: 0, name: '', amountRaw: '0', sink: null, source: 'fallback', nextTierAt: null, nextTierBips: null },
+      fee: { bips: 0, tier: 0, name: '', amountRaw: '0', sink: null, source: 'fallback', nextTierAt: null, nextTierBips: null, onInput: false },
       route: { label: '', hops: [], source: 'onchain' },
       gasEstimate: '0',
       steps: [],
@@ -430,6 +433,21 @@ export class SwapService {
     const taxUnknown = taxIn === 'unavailable' || taxOut === 'unavailable'
     const taxBips = taxSlippageBips(taxIn, taxOut)
     /*
+      A token the detector could not sell back is not a token with a large fee.
+
+      The probe borrows from the pair, sends it back, and measures the
+      shortfall. When that send reverts, the detector says so — and a token that
+      refuses to be sold is one a user can be talked into buying and then never
+      get out of. Nothing downstream can protect them: the swap in succeeds, the
+      minimum received is honoured, and the position is simply stuck.
+
+      The detector this replaced had no way to report it. It caught the failing
+      sell and echoed `buyFeeBps`, so a honeypot came back looking like an
+      ordinary 3% token and was quoted like one.
+    */
+    if (sellsAreRefused(taxOut)) problems.push(`${outView.symbol} cannot be sold back — the check that buys it succeeds and then nothing can get you out. BoltVault will not buy it for you.`)
+    if (sellsAreRefused(taxIn)) problems.push(`${inView.symbol} refuses to be sold, so this swap would fail on chain. Nothing BoltVault can sign will move it.`)
+    /*
       A token that charges a fee on transfer cannot honour an exact output, so
       the wallet refuses rather than promising one.
 
@@ -453,6 +471,22 @@ export class SwapService {
       therefore disarmed the only protection the swap has. Refuse instead: a
       swap whose combined slippage reaches 100% has nothing left to protect.
     */
+    /*
+      Where the wallet takes its fee, which the output token decides.
+
+      `PAY_PORTION` needs the router to hold the output, and the hop from the
+      router to the user is one more transfer for a token that charges on
+      transfer to tax — taken after `Payments.sweep` has already compared its
+      minimum against the *router's* balance. The figure on screen was not the
+      figure guaranteed. Charging the input instead means the router never holds
+      the output: the swap pays the user directly and the V2 router measures
+      their balance before and after, which is a real delivered-amount floor.
+
+      Only when the detector actually measured something. A probe that could not
+      answer is not evidence of anything, and the ordinary case keeps the shape
+      it has always had.
+    */
+    const feeOnInput = custodyIsUnsafe(taxOut) && bips > 0 && sink !== null
     const effectiveSlippage = Math.min(slippageBips + taxBips, MAX_EFFECTIVE_SLIPPAGE_BPS)
     if (slippageBips + taxBips >= BIPS_CEILING)
       problems.push('This token’s transfer tax plus your slippage would leave no minimum received. BoltVault will not sign a swap with no floor.')
@@ -469,8 +503,27 @@ export class SwapService {
       screen and the sheet have to show, because it is the one the user is
       committing to.
     */
-    const receive = exactOut ? wantOut : (netAfterFee(amountOut, bips) * BigInt(10_000 - Math.min(taxBips, 9_999))) / 10_000n
-    const minOut = exactOut ? wantOut : deliveredMinimumOut(amountOut, bips, effectiveSlippage)
+    /*
+      What lands, which depends on where the fee was taken.
+
+      On the output, the router's quote is reduced by the fee and then by the
+      token's own transfer tax. On the input, the fee came off before the pools
+      were asked at all — so the whole swap output is the user's, less the tax,
+      and subtracting the fee again here would under-report what they get by the
+      fee twice over.
+    */
+    const receive = exactOut ? wantOut : ((feeOnInput ? amountOut : netAfterFee(amountOut, bips)) * BigInt(10_000 - Math.min(taxBips, 9_999))) / 10_000n
+    /*
+      The same number the encoder writes, whichever side the fee came from.
+
+      `deliveredMinimumOut` subtracts the fee from the floor because the router
+      takes its portion out of what it is holding. On the input side there is no
+      portion to take — the fee left before the pools were asked — so the floor
+      is the scaled quote less slippage, and subtracting the fee again would
+      promise the user less than the bytes actually guarantee.
+    */
+    const scaledOut = feeOnInput ? amountOut - feeAmount(amountOut, bips) : amountOut
+    const minOut = exactOut ? wantOut : feeOnInput ? routerMinimumOut(scaledOut, effectiveSlippage) : deliveredMinimumOut(amountOut, bips, effectiveSlippage)
     const maxIn = exactOut ? maximumInFor(amountIn, effectiveSlippage) : 0n
     const spot = probe ? rateOf(probeIn, probe.amountOut, inView.decimals, outView.decimals) : null
     const impact = priceImpactPct(amountIn, amountOut, spot, inView.decimals, outView.decimals)
@@ -517,7 +570,8 @@ export class SwapService {
       priceImpactPct: impact,
       taxBips,
       taxUnknown,
-      fee: { ...withState.fee, amountRaw: feeAmount(amountOut, bips).toString() },
+      // Denominated in whichever token it is actually taken from.
+      fee: { ...withState.fee, onInput: feeOnInput, amountRaw: (feeOnInput ? feeAmount(amountIn, bips) : feeAmount(amountOut, bips)).toString() },
       route: { label: candidate.label, source, hops: candidate.route.hops.map((h) => (h.kind === 'v3' ? { kind: 'v3' as const, tokenIn: h.tokenIn, tokenOut: h.tokenOut, fee: h.fee } : { kind: 'v2' as const, tokenIn: h.tokenIn, tokenOut: h.tokenOut })) },
       gasEstimate: gas.toString(),
       steps,
@@ -648,6 +702,7 @@ export class SwapService {
           wrappedNative: wetn,
           recipient: owner,
           fee: bips > 0 && sink ? { sink, bips } : null,
+          ...(quote.fee.onInput ? { feeOnInput: true } : {}),
           ...(permit ? { permit } : {}),
           deadline: BigInt(nowS + DEADLINE_S),
           universalRouter: ur,
@@ -674,7 +729,16 @@ export class SwapService {
           accountId: input.accountId,
           tx: { from: owner, to: enc.to, value: hex(enc.value), data: enc.data },
           clientRequestId: `swap:${tag}:swap`,
-          expectedFee: { sink: sink ?? ZERO, bips },
+          /*
+            The amount is handed over rather than derived: on the input side the
+            swap command's `amountIn` is already net of the fee, so there is
+            nothing left in the calldata for the firewall to recompute it from.
+          */
+          expectedFee: {
+            sink: sink ?? ZERO,
+            bips,
+            ...(quote.fee.onInput && sink ? { onInput: { token: (nativeIn ? wetn : tokenIn) as Hex, amount: feeAmount(amountIn, bips) } } : {}),
+          },
         })
       },
     })

@@ -23,7 +23,7 @@ export interface ElectroSwapAddresses {
   dyno: string
   /** BOLT — the boost/governance-style token (§8.18). */
   bolt: string | null
-  /** Uniswap's FeeOnTransferDetector, as used by the interface (§8.6). */
+  /** FeeOnTransferDetectorV2 — measures a token's transfer tax, and says when it could not (§8.6). */
   feeOnTransferDetector: string | null
   /** EsLimitOrderManagerV1 (§8.6). */
   limitOrders: string | null
@@ -60,7 +60,7 @@ export const ELECTRONEUM_ADDRESSES: Record<52014 | 5201420, ElectroSwapAddresses
     yieldFarm: '0xe653aC16B732876F58a1722d24801230fA96bc82',
     dyno: '0xEe432C220273e4F949007B4c1946562826Efa055',
     bolt: '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1',
-    feeOnTransferDetector: '0x34dc8af1FFe9F71aB8B37F9Ea79c567ab64140b3',
+    feeOnTransferDetector: '0x0704B84d3D20E5dF67169649f216C368185EE841',
     limitOrders: '0x5911BE1AE831248883F84891fe798b52940a8721',
     usdc: '0x3187deAd7A2Bd6770F5Fe81495D1B715926AAe6e',
     usdt: '0x48E722f1458b253c2FB0E573F939318D7Dbd54e7',
@@ -89,7 +89,7 @@ export const ELECTRONEUM_ADDRESSES: Record<52014 | 5201420, ElectroSwapAddresses
     yieldFarm: '0x4025ed69ce7DCdc147418e0e730E7575F9b14b78',
     dyno: '0x162D5a58096b63D89D83e0C66b4731A6CC8b10aF',
     bolt: null,
-    feeOnTransferDetector: null,
+    feeOnTransferDetector: '0xB1554103215F90f80873A5713F776C4369480dC1',
     limitOrders: '0x960d1cfD7582C2031939d228eBD61cF060cd21Dc',
     usdc: '0x9a110A3Ecc8704e93Bd4FA1bA44D5CF93327202B',
     usdt: '0x02FeC8c559fB598762df8D033bD7A3Df9b374771',

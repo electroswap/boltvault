@@ -68,6 +68,24 @@ export interface EncodeSwapInput {
   readonly recipient: Hex
   /** The wallet fee; `null` only when the schedule says 0 bips (PAY_PORTION reverts on 0). */
   readonly fee: { readonly sink: Hex; readonly bips: number } | null
+  /**
+   * Take the fee out of the input token, before the swap, instead of out of the
+   * output with `PAY_PORTION`.
+   *
+   * `PAY_PORTION` needs the router to hold the output, and the router handing it
+   * on to the user is one more transfer. For an ordinary token that is free; for
+   * one that charges on transfer it is another cut, taken *after* the only
+   * on-chain check — `Payments.sweep` compares `balanceOf(address(this))` with
+   * the minimum and then transfers, so the assertion covers the router's receipt
+   * and not the user's. The minimum received shown on screen was therefore not
+   * the amount guaranteed.
+   *
+   * Charging the input instead means the router never holds the output at all:
+   * the swap delivers straight to the user, and `V2SwapRouter` measures
+   * `balanceOf(recipient)` before and after. The floor becomes a real
+   * delivered-amount assertion, with no extra hop for a tax to apply to.
+   */
+  readonly feeOnInput?: boolean
   readonly permit?: PermitInput
   readonly deadline: bigint
   readonly universalRouter: Hex
@@ -155,10 +173,37 @@ export function encodeSwap(input: EncodeSwapInput): EncodedSwap {
     payerIsUser = false
   }
 
-  // The router must custody the output when it takes a fee or must unwrap.
-  const routerMustCustody = input.fee !== null || input.nativeOut
+  /*
+    The fee on the input side is paid before anything is swapped, out of the
+    token the user is spending — from their Permit2 allowance directly, or from
+    the router's own balance when the input was just wrapped for them.
+  */
+  const feeOnInput = input.feeOnInput === true && input.fee !== null
+  const inputFee = feeOnInput && input.fee ? feeAmount(input.amountIn, input.fee.bips) : 0n
+  if (feeOnInput && input.fee) {
+    const token = input.nativeIn ? input.wrappedNative : (input.route.hops[0]?.tokenIn as Hex)
+    if (input.nativeIn) push(COMMAND.TRANSFER, encodeAbiParameters(parseAbiParameters('address token, address recipient, uint256 value'), [token, input.fee.sink, inputFee]))
+    else push(COMMAND.PERMIT2_TRANSFER_FROM, encodeAbiParameters(parseAbiParameters('address token, address recipient, uint160 amount'), [token, input.fee.sink, inputFee]))
+  }
+  const swapAmountIn = input.amountIn - inputFee
+
+  // The router must custody the output to take a portion of it, or to unwrap it.
+  const routerMustCustody = (input.fee !== null && !feeOnInput) || input.nativeOut
   const swapRecipient = routerMustCustody ? ROUTER_AS_RECIPIENT : input.recipient
-  const routerMinOut = input.quotedOut - (input.quotedOut * BigInt(input.slippageBips)) / BIPS
+  /*
+    The floor has to be a floor under the trade that is actually made.
+
+    `quotedOut` is what the pools offered for the whole input, but with the fee
+    taken off the front only `amountIn - fee` reaches them, so the output is
+    smaller in the same proportion. Writing the unscaled figure into the
+    delivering command leaves a floor the swap cannot clear on its own merits:
+    at a 50 bps tier and 50 bps of slippage the margin collapses to about a
+    basis point, and any ordinary movement between quoting and mining reverts a
+    swap that was never going to be bad. Scaling it keeps the user's slippage
+    theirs, which is what it was for.
+  */
+  const quotedOut = feeOnInput && input.amountIn > 0n ? (input.quotedOut * swapAmountIn) / input.amountIn : input.quotedOut
+  const routerMinOut = quotedOut - (quotedOut * BigInt(input.slippageBips)) / BIPS
 
   /*
     One command per contiguous same-protocol run, which is how a mixed route is
@@ -192,7 +237,7 @@ export function encodeSwap(input: EncodeSwapInput): EncodedSwap {
   runs.forEach((hops, i) => {
     const isLast = i === runs.length - 1
     const recipient = isLast ? swapRecipient : ROUTER_AS_RECIPIENT
-    const amountIn = i === 0 ? input.amountIn : CONTRACT_BALANCE
+    const amountIn = i === 0 ? swapAmountIn : CONTRACT_BALANCE
     const amountOutMin = isLast ? routerMinOut : 0n
     const payer = payerIsUser && i === 0
     if (hops[0]?.kind === 'v2') {
@@ -206,7 +251,7 @@ export function encodeSwap(input: EncodeSwapInput): EncodedSwap {
   const outputToken = input.route.hops[input.route.hops.length - 1]?.tokenOut as Hex
   let minimumOut = routerMinOut
   if (routerMustCustody) {
-    if (input.fee) {
+    if (input.fee && !feeOnInput) {
       push(COMMAND.PAY_PORTION, encodeAbiParameters(parseAbiParameters('address token, address recipient, uint256 bips'), [outputToken, input.fee.sink, BigInt(input.fee.bips)]))
       minimumOut = minimumOut - feeAmount(minimumOut, input.fee.bips)
     }

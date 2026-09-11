@@ -66,7 +66,9 @@ describe('an exact output a token cannot honour', () => {
     rpc.state.calls.set(DETECTOR.toLowerCase(), ({ data }) => {
       const token = `0x${data.slice(34, 74)}`.toLowerCase()
       const buy = token === TAXED.toLowerCase() ? BUY_FEE_BPS : 0n
-      return encodeAbiParameters(parseAbiParameters('uint256, uint256'), [buy, 0n])
+      // FeeOnTransferDetectorV2's `inspect`: a status first, so "could not measure"
+      // is a value rather than a revert, then the fees and the three flags.
+      return encodeAbiParameters(parseAbiParameters('uint8, uint256, uint256, bool, bool, bool'), [0, buy, 0n, false, false, false])
     })
     // One pool, quotable from either end at 1 WETN = 1 TAX.
     rpc.state.calls.set(QUOTER.toLowerCase(), ({ data }) => {
