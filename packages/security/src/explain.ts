@@ -10,9 +10,32 @@ import type { AssessmentContext, SignRequest, Simulation, Statement } from './ty
 
 const DOMAIN_NAMES: Readonly<Record<number, string>> = { 52014: 'Electroneum', 1: 'Ethereum', 8453: 'Base', 43114: 'Avalanche' }
 
+/*
+  Text a site or a contract chose, rendered at a length and a character set a
+  statement can carry.
+
+  A `primaryType`, a domain name and a token symbol all arrive from the thing
+  being signed. Unbounded, one of them fills the sheet and pushes the verb off
+  screen; carrying U+202E it reorders the sentence around it, so "Send 1 ETN to
+  <attacker>" can be made to read as something else entirely. Strip the
+  characters that move text about, then cap the length.
+
+  Confusable-but-printable homoglyphs (a Cyrillic "о" in "Uniswap") still
+  render — defeating those needs a confusables table, which belongs with the
+  spam signal, not here. What this removes is the layout and reordering
+  attacks, which are the ones that change what the sentence says.
+*/
+const UNSAFE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu
+export function untrusted(s: string, max = 32): string {
+  const clean = s.normalize('NFKC').replace(UNSAFE, '')
+  return clean.length > max ? `${clean.slice(0, max)}…` : clean
+}
+
 function who(ctx: AssessmentContext, chainId: number, address: string): string {
+  // Labels and token metadata reach here from the caller, which read them off
+  // a contract: untrusted, same as the typed-data names above.
   const l = ctx.labels[address.toLowerCase()]
-  if (l) return l
+  if (l) return untrusted(l)
   const k = knownContract(chainId, address)
   if (k) return k.name
   return `${address.slice(0, 6)}…${address.slice(-4)}`
@@ -25,7 +48,7 @@ function amount(ctx: AssessmentContext, token: 'native' | Hex, raw: bigint, chai
     return `${trim(formatUnits(abs, 18))} ${symbol}`
   }
   const t = ctx.tokens[token.toLowerCase()]
-  if (t) return `${trim(formatUnits(abs, t.decimals))} ${t.symbol}`
+  if (t) return `${trim(formatUnits(abs, t.decimals))} ${untrusted(t.symbol, 12)}`
   // Wrapped ETN is known by role even when the universe has not loaded (offers are priced in it).
   if (knownContract(chainId, token)?.role === 'wrapped_native') return `${trim(formatUnits(abs, 18))} WETN`
   return `${abs.toString()} of ${who(ctx, chainId, token)}`
@@ -203,7 +226,7 @@ export function explainTypedData(typed: ParsedTypedData | null, ctx: AssessmentC
       return [{ text: `List ${give}`, tone: 'out' }, { text: get ? `You receive ${get}` : 'You receive nothing', tone: get ? 'in' : 'warn' }]
     }
     case 'unknown':
-      return [{ text: `Sign a "${d.primaryType}" message${typed.domain.name ? ` for ${typed.domain.name}` : ''}`, tone: 'neutral' }]
+      return [{ text: `Sign a "${untrusted(d.primaryType)}" message${typed.domain.name ? ` for ${untrusted(typed.domain.name)}` : ''}`, tone: 'neutral' }]
   }
 }
 

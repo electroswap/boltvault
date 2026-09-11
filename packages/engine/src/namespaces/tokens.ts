@@ -64,6 +64,19 @@ export interface TokenMetadata {
 
 const isEtnChain = (chainId: number): chainId is 52014 | 5201420 => chainId === 52014 || chainId === 5201420
 
+/*
+  A token's name and symbol are whatever its contract chose to return. They
+  reach the portfolio, the swap picker, the approval sheet and the hardware
+  panel, so they are bounded here — at the point they enter the wallet — rather
+  than at each of the places that render them. Strip the characters that move
+  text about (control, format, separators: U+202E and friends), then cap.
+*/
+const UNSAFE_LABEL = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu
+function label(raw: string, max: number): string {
+  const clean = raw.normalize('NFKC').replace(UNSAFE_LABEL, '').trim()
+  return clean.length > max ? clean.slice(0, max) : clean
+}
+
 export class TokensService {
   private lists = new Map<number, Promise<TokenEntry[]>>()
 
@@ -182,8 +195,8 @@ export class TokensService {
     if (!decimals?.ok) throw new EngineError('invalid_argument', 'this contract does not look like a token')
     return {
       address: checksummed,
-      name: name?.ok && typeof name.value === 'string' ? name.value : checksummed.slice(0, 10),
-      symbol: symbol?.ok && typeof symbol.value === 'string' ? symbol.value : '???',
+      name: (name?.ok && typeof name.value === 'string' ? label(name.value, 48) : '') || checksummed.slice(0, 10),
+      symbol: (symbol?.ok && typeof symbol.value === 'string' ? label(symbol.value, 12) : '') || '???',
       decimals: Number(decimals.value),
       hasCode: true,
     }

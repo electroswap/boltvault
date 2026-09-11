@@ -272,13 +272,21 @@ export function parseTypedData(input: unknown): ParsedTypedData | null {
   if (!t.types || typeof t.primaryType !== 'string' || !t.domain || !t.message) return null
   const typed: TypedDataJson = { types: t.types, primaryType: t.primaryType, domain: t.domain, message: t.message }
   const d = typed.domain
+  /*
+    Cap the free-text fields where they enter, not only where they render.
+    `primaryType` and the domain's `name`/`version` are chosen by whoever asked
+    for the signature and flow into statements, the sheet and the hardware
+    panel; a decoder that hands on a five-thousand-character name has already
+    lost the argument about what any one of those surfaces can do about it.
+    The signed object is untouched — this is the description of it.
+  */
   const domain: TypedDataDomain = {
-    ...(typeof d['name'] === 'string' ? { name: d['name'] } : {}),
-    ...(typeof d['version'] === 'string' ? { version: d['version'] } : {}),
+    ...(typeof d['name'] === 'string' ? { name: d['name'].slice(0, 64) } : {}),
+    ...(typeof d['version'] === 'string' ? { version: d['version'].slice(0, 32) } : {}),
     ...(d['chainId'] !== undefined ? { chainId: safeBig(d['chainId']) } : {}),
     ...(typeof d['verifyingContract'] === 'string' && isAddress(d['verifyingContract']) ? { verifyingContract: d['verifyingContract'] as Hex } : {}),
   }
-  return { domain, primaryType: typed.primaryType, decoded: decodeTypedMessage(typed), raw: typed }
+  return { domain, primaryType: typed.primaryType.slice(0, 64), decoded: decodeTypedMessage(typed), raw: typed }
 }
 
 function safeBig(v: unknown): bigint | undefined {
