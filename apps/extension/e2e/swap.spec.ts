@@ -101,10 +101,14 @@ test('quote with the fee stack, then approve → permit → swap through the she
     await expect(popup.getByTestId('swap-token-out')).toContainText('USDC')
     await popup.getByTestId('swap-amount-in').fill('2')
     await expect(popup.getByTestId('swap-amount-out')).toContainText('0.99', { timeout: 20_000 }) // 1 USDC − 0.30 %
+    // The details card is a disclosure now: the rate is the row you always see,
+    // the figures are one tap under it.
+    await expect(popup.getByTestId('swap-rate')).toContainText('1 FIX = 0.5 USDC')
+    await expect(popup.getByTestId('swap-fee')).toHaveCount(0)
+    await popup.getByTestId('swap-details-toggle').click()
     await expect(popup.getByTestId('swap-fee')).toContainText('0.30% · Magneto')
     await expect(popup.getByTestId('swap-fee')).toContainText('0.003 USDC to 0xD6Cf…69d0')
     await expect(popup.getByTestId('swap-fee-next')).toContainText('BOLT-eq for 0.20%')
-    await expect(popup.getByTestId('swap-rate')).toContainText('1 FIX = 0.5 USDC')
     await expect(popup.getByTestId('swap-route')).toContainText('V3 0.3%')
     await expect(popup.getByTestId('swap-min')).toContainText('USDC')
     await expect(popup.getByTestId('swap-locks')).toContainText(/No lock/)

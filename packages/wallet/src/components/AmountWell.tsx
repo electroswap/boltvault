@@ -27,13 +27,18 @@ export interface AmountWellProps {
   readonly onMax?: () => void
   readonly error?: string | null
   /**
-   * An override for the well's hairline.
+   * An override for the well's hairline, two pixels wide.
    *
    * The interface marks a swap whose pair has locked liquidity by turning both
    * terminals' borders green (`SwapSection` takes `theme.success` in place of
    * `theme.surface3`, and keeps it through hover and focus). Owner: "I like the
    * lock UI treatment that the UI applies." This is that seam — the caller says
    * which colour, the well stays generic, and Send and Bridge are untouched.
+   *
+   * It draws at 2 px rather than the well's usual 1: a hairline in a colour
+   * nothing else on the screen uses is a detail, and this is meant to be the
+   * first thing you notice about the pair ("make the green border ... another
+   * pixel thicker when there's locked liquidity").
    */
   readonly accent?: `#${string}` | `rgba(${string})` | null
   readonly autoFocus?: boolean
@@ -46,7 +51,7 @@ export interface AmountWellProps {
 export function AmountWell({ label, value, onChange, readOnly = false, tokenPill, right, fiat, balance, balanceIcon = 'wallet', onMax, error, accent, autoFocus, testID, inputTestID, maxTestID, balanceTestID }: AmountWellProps) {
   const empty = !value || value === '0' || value === '—'
   return (
-    <Plate role="well" gap={2} paddingVertical={8} paddingHorizontal={12} {...(accent ? { borderColor: accent } : {})} testID={testID}>
+    <Plate role="well" gap={2} paddingVertical={8} paddingHorizontal={12} {...(accent ? { borderColor: accent, borderWidth: 2 } : {})} testID={testID}>
       <Row justifyContent="space-between" alignItems="center" minHeight={right ? 32 : 18}>
         <Body tone="mute" size="caption">
           {label}

@@ -84,8 +84,15 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   const [limitQuote, setLimitQuote] = useState<LimitQuote | null>(null)
   const [orders, setOrders] = useState<LimitOrderView[]>([])
   const [feeSheet, setFeeSheet] = useState(false)
-  /** The details card starts open: what a swap costs is not a disclosure. */
-  const [details, setDetails] = useState(true)
+  /*
+    The details card starts closed.
+
+    It opened by default when it was still two always-open plates wearing a new
+    header; as a disclosure it should behave like one, and the interface's does
+    (`SwapDetailsDropdown`). The figures are one tap away, and the lock on the
+    seam is a second way in — see `openDetails`.
+  */
+  const [details, setDetails] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
@@ -373,13 +380,18 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
             theme.surface1`).
           */}
           <Row justifyContent="center" alignItems="center" gap={2} marginVertical={-20} zIndex={2}>
+            {/*
+              The lock opens the details, where the figure it stands for lives.
+              The interface's opens a tooltip carrying the lock's end date; ours
+              has a row saying "100% locked · 1 lock", and a mark that says
+              something is true should take you to the thing that says it.
+            */}
             {lockPaint ? (
-              <Column
-                width={44}
-                height={44}
-                alignItems="center"
-                justifyContent="center"
+              <Pressable
+                onPress={() => setDetails(true)}
+                accessibilityRole="button"
                 accessibilityLabel={t({ id: 'swap.locked.a11y', message: 'Liquidity locked: {v}', values: { v: lockText } })}
+                style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
                 testID="swap-lock-badge"
               >
                 <Column width={40} height={40} borderRadius={20} alignItems="center" justifyContent="center" backgroundColor="$glassRaisedSolid">
@@ -387,7 +399,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
                     <Icon name="lock" size={15} color={paint.void} />
                   </Column>
                 </Column>
-              </Column>
+              </Pressable>
             ) : null}
             <Pressable onPress={flip} accessibilityRole="button" accessibilityLabel={t({ id: 'swap.flip', message: 'Swap direction' })} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }} testID="swap-flip">
               <Column width={40} height={40} borderRadius={20} alignItems="center" justifyContent="center" backgroundColor="$glassRaisedSolid">
@@ -457,7 +469,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
           slippage, network cost, order routing.
         */}
         {mode === 'swap' ? (
-          <Plate role="recessed" gap={0} paddingVertical={2} paddingHorizontal="$3" testID="fee-stack">
+          <Plate role="recessed" rim={0.7} gap={0} paddingVertical={2} paddingHorizontal="$3" testID="fee-stack">
             <Pressable
               onPress={() => setDetails((d) => !d)}
               accessibilityRole="button"

@@ -77,13 +77,27 @@ const PlateFrame = styled(TView, {
 })
 
 export type PlateRole = 'recessed' | 'raised' | 'console' | 'card' | 'tile' | 'well'
-export type PlateProps = Omit<ComponentProps<typeof PlateFrame>, 'role'> & { readonly role?: PlateRole; readonly children?: ReactNode }
+export type PlateProps = Omit<ComponentProps<typeof PlateFrame>, 'role'> & {
+  readonly role?: PlateRole
+  /**
+   * Override the role's lit rim, 0..1.
+   *
+   * A recessed plate carries none, which is right for the fifth panel down a
+   * settings page and wrong for a card that has to hold its own beside a
+   * console. Owner, of the swap's details card: "give the details section
+   * header a bit more contrast ... even just giving it the same border as the
+   * swap container right above it would make it clearer." That border is the
+   * console's rim, and this is how a plate borrows it.
+   */
+  readonly rim?: number
+  readonly children?: ReactNode
+}
 
 const RIM_BY_ROLE: Record<PlateRole, number> = { recessed: 0, raised: 0.45, console: 0.7, card: 0.3, tile: 0.45, well: 0 }
 const RADIUS_BY_ROLE: Record<PlateRole, number> = { recessed: radius.recessed, raised: radius.raised, console: radius.console, card: radius.recessed, tile: radius.raised, well: radius.well }
 
-export function Plate({ role = 'recessed', children, ...rest }: PlateProps) {
-  const lit = RIM_BY_ROLE[role]
+export function Plate({ role = 'recessed', rim, children, ...rest }: PlateProps) {
+  const lit = rim ?? RIM_BY_ROLE[role]
   /*
     The gradient goes UNDER the children and over the frame's flat colour, which
     stays as the fallback for the frame it is painted on before layout lands.
