@@ -470,6 +470,8 @@ export function createEngine(deps: EngineDeps): Engine {
     holder,
     flows,
     ...(quoter ? { quoter } : {}),
+    // `explore` is built further down; the arrow only runs once a quote is asked for.
+    safety: { level: (chainId, address) => explore.safetyLevel(chainId, address) },
   })
   const limit = new LimitService({
     platform: deps.platform,

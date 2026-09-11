@@ -106,6 +106,16 @@ export class ExploreService {
     }
   }
 
+  /**
+   * The project safety level for one token, for callers that must refuse rather
+   * than merely warn (the swap gate). Null means "we do not know" — an API that
+   * is unreachable, a chain without market data, or a token nobody has rated —
+   * and a caller must never read that as a refusal.
+   */
+  async safetyLevel(chainId: number, address: string): Promise<TokenDetailView['safety']> {
+    return (await this.tokenDetail(chainId, address))?.safety ?? null
+  }
+
   async cachedTokenDetail(chainId: number, address: string): Promise<Cached<TokenDetailView> | null> {
     return this.deps.cache.read(DETAIL_SPEC(chainId, address))
   }

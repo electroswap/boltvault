@@ -66,7 +66,15 @@ export interface SwapDeps {
    * so there would be nothing to ask — and in tests, which quote on chain.
    */
   readonly quoter?: Quoter
+  /**
+   * ElectroSwap's project safety level for a token (§8.3). Optional: a build
+   * with no API cannot answer, and silence must never be read as "blocked".
+   */
+  readonly safety?: { level(chainId: number, address: string): Promise<TokenSafetyLevel | null> }
 }
+
+/** ElectroSwap's project safety levels, as the market data reports them. */
+export type TokenSafetyLevel = 'VERIFIED' | 'MEDIUM_WARNING' | 'STRONG_WARNING' | 'BLOCKED'
 
 export interface SwapInput {
   readonly accountId: string
@@ -153,6 +161,16 @@ export class SwapService {
   private async pair(chainId: number, tokenIn: string, tokenOut: string): Promise<{ inView: TokenView | null; outView: TokenView | null }> {
     const [inView, outView] = await Promise.all([this.deps.tokens.get(chainId, tokenIn), this.deps.tokens.get(chainId, tokenOut)])
     return { inView, outView }
+  }
+
+  /** Fail-soft: an unreachable API, a token the API does not know, or the native coin all answer "not blocked". */
+  private async isBlocked(chainId: number, address: string): Promise<boolean> {
+    if (address === 'native' || !this.deps.safety) return false
+    try {
+      return (await this.deps.safety.level(chainId, address)) === 'BLOCKED'
+    } catch {
+      return false
+    }
   }
 
   private skeleton(input: SwapInput, inView: TokenView | null, outView: TokenView | null, problems: string[]): SwapQuote {
@@ -249,6 +267,17 @@ export class SwapService {
     if (account.kind === 'watch') problems.push('Watch-only — import a key or pair a device to swap.')
     const status = await d.vault.status()
     if (!status.backupComplete && status.seeds.length > 0 && account.kind === 'hd') problems.push('Back up your recovery phrase before you swap.')
+    /*
+      The safety level used to be decoration: one warning icon on one Explore
+      row, and nothing in the swap path ever read it, so a token ElectroSwap had
+      marked BLOCKED swapped exactly like any other. Refusing belongs here rather
+      than in the screen, because the screen is not the only way to reach a swap.
+      Only BLOCKED refuses: an unknown token is not a blocked one, and a silent
+      API must not turn every token into a refusal.
+    */
+    for (const side of [inView, outView]) {
+      if (await this.isBlocked(chainId, side.address)) problems.push(`${side.symbol} is marked unsafe by ElectroSwap. BoltVault will not swap it.`)
+    }
 
     // Balances and the network fee reserve.
     const read = readerFor(d.chains, chainId)
