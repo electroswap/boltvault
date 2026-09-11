@@ -40,7 +40,7 @@ export const WALLET_ACTIVITY = `query WalletActivity($owner: String!, $chains: [
  * boundary the rule asks about. Each fact is nullable and null means "nobody
  * could tell us", never "no".
  */
-export const CONTRACT_FACTS = `query ContractFacts($chain: Chain!, $address: String!) { contractFacts(chain: $chain, address: $address) { address hasCode verified deployedAt } }`
+export const CONTRACT_FACTS = `query ContractFacts($chain: Chain!, $address: String!) { contractFacts(chain: $chain, address: $address) { address hasCode verified deployedAt newAfterDays } }`
 
 export const TOKEN_DETAIL = `query TokenDetail($address: String, $chain: Chain) { token(address: $address, chain: $chain) { id address symbol name decimals standard ${MARKET} sparkline: market(currency: USD) { priceHistory(duration: DAY) { timestamp value } } project { description homepageUrl twitterUrl telegramUrl safetyLevel isSpam logoUrl } } }`
 

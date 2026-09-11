@@ -336,7 +336,7 @@ export function createEngine(deps: EngineDeps): Engine {
     contractFacts: async (chainId, address) => {
       if (!electroswap) return null
       const facts = await fetchContractFacts(electroswap, chainId, address, deps.platform.now())
-      return facts ? { deployedAt: facts.deployedAt, verified: facts.verified } : null
+      return facts ? { deployedAt: facts.deployedAt, verified: facts.verified, newAfterDays: facts.newAfterDays } : null
     },
     tokenMetadata: (chainId, address) => tokens.metadata(chainId, address),
     watchAsset: (i) =>

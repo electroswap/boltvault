@@ -377,3 +377,101 @@ describe('a chain nobody can answer for costs nothing to not answer', () => {
     expect(lookups).toEqual([])
   })
 })
+
+/*
+  The "very new" threshold is served rather than compiled in, so ops can retune
+  it without shipping a wallet. Which means it arrives from outside, and is
+  clamped on the way in: it may make the wallet more careful, never less.
+*/
+const TEN_DAYS_OLD = '0xdd00000000000000000000000000000000000010' as Hex
+
+describe('the served threshold for "very new"', () => {
+  let rpc: MockRpc
+
+  beforeAll(async () => {
+    rpc = await startMockRpc({ chainId: TESTNET })
+    rpc.state.code.set(TEN_DAYS_OLD.toLowerCase(), '0x6080')
+  })
+
+  afterAll(async () => {
+    await rpc.close()
+  })
+
+  /** An engine whose API serves this threshold, and one contract ten days old. */
+  async function engineServing(newAfterDays: number | null): Promise<{ engine: Engine; codes: () => Promise<string[]> }> {
+    const platform = createMemoryPlatform()
+    const base = platform.now()
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input)
+      if (url !== API) return new Response('not found', { status: 404 })
+      const body = JSON.parse(String(init?.body ?? '{}')) as { query?: string }
+      if (!String(body.query ?? '').includes('ContractFacts')) return json({ data: {} })
+      return json({
+        data: {
+          contractFacts: {
+            address: TEN_DAYS_OLD,
+            hasCode: true,
+            verified: true,
+            deployedAt: Math.floor((base - 10 * DAY) / 1000),
+            ...(newAfterDays === null ? {} : { newAfterDays }),
+          },
+        },
+      })
+    }
+    const engine = createEngine({ platform, kdf: KDF, receiptPollMs: 20, fetch: fetchImpl, staticsUrl: null, electroswapUrl: API })
+    await engine.ready
+    const created = await engine.engine.vault.create({ password: PASSWORD })
+    const address = created.accounts[0]?.address as Hex
+    const accountId = created.accounts[0]?.id ?? ''
+    await engine.chains.setRpc(TESTNET, rpc.url)
+    rpc.state.balances.set(address.toLowerCase(), 10n ** 18n)
+    const client = dapp(engine, `https://threshold-${String(newAfterDays)}.example`)
+    const p = client.request('eth_requestAccounts')
+    const connectReq = await nextApproval(engine)
+    await engine.engine.approvals.decide({ id: connectReq.id, approve: true, data: { accountId, chainId: TESTNET } })
+    await p
+    const codes = async (): Promise<string[]> => {
+      const send = client.request('eth_sendTransaction', [{ from: address, to: TEN_DAYS_OLD, data: '0xdeadbeef' }])
+      const req = await nextApproval(engine)
+      const payload = parseApprovalPayload(req.payload)
+      if (payload?.kind !== 'send_transaction') throw new Error('expected a transaction sheet')
+      const out = payload.assessment.rules.map((r) => r.code)
+      await engine.engine.approvals.decide({ id: req.id, approve: false })
+      await send.catch(() => undefined)
+      return out
+    }
+    return { engine, codes }
+  }
+
+  it('is not new under the bundled default', async () => {
+    const { engine, codes } = await engineServing(null)
+    try {
+      expect(await codes()).not.toContain('NEW_CONTRACT')
+    } finally {
+      engine.dispose()
+    }
+  })
+
+  it('is new once the service says a month', async () => {
+    const { engine, codes } = await engineServing(30)
+    try {
+      expect(await codes()).toContain('NEW_CONTRACT')
+    } finally {
+      engine.dispose()
+    }
+  })
+
+  it('cannot be talked out of warning by a served zero', async () => {
+    /*
+      The failure this guards: a zero switches the warning off, and a warning
+      that never appears looks exactly like a contract that is fine. Clamped to
+      the bundled floor, so this contract is judged on seven days as before.
+    */
+    const { engine, codes } = await engineServing(0)
+    try {
+      expect(await codes()).not.toContain('NEW_CONTRACT')
+    } finally {
+      engine.dispose()
+    }
+  })
+})

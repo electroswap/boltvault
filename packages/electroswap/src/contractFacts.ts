@@ -34,6 +34,12 @@ export interface ContractFactsView {
   readonly verified: boolean | null
   /** Epoch milliseconds of the creating block, or null when unknown. */
   readonly deployedAt: number | null
+  /**
+   * How new the service considers "very new", in days. Global policy rather than
+   * a fact about this address, but it rides along so a caller that has an age
+   * always has the threshold to judge it by, with no second round trip.
+   */
+  readonly newAfterDays: number | null
 }
 
 const FactsSchema = z.object({
@@ -41,6 +47,7 @@ const FactsSchema = z.object({
   hasCode: z.boolean().nullable().optional(),
   verified: z.boolean().nullable().optional(),
   deployedAt: z.number().nullable().optional(),
+  newAfterDays: z.number().nullable().optional(),
 })
 
 const ResponseSchema = z.object({ contractFacts: FactsSchema.nullable().optional() })
@@ -74,5 +81,6 @@ export async function fetchContractFacts(client: ElectroSwapClient, chainId: num
     hasCode: facts.hasCode ?? null,
     verified: facts.verified ?? null,
     deployedAt: instantOf(facts.deployedAt, now),
+    newAfterDays: typeof facts.newAfterDays === 'number' && Number.isFinite(facts.newAfterDays) ? facts.newAfterDays : null,
   }
 }

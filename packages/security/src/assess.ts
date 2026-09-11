@@ -6,7 +6,7 @@
 import type { Hex } from 'viem'
 import { decodeCalldata, parseTypedData, type DecodedCall, type ParsedTypedData } from './decode'
 import { explain, explainSimulation } from './explain'
-import { runRules, type Rule } from './rules'
+import { NEW_CONTRACT_DEFAULT_DAYS, runRules, type Rule } from './rules'
 import type { AssessmentContext, Presentation, RiskRule, Severity, SignRequest, Simulation, Statement } from './types'
 import { maxSeverity } from './types'
 
@@ -123,6 +123,7 @@ export function emptyContext(overrides: Partial<AssessmentContext> = {}): Assess
     labels: {},
     nftFloors: {},
     ethSignEnabled: false,
+    newContractAfterDays: NEW_CONTRACT_DEFAULT_DAYS,
     now: 0,
     ...overrides,
   }

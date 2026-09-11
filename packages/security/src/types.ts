@@ -146,6 +146,12 @@ export interface AssessmentContext {
   /** Address labels (names, known contracts) for statements; lowercase keys. */
   readonly labels: Readonly<Record<string, string>>
   readonly ethSignEnabled: boolean
+  /**
+   * How new "very new" is, in days (§3.4). Configurable so ops can retune it
+   * without a wallet release; `NEW_CONTRACT_DEFAULT_DAYS` is what ships, and is
+   * also the floor — see `clampNewContractDays`.
+   */
+  readonly newContractAfterDays: number
   readonly now: number
   /**
    * Collection floor prices in the chain's native base units, by lowercase NFT

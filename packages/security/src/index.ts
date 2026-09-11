@@ -3,7 +3,7 @@ export { assess, emptyContext, presentationFor, type Assessment, type Assessment
 export { decodeCalldata, parseTypedData, decodeMessage, isUnlimited, type DecodedCall, type DecodedTypedData, type ParsedTypedData, type TypedDataDomain, type TypedDataJson, type DecodedMessage } from './decode'
 export { decodeUniversalRouter, decodeUrCommand, urCommandName, UR_COMMAND, UR_MSG_SENDER, UR_ROUTER_SELF, type UrCommand, type DecodedUniversalRouter } from './ur'
 export { explain, explainCall, explainTypedData, explainMessage, explainSimulation } from './explain'
-export { ALL_RULES, runRules, type Rule, type RuleInput } from './rules'
+export { ALL_RULES, runRules, clampNewContractDays, NEW_CONTRACT_DEFAULT_DAYS, NEW_CONTRACT_MAX_DAYS, type Rule, type RuleInput } from './rules'
 export { deltasFromTrace, simulationFromTrace, mergeDeltas, estimateSimulation, NO_SIMULATION, type TraceFrame, type TraceLog } from './simulate'
 export { knownContract, isKnownSpender, knownSpenders, permit2Address, registerKnownContract, type KnownContract, type ContractRole } from './registry'
 export { registrableOrigin, hostOf, isScamOrigin, typosquat, levenshtein, normaliseHomoglyphs, PROTECTED_HOSTS, type TyposquatHit } from './origin'

@@ -489,6 +489,24 @@ export const unknownFunction: Rule = ({ request, decoded, chainId, context }) =>
   }
 }
 
+/**
+ * What §3.4 fixes "code age < 7 days" at, and what ships in the bundle.
+ *
+ * It is also the floor a served value is clamped to. A threshold that came from
+ * somewhere else may make the wallet more careful, never less: a zero served by
+ * a compromised or misconfigured source would switch the warning off entirely,
+ * which is the one outcome a user cannot notice.
+ */
+export const NEW_CONTRACT_DEFAULT_DAYS = 7
+/** A year. Past this the warning stops being about newness and starts being noise. */
+export const NEW_CONTRACT_MAX_DAYS = 365
+
+/** Keep a served threshold inside the range where it can only help. */
+export function clampNewContractDays(served: number | null | undefined): number {
+  if (typeof served !== 'number' || !Number.isFinite(served)) return NEW_CONTRACT_DEFAULT_DAYS
+  return Math.min(NEW_CONTRACT_MAX_DAYS, Math.max(NEW_CONTRACT_DEFAULT_DAYS, Math.floor(served)))
+}
+
 export const newContract: Rule = ({ request, decoded, chainId, context }) => {
   if (request.kind !== 'transaction' || !decoded) return null
   const target =
@@ -496,7 +514,7 @@ export const newContract: Rule = ({ request, decoded, chainId, context }) => {
   if (!target || knownContract(chainId, target)) return null
   const info = context.contracts[target.toLowerCase()]
   if (!info || !info.hasCode) return null
-  if (info.ageDays !== undefined && info.ageDays !== null && info.ageDays < 7)
+  if (info.ageDays !== undefined && info.ageDays !== null && info.ageDays < context.newContractAfterDays)
     return {
       code: 'NEW_CONTRACT',
       severity: 'warn',

@@ -29,6 +29,7 @@ import {
 } from '@boltvault/protocol'
 import {
   assess,
+  clampNewContractDays,
   emptyContext,
   estimateSimulation,
   NO_SIMULATION,
@@ -101,7 +102,7 @@ export interface ProviderDeps {
    * source is verified (§3.4). Absent in a build with no API; an answer of null,
    * or one that knows neither fact, falls through to the explorer.
    */
-  readonly contractFacts?: (chainId: number, address: Hex) => Promise<ContractFactsAt | null>
+  readonly contractFacts?: (chainId: number, address: Hex) => Promise<(ContractFactsAt & { newAfterDays?: number | null }) | null>
   /** Our own API, for the trace the public RPCs cannot do (§9.2). */
   readonly apiOrigin?: string
   /** The wallet key. `POST /api/wallet/trace` is key-gated; without one there is no preview off a self-hosted node. */
@@ -242,6 +243,15 @@ export class ProviderService {
   private unverified = new Set<string>()
   /** Explorer answers by `chainId:address`; failures are cached too, so a dead explorer is asked once. */
   private readonly contractFactsCache = new Map<string, { at: number; facts: ContractFactsAt }>()
+  /**
+   * The "very new" threshold the service last served, in days.
+   *
+   * Global policy, so it is held once rather than copied into every cached
+   * contract — and it is remembered rather than re-asked, because the answer it
+   * qualifies is itself cached for hours. Null until a lookup has carried one,
+   * which is what the bundled default is for.
+   */
+  private servedNewContractDays: number | null = null
   /** Collection floors in base units by `chainId:address`; `null` means the index has none. */
   private readonly floorCache = new Map<string, { at: number; wei: bigint | null }>()
   private marketClient: ElectroSwapClient | null = null
@@ -878,6 +888,13 @@ export class ProviderService {
       nftFloors: await this.nftFloors(chainId, request),
       ethSignEnabled: settings.ethSignEnabled,
       /*
+        Clamped, not trusted. A served threshold may make the wallet more careful
+        and never less: a zero from a compromised or misconfigured service would
+        switch the new-contract warning off, and that is the one failure a user
+        has no way of noticing. Same shape as the fee ladder's ceiling.
+      */
+      newContractAfterDays: clampNewContractDays(this.servedNewContractDays),
+      /*
         Settings › Spending, in token units (§3.4 point 6).
 
         The threshold used to be a tenth of the balance written into the rule
@@ -993,7 +1010,8 @@ export class ProviderService {
     // Nobody can answer for this chain, so do not ask anybody (§3.4).
     if (!contractFactsAnswerable(chainId)) return UNKNOWN_CONTRACT_FACTS
     const fromApi = await this.deps.contractFacts?.(chainId, address).catch(() => null)
-    if (fromApi && (fromApi.deployedAt !== null || fromApi.verified !== null)) return fromApi
+    if (typeof fromApi?.newAfterDays === 'number') this.servedNewContractDays = fromApi.newAfterDays
+    if (fromApi && (fromApi.deployedAt !== null || fromApi.verified !== null)) return { deployedAt: fromApi.deployedAt, verified: fromApi.verified }
     return this.readExplorer(chainId, address).catch(() => UNKNOWN_CONTRACT_FACTS)
   }
 
