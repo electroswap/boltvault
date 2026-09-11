@@ -1,46 +1,4 @@
 {
-  "YieldFarm": {
-    "source": "apps/interface/src/abis/yield-farm.json",
-    "sha256": "e628155ac71e6d2aa04cbc9cee3c8f465df600ef67440b238c4d5612f59de644",
-    "functions": 26,
-    "events": 13
-  },
-  "LimitOrders": {
-    "source": "apps/interface/src/abis/limit-orders.json",
-    "sha256": "ea43931a04064a2242ad199310bf8c3c4a44ce042a8735be46d9d768f4c64038",
-    "functions": 13,
-    "events": 3
-  },
-  "FeeOnTransferDetector": {
-    "source": "apps/interface/src/abis/fee-on-transfer-detector.json",
-    "sha256": "8bec942e10a1eac0833ab869daec155753e66c01d609667ca1b7334e3840fc23",
-    "functions": 3,
-    "events": 0
-  },
-  "EsDividendDistributorV2": {
-    "source": "apps/interface/src/abis/dividend-distributor.json",
-    "sha256": "c2c13cb456c06430c544bac217d731430dd3d9bd9f1671e757dc46e3a07793e1",
-    "functions": 17,
-    "events": 0
-  },
-  "ElectricLegends": {
-    "source": "apps/interface/src/abis/electric-legends.json",
-    "sha256": "4b35142a8657ff68479e34dd85a403db3f015091fef6a93e0f53191cffb743fc",
-    "functions": 29,
-    "events": 7
-  },
-  "LaunchpadAffiliateRewards": {
-    "source": "apps/interface/src/abis/launchpadAffiliateRewards.json",
-    "sha256": "1fbbc63bef84bee4687cc08a4e16624070ba4e30f5e902a852637ea579203bea",
-    "functions": 7,
-    "events": 3
-  },
-  "LaunchpadLpFeeProcessor": {
-    "source": "apps/interface/src/abis/launchpadLpFeeProcessor.json",
-    "sha256": "0ce53f59d3967c3a795e04d2e515cb02e3baa70918009ec91206a8995b35ca17",
-    "functions": 28,
-    "events": 5
-  },
   "ERC20": {
     "source": "apps/interface/src/abis/erc20.json",
     "sha256": "6fcb7ab4f5218c1a3974716af22a6c2be8a1fe0dbd74e4db588d0605988458bf",
@@ -64,5 +22,108 @@
     "sha256": "ddd1f420676eea1b72995382a9d0747d78f875b8d31d8f76cdb5f7615025e800",
     "functions": 2,
     "events": 0
+  },
+  "WETH9": {
+    "source": "apps/interface/src/abis/weth.json",
+    "sha256": "9b45a4dee4322ccf1aa56451bd7e1ddeed5defb6d656e5df577f03f9a578f2dd",
+    "functions": 11,
+    "events": 4
+  },
+  "Multicall3": {
+    "source": "services/indexer/abis/multicallAbi.json",
+    "sha256": "c5106b3bf4cf70286a9483497b738bbaa22379d0c18dc955108436f2b6a2c68f",
+    "functions": 16,
+    "events": 0
+  },
+  "UniversalRouter": {
+    "source": "contracts/universal-router/artifacts/contracts/UniversalRouter.sol/UniversalRouter.json",
+    "sha256": "51d371c923decbc33d097c2122c25fd1690a5e83ad8c58079ba2d40e3627f4c8",
+    "functions": 8,
+    "events": 1
+  },
+  "Permit2": {
+    "source": "sdks/permit2-sdk/abis/Permit2.json",
+    "sha256": "f077393ba4121c3cbfb4ed491c1b127a5d30fb9616bab9643057b5d47c1a4fe9",
+    "functions": 15,
+    "events": 4
+  },
+  "FeeOnTransferDetector": {
+    "source": "apps/interface/src/abis/fee-on-transfer-detector.json",
+    "sha256": "8bec942e10a1eac0833ab869daec155753e66c01d609667ca1b7334e3840fc23",
+    "functions": 3,
+    "events": 0
+  },
+  "LimitOrders": {
+    "source": "apps/interface/src/abis/limit-orders.json",
+    "sha256": "ea43931a04064a2242ad199310bf8c3c4a44ce042a8735be46d9d768f4c64038",
+    "functions": 13,
+    "events": 3
+  },
+  "Seaport15": {
+    "source": "services/indexer/abis/seaport15Abi.json",
+    "sha256": "20eed1652fb367b46970b03e375adc59354fa96441a3684762e621a6e966936b",
+    "functions": 17,
+    "events": 5,
+    "verifiedAgainst": "contracts/electroswap/Seaport/verifications/Seaport_0.8.17.json"
+  },
+  "YieldFarm": {
+    "source": "apps/interface/src/abis/yield-farm.json",
+    "sha256": "e628155ac71e6d2aa04cbc9cee3c8f465df600ef67440b238c4d5612f59de644",
+    "functions": 26,
+    "events": 13
+  },
+  "LaunchpadManager": {
+    "source": "apps/interface/src/abis/launchpadManager.json",
+    "sha256": "73c8d9d9ef242a7af67940c79f4fd7ee1a905bd5de4ea792b4d3737f18e9b0ca",
+    "functions": 34,
+    "events": 8
+  },
+  "LaunchpadPresalePool": {
+    "source": "apps/interface/src/abis/launchpadPresalePool.json",
+    "sha256": "2dd101ad0b734b97a859a9bcafb07d8569fb745668fe3ec85c649fa99a553372",
+    "functions": 43,
+    "events": 8
+  },
+  "LaunchpadAffiliateRewards": {
+    "source": "apps/interface/src/abis/launchpadAffiliateRewards.json",
+    "sha256": "1fbbc63bef84bee4687cc08a4e16624070ba4e30f5e902a852637ea579203bea",
+    "functions": 7,
+    "events": 3
+  },
+  "LaunchpadLpFeeProcessor": {
+    "source": "apps/interface/src/abis/launchpadLpFeeProcessor.json",
+    "sha256": "0ce53f59d3967c3a795e04d2e515cb02e3baa70918009ec91206a8995b35ca17",
+    "functions": 28,
+    "events": 5
+  },
+  "LockerV2": {
+    "source": "apps/interface/src/abis/locker-v2.json",
+    "sha256": "39d4f6005544ce9485186d9a1b61899f694ff9273f3a2b028f9302786f548a1a",
+    "functions": 17,
+    "events": 6
+  },
+  "LockerV3": {
+    "source": "apps/interface/src/abis/locker-v3.json",
+    "sha256": "47a54f5e4fa1eb1aba2b927528c071f2946426bb4f71b2a615918f4f2a255980",
+    "functions": 17,
+    "events": 12
+  },
+  "ElectricLegends": {
+    "source": "apps/interface/src/abis/electric-legends.json",
+    "sha256": "4b35142a8657ff68479e34dd85a403db3f015091fef6a93e0f53191cffb743fc",
+    "functions": 29,
+    "events": 7
+  },
+  "EsDividendDistributorV2": {
+    "source": "apps/interface/src/abis/dividend-distributor.json",
+    "sha256": "c2c13cb456c06430c544bac217d731430dd3d9bd9f1671e757dc46e3a07793e1",
+    "functions": 17,
+    "events": 0
+  },
+  "EsMinterV2": {
+    "source": "apps/interface/src/abis/esMinter.json",
+    "sha256": "f10f0876d4e38dad3790f1c456367c930ad0978c7210ddee99f600e3b3db5d2e",
+    "functions": 8,
+    "events": 1
   }
 }

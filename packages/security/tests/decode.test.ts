@@ -64,6 +64,32 @@ describe('decodeCalldata', () => {
     const d = decodeCalldata({ chainId: 52014, to: SPENDER, data: '0xdeadbeef00', value: 0n })
     expect(d).toMatchObject({ kind: 'contract_call', selector: '0xdeadbeef', functionName: null })
   })
+
+  /*
+    `approve(address,uint256)` is ERC-20's and ERC-721's, with the same layout
+    and different meanings: a token allowance, or the right to move one item.
+    The ERC-20 reading used to win on every address simply because its block ran
+    first in the decoder, so approving one Legend read as approving a balance.
+    The collision is settled the same way the `transferFrom` one is — by what
+    the wallet knows sits at the address.
+  */
+  it('an approve on a known NFT is an item, not an allowance', () => {
+    const data = encodeFunctionData({ abi: ERC721_ABI, functionName: 'approve', args: [SPENDER, 12n] })
+    expect(decodeCalldata({ chainId: 52014, to: A.electricLegends as Hex, data, value: 0n })).toEqual({ kind: 'erc721_approve', token: A.electricLegends, to: SPENDER, tokenId: 12n })
+    // Nothing known about this address, so the standard wins and it is an allowance.
+    expect(decodeCalldata({ chainId: 52014, to: TOKEN, data, value: 0n })).toMatchObject({ kind: 'erc20_approve', spender: SPENDER, amount: 12n })
+  })
+
+  /*
+    A selector no artifact claims falls to the shipped 4byte table (§3.4 step
+    1), which names it and decodes its arguments without a network call. It is a
+    name, not a verdict: `contract_call` is still what the rules and the sheet
+    see.
+  */
+  it('names a selector only the shipped 4byte table knows', () => {
+    const stake = '0xa694fc3a000000000000000000000000000000000000000000000000000000000000002a' as Hex
+    expect(decodeCalldata({ chainId: 52014, to: SPENDER, data: stake, value: 0n })).toMatchObject({ kind: 'contract_call', selector: '0xa694fc3a', functionName: 'stake', args: [42n] })
+  })
 })
 
 describe('universal router', () => {

@@ -4,8 +4,8 @@
  * reason about. Unknown selectors are reported as unknown — never silently
  * "contract interaction".
  */
-import { decodeFunctionData, getAddress, hexToString, isAddress, isHex, maxUint256, size, type Hex } from 'viem'
-import { DIVIDENDS_ABI, ERC1155_ABI, ERC20_ABI, ERC721_ABI, FARM_ABI, LAUNCHPAD_ABI, LIMIT_ORDERS_ABI, MINTER_ABI, MULTICALL3_ABI, PERMIT2_ABI, SEAPORT_ABI, WARP_ROUTER_ABI, WETH_ABI } from './abis'
+import { decodeFunctionData, getAddress, hexToString, isAddress, isHex, maxUint256, size, type Abi, type Hex } from 'viem'
+import { ERC20_CONTRACTS, LAUNCHPAD_CONTRACTS, fourByte, fragmentFor, fragmentForAny, resolveSelector } from './abis'
 import { knownContract } from './registry'
 import { decodeUniversalRouter, type DecodedUniversalRouter } from './ur'
 
@@ -62,13 +62,34 @@ export interface DecodeCallInput {
   readonly standardHint?: 'erc20' | 'erc721' | null
 }
 
-function tryDecode(abi: typeof ERC20_ABI | typeof ERC721_ABI | typeof ERC1155_ABI | typeof PERMIT2_ABI | typeof WETH_ABI | typeof MULTICALL3_ABI | typeof LIMIT_ORDERS_ABI | typeof FARM_ABI | typeof LAUNCHPAD_ABI | typeof SEAPORT_ABI | typeof DIVIDENDS_ABI | typeof MINTER_ABI | typeof WARP_ROUTER_ABI, data: Hex): { functionName: string; args: readonly unknown[] } | null {
+interface Decoded {
+  readonly functionName: string
+  readonly args: readonly unknown[]
+}
+
+function tryDecode(abi: Abi, data: Hex): Decoded | null {
   try {
     const d = decodeFunctionData({ abi, data })
     return { functionName: d.functionName, args: (d.args ?? []) as readonly unknown[] }
   } catch {
     return null
   }
+}
+
+/**
+ * Decode against exactly the contract whose role the wallet recognised, by
+ * selector. One map lookup and one fragment, rather than thirteen ABIs tried in
+ * order until one of them stops throwing.
+ */
+function decodeAs(contract: string, selector: Hex, data: Hex): Decoded | null {
+  const claim = fragmentFor(contract, selector)
+  return claim ? tryDecode(claim.abi, data) : null
+}
+
+/** The same, for a role two deployed contracts share (the launchpad, ERC-20 and its extensions). */
+function decodeAsAny(contracts: readonly string[], selector: Hex, data: Hex): Decoded | null {
+  const claim = fragmentForAny(contracts, selector)
+  return claim ? tryDecode(claim.abi, data) : null
 }
 
 export function decodeCalldata(input: DecodeCallInput): DecodedCall {
@@ -84,7 +105,7 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
     if (ur) return { kind: 'universal_router', router: to, decoded: ur, value }
   }
   if (known?.role === 'permit2') {
-    const p = tryDecode(PERMIT2_ABI, data)
+    const p = decodeAs('Permit2', selector, data)
     if (p?.functionName === 'approve') {
       const [token, spender, amount, expiration] = p.args as [Hex, Hex, bigint, number]
       return { kind: 'permit2_approve', token, spender, amount, expiration, unlimited: isUnlimited(amount, 160) }
@@ -95,12 +116,12 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
     }
   }
   if (known?.role === 'wrapped_native') {
-    const w = tryDecode(WETH_ABI, data)
+    const w = decodeAs('WETH9', selector, data)
     if (w?.functionName === 'deposit') return { kind: 'wrap', token: to, amount: value }
     if (w?.functionName === 'withdraw') return { kind: 'unwrap', token: to, amount: (w.args as [bigint])[0] }
   }
   if (known?.role === 'limit_orders') {
-    const l = tryDecode(LIMIT_ORDERS_ABI, data)
+    const l = decodeAs('LimitOrders', selector, data)
     if (l?.functionName === 'submitOrder' || l?.functionName === 'submitOrderWithPermit') {
       const [tokenIn, tokenOut, , amountInExact, amountOutMin, recipient, duration] = l.args as [Hex, Hex, boolean, bigint, bigint, Hex, bigint]
       return { kind: 'limit_order', manager: to, action: 'submit', tokenIn, tokenOut, amountIn: amountInExact, minOut: amountOutMin, recipient, durationSeconds: duration, orderIds: [], withPermit: l.functionName === 'submitOrderWithPermit' }
@@ -109,7 +130,7 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
     if (l?.functionName === 'closeOrders') return { kind: 'limit_order', manager: to, action: 'close', tokenIn: null, tokenOut: null, amountIn: 0n, minOut: 0n, recipient: null, durationSeconds: 0n, orderIds: [...(l.args as [readonly bigint[]])[0]], withPermit: false }
   }
   if (known?.role === 'farm') {
-    const f = tryDecode(FARM_ABI, data)
+    const f = decodeAs('YieldFarm', selector, data)
     if (f?.functionName === 'deposit') {
       const [farmId, amount0, amount1, amountBolt] = f.args as [bigint, bigint, bigint, bigint]
       return { kind: 'farm_deposit', farm: to, farmId, amount0, amount1, amountBolt, value }
@@ -120,7 +141,7 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
     }
   }
   if (known?.role === 'marketplace') {
-    const s = tryDecode(SEAPORT_ABI, data)
+    const s = decodeAs('Seaport15', selector, data)
     if (s?.functionName === 'fulfillOrder') {
       const [order] = s.args as [{ parameters: { offerer: Hex; offer: ReadonlyArray<{ itemType: number; token: Hex; identifierOrCriteria: bigint; startAmount: bigint }>; consideration: ReadonlyArray<{ itemType: number; token: Hex; identifierOrCriteria: bigint; startAmount: bigint; recipient: Hex }> } }]
       const p = order.parameters
@@ -132,42 +153,51 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
     }
   }
   if (known?.role === 'dividends') {
-    const d = tryDecode(DIVIDENDS_ABI, data)
+    const d = decodeAs('EsDividendDistributorV2', selector, data)
     if (d?.functionName === 'register' || d?.functionName === 'claimDividends') {
       const [ids] = d.args as [readonly bigint[]]
       return { kind: 'dividends', distributor: to, action: d.functionName === 'register' ? 'register' : 'claim', tokenIds: [...ids] }
     }
   }
   if (known?.role === 'warp_router') {
-    const w = tryDecode(WARP_ROUTER_ABI, data)
+    const w = decodeAs('HyperlaneTokenRouter', selector, data)
     if (w?.functionName === 'transferRemote') {
       const [destination, recipient32, amount] = w.args as [number, Hex, bigint]
       return { kind: 'bridge', router: to, destinationDomain: Number(destination), recipient: getAddress(`0x${recipient32.slice(-40)}`), amount, value }
     }
   }
   if (known?.role === 'minter') {
-    const m = tryDecode(MINTER_ABI, data)
+    const m = decodeAs('EsMinterV2', selector, data)
     if (m?.functionName === 'mint') {
       const [collection, count] = m.args as [Hex, bigint]
       return { kind: 'nft_mint', minter: to, collection, count, value }
     }
   }
   // Launchpad pools are one contract per campaign: matched by selector, then by the manager the pool reports (engine side).
-  const lp = tryDecode(LAUNCHPAD_ABI, data)
+  const lp = decodeAsAny(LAUNCHPAD_CONTRACTS, selector, data)
   if (lp?.functionName === 'contribute') return { kind: 'launchpad', pool: to, action: 'contribute', value, referrer: (lp.args as [Hex])[0], recipient: null }
   if (lp?.functionName === 'claimTokens') return { kind: 'launchpad', pool: to, action: 'claim_tokens', value, referrer: null, recipient: (lp.args as [Hex])[0] }
   if (lp?.functionName === 'claimRefund') return { kind: 'launchpad', pool: to, action: 'claim_refund', value, referrer: null, recipient: (lp.args as [Hex])[0] }
   if (lp?.functionName === 'claimReferralRewards' && known?.role === 'launchpad') return { kind: 'launchpad', pool: to, action: 'claim_referral', value, referrer: null, recipient: null }
   if (known?.role === 'multicall') {
-    const m = tryDecode(MULTICALL3_ABI, data)
+    const m = decodeAs('Multicall3', selector, data)
     if (m) {
       const [calls] = m.args as [ReadonlyArray<{ target: Hex; callData: Hex }>]
       return { kind: 'multicall', to, value, calls: calls.map((c) => ({ target: c.target, data: c.callData })) }
     }
   }
 
-  // Standards are tried by selector on any address — a token is a token.
-  const e20 = tryDecode(ERC20_ABI, data)
+  /*
+    Standards are matched by selector on any address — a token is a token.
+
+    ERC-20 and ERC-721 both claim `approve(address,uint256)` and
+    `transferFrom(address,address,uint256)`, and the ERC-20 reading used to win
+    simply because its block came first. When the wallet knows an NFT is at this
+    address, that is evidence, and it decides.
+  */
+  const e721 = decodeAs('ERC721', selector, data)
+  const nftFirst = known?.role === 'nft' || input.standardHint === 'erc721'
+  const e20 = nftFirst && e721 ? null : decodeAsAny(ERC20_CONTRACTS, selector, data)
   if (e20) {
     if (e20.functionName === 'transfer') {
       const [dest, amount] = e20.args as [Hex, bigint]
@@ -182,7 +212,6 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
       return { kind: 'erc20_approve', token: to, spender, amount, unlimited: isUnlimited(amount) }
     }
   }
-  const e721 = tryDecode(ERC721_ABI, data)
   if (e721) {
     if (e721.functionName === 'setApprovalForAll') {
       const [operator, approved] = e721.args as [Hex, boolean]
@@ -210,7 +239,7 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
       return { kind: 'erc721_approve', token: to, to: dest, tokenId }
     }
   }
-  const e1155 = tryDecode(ERC1155_ABI, data)
+  const e1155 = decodeAs('ERC1155', selector, data)
   if (e1155) {
     if (e1155.functionName === 'safeTransferFrom') {
       const [from, dest, id, amount] = e1155.args as [Hex, Hex, bigint, bigint]
@@ -220,6 +249,28 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
       const [from, dest, ids, amounts] = e1155.args as [Hex, Hex, readonly bigint[], readonly bigint[]]
       return { kind: 'erc1155_transfer', token: to, from, to: dest, ids, amounts }
     }
+  }
+  /*
+    Nothing above claimed this call as a kind the wallet has words for, so the
+    last job is to name it honestly (§3.4 step 1: registry → shipped 4byte table
+    → "unknown function", never silently "contract interaction").
+
+    The registry goes first because it is the shape of a contract that was
+    actually deployed; the 4byte table is a list of signatures that hash to the
+    right four bytes, which is weaker evidence and can in principle be a
+    coincidence. Naming is not endorsement either way: `functionName` says what
+    the calldata calls itself, and the rules and the sheet decide what to make
+    of that.
+  */
+  const claim = resolveSelector(selector, known?.role ?? null)
+  if (claim) {
+    const named = tryDecode(claim.abi, data)
+    if (named) return { kind: 'contract_call', to, selector, functionName: named.functionName, args: named.args, value }
+  }
+  const local = fourByte(selector)
+  if (local) {
+    const named = local.abi ? tryDecode(local.abi, data) : null
+    return { kind: 'contract_call', to, selector, functionName: local.name, args: named?.args ?? null, value }
   }
   return { kind: 'contract_call', to, selector, functionName: null, args: null, value }
 }

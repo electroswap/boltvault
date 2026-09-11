@@ -1,0 +1,550 @@
+[
+  {
+    "type": "constructor",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_electroSwapFactory",
+        "internalType": "contract IElectroSwapFactory"
+      },
+      {
+        "type": "address",
+        "name": "_boltAddress",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "LiquidityLocked",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "owner",
+        "internalType": "address",
+        "indexed": true
+      },
+      {
+        "type": "address",
+        "name": "pair",
+        "internalType": "address",
+        "indexed": true
+      },
+      {
+        "type": "uint256",
+        "name": "amount",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "duration",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "lockID",
+        "internalType": "uint256",
+        "indexed": true
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "LiquidityWithdrawn",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "owner",
+        "internalType": "address",
+        "indexed": true
+      },
+      {
+        "type": "address",
+        "name": "pair",
+        "internalType": "address",
+        "indexed": true
+      },
+      {
+        "type": "uint256",
+        "name": "amount",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "lockID",
+        "internalType": "uint256",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "LockIncreased",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "lockID",
+        "internalType": "uint256",
+        "indexed": true
+      },
+      {
+        "type": "uint256",
+        "name": "existingAmount",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "existingDuration",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "newAmount",
+        "internalType": "uint256",
+        "indexed": false
+      },
+      {
+        "type": "uint256",
+        "name": "newDuration",
+        "internalType": "uint256",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "LockMigrated",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "lockID",
+        "internalType": "uint256",
+        "indexed": true
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "LockSplit",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "originalLockID",
+        "internalType": "uint256",
+        "indexed": true
+      },
+      {
+        "type": "uint256",
+        "name": "newLockID",
+        "internalType": "uint256",
+        "indexed": true
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "LockTransferred",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "lockID",
+        "internalType": "uint256",
+        "indexed": true
+      },
+      {
+        "type": "address",
+        "name": "previousOwner",
+        "internalType": "address",
+        "indexed": true
+      },
+      {
+        "type": "address",
+        "name": "newOwner",
+        "internalType": "address",
+        "indexed": true
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "_setFees",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_etnFlatFee",
+        "internalType": "uint256"
+      },
+      {
+        "type": "uint256",
+        "name": "_boltFlatFee",
+        "internalType": "uint256"
+      },
+      {
+        "type": "uint256",
+        "name": "_lpPercentFee",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "_setMigrator",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_migrator",
+        "internalType": "contract IMigrator"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "_setTeamWallet",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_teamWallet",
+        "internalType": "address payable"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "_updateFeeWhitelist",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_address",
+        "internalType": "address"
+      },
+      {
+        "type": "bool",
+        "name": "_addToWhitelist",
+        "internalType": "bool"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "outputs": [
+      {
+        "type": "address",
+        "name": "",
+        "internalType": "address"
+      }
+    ],
+    "name": "boltAddress",
+    "inputs": []
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "outputs": [
+      {
+        "type": "uint256",
+        "name": "",
+        "internalType": "uint256"
+      }
+    ],
+    "name": "getBlockTime",
+    "inputs": []
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "outputs": [
+      {
+        "type": "tuple",
+        "name": "",
+        "internalType": "struct ElectroSwapLockerV2.Fees",
+        "components": [
+          {
+            "type": "uint256",
+            "name": "etnFlatFee",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "boltFlatFee",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "lpPercentFee",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "name": "getFees",
+    "inputs": [
+      {
+        "type": "bool",
+        "name": "_noop",
+        "internalType": "bool"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "outputs": [
+      {
+        "type": "tuple",
+        "name": "",
+        "internalType": "struct ElectroSwapLockerV2.LockInfo",
+        "components": [
+          {
+            "type": "uint256",
+            "name": "lockID",
+            "internalType": "uint256"
+          },
+          {
+            "type": "address",
+            "name": "pair",
+            "internalType": "address"
+          },
+          {
+            "type": "address",
+            "name": "owner",
+            "internalType": "address"
+          },
+          {
+            "type": "uint256",
+            "name": "initial",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "amount",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "created",
+            "internalType": "uint256"
+          },
+          {
+            "type": "uint256",
+            "name": "duration",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "name": "getLockById",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_lockID",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "outputs": [
+      {
+        "type": "uint256[]",
+        "name": "",
+        "internalType": "uint256[]"
+      }
+    ],
+    "name": "getLockIDsByOwner",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_owner",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "outputs": [
+      {
+        "type": "uint256[]",
+        "name": "",
+        "internalType": "uint256[]"
+      }
+    ],
+    "name": "getLockIDsByPairAddress",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_pairAddress",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "increaseLock",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_lockID",
+        "internalType": "uint256"
+      },
+      {
+        "type": "uint256",
+        "name": "_additionalTokens",
+        "internalType": "uint256"
+      },
+      {
+        "type": "uint256",
+        "name": "_additionalTime",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "payable",
+    "outputs": [
+      {
+        "type": "uint256",
+        "name": "",
+        "internalType": "uint256"
+      }
+    ],
+    "name": "lock",
+    "inputs": [
+      {
+        "type": "address",
+        "name": "_pairAddress",
+        "internalType": "address"
+      },
+      {
+        "type": "uint256",
+        "name": "_duration",
+        "internalType": "uint256"
+      },
+      {
+        "type": "uint256",
+        "name": "_amountToLock",
+        "internalType": "uint256"
+      },
+      {
+        "type": "bool",
+        "name": "_feeInETN",
+        "internalType": "bool"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "outputs": [
+      {
+        "type": "uint256",
+        "name": "",
+        "internalType": "uint256"
+      }
+    ],
+    "name": "lockCount",
+    "inputs": []
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "migrateLock",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_lockID",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "splitLock",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_lockID",
+        "internalType": "uint256"
+      },
+      {
+        "type": "uint256",
+        "name": "_newLockAmount",
+        "internalType": "uint256"
+      },
+      {
+        "type": "uint256",
+        "name": "_newLockDuration",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "transferLock",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_lockID",
+        "internalType": "uint256"
+      },
+      {
+        "type": "address",
+        "name": "_newOwner",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "outputs": [],
+    "name": "withdraw",
+    "inputs": [
+      {
+        "type": "uint256",
+        "name": "_lockID",
+        "internalType": "uint256"
+      },
+      {
+        "type": "uint256",
+        "name": "_amountToWithdraw",
+        "internalType": "uint256"
+      },
+      {
+        "type": "uint256",
+        "name": "_remainderDuration",
+        "internalType": "uint256"
+      }
+    ]
+  }
+]

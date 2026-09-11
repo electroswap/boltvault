@@ -128,6 +128,14 @@ export function decodeUniversalRouter(data: Hex): DecodedUniversalRouter | null 
   } catch {
     return null
   }
+  /*
+    The router's ABI is now the deployed artifact, not two hand-written
+    `execute` signatures, so it also declares `collectRewards`, the V3 swap
+    callback and the ERC-721/1155 receiver hooks. Reading any of those as
+    `(commands, inputs, deadline)` would invent a command list out of unrelated
+    words, so say what this is not.
+  */
+  if (decoded.functionName !== 'execute') return null
   const [commandsHex, inputs, deadline] = decoded.args as [Hex, readonly Hex[], bigint | undefined]
   const bytes = commandsHex.slice(2).match(/.{2}/g) ?? []
   const commands: UrCommand[] = []
