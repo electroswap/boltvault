@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { useEngine } from '../../engine/EngineProvider'
 import { useHost } from '../../host'
 import { t } from '../../i18n'
+import { useSecretGuard } from '../../screens/onboarding/useSecretGuard'
 import { derivationLabel, kindLabel } from './AccountRow'
 
 export interface MenuItem {
@@ -139,6 +140,9 @@ export function RevealSheet({ open, onClose, seed, reducedMotion = false }: { op
   const [words, setWords] = useState<string[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Arms screenshot blocking while the phrase is on screen; must run before the
+  // `!seed` early return so the hook order stays stable.
+  const { masked } = useSecretGuard(words !== null)
   useEffect(() => {
     if (!open) {
       setPassword('')
@@ -163,7 +167,17 @@ export function RevealSheet({ open, onClose, seed, reducedMotion = false }: { op
   return (
     <Sheet open={open} onClose={onClose} title={t({ id: 'reveal.title', message: 'Recovery phrase · {label}', values: { label: seed.label } })} quiet reducedMotion={reducedMotion} footer={words ? <Key label={t({ id: 'reveal.hide', message: 'Hide' })} kind="secondary" size="compact" onPress={onClose} /> : <Key label={t({ id: 'reveal.key', message: 'Reveal' })} size="compact" disabled={busy || !password} onPress={() => void reveal()} testID="reveal-submit" />} testID="reveal">
       {words ? (
-        <WordGrid words={words} />
+        /* Screenshot-blocked while shown, masked the moment this stops being the active surface — the same treatment Backup gives the same secret. */
+        masked ? (
+          <Column minHeight={168} alignItems="center" justifyContent="center" gap="$2" testID="reveal-masked">
+            <Icon name="eyeOff" size={20} color={paint.mute} />
+            <Body tone="mute" size="caption">
+              {t({ id: 'secret.masked', message: 'Hidden while this window is not in front' })}
+            </Body>
+          </Column>
+        ) : (
+          <WordGrid words={words} />
+        )
       ) : (
         <Column gap="$2">
           <Body tone="mute">{t({ id: 'reveal.body', message: 'Enter your password. Make sure nobody can see your screen.' })}</Body>

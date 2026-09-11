@@ -1,5 +1,5 @@
 /** Settings › Security (master plan §8.14): password, auto-lock, passkeys, export. */
-import { AnimatedQR, Body, Column, Input, Key, Plate, Row, ScrollView, metrics } from '@boltvault/ui'
+import { AnimatedQR, Body, Column, Icon, Input, Key, Plate, Row, ScrollView, metrics, paint } from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
 import type { AutoLock } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
@@ -8,6 +8,7 @@ import { useHost } from '../host'
 import { t } from '../i18n'
 import { useWalletState } from '../state/useWalletState'
 import { PASSKEY_USER_ID } from './Onboarding'
+import { useSecretGuard } from './onboarding/useSecretGuard'
 import { passwordStrength } from './onboarding/rules'
 
 const AUTO_LOCKS: AutoLock[] = ['5min', '15min', '60min', 'never']
@@ -26,6 +27,13 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  /*
+    The export envelope holds every seed, passphrase and imported key in this
+    vault. It is the same secret the recovery-phrase screens show, so it gets
+    the same treatment: screenshots blocked while it is up, masked whenever
+    this surface is not in front.
+  */
+  const { masked } = useSecretGuard(frames !== null)
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
 
   useEffect(() => {
@@ -203,7 +211,16 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
           </Body>
           {frames ? (
             <>
-              <AnimatedQR frames={frames} />
+              {masked ? (
+                <Column minHeight={168} alignItems="center" justifyContent="center" gap="$2" testID="export-masked">
+                  <Icon name="eyeOff" size={20} color={paint.mute} />
+                  <Body tone="mute" size="caption">
+                    {t({ id: 'secret.masked', message: 'Hidden while this window is not in front' })}
+                  </Body>
+                </Column>
+              ) : (
+                <AnimatedQR frames={frames} />
+              )}
               <Key label={t({ id: 'security.export.done', message: 'Done' })} kind="secondary" onPress={() => setFrames(null)} />
             </>
           ) : (
