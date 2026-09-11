@@ -171,7 +171,7 @@
       "expo-audio",
       "./plugins/withWidgets.js",
       "./plugins/withUsbHost.js",
-      "./plugins/withSplashColors.js",
+      "./plugins/withNativeSplash.js",
       "./plugins/withBuildTuning.js"
     ],
     "extra": {

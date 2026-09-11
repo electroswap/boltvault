@@ -27,9 +27,15 @@ import { t } from '../../i18n'
   Typed structurally rather than imported from react-native: `packages/wallet`
   composes only `@boltvault/ui` and never reaches for the platform directly —
   `.dependency-cruiser.cjs` makes that an error, not a preference.
+
+  Every hop is optional, and the readers below check. On Android, pressing
+  "Next" crashed the app outright with `Cannot read property 'layout' of null`:
+  a layout event arrives there with a null `nativeEvent`, which the web body
+  never produces and so the harness never saw. A handler that assumes the
+  shape of an event it did not construct is a crash waiting for a platform.
 */
-type LayoutEvent = { nativeEvent: { layout: { width: number } } }
-type ScrollEvent = { nativeEvent: { contentOffset: { x: number } } }
+type LayoutEvent = { nativeEvent?: { layout?: { width?: number } } | null }
+type ScrollEvent = { nativeEvent?: { contentOffset?: { x?: number } } | null }
 
 /** A miniature of the wallet, built from the real thing. */
 function ProductSlide({ width }: { width: number }) {
@@ -98,8 +104,15 @@ export function IntroCarousel({ onDone, onSkip, reducedMotion = false }: { onDon
   }
 
   const onScrollEnd = (e: ScrollEvent): void => {
-    if (width <= 0) return
-    setIndex(Math.min(Math.max(Math.round(e.nativeEvent.contentOffset.x / width), 0), slides.length - 1))
+    const x = e?.nativeEvent?.contentOffset?.x
+    if (width <= 0 || typeof x !== 'number') return
+    setIndex(Math.min(Math.max(Math.round(x / width), 0), slides.length - 1))
+  }
+
+  const onPageLayout = (e: LayoutEvent): void => {
+    const w = e?.nativeEvent?.layout?.width
+    if (typeof w !== 'number' || w <= 0) return
+    setWidth((p) => (Math.abs(p - w) < 0.5 ? p : w))
   }
 
   /*
@@ -120,12 +133,12 @@ export function IntroCarousel({ onDone, onSkip, reducedMotion = false }: { onDon
         <Key label={t({ id: 'ob.intro.skip', message: 'Skip' })} kind="secondary" size="compact" onPress={onSkip} testID="ob-intro-skip" />
       </Row>
 
-      <Column flex={1} onLayout={(e: LayoutEvent) => setWidth((p) => (Math.abs(p - e.nativeEvent.layout.width) < 0.5 ? p : e.nativeEvent.layout.width))}>
+      <Column flex={1} onLayout={onPageLayout}>
         <ScrollView ref={scroller} horizontal pagingEnabled showsHorizontalScrollIndicator={false} onMomentumScrollEnd={onScrollEnd} onScrollEndDrag={onScrollEnd}>
           {slides.map((s, i) => (
             <Column key={s.id} width={width > 0 ? width : undefined} alignItems="center" justifyContent="center" gap="$4" paddingHorizontal={4} testID={`ob-slide-${s.id}`}>
               <Column minHeight={art} alignItems="center" justifyContent="center">
-                {i === 2 ? <ProductSlide width={width || art} /> : <IntroArt slide={i === 0 ? 1 : 2} size={art} testID={`ob-art-${s.id}`} />}
+                {i === 2 ? <ProductSlide width={width || art} /> : <IntroArt slide={i === 0 ? 1 : 2} size={art} reducedMotion={reducedMotion} testID={`ob-art-${s.id}`} />}
               </Column>
               <Column gap="$2" alignItems="center" paddingHorizontal={8}>
                 <Body size="title" textAlign="center">

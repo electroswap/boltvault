@@ -223,7 +223,20 @@ describe('remote sign: the phone asks the laptop', () => {
     expect(trezor.log.some((l) => l.startsWith('signTransaction:'))).toBe(true)
     for (let i = 0; i < 100 && (await phone.engine.remote.list()).outgoing.length > 0; i++) await new Promise((res) => setTimeout(res, 20))
     expect((await phone.engine.remote.list()).outgoing).toEqual([])
-    const entry = (await phone.engine.activity.list({ accountId: synced.id })).find((e) => e.hash === hash)
+    /*
+      Polled, not asserted once.
+
+      "The outgoing queue is empty" and "the activity row is written" are two
+      different awaits on the broadcast path, and the queue drains first — so
+      roughly one run in four read the list a tick early and found nothing.
+      Every other wait in this test already polls; this one did not.
+    */
+    const findEntry = async () => (await phone.engine.activity.list({ accountId: synced.id })).find((e) => e.hash === hash)
+    let entry = await findEntry()
+    for (let i = 0; i < 100 && !entry; i++) {
+      await new Promise((res) => setTimeout(res, 20))
+      entry = await findEntry()
+    }
     expect(entry?.category).toBe('SEND')
     // The laptop recorded nothing for it: the requester owns the record (§6).
     expect((await laptop.engine.activity.list({})).find((e) => e.hash === hash)).toBeUndefined()

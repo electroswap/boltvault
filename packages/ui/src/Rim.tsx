@@ -29,6 +29,19 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 import { current, rim } from './tokens'
 
 const FILL = { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 } as const
+/*
+  A pixel of bleed, for a fill that has to cover its frame completely.
+
+  `KeyFrame` paints `current.from` underneath as the one-frame fallback before
+  this gradient has measured itself. Android rounds view frames to physical
+  pixels, and the rounded SVG canvas can come up a pixel short of the frame it
+  sits in — so that cyan fallback showed as a hard vertical line down the right
+  edge of every primary key. The owner photographed it on "Create vault".
+
+  The frame clips (`overflow: hidden`), so a pixel over is free; a pixel under
+  is a bug you can see from across the room.
+*/
+const BLEED = { position: 'absolute', left: -1, top: -1, right: -1, bottom: -1 } as const
 
 interface Box {
   readonly width: number
@@ -112,7 +125,7 @@ export function CurrentFill({ radius = 0, opacity = 1, vertical = false }: Curre
   const id = useGradientId('cur')
   const [box, onLayout] = useBox()
   return (
-    <View style={FILL} pointerEvents="none" onLayout={onLayout} aria-hidden>
+    <View style={BLEED} pointerEvents="none" onLayout={onLayout} aria-hidden>
       {box === null ? null : (
         <Svg width={box.width} height={box.height} viewBox={`0 0 ${box.width} ${box.height}`} pointerEvents="none">
           <Defs>
@@ -121,7 +134,7 @@ export function CurrentFill({ radius = 0, opacity = 1, vertical = false }: Curre
               <Stop offset="1" stopColor={current.to} stopOpacity={opacity} />
             </LinearGradient>
           </Defs>
-          <Rect x={0} y={0} width={box.width} height={box.height} rx={radius} ry={radius} fill={`url(#${id})`} />
+          <Rect x={0} y={0} width={box.width} height={box.height} rx={radius + 1} ry={radius + 1} fill={`url(#${id})`} />
         </Svg>
       )}
     </View>

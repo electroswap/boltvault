@@ -162,7 +162,20 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
     (onboarding, unlock, signing) that must not offer a way out mid-flow.
   */
   const wide = body === 'extension-tab'
-  const showTabs = meta.dock && !wide
+  /*
+    No dock before there is a vault.
+
+    Home, Swap and Activity are three places to stand in a wallet that has no
+    accounts, no balances and nothing to show — Swap cannot quote and Activity
+    has nothing to list. Owner: "home/swap/activity should not be available
+    anywhere in the onboarding flow." A first run is one screen with one verb
+    on it until the vault exists; the dock arrives with the wallet.
+
+    `loading` is deliberately not a reason to hide it: flickering the dock in
+    on every cold start would be worse than a moment of it on a fresh install.
+  */
+  const noVault = !loading && !vault?.exists
+  const showTabs = meta.dock && !wide && !noVault
   // How the view arrives (style bible › motion): a push from the right, a pop from the left, a tab change rising in place; the same route never re-animates.
   const depth = state.stack.length
   const prev = useRef({ depth, tab: state.tab, screen: current.screen })
@@ -366,7 +379,14 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
           status bar while nothing readable sits under it. The dock takes the
           bottom inset itself.
         */}
-        <Column flex={1} zIndex={1} overflow="hidden" paddingTop={insets.top}>
+        {/*
+          The bottom inset belongs to whoever is at the bottom. With a dock it
+          is the dock's; without one it is the screen's, and nothing was
+          claiming it — so on a phone with gesture navigation the last control
+          of every dockless screen sat under the system bar. The owner
+          photographed onboarding's "Next" cut in half by it.
+        */}
+        <Column flex={1} zIndex={1} overflow="hidden" paddingTop={insets.top} paddingBottom={showTabs ? 0 : insets.bottom}>
           {/*
             One width for every screen, applied here rather than in each of
             thirty. Home, Portfolio, Swap, the Rack and a handful of others had

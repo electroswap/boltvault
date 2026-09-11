@@ -17,7 +17,13 @@ test('popup renders the shared Home screen through the service-worker engine', a
     }
     // A fresh install: no vault yet → the creation plate, never a fake balance.
     await expect(page.getByTestId('create-plate')).toContainText('Your vault is not created yet', { timeout: 15_000 })
-    await expect(page.getByTestId('tabs')).toBeVisible()
+    // ...and no dock. Home, Swap and Activity are three places to stand in a
+    // wallet with no accounts and nothing to show; the dock arrives with the
+    // vault (owner: "home/swap/activity should not be available anywhere in
+    // the onboarding flow"). The mark and the house lock-up stand in for it.
+    await expect(page.getByTestId('tabs')).toHaveCount(0)
+    await expect(page.getByTestId('first-run-mark')).toBeVisible()
+    await expect(page.getByTestId('first-run-brand')).toBeVisible()
     expect(errors.filter((e) => /Content Security Policy/i.test(e))).toEqual([])
     expect(errors.filter((e) => e.startsWith('pageerror'))).toEqual([])
 

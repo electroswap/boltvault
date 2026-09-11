@@ -1,9 +1,10 @@
 import 'react-native-get-random-values'
 import { createEngine, type Engine } from '@boltvault/engine'
-import { App as WalletApp, SplashRoot, takeSplash, type UiHost } from '@boltvault/wallet'
+import { App as WalletApp, SPLASH_BEAT, SplashRoot, takeSplash, type UiHost } from '@boltvault/wallet'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useState } from 'react'
 import { Linking, Share, StyleSheet, View } from 'react-native'
+import Animated, { cubicBezier } from 'react-native-reanimated'
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { haptic, sound } from './src/feel'
 import { mobileLedgerProvider } from './src/ledger'
@@ -73,23 +74,38 @@ function Shell({ engine }: { engine: Engine['engine'] }) {
   return <WalletApp engine={engine} body="mobile" host={host} insets={insets} />
 }
 
+/** The splash leaving: the camera pushes through the mark rather than cutting. */
+const LEAVE = 320
+
 export default function App() {
   const [engine, setEngine] = useState<Engine | null>(null)
   /*
-    Held for a beat so the splash is a moment rather than a flicker.
+    The splash is held for exactly its ceremony and then pushed through.
 
-    The engine builds in well under a second on a modern phone, and a mark that
-    appears and vanishes inside 200 ms reads as a glitch. `takeSplash` is spent
-    once per process, so this costs nothing on any later render — and resuming
-    from another app does not come through here at all, because `engine` is
-    already set and this component never unmounted.
+    `takeSplash` is spent once per process, so a resume costs nothing here —
+    and resuming from another app does not come through this path at all,
+    because `engine` is already set and this component never unmounted.
+
+    Two states rather than one: `beat` is "the animation has finished", `gone`
+    is "it has left the tree". Between them the splash fades and scales up over
+    Home, which is already mounted underneath — the old code swapped the two in
+    a single frame, and a hard cut is the one transition the style bible has no
+    word for.
   */
-  const [splashDone, setSplashDone] = useState(!takeSplash())
+  const [cold] = useState(takeSplash)
+  const [beat, setBeat] = useState(!cold)
+  const [gone, setGone] = useState(!cold)
   useEffect(() => {
-    if (splashDone) return
-    const t = setTimeout(() => setSplashDone(true), 1_100)
+    if (beat) return
+    const t = setTimeout(() => setBeat(true), SPLASH_BEAT)
     return () => clearTimeout(t)
-  }, [splashDone])
+  }, [beat])
+  const leaving = beat && engine !== null
+  useEffect(() => {
+    if (!leaving || gone) return
+    const t = setTimeout(() => setGone(true), LEAVE)
+    return () => clearTimeout(t)
+  }, [leaving, gone])
   useEffect(() => {
     let alive = true
     Promise.all([createMobilePlatform(), createWalletKit().catch(() => null)])
@@ -112,8 +128,26 @@ export default function App() {
     <SafeAreaProvider>
       <View style={styles.root}>
         <StatusBar style="light" />
+        {engine ? <Shell engine={engine.engine} /> : null}
         {/* `SplashRoot`, not `Splash`: out here there is no TamaguiProvider yet — WalletApp owns it. */}
-        {engine && splashDone ? <Shell engine={engine.engine} /> : <SplashRoot />}
+        {gone ? null : (
+          <Animated.View
+            pointerEvents={leaving ? 'none' : 'auto'}
+            style={[
+              StyleSheet.absoluteFill,
+              leaving
+                ? {
+                    animationName: { from: { opacity: 1, transform: [{ scale: 1 }] }, to: { opacity: 0, transform: [{ scale: 1.08 }] } },
+                    animationDuration: `${LEAVE}ms`,
+                    animationTimingFunction: cubicBezier(0.4, 0, 1, 1),
+                    animationFillMode: 'forwards',
+                  }
+                : null,
+            ]}
+          >
+            <SplashRoot />
+          </Animated.View>
+        )}
         <ScanHost />
       </View>
     </SafeAreaProvider>

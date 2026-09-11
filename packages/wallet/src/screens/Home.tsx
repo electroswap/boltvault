@@ -5,7 +5,7 @@
  * on the dock. Tapping the total opens the Portfolio. The Grid is drawn by
  * TabShell behind this screen; the holder tier warms it.
  */
-import { ActionGrid, Body, ChainMark, Column, Icon, IconButton, Ignition, Key, LiveFilament, Pill, Plate, Pressable, Rotor, Row, RollingReadout, Seat, ScrollView, metrics, paint, type ActionTileBadge, type IconName, type RotorItem } from '@boltvault/ui'
+import { ActionGrid, Body, BoltMark, ChainMark, Column, EsWordmark, Icon, IconButton, Ignition, Key, LiveFilament, Pill, Plate, Pressable, Rotor, Row, RollingReadout, Seat, ScrollView, metrics, paint, type ActionTileBadge, type IconName, type RotorItem } from '@boltvault/ui'
 import { cacheKey, type BridgeStatus, type CampaignView, type Inventory, type TokenDetailView } from '@boltvault/engine'
 import { useEffect, useRef, useState } from 'react'
 import { ChainScopeSheet, ScopePill, useHomeScope } from '../components/ChainScope'
@@ -73,6 +73,8 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   const ignite = igniteRef.current ?? false
   const dapp = useDappStatus(unlocked && (host.body === 'extension-popup' || host.body === 'harness'))
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
+  /** No vault yet: Home is a title screen, not a list with one card on it. */
+  const firstRun = !loading && !vault?.exists
   // The tab lays tiles out as rows and centres the column; the popup and the phone stack them (plan B3).
   const wide = body === 'extension-tab'
 
@@ -280,7 +282,9 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
 
   return (
     <Column flex={1} testID="home">
-      <ScrollView contentContainerStyle={{ paddingHorizontal: inset, paddingTop: 12, paddingBottom: 12, gap: 10 }}>
+      {/* `flexGrow` only on a first run: it lets the title screen centre in
+          whatever is left, and on every other state the content sizes itself. */}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: inset, paddingTop: 12, paddingBottom: 12, gap: 10, ...(firstRun ? { flexGrow: 1 } : {}) }}>
         <Ignition active={ignite} reducedMotion={reducedMotion} order={0}>
           <Row justifyContent="space-between" alignItems="center" minHeight={metrics.header} gap="$2">
             {active ? (
@@ -308,15 +312,47 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
           null
         ) : null}
 
-        {!loading && !vault?.exists ? (
-          <Ignition active={ignite} reducedMotion={reducedMotion} order={1}>
-            <Plate role="raised" gap="$3" testID="create-plate">
-              <Body size="title">{t({ id: 'home.create.title', message: 'Your vault is not created yet' })}</Body>
-              <Body tone="mute">
-                {t({ id: 'home.create.body', message: 'Create a new recovery phrase or import one you already have. Electroneum is your home chain.' })}
-              </Body>
-              <Key label={t({ id: 'home.create.key', message: 'Create vault' })} onPress={() => router.navigate('onboarding')} testID="create-vault" />
-            </Plate>
+        {/*
+          A first run is not Home with one card on it.
+
+          It was: the header, a plate at the top, and two thirds of a phone
+          screen of empty circuit under it — the first thing anyone sees of
+          this product, and it read as a page that had failed to load. Owner:
+          "the page that's on looks super boring for the first page they land
+          on in a new app. Logo should be above the ... container, and the
+          ElectroSwap logo should be at the bottom."
+
+          So it becomes a title screen: the mark, the one decision, and whose
+          wallet this is — the same three-part lock-up as Unlock and the
+          splash, which is what makes them feel like one product rather than
+          three screens that happen to share a palette. The dock is gone here
+          too (`TabShell`), so this really is the whole screen.
+        */}
+        {firstRun ? (
+          <Column flex={1} justifyContent="center" gap="$5" paddingBottom="$4" testID="first-run">
+            <Ignition active={ignite} reducedMotion={reducedMotion} order={1}>
+              <Column alignItems="center" gap="$2">
+                <BoltMark size={168} testID="first-run-mark" />
+              </Column>
+            </Ignition>
+            <Ignition active={ignite} reducedMotion={reducedMotion} order={2}>
+              <Plate role="raised" gap="$3" testID="create-plate">
+                <Body size="title">{t({ id: 'home.create.title', message: 'Your vault is not created yet' })}</Body>
+                <Body tone="mute">
+                  {t({ id: 'home.create.body', message: 'Create a new recovery phrase or import one you already have. Electroneum is your home chain.' })}
+                </Body>
+                <Key label={t({ id: 'home.create.key', message: 'Create vault' })} onPress={() => router.navigate('onboarding')} testID="create-vault" />
+              </Plate>
+            </Ignition>
+          </Column>
+        ) : null}
+
+        {/* Whose wallet this is, at the foot — the same place Unlock and the splash put it. */}
+        {firstRun ? (
+          <Ignition active={ignite} reducedMotion={reducedMotion} order={3}>
+            <Column alignItems="center" paddingTop="$2" testID="first-run-brand">
+              <EsWordmark />
+            </Column>
           </Ignition>
         ) : null}
 
