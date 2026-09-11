@@ -5,7 +5,7 @@
  * decimal can tip a figure into the unit above, and 999,999 is 1M, not 1000K.
  */
 import { describe, expect, it } from 'vitest'
-import { formatAmount, formatCompact, formatQuantity } from '../src/format'
+import { formatAmount, formatCompact, formatFloor, formatQuantity, formatRaw } from '../src/format'
 
 describe('formatCompact', () => {
   it('leaves anything under a thousand alone, decimals and all', () => {
@@ -62,5 +62,42 @@ describe('allowance amounts are scaled by the token, not shown raw', () => {
     // What the screen did before: the same 1,000 USDC allowance, unscaled.
     expect(formatQuantity('1000000000')).toBe('1.00B')
     expect(formatAmount('1000000000', 6)).not.toBe(formatQuantity('1000000000'))
+  })
+})
+
+/**
+ * Every formatter rounded to its display precision, and rounding goes *up*
+ * half the time — so a balance read fractionally higher than it was, and the
+ * swap's "minimum received" advertised a floor above the one the calldata
+ * actually enforces. A number the wallet shows must never exceed the number
+ * the wallet holds.
+ */
+describe('never rounds up', () => {
+  it('truncates rather than rounding, at every scale', () => {
+    // One wei short of a whole token must not read as a whole token.
+    expect(formatRaw('999999999999999999', 18)).not.toBe('1')
+    // One short of the next unit must not tip the compact ladder.
+    expect(formatQuantity('999999999')).toBe('999.99M')
+    expect(formatQuantity('1.999')).toBe('1.99')
+    expect(formatQuantity('0.019999')).toBe('0.01999')
+  })
+
+  it('formatFloor states a guarantee exactly, with no Number in the path', () => {
+    expect(formatFloor('1234567100', 6)).toBe('1,234.5671')
+    expect(formatFloor('999999999999999999', 18)).toBe('0.999999')
+    expect(formatFloor('0', 18)).toBe('0')
+  })
+
+  it('holds over a spread of pseudo-random amounts', () => {
+    let seed = 12345n
+    for (let i = 0; i < 200; i++) {
+      seed = (seed * 6364136223846793005n + 1442695040888963407n) % (1n << 64n)
+      const raw = seed % 10n ** 24n
+      const exact = Number(raw) / 1e18
+      const shown = Number(formatRaw(raw.toString(), 18).replace(/,/g, ''))
+      // Compact forms ('1.23M') parse as NaN; those are checked above.
+      if (!Number.isFinite(shown)) continue
+      expect(shown).toBeLessThanOrEqual(exact)
+    }
   })
 })

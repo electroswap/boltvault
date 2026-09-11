@@ -223,7 +223,8 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
     run(async () => {
       if (!host.deviceKey) return
       const keyHex = await host.deviceKey.ensure()
-      await engine.vault.enrolDevice({ keyId: host.deviceKey.id, keyHex })
+      // The password was set moments ago in this same flow and is still in hand.
+      await engine.vault.enrolDevice({ keyId: host.deviceKey.id, keyHex, password })
       go('done')
     })
 
@@ -231,7 +232,7 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
     run(async () => {
       if (!host.passkeys) return
       const res = await host.passkeys.create({ userName: 'BoltVault', userIdHex: PASSKEY_USER_ID, rpName: 'BoltVault' })
-      await engine.vault.enrolPasskey({ credentialId: res.credentialId, prfSecretHex: res.prfSecretHex })
+      await engine.vault.enrolPasskey({ credentialId: res.credentialId, prfSecretHex: res.prfSecretHex, password })
       go('done')
     })
 

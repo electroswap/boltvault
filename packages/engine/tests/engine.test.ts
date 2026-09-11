@@ -186,9 +186,17 @@ describe('vault v2 + accounts', () => {
     await ready
     await engine.vault.create({ password: 'pw' })
     const prf = 'ab'.repeat(32)
-    let status = await engine.vault.enrolPasskey({ credentialId: 'cred-1', prfSecretHex: prf })
+    /*
+      An unlock factor is a key to everything, so changing the set of them
+      costs the password. It used to need only an unlocked wallet — enough for
+      anyone at an unattended machine to enrol their own passkey and keep
+      access long after the screen locked, without ever learning the password.
+    */
+    await expectError(engine.vault.enrolPasskey({ credentialId: 'cred-1', prfSecretHex: prf, password: 'wrong' }), 'wrong_password')
+    expect((await engine.vault.status()).wraps.map((w) => w.by)).toEqual(['password'])
+    let status = await engine.vault.enrolPasskey({ credentialId: 'cred-1', prfSecretHex: prf, password: 'pw' })
     expect(status.wraps.map((w) => w.by)).toEqual(['password', 'prf'])
-    status = await engine.vault.enrolDevice({ keyId: 'pixel', keyHex: 'cd'.repeat(32) })
+    status = await engine.vault.enrolDevice({ keyId: 'pixel', keyHex: 'cd'.repeat(32), password: 'pw' })
     expect(status.wraps).toHaveLength(3)
     await engine.vault.lock()
     await expectError(engine.vault.unlockWithPasskey({ credentialId: 'cred-1', prfSecretHex: 'ff'.repeat(32) }), 'unauthorized')
@@ -201,7 +209,8 @@ describe('vault v2 + accounts', () => {
     await engine.vault.lock()
     await expectError(engine.vault.unlock({ password: 'pw' }), 'wrong_password')
     await engine.vault.unlock({ password: 'new' })
-    status = await engine.vault.removePasskey({ credentialId: 'cred-1' })
+    await expectError(engine.vault.removePasskey({ credentialId: 'cred-1', password: 'pw' }), 'wrong_password') // the password changed above
+    status = await engine.vault.removePasskey({ credentialId: 'cred-1', password: 'new' })
     expect(status.wraps.map((w) => w.by).sort()).toEqual(['device', 'password'])
   })
 

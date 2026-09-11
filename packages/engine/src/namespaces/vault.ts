@@ -202,7 +202,24 @@ export class VaultManager {
     if (this.opts.kdf) return this.opts.kdf
     const stored = (await readDoc(this.platform.storage.local, KDF_DOC, () => this.platform.now())).value
     if (stored) return stored
-    const calibrated = await calibrateArgon2(this.crypto)
+    /*
+      Prove the chosen cost before writing it into the envelope.
+
+      Calibration measures this device at this moment. If the number it picks
+      cannot actually be allocated — a busy service worker, a phone under
+      pressure — every future unlock inherits a vault that will not open, and
+      the failure surfaces as "wrong password". Step down to the floor instead.
+    */
+    let calibrated = await calibrateArgon2(this.crypto)
+    for (;;) {
+      try {
+        await this.crypto.argon2id({ password: new TextEncoder().encode('calibration-probe'), salt: this.platform.random(16), memoryKiB: calibrated.m, iterations: calibrated.t, parallelism: calibrated.p, hashLength: 32 })
+        break
+      } catch {
+        if (calibrated.m <= 64 * 1024) break
+        calibrated = { ...calibrated, m: Math.max(64 * 1024, Math.floor(calibrated.m / 2)) }
+      }
+    }
     await writeDoc(this.platform.storage.local, KDF_DOC, calibrated)
     return calibrated
   }
@@ -355,7 +372,7 @@ export class VaultManager {
       if (!pt) throw new EngineError('internal', 'migration produced an unreadable vault')
       return { accounts: await this.unlockWithDek(migrated.dek, pt) }
     }
-    const dek = await unwrapDek(this.crypto, file, { password: input.password })
+    const dek = await this.unwrap(file, { password: input.password })
     if (!dek) throw new EngineError('wrong_password', 'wrong password')
     const pt = openVaultV2(file, dek)
     if (!pt) throw new EngineError('internal', 'the vault could not be opened')
@@ -428,6 +445,17 @@ export class VaultManager {
 
   async lock(): Promise<void> {
     const session = this.platform.storage.session
+    /*
+      Overwrite, then remove.
+
+      The session DEK is held as a hex string, and a JS string is immutable —
+      `Uint8Array.fill(0)` has nothing to reach, whatever §3.2 says about
+      zeroisation. What *can* be controlled is the stored value: writing over
+      it means a dump of the storage area reads zeros rather than the key, even
+      if the original string is still somewhere on the heap until it is
+      collected. Short auto-lock remains the control that actually matters.
+    */
+    await session.set(KEY_DEK, '0'.repeat(64))
     await Promise.all([session.remove(KEY_DEK), session.remove(KEY_UNLOCKED_AT), session.remove(KEY_LOCK_AT)])
     await this.platform.alarms.cancel(AUTOLOCK_ALARM)
     this.bus.emit({ type: 'vault.status', status: await this.status() })
@@ -436,9 +464,25 @@ export class VaultManager {
 
   // ---- factors -------------------------------------------------------------------
 
+  /*
+    "The KDF could not run" and "the password is wrong" are different answers.
+
+    `unwrapDek` returns null for a wrong factor and *throws* when Argon2id
+    cannot allocate its memory — and both used to surface as "wrong password",
+    which sends someone to re-type a password that was right all along, on a
+    vault that is fine. Say which it was.
+  */
+  private async unwrap(file: VaultFileV2, unlock: Parameters<typeof unwrapDek>[2]): Promise<Uint8Array | null> {
+    try {
+      return await unwrapDek(this.crypto, file, unlock)
+    } catch {
+      throw new EngineError('internal', 'This device could not allocate enough memory to open the vault. Close some tabs or apps and try again.')
+    }
+  }
+
   private async verifyPassword(password: string): Promise<VaultFileV2> {
     const file = await this.requireV2()
-    if (!(await unwrapDek(this.crypto, file, { password }))) throw new EngineError('wrong_password', 'wrong password')
+    if (!(await this.unwrap(file, { password }))) throw new EngineError('wrong_password', 'wrong password')
     return file
   }
 
@@ -458,29 +502,41 @@ export class VaultManager {
     return this.emitStatus()
   }
 
-  async enrolPasskey(input: { credentialId: string; prfSecretHex: string }): Promise<VaultStatus> {
-    const file = await this.requireV2()
+  /*
+    Changing who can open the vault costs the password, every time.
+
+    An unlock factor is a key to everything. Adding one only needed the wallet
+    to be *unlocked* — so anyone at an unattended, unlocked machine could enrol
+    their own passkey or device key and keep access long after the screen
+    locked, without ever learning the password. Removing one needed no more
+    either, which is how you lock the owner out of their own biometric.
+
+    The DEK is still what the new wrap is built from; the password is what
+    proves the person asking is entitled to hand it out.
+  */
+  async enrolPasskey(input: { credentialId: string; prfSecretHex: string; password: string }): Promise<VaultStatus> {
+    const file = await this.verifyPassword(input.password)
     const dek = await this.dek()
     await this.writeFile(await addWrap(this.crypto, file, dek, { by: 'prf', credentialId: input.credentialId, prfSecret: fromHex(input.prfSecretHex) }, this.platform.now()))
     return this.emitStatus()
   }
 
-  async removePasskey(input: { credentialId: string }): Promise<VaultStatus> {
-    await this.dek()
-    await this.writeFile(removeWrap(await this.requireV2(), 'prf', input.credentialId, this.platform.now()))
+  async removePasskey(input: { credentialId: string; password: string }): Promise<VaultStatus> {
+    const file = await this.verifyPassword(input.password)
+    await this.writeFile(removeWrap(file, 'prf', input.credentialId, this.platform.now()))
     return this.emitStatus()
   }
 
-  async enrolDevice(input: { keyId: string; keyHex: string }): Promise<VaultStatus> {
-    const file = await this.requireV2()
+  async enrolDevice(input: { keyId: string; keyHex: string; password: string }): Promise<VaultStatus> {
+    const file = await this.verifyPassword(input.password)
     const dek = await this.dek()
     await this.writeFile(await addWrap(this.crypto, file, dek, { by: 'device', keyId: input.keyId, deviceKey: fromHex(input.keyHex) }, this.platform.now()))
     return this.emitStatus()
   }
 
-  async removeDevice(input: { keyId: string }): Promise<VaultStatus> {
-    await this.dek()
-    await this.writeFile(removeWrap(await this.requireV2(), 'device', input.keyId, this.platform.now()))
+  async removeDevice(input: { keyId: string; password: string }): Promise<VaultStatus> {
+    const file = await this.verifyPassword(input.password)
+    await this.writeFile(removeWrap(file, 'device', input.keyId, this.platform.now()))
     return this.emitStatus()
   }
 
@@ -816,15 +872,15 @@ export function vaultNamespace(vault: VaultManager, settings: SettingsStore): Na
       handler: (arg) => vault.changePassword(arg as { current: string; next: string }),
     },
     enrolPasskey: {
-      input: z.object({ credentialId: z.string().min(1), prfSecretHex: HexSchema }),
-      handler: (arg) => vault.enrolPasskey(arg as { credentialId: string; prfSecretHex: string }),
+      input: z.object({ credentialId: z.string().min(1), prfSecretHex: HexSchema, password: PasswordSchema }),
+      handler: (arg) => vault.enrolPasskey(arg as { credentialId: string; prfSecretHex: string; password: string }),
     },
-    removePasskey: { input: z.object({ credentialId: z.string().min(1) }), handler: (arg) => vault.removePasskey(arg as { credentialId: string }) },
+    removePasskey: { input: z.object({ credentialId: z.string().min(1), password: PasswordSchema }), handler: (arg) => vault.removePasskey(arg as { credentialId: string; password: string }) },
     enrolDevice: {
-      input: z.object({ keyId: z.string().min(1), keyHex: HexSchema }),
-      handler: (arg) => vault.enrolDevice(arg as { keyId: string; keyHex: string }),
+      input: z.object({ keyId: z.string().min(1), keyHex: HexSchema, password: PasswordSchema }),
+      handler: (arg) => vault.enrolDevice(arg as { keyId: string; keyHex: string; password: string }),
     },
-    removeDevice: { input: z.object({ keyId: z.string().min(1) }), handler: (arg) => vault.removeDevice(arg as { keyId: string }) },
+    removeDevice: { input: z.object({ keyId: z.string().min(1), password: PasswordSchema }), handler: (arg) => vault.removeDevice(arg as { keyId: string; password: string }) },
     setAutoLock: {
       input: z.object({ autoLock: AutoLockSchema }),
       handler: async (arg) => {

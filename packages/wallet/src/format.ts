@@ -62,12 +62,32 @@ export function formatPrice(value: number | null, currency: 'USD' | 'ETN'): stri
 const COMPACT_FROM = 10_000_000
 const CEILING = 1e15
 
+/*
+  Cut a decimal string at `places`, never rounding.
+
+  Every formatter below used to round to its display precision, which rounds
+  *up* half the time — so a balance read fractionally higher than it is, and a
+  swap's "minimum received" advertised a floor above the one the calldata
+  enforces. A number the wallet shows should never be larger than the number
+  the wallet holds. Done on the string, so nothing depends on `Number`'s
+  precision either.
+*/
+export function cut(q: string, places: number): string {
+  const neg = q.startsWith('-') || q.startsWith('−')
+  const body = neg ? q.slice(1) : q
+  const [i = '0', f = ''] = body.split('.')
+  const kept = places > 0 ? f.slice(0, places).replace(/0+$/, '') : ''
+  return `${neg ? '−' : ''}${kept ? `${i}.${kept}` : i}`
+}
+
 function compact(n: number): string {
   const abs = Math.abs(n)
   if (abs >= CEILING) return `${n < 0 ? '−' : ''}>999T`
   const scale = abs >= 1e12 ? 1e12 : abs >= 1e9 ? 1e9 : 1e6
   const unit = abs >= 1e12 ? 'T' : abs >= 1e9 ? 'B' : 'M'
-  return `${(n / scale).toFixed(2)}${unit}`
+  // Truncated first so 999,999,999 cannot read as "1.00B", then padded back to
+  // two places — `toFixed` on an already-truncated value only pads.
+  return `${Number(cut((n / scale).toFixed(6), 2)).toFixed(2)}${unit}`
 }
 
 export function formatQuantity(q: string): string {
@@ -76,9 +96,14 @@ export function formatQuantity(q: string): string {
   if (n === 0) return '0'
   const abs = Math.abs(n)
   if (abs >= COMPACT_FROM) return compact(n)
-  if (abs >= 1_000_000) return n.toLocaleString('en-US', { maximumFractionDigits: 0 })
-  if (abs >= 1) return n.toLocaleString('en-US', { maximumFractionDigits: 2 })
-  return n.toLocaleString('en-US', { maximumSignificantDigits: 4 })
+  // Truncate first, then group: `toLocaleString`'s own rounding would round up.
+  if (abs >= 1_000_000) return Number(cut(q, 0)).toLocaleString('en-US', { maximumFractionDigits: 0 })
+  if (abs >= 1) return Number(cut(q, 2)).toLocaleString('en-US', { maximumFractionDigits: 2 })
+  // Below one, "4 significant digits" starts at the first non-zero decimal.
+  const f = q.split('.')[1] ?? ''
+  const firstDigit = f.search(/[1-9]/)
+  const places = firstDigit === -1 ? 4 : firstDigit + 4
+  return Number(cut(q, places)).toLocaleString('en-US', { maximumSignificantDigits: 4 })
 }
 
 /**
@@ -214,11 +239,13 @@ export function formatAmount(raw: string, decimals: number, significant = 4): st
   const base = 10n ** BigInt(decimals)
   const whole = n / base
   const sign = neg ? '−' : ''
-  // Big enough to read whole: group it and stop.
+  // Big enough to read whole: group it and stop. Built from the integer and
+  // its fraction as strings, so nothing is rounded up on the way.
   if (whole > 0n) {
-    const value = Number(n) / Number(base)
     const places = whole >= 1000n ? 0 : whole >= 100n ? 1 : whole >= 10n ? 2 : significant - 1
-    return `${sign}${formatQuantity(value.toFixed(places))}`
+    const fracDigits = (n % base).toString().padStart(decimals, '0')
+    const exact = `${whole.toString()}.${fracDigits}`
+    return `${sign}${formatQuantity(cut(exact, places))}`
   }
   // Below one: keep `significant` digits from the first that is not a zero.
   const frac = (n % base).toString().padStart(decimals, '0')
@@ -226,7 +253,30 @@ export function formatAmount(raw: string, decimals: number, significant = 4): st
   if (firstDigit === -1) return '0'
   const places = firstDigit + significant
   if (places > decimals) return `${sign}0.${frac.slice(0, decimals).replace(/0+$/, '')}`
-  const cut = `0.${frac.slice(0, places)}`
-  const rounded = Number(cut).toFixed(places).replace(/0+$/, '').replace(/\.$/, '')
-  return `${sign}${rounded}`
+  // Truncated, not `toFixed`: 0.0999999 must not read as 0.1.
+  return `${sign}${cut(`0.${frac.slice(0, places)}`, places)}`
+}
+
+/**
+ * A guaranteed floor, never rounded up.
+ *
+ * Where a number is a *promise* rather than an observation — a swap's minimum
+ * received, a limit order's floor — displaying one wei more than the contract
+ * enforces is telling the user they will get something they might not. Pure
+ * BigInt: no `Number`, so precision does not come into it either.
+ */
+export function formatFloor(raw: string, decimals: number, places = 6): string {
+  let n: bigint
+  try {
+    n = BigInt(raw)
+  } catch {
+    return raw
+  }
+  const neg = n < 0n
+  if (neg) n = -n
+  const base = 10n ** BigInt(decimals)
+  const whole = (n / base).toString()
+  const frac = decimals > 0 ? (n % base).toString().padStart(decimals, '0').slice(0, places).replace(/0+$/, '') : ''
+  const grouped = Number(whole) >= 1000 ? Number(whole).toLocaleString('en-US') : whole
+  return `${neg ? '−' : ''}${frac ? `${grouped}.${frac}` : grouped}`
 }

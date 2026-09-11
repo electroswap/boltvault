@@ -21,6 +21,9 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
   const [next, setNext] = useState('')
   const nextStrength = passwordStrength(next)
   const [exportPassword, setExportPassword] = useState('')
+  // Adding or removing an unlock factor is a change to who can open the vault,
+  // so it costs the password — not merely an unlocked wallet.
+  const [quickPassword, setQuickPassword] = useState('')
   const [exportCode, setExportCode] = useState('')
   const [frames, setFrames] = useState<string[] | null>(null)
   const [passkeysSupported, setPasskeysSupported] = useState(false)
@@ -118,6 +121,14 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
             message: 'Unlock with your face or fingerprint instead of typing your password. What gets stored is a key this device will only release once you have authenticated — never your password, and never your keys. The password keeps working, and is still required to reveal or export your phrase.',
           })}
         </Body>
+        <Input
+          value={quickPassword}
+          onChange={setQuickPassword}
+          secure
+          placeholder={t({ id: 'security.current', message: 'Current password' })}
+          hint={t({ id: 'security.quick.why', message: 'Required to add or remove a way into this vault.' })}
+          testID="quick-password"
+        />
         {passkeys.length === 0 && devices.length === 0 ? (
           <Body tone="mute" size="caption">
             {t({ id: 'security.quick.none', message: 'Nothing enrolled yet, so the password is the only way in.' })}
@@ -129,7 +140,7 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
                 <Body tone="mute" size="caption">
                   {t({ id: 'security.quick.passkey', message: 'Passkey' })} · {w.id.slice(0, 8)}…
                 </Body>
-                <Body tone="burn" size="caption" onPress={() => run(() => engine.vault.removePasskey({ credentialId: w.id }).then(() => undefined))}>
+                <Body tone="burn" size="caption" onPress={() => run(() => engine.vault.removePasskey({ credentialId: w.id, password: quickPassword }).then(() => undefined))}>
                   {t({ id: 'remove', message: 'Remove' })}
                 </Body>
               </Row>
@@ -146,7 +157,7 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
                   onPress={() =>
                     run(async () => {
                       if (!host.deviceKey) return
-                      await engine.vault.removeDevice({ keyId: w.id })
+                      await engine.vault.removeDevice({ keyId: w.id, password: quickPassword })
                       await host.deviceKey.remove()
                     })
                   }
@@ -170,7 +181,7 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
                 // handle, re-enrolling replaces the credential" only holds if
                 // both places agree. This used to be '01' and did not.
                 const r = await host.passkeys.create({ userName: 'BoltVault', userIdHex: PASSKEY_USER_ID, rpName: 'BoltVault' })
-                await engine.vault.enrolPasskey({ credentialId: r.credentialId, prfSecretHex: r.prfSecretHex })
+                await engine.vault.enrolPasskey({ credentialId: r.credentialId, prfSecretHex: r.prfSecretHex, password: quickPassword })
               })
             }
           />
@@ -186,7 +197,7 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
                 run(async () => {
                   if (!host.deviceKey) return
                   const keyHex = await host.deviceKey.ensure()
-                  await engine.vault.enrolDevice({ keyId: host.deviceKey.id, keyHex })
+                  await engine.vault.enrolDevice({ keyId: host.deviceKey.id, keyHex, password: quickPassword })
                 })
               }
             />

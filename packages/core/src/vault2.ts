@@ -287,7 +287,17 @@ export async function migrateV1(crypto: VaultCrypto, v1: VaultFileV1, password: 
 export async function calibrateArgon2(crypto: VaultCrypto, opts: { targetMs?: number; floorKiB?: number; ceilKiB?: number; now?: () => number } = {}): Promise<Argon2idParams> {
   const target = opts.targetMs ?? 600
   const floor = opts.floorKiB ?? 64 * 1024
-  const ceil = opts.ceilKiB ?? 256 * 1024
+  /*
+    128 MiB, not 256.
+
+    Calibration picks a cost on the device that creates the vault and writes it
+    into the envelope, and every later unlock has to allocate it again — in an
+    MV3 service worker, on a phone under memory pressure, or on a different,
+    weaker device the vault was moved to. A vault that cannot be opened is
+    worse than one that is cheaper to attack, and 128 MiB at t=3 is already
+    comfortably above the OWASP Argon2id guidance.
+  */
+  const ceil = opts.ceilKiB ?? 128 * 1024
   const now = opts.now ?? (() => performance.now())
   const salt = crypto.random(16)
   const probe = async (m: number): Promise<number> => {

@@ -23,7 +23,7 @@ import { useCached } from '../hooks/useCached'
 import { useChainHead } from '../hooks/useChainHead'
 import { usePortfolio } from '../hooks/usePortfolio'
 import { usePrefs } from '../hooks/usePrefs'
-import { formatAmountFiat, formatPct, formatQuantity, formatRate, formatRaw } from '../format'
+import { formatAmountFiat, formatFloor, formatPct, formatQuantity, formatRate, formatRaw } from '../format'
 import { t } from '../i18n'
 import { swapFlowStore, useSwapFlow } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
@@ -261,7 +261,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
           </Body>
           {q ? (
             <Body tone="mute" testID="swap-flow-summary">
-              {t({ id: 'swap.summary', message: '{a} {s} → at least {b} {u}', values: { a: formatRaw(q.amountInRaw, q.decimalsIn), s: q.symbolIn, b: formatRaw(q.minimumOutRaw, q.decimalsOut), u: q.symbolOut } })}
+              {t({ id: 'swap.summary', message: '{a} {s} → at least {b} {u}', values: { a: formatRaw(q.amountInRaw, q.decimalsIn), s: q.symbolIn, b: formatFloor(q.minimumOutRaw, q.decimalsOut), u: q.symbolOut } })}
             </Body>
           ) : null}
           <Plate gap="$2" testID="swap-steps">

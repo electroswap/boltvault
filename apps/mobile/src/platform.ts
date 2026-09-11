@@ -2,9 +2,11 @@
  * Mobile Platform (master plan §5.2, v1 exact):
  *
  * - local  → MMKV `bv-local` (non-secret documents)
- * - secret → MMKV `bv-secret`, encrypted with a random key that lives in the
- *            OS keychain (`WHEN_UNLOCKED_THIS_DEVICE_ONLY`, no biometry — it
- *            guards ciphertext at rest, not the vault DEK)
+ * - secret → MMKV `bv-secret`, AES-256 under a 32-character base64 key (192
+ *            bits) that lives in the OS keychain
+ *            (`WHEN_UNLOCKED_THIS_DEVICE_ONLY`, no biometry — it guards
+ *            ciphertext at rest, not the vault DEK). Installs predating this
+ *            keep their original key and cipher; see `secretStoreKey`.
  * - session→ process memory only (the unlocked DEK never touches disk)
  * - kdf    → react-native-libsodium `crypto_pwhash` (RFC 9106 Argon2id;
  *            byte-identical to hash-wasm in the extension — CI vector)
@@ -13,6 +15,7 @@
  * - alarms → timers, re-checked on foreground so a background sleep still
  *            locks on time
  */
+import { Buffer } from 'buffer'
 import type { AlarmScheduler, KeyValueStore, Platform } from '@boltvault/platform'
 import * as LocalAuthentication from 'expo-local-authentication'
 import { AppState, Linking, Platform as RNPlatform } from 'react-native'
@@ -53,16 +56,36 @@ function randomBytes(n: number): Uint8Array {
 
 const SECRET_STORE_KEY_SERVICE = 'io.electroswap.boltvault.secret-store'
 
-/** The MMKV encryption key for the secret store, minted once and kept in the keychain. */
-async function secretStoreKey(): Promise<string> {
+/*
+  The MMKV encryption key for the secret store.
+
+  MMKV takes the key as a *string* and bounds it by character length. The
+  original minted 16 random bytes and hex-encoded them — 32 characters, twice
+  the 16 the AES-128 default accepts — so the declared parameter was out of
+  range and the store was opened under whatever MMKV made of it: at best the
+  first 16 hex characters, which is 64 bits, not the 128 the byte count
+  suggests.
+
+  A fresh install now mints 24 random bytes as base64: 32 characters exactly,
+  which is the AES-256 maximum, carrying 192 bits.
+
+  An install that already has a v1 key keeps it, opened exactly as before. Its
+  entropy is lower than we would choose today, but `vault.file` lives in that
+  store and re-keying it is a device-tested migration, not a patch — swapping
+  the cipher underneath an existing store loses the vault. The version is
+  recorded so that migration can find them later.
+*/
+type SecretStoreKey = { readonly key: string; readonly v2: boolean }
+
+async function secretStoreKey(): Promise<SecretStoreKey> {
   const existing = await Keychain.getGenericPassword({ service: SECRET_STORE_KEY_SERVICE })
-  if (existing && existing.password) return existing.password
-  const key = Array.from(randomBytes(16), (b) => b.toString(16).padStart(2, '0')).join('')
-  await Keychain.setGenericPassword('secret-store', key, {
+  if (existing && existing.password) return { key: existing.password, v2: existing.username === 'secret-store.v2' }
+  const key = Buffer.from(randomBytes(24)).toString('base64')
+  await Keychain.setGenericPassword('secret-store.v2', key, {
     service: SECRET_STORE_KEY_SERVICE,
     accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
   })
-  return key
+  return { key, v2: true }
 }
 
 function timerAlarms(): AlarmScheduler {
@@ -107,7 +130,9 @@ function timerAlarms(): AlarmScheduler {
 export async function createMobilePlatform(): Promise<Platform> {
   await Sodium.ready
   const local = createMMKV({ id: 'bv-local' })
-  const secret = createMMKV({ id: 'bv-secret', encryptionKey: await secretStoreKey() })
+  const secretKey = await secretStoreKey()
+  // AES-256 only for a key minted for it; an existing v1 key opens its store the way it was written.
+  const secret = createMMKV({ id: 'bv-secret', encryptionKey: secretKey.key, ...(secretKey.v2 ? { encryptionType: 'AES-256' as const } : {}) })
   return {
     kind: 'mobile',
     storage: { local: mmkvStore(local), secret: mmkvStore(secret), session: memoryStore() },

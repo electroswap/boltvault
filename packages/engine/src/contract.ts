@@ -98,10 +98,11 @@ export interface VaultNamespace {
   /** Seed reveal — password re-verified, UI-class senders only, quiet mode in the UI. */
   reveal(input: { seedId: string; password: string }): Promise<{ mnemonic: string; passphraseSet: boolean }>
   changePassword(input: { current: string; next: string }): Promise<VaultStatus>
-  enrolPasskey(input: { credentialId: string; prfSecretHex: string }): Promise<VaultStatus>
-  removePasskey(input: { credentialId: string }): Promise<VaultStatus>
-  enrolDevice(input: { keyId: string; keyHex: string }): Promise<VaultStatus>
-  removeDevice(input: { keyId: string }): Promise<VaultStatus>
+  /** Changing who can open the vault costs the password, every time. */
+  enrolPasskey(input: { credentialId: string; prfSecretHex: string; password: string }): Promise<VaultStatus>
+  removePasskey(input: { credentialId: string; password: string }): Promise<VaultStatus>
+  enrolDevice(input: { keyId: string; keyHex: string; password: string }): Promise<VaultStatus>
+  removeDevice(input: { keyId: string; password: string }): Promise<VaultStatus>
   setAutoLock(input: { autoLock: AutoLock }): Promise<VaultStatus>
   /** Three word positions to ask for; the words themselves never leave the engine. */
   backupQuiz(input: { seedId: string }): Promise<{ positions: number[]; wordCount: number }>
