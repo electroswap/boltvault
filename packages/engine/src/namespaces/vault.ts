@@ -34,6 +34,7 @@ import {
   seedHexFromMnemonic,
   toHex,
   unwrapDek,
+  type UnlockWith,
   validateMnemonicStr,
   type Argon2idParams,
   type VaultAccountV2,
@@ -128,6 +129,18 @@ export interface VaultManagerOptions {
   readonly active: SealedMap<{ id: string | null }>
   /** Drop every sealed entry belonging to a removed account. */
   readonly purgeAccount?: (accountId: string) => Promise<void>
+}
+
+/**
+ * Any one of the factors the vault is wrapped under (§3.2). Hex on the wire,
+ * because the channel guard refuses raw bytes.
+ */
+export type RevealFactor = { readonly password: string } | { readonly credentialId: string; readonly prfSecretHex: string } | { readonly keyId: string; readonly keyHex: string }
+
+function unlockFor(input: RevealFactor): UnlockWith {
+  if ('password' in input) return { password: input.password }
+  if ('prfSecretHex' in input) return { credentialId: input.credentialId, prfSecret: fromHex(input.prfSecretHex) }
+  return { keyId: input.keyId, deviceKey: fromHex(input.keyHex) }
 }
 
 export class VaultManager {
@@ -486,10 +499,21 @@ export class VaultManager {
     return file
   }
 
-  async reveal(input: { seedId: string; password: string }): Promise<{ mnemonic: string; passphraseSet: boolean }> {
-    const file = await this.verifyPassword(input.password)
-    const dek = await unwrapDek(this.crypto, file, { password: input.password })
-    const pt = dek ? openVaultV2(file, dek) : null
+  /**
+   * Revealing a seed is re-authenticated, but the factor is whichever one the
+   * vault is wrapped under — not the password specifically. Demanding the
+   * password shut out anyone who set the wallet up behind a passkey or the
+   * device key and never had a memorable one to type; the vault file has
+   * supported all three wraps since v2 and only this method insisted.
+   */
+  async reveal(input: { seedId: string } & RevealFactor): Promise<{ mnemonic: string; passphraseSet: boolean }> {
+    const file = await this.requireV2()
+    // One KDF pass, not two: this used to verify by unwrapping, throw the
+    // result away, and then unwrap a second time — a second Argon2id run for
+    // nothing on the slowest operation the wallet performs.
+    const dek = await unwrapDek(this.crypto, file, unlockFor(input))
+    if (!dek) throw 'password' in input ? new EngineError('wrong_password', 'wrong password') : new EngineError('unauthorized', 'that factor does not unlock the vault')
+    const pt = openVaultV2(file, dek)
     const seed = pt?.seeds.find((s) => s.id === input.seedId)
     if (!seed) throw new EngineError('not_found', 'no such seed')
     return { mnemonic: seed.mnemonic, passphraseSet: !!seed.passphrase }
@@ -834,6 +858,17 @@ export class VaultManager {
 }
 
 const PasswordSchema = z.string().min(1).max(1024)
+
+/**
+ * Any one of the vault's unlock factors. The reveal accepts whichever the user
+ * actually enrolled — §3.2's whole point is that the DEK is wrapped
+ * independently by each, so no one factor is privileged.
+ */
+const RevealFactorSchema = z.union([
+  z.object({ password: PasswordSchema }),
+  z.object({ credentialId: z.string().min(1), prfSecretHex: z.string().min(1) }),
+  z.object({ keyId: z.string().min(1), keyHex: z.string().min(1) }),
+])
 const HexSchema = z.string().regex(/^[0-9a-fA-F]+$/)
 
 export function vaultNamespace(vault: VaultManager, settings: SettingsStore): NamespaceSpec {
@@ -864,8 +899,8 @@ export function vaultNamespace(vault: VaultManager, settings: SettingsStore): Na
     lock: { handler: () => vault.lock() },
     touch: { handler: () => vault.touch() },
     reveal: {
-      input: z.object({ seedId: z.string(), password: PasswordSchema }),
-      handler: (arg) => vault.reveal(arg as { seedId: string; password: string }),
+      input: z.intersection(z.object({ seedId: z.string() }), RevealFactorSchema),
+      handler: (arg) => vault.reveal(arg as { seedId: string } & RevealFactor),
     },
     changePassword: {
       input: z.object({ current: PasswordSchema, next: PasswordSchema }),
