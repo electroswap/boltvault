@@ -247,7 +247,11 @@ export class ExploreService {
       starred: starred.has(`${chainId}:${r.address.toLowerCase()}`),
       owned: owned.get(r.address.toLowerCase()) ?? 0,
     }))
-    out.sort((a, b) => (a.paysDividends === b.paysDividends ? (b.volume24hEtn ?? 0) - (a.volume24hEtn ?? 0) : a.paysDividends ? -1 : 1))
+    // Rank by the window the caller asked for — the same figure the row shows.
+    // Ranking by `volume24hEtn` ordered every window by yesterday, so a list of
+    // weekly or lifetime volumes came back in the order of a single day's trade.
+    const ranked = (c: CollectionView): number => c.volumeEtn ?? c.volume24hEtn ?? 0
+    out.sort((a, b) => (a.paysDividends === b.paysDividends ? ranked(b) - ranked(a) : a.paysDividends ? -1 : 1))
     return out
   }
 

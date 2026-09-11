@@ -33,6 +33,7 @@ const SEAPORT = A.seaport15 as Hex
 const POOL = '0x9999999999999999999999999999999999999999' as Hex
 const REFERRER = '0x5555555555555555555555555555555555555555' as Hex
 const SELLER = '0x6666666666666666666666666666666666666666' as Hex
+const SPARKS = '0x4444444444444444444444444444444444444444' as Hex
 const config: MarketplaceConfig = marketplaceConfig(52014)
 
 const str = (v: string): Hex => encodeAbiParameters(parseAbiParameters('string'), [v])
@@ -99,7 +100,16 @@ describe('the uber-app on the mainnet mock', () => {
 
   function graphql(query: string, variables: Record<string, unknown>): unknown {
     if (query.startsWith('query TopTokens')) return { topTokens: [{ address: 'NATIVE', symbol: 'ETN', name: 'Electroneum', decimals: 18, standard: 'NATIVE', market: { price: { value: 0.00296 }, volume: { value: 10 } } }, { address: BOLT, symbol: 'BOLT', name: 'BOLT', decimals: 18, standard: 'ERC20', market: { price: { value: price }, volume: { value: 500 } }, project: { safetyLevel: 'VERIFIED' } }] }
-    if (query.startsWith('query TopCollections')) return { topCollections: { edges: [{ node: { collectionId: '0x8888888888888888888888888888888888888888', name: 'Volts', isVerified: true, nftContracts: [{ address: '0x8888888888888888888888888888888888888888', standard: 'ERC721' }], markets: [{ floorPrice: { value: 2 }, volume: { value: 900 } }] } }, { node: { collectionId: LEGENDS, name: 'Electric Legends', isVerified: true, nftContracts: [{ address: LEGENDS, standard: 'ERC721' }], listingFees: [{ payoutAddress: SELLER, basisPoints: 500 }], markets: [{ floorPrice: { value: 40 }, volume: { value: 100 } }] } }] } }
+    if (query.startsWith('query TopCollections'))
+      return {
+        topCollections: {
+          edges: [
+            { node: { collectionId: '0x8888888888888888888888888888888888888888', name: 'Volts', isVerified: true, nftContracts: [{ address: '0x8888888888888888888888888888888888888888', standard: 'ERC721' }], markets: [{ floorPrice: { value: 2 }, volume: { value: 900 } }], window: [{ volume: { value: 5 }, sales: { value: 1 } }] } },
+            { node: { collectionId: SPARKS, name: 'Sparks', isVerified: true, nftContracts: [{ address: SPARKS, standard: 'ERC721' }], markets: [{ floorPrice: { value: 1 }, volume: { value: 10 } }], window: [{ volume: { value: 700 }, sales: { value: 9 } }] } },
+            { node: { collectionId: LEGENDS, name: 'Electric Legends', isVerified: true, nftContracts: [{ address: LEGENDS, standard: 'ERC721' }], listingFees: [{ payoutAddress: SELLER, basisPoints: 500 }], markets: [{ floorPrice: { value: 40 }, volume: { value: 100 } }], window: [{ volume: { value: 50 }, sales: { value: 3 } }] } },
+          ],
+        },
+      }
     if (query.startsWith('query NftCollectionBalances')) return { nftCollectionBalances: { collections: [{ address: LEGENDS, name: 'Electric Legends', logoImage: null, balance: 2 }] } }
     if (query.startsWith('query NftCollections')) return { nftCollections: { edges: [{ node: { collectionId: LEGENDS, name: 'Electric Legends', isVerified: true, nftContracts: [{ address: LEGENDS, standard: 'ERC721' }], listingFees: [{ payoutAddress: SELLER, basisPoints: 500 }], markets: [{ floorPrice: { value: 40 } }] } }] } }
     if (query.startsWith('query NftBalances')) return { nftBalances: { pageInfo: { hasNextPage: false }, edges: legendsOwned.map((id) => ({ node: { quantity: 1, listedMarketplaces: [], ownedAsset: { tokenId: id.toString(), name: `Legend #${id}`, ownerAddress: address, nftContract: { address: LEGENDS, standard: 'ERC721' }, collection: { collectionId: LEGENDS, name: 'Electric Legends', listingFees: [{ payoutAddress: SELLER, basisPoints: 500 }] } } } })) } }
@@ -227,6 +237,10 @@ describe('the uber-app on the mainnet mock', () => {
     expect(tokens.map((t) => t.symbol)).toEqual(['BOLT', 'ETN'])
     const collections = await engine.engine.explore.collections({ chainId: CHAIN, accountId })
     expect(collections[0]).toMatchObject({ name: 'Electric Legends', paysDividends: true, owned: 2, floorEtn: 40 })
+    // Ranked by the window asked for, not by 24h volume: Sparks sold 700 over the
+    // window against Volts' 5, while a day alone would have put Volts first.
+    expect(collections.map((c) => c.name)).toEqual(['Electric Legends', 'Sparks', 'Volts'])
+    expect(collections.map((c) => c.volumeEtn)).toEqual([50, 700, 5])
     const found = await engine.engine.explore.search({ chainId: CHAIN, query: 'bol' })
     expect(found.tokens[0]?.symbol).toBe('BOLT')
   })
