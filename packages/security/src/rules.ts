@@ -4,7 +4,7 @@
  * the §7.10 voice. Fixtures from real drainer payloads live in the tests.
  */
 import { formatUnits, type Hex } from 'viem'
-import { decodeMessage, parseTypedData, type DecodedCall, type ParsedTypedData } from './decode'
+import { decodeCalldata, decodeMessage, parseTypedData, type DecodedCall, type ParsedTypedData } from './decode'
 import { typosquat, hostOf, isScamOrigin } from './origin'
 import { inSet, poisonCheck, sameAddress } from './poison'
 import { isKnownSpender, knownContract } from './registry'
@@ -458,13 +458,47 @@ export const newContract: Rule = ({ request, decoded, chainId, context }) => {
 function recipientOf(decoded: DecodedCall | null): Hex | null {
   if (!decoded) return null
   switch (decoded.kind) {
+    // `ambiguous_transfer_from` is here too: whatever its third word means,
+    // the second is still a recipient, so poisoning and first-time checks
+    // apply exactly as they do to the rest.
     case 'native_transfer':
     case 'erc20_transfer':
     case 'erc721_transfer':
     case 'erc1155_transfer':
+    case 'ambiguous_transfer_from':
       return decoded.to
     default:
       return null
+  }
+}
+
+/**
+ * T1: a batch carrying value, or an inner call the decoder cannot name.
+ *
+ * Multicall3 is a legitimate and common way to do several things at once, so
+ * the batch itself is not suspicious. What is worth saying out loud is that
+ * part of it could not be read, or that the batch moves native value — both
+ * are things the summary line used to hide behind a call count.
+ */
+export const multicallOpaque: Rule = ({ decoded, chainId }) => {
+  if (decoded?.kind !== 'multicall') return null
+  if (decoded.value > 0n)
+    return {
+      code: 'MULTICALL_OPAQUE',
+      severity: 'warn',
+      title: 'This batch also sends funds',
+      detail: 'A batched call that carries value is unusual. Read the list below before approving.',
+    }
+  const opaque = decoded.calls.some((c) => {
+    const inner = decodeCalldata({ chainId, to: c.target, data: c.data, value: 0n })
+    return inner.kind === 'contract_call' && inner.functionName === null
+  })
+  if (!opaque) return null
+  return {
+    code: 'MULTICALL_OPAQUE',
+    severity: 'warn',
+    title: 'Part of this batch could not be read',
+    detail: 'At least one call inside this batch is a function BoltVault does not recognise, so what it does cannot be shown.',
   }
 }
 
@@ -702,6 +736,7 @@ export const ALL_RULES: readonly Rule[] = [
   dappTipsThirdParty,
   urRecipientNotSelf,
   swapMinOutImplausible,
+  multicallOpaque,
   unknownFunction,
   newContract,
   recipientRules,

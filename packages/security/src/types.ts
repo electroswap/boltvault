@@ -52,6 +52,7 @@ export type RiskCode =
   | 'CHAIN_MISMATCH'
   | 'UR_RECIPIENT_NOT_SELF'
   | 'SWAP_MIN_OUT_IMPLAUSIBLE'
+  | 'MULTICALL_OPAQUE'
 
 export interface RiskRule {
   readonly code: RiskCode

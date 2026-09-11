@@ -23,6 +23,34 @@ describe('decodeCalldata', () => {
     const data = encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [SPENDER, 12n] })
     expect(decodeCalldata({ chainId: 52014, to: TOKEN, data, value: 0n })).toEqual({ kind: 'erc20_transfer', token: TOKEN, to: SPENDER, amount: 12n })
   })
+  /*
+    ERC-20 and ERC-721 `transferFrom` share a selector and an argument layout,
+    so the third word is an amount or a token id and nothing in the calldata
+    says which. It used to resolve to ERC-20 whenever the ERC-20 ABI also
+    matched — which it always does — so every NFT transfer was described as a
+    token amount, and item #250000 read as "250,000".
+  */
+  describe('transferFrom is disambiguated by evidence, not by ABI overlap', () => {
+    const data = encodeFunctionData({ abi: ERC721_ABI, functionName: 'transferFrom', args: [ME, SPENDER, 250_000n] })
+
+    it('a known NFT contract is an item', () => {
+      expect(decodeCalldata({ chainId: 52014, to: A.electricLegends as Hex, data, value: 0n })).toMatchObject({ kind: 'erc721_transfer', tokenId: 250_000n })
+    })
+
+    it('a token the caller knows is an amount', () => {
+      expect(decodeCalldata({ chainId: 52014, to: TOKEN, data, value: 0n, standardHint: 'erc20' })).toMatchObject({ kind: 'erc20_transfer', amount: 250_000n, from: ME })
+    })
+
+    it('an unknown contract is admitted to be ambiguous rather than guessed', () => {
+      expect(decodeCalldata({ chainId: 52014, to: TOKEN, data, value: 0n })).toEqual({ kind: 'ambiguous_transfer_from', token: TOKEN, from: ME, to: SPENDER, value: 250_000n })
+    })
+
+    it('safeTransferFrom is ERC-721 only, so it is never ambiguous', () => {
+      const safe = encodeFunctionData({ abi: ERC721_ABI, functionName: 'safeTransferFrom', args: [ME, SPENDER, 7n] })
+      expect(decodeCalldata({ chainId: 52014, to: TOKEN, data: safe, value: 0n })).toMatchObject({ kind: 'erc721_transfer', tokenId: 7n })
+    })
+  })
+
   it('reads setApprovalForAll', () => {
     const data = encodeFunctionData({ abi: ERC721_ABI, functionName: 'setApprovalForAll', args: [SPENDER, true] })
     expect(decodeCalldata({ chainId: 52014, to: TOKEN, data, value: 0n })).toEqual({ kind: 'approval_for_all', token: TOKEN, operator: SPENDER, approved: true })

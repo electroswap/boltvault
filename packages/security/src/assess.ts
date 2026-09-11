@@ -54,11 +54,37 @@ function confirmationWord(origin: string): string {
 }
 
 export function assess(input: AssessmentInput, rules?: readonly Rule[]): Assessment {
-  const decoded = input.request.kind === 'transaction' ? decodeCalldata({ chainId: input.request.tx.chainId, to: input.request.tx.to, data: input.request.tx.data, value: input.request.tx.value }) : null
+  /*
+    `transferFrom` is the same selector and layout in ERC-20 and ERC-721, so
+    the decoder needs outside evidence to tell an amount from a token id. The
+    context already carries the chain's ERC-20 universe — a target that is in
+    it is a token, and the decoder can stop guessing. Anything else falls
+    through to `ambiguous_transfer_from`, which says so on the sheet.
+  */
+  const hint = input.request.kind === 'transaction' && input.request.tx.to && input.context.tokens[input.request.tx.to.toLowerCase()] ? ('erc20' as const) : null
+  const decoded = input.request.kind === 'transaction' ? decodeCalldata({ chainId: input.request.tx.chainId, to: input.request.tx.to, data: input.request.tx.data, value: input.request.tx.value, standardHint: hint }) : null
   const typed = input.request.kind === 'typed_data' ? parseTypedData(input.request.typedData) : null
   const simulation = input.simulation ?? null
   const ruleInput = { origin: input.origin, chainId: input.chainId, account: input.account, request: input.request, decoded, typed, context: input.context, simulation }
-  const found = runRules({ ...ruleInput, simulation: null }, rules)
+  const found = [...runRules({ ...ruleInput, simulation: null }, rules)]
+  /*
+    A batch is assessed by what is inside it.
+
+    Every rule reads `decoded`, and for a Multicall3 call that is the batch
+    itself — so an unlimited approval to an attacker raised nothing at all as
+    long as it was wrapped in `aggregate3`. Wrapping is not a mitigation, so
+    the inner calls are run through the same rules and their findings merged.
+    One level deep, matching the statements, and de-duplicated by code so a
+    batch of ten approvals reads as one finding rather than ten.
+  */
+  if (decoded?.kind === 'multicall') {
+    for (const c of decoded.calls.slice(0, 10)) {
+      const inner = decodeCalldata({ chainId: input.chainId, to: c.target, data: c.data, value: 0n })
+      if (inner.kind === 'multicall') continue
+      for (const r of runRules({ ...ruleInput, decoded: inner, simulation: null }, rules))
+        if (!found.some((f) => f.code === r.code)) found.push(r)
+    }
+  }
   let severity: Severity = 'info'
   for (const r of found) severity = maxSeverity(severity, r.severity)
   // Simulation-derived rules can only add.

@@ -1,7 +1,7 @@
 import { ELECTRONEUM_ADDRESSES } from '@boltvault/chains'
 import { encodeAbiParameters, encodeFunctionData, maxUint256, parseAbiParameters, type Hex } from 'viem'
 import { describe, expect, it } from 'vitest'
-import { ERC20_ABI, ERC721_ABI, UNIVERSAL_ROUTER_ABI } from '../src/abis'
+import { ERC20_ABI, ERC721_ABI, MULTICALL3_ABI, UNIVERSAL_ROUTER_ABI } from '../src/abis'
 import { assess, emptyContext, type AssessmentInput } from '../src/assess'
 import { UR_COMMAND } from '../src/ur'
 import type { SignRequest } from '../src/types'
@@ -164,6 +164,24 @@ describe('transactions', () => {
     const text = a.statements.map((s) => s.text).join('\n')
     expect(text).toContain('0x2222…2222')
     expect(text.toLowerCase()).toContain('send everything left')
+  })
+
+  /*
+    "Run 3 calls through Multicall3" was the same sentence whether the batch
+    checked three balances or granted three unlimited approvals: the inner
+    calldata was decoded and then thrown away.
+  */
+  it('a batch says what is inside it, and an approval within it is assessed', () => {
+    const approve = encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [UNKNOWN, maxUint256] })
+    const data = encodeFunctionData({
+      abi: MULTICALL3_ABI,
+      functionName: 'aggregate3',
+      args: [[{ target: TOKEN, allowFailure: false, callData: approve }]],
+    })
+    const a = run(tx(A.multicall3 as Hex, data))
+    const text = a.statements.map((s) => s.text).join('\n')
+    expect(text).toContain('unlimited')
+    expect(codes(a)).toContain('APPROVE_UNKNOWN_SPENDER')
   })
 
   it('a router call that pays the user is not flagged', () => {

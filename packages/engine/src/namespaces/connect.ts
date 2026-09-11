@@ -6,7 +6,7 @@
  * peer. The peer counts as verified only when Reown's Verify said VALID —
  * otherwise the firewall shows ORIGIN_UNVERIFIED on every signature.
  */
-import { buildNamespaces, caipChain, chainIdFromCaip, peerOrigin, WC_REASON, type ActiveSession, type SessionProposal, type SessionRequest, type WalletKitLike } from '@boltvault/connect'
+import { buildNamespaces, caipChain, chainIdFromCaip, WC_REASON, type ActiveSession, type SessionProposal, type SessionRequest, type WalletKitLike } from '@boltvault/connect'
 import { z } from 'zod'
 import { EngineError } from '../errors'
 import type { EventBus, NamespaceSpec } from '../host'

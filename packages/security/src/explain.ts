@@ -4,7 +4,7 @@
  * panel. Plain language, the closed verb set, no jargon.
  */
 import { formatUnits, type Hex } from 'viem'
-import { decodeMessage, type DecodedCall, type ParsedTypedData } from './decode'
+import { decodeCalldata, decodeMessage, type DecodedCall, type ParsedTypedData } from './decode'
 import { knownContract } from './registry'
 import { UR_MSG_SENDER, UR_ROUTER_SELF, type UrCommand } from './ur'
 import type { AssessmentContext, SignRequest, Simulation, Statement } from './types'
@@ -108,15 +108,40 @@ function siteName(origin: string): string {
   }
 }
 
-export function explainCall(decoded: DecodedCall, ctx: AssessmentContext, chainId: number, origin: string): Statement[] {
+/**
+ * @param depth How many Multicall3 layers deep we already are. One level of
+ *   expansion is enough to see an approval hidden in a batch; expanding
+ *   further lets a batch of batches fill the sheet.
+ */
+export function explainCall(decoded: DecodedCall, ctx: AssessmentContext, chainId: number, origin: string, depth = 0): Statement[] {
   const site = siteName(origin)
   switch (decoded.kind) {
     case 'native_transfer':
       return [{ text: `Send ${amount(ctx, 'native', decoded.value, chainId)} to ${who(ctx, chainId, decoded.to)}`, tone: 'out' }]
     case 'deploy':
       return [{ text: 'Deploy a new contract', tone: 'neutral' }]
-    case 'erc20_transfer':
-      return [{ text: `Send ${amount(ctx, decoded.token, decoded.amount, chainId)} to ${who(ctx, chainId, decoded.to)}`, tone: 'out' }]
+    case 'erc20_transfer': {
+      // `transferFrom` moves someone else's balance; say whose, rather than
+      // describing it as a plain send from the signer.
+      const src = decoded.from
+      const thirdParty = src !== undefined && !ctx.own.some((a) => a.toLowerCase() === src.toLowerCase())
+      return [
+        thirdParty && src !== undefined
+          ? { text: `Move ${amount(ctx, decoded.token, decoded.amount, chainId)} from ${who(ctx, chainId, src)} to ${who(ctx, chainId, decoded.to)}`, tone: 'out' }
+          : { text: `Send ${amount(ctx, decoded.token, decoded.amount, chainId)} to ${who(ctx, chainId, decoded.to)}`, tone: 'out' },
+      ]
+    }
+    case 'ambiguous_transfer_from':
+      return [
+        {
+          text: `Move ${decoded.value.toString()} from ${who(ctx, chainId, decoded.from)} to ${who(ctx, chainId, decoded.to)} using ${who(ctx, chainId, decoded.token)}`,
+          tone: 'out',
+        },
+        {
+          text: 'BoltVault cannot tell whether that number is a token amount or an item id — this contract is not one it knows.',
+          tone: 'warn',
+        },
+      ]
     case 'erc20_approve':
       if (decoded.amount === 0n) return [{ text: `Revoke ${who(ctx, chainId, decoded.spender)}'s allowance for ${who(ctx, chainId, decoded.token)}`, tone: 'in' }]
       return [{ text: decoded.unlimited ? `Allow ${who(ctx, chainId, decoded.spender)} to move an unlimited amount of ${who(ctx, chainId, decoded.token)}` : `Allow ${who(ctx, chainId, decoded.spender)} to move up to ${amount(ctx, decoded.token, decoded.amount, chainId)}`, tone: decoded.unlimited ? 'warn' : 'neutral' }]
@@ -136,8 +161,32 @@ export function explainCall(decoded: DecodedCall, ctx: AssessmentContext, chainI
       return [{ text: `Wrap ${amount(ctx, 'native', decoded.amount, chainId)}`, tone: 'neutral' }]
     case 'unwrap':
       return [{ text: `Unwrap ${amount(ctx, decoded.token, decoded.amount, chainId)}`, tone: 'neutral' }]
-    case 'multicall':
-      return [{ text: `Run ${decoded.calls.length} calls through Multicall3`, tone: 'neutral' }]
+    case 'multicall': {
+      /*
+        Say what the batch does, not how many things it does.
+
+        "Run 3 calls through Multicall3" is the same sentence whether the batch
+        checks three balances or grants three unlimited approvals, and the
+        inner calldata was decoded and then thrown away. Each entry is decoded
+        and explained here, one level deep — deep enough for the shape that
+        matters, shallow enough that a batch of batches cannot be used to
+        exhaust the sheet.
+      */
+      const out: Statement[] = []
+      if (decoded.value > 0n) out.push({ text: `Send ${amount(ctx, 'native', decoded.value, chainId)} to ${who(ctx, chainId, decoded.to)}`, tone: 'out' })
+      if (depth >= 1) {
+        out.push({ text: `Run ${decoded.calls.length} more calls through Multicall3 — not expanded here`, tone: 'warn' })
+        return out
+      }
+      const shown = decoded.calls.slice(0, 10)
+      shown.forEach((c, i) => {
+        const inner = decodeCalldata({ chainId, to: c.target, data: c.data, value: 0n })
+        for (const s of explainCall(inner, ctx, chainId, origin, depth + 1)) out.push({ ...s, text: `${i + 1}. ${s.text}` })
+      })
+      if (decoded.calls.length > shown.length) out.push({ text: `+${decoded.calls.length - shown.length} more calls in this batch`, tone: 'warn' })
+      if (out.length === 0) out.push({ text: `Run ${decoded.calls.length} calls through Multicall3`, tone: 'neutral' })
+      return out
+    }
     case 'farm_deposit': {
       const parts = [`Deposit into farm #${decoded.farmId.toString()}`]
       if (decoded.value > 0n) parts.push(`with ${amount(ctx, 'native', decoded.value, chainId)}`)

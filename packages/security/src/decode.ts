@@ -22,6 +22,14 @@ export type DecodedCall =
   | { readonly kind: 'erc20_transfer'; readonly token: Hex; readonly to: Hex; readonly amount: bigint; readonly from?: Hex }
   | { readonly kind: 'erc20_approve'; readonly token: Hex; readonly spender: Hex; readonly amount: bigint; readonly unlimited: boolean }
   | { readonly kind: 'erc721_transfer'; readonly token: Hex; readonly from: Hex; readonly to: Hex; readonly tokenId: bigint }
+  /**
+   * `transferFrom(address,address,uint256)` on a contract the wallet cannot
+   * place. ERC-20 and ERC-721 share the selector and the argument layout, so
+   * the third word is either an amount or a token id and nothing in the
+   * calldata says which. Guessing renders one as the other — an item id of
+   * 250000 reads as 250,000 tokens — so this kind says so instead.
+   */
+  | { readonly kind: 'ambiguous_transfer_from'; readonly token: Hex; readonly from: Hex; readonly to: Hex; readonly value: bigint }
   | { readonly kind: 'erc721_approve'; readonly token: Hex; readonly to: Hex; readonly tokenId: bigint }
   | { readonly kind: 'approval_for_all'; readonly token: Hex; readonly operator: Hex; readonly approved: boolean }
   | { readonly kind: 'erc1155_transfer'; readonly token: Hex; readonly from: Hex; readonly to: Hex; readonly ids: readonly bigint[]; readonly amounts: readonly bigint[] }
@@ -30,7 +38,7 @@ export type DecodedCall =
   | { readonly kind: 'wrap'; readonly token: Hex; readonly amount: bigint }
   | { readonly kind: 'unwrap'; readonly token: Hex; readonly amount: bigint }
   | { readonly kind: 'universal_router'; readonly router: Hex; readonly decoded: DecodedUniversalRouter; readonly value: bigint }
-  | { readonly kind: 'multicall'; readonly to: Hex; readonly calls: ReadonlyArray<{ target: Hex; data: Hex }> }
+  | { readonly kind: 'multicall'; readonly to: Hex; readonly value: bigint; readonly calls: ReadonlyArray<{ target: Hex; data: Hex }> }
   | { readonly kind: 'limit_order'; readonly manager: Hex; readonly action: 'submit' | 'close'; readonly tokenIn: Hex | null; readonly tokenOut: Hex | null; readonly amountIn: bigint; readonly minOut: bigint; readonly recipient: Hex | null; readonly durationSeconds: bigint; readonly orderIds: readonly bigint[]; readonly withPermit: boolean }
   | { readonly kind: 'farm_deposit'; readonly farm: Hex; readonly farmId: bigint; readonly amount0: bigint; readonly amount1: bigint; readonly amountBolt: bigint; readonly value: bigint }
   | { readonly kind: 'farm_withdraw'; readonly farm: Hex; readonly farmId: bigint; readonly liquidity: bigint; readonly asNative: boolean }
@@ -47,6 +55,11 @@ export interface DecodeCallInput {
   readonly to: Hex | null
   readonly data: Hex
   readonly value: bigint
+  /**
+   * What the caller already knows the target to be, when it knows. Used only
+   * to break the ERC-20/ERC-721 `transferFrom` tie; absent means "say so".
+   */
+  readonly standardHint?: 'erc20' | 'erc721' | null
 }
 
 function tryDecode(abi: typeof ERC20_ABI | typeof ERC721_ABI | typeof ERC1155_ABI | typeof PERMIT2_ABI | typeof WETH_ABI | typeof MULTICALL3_ABI | typeof LIMIT_ORDERS_ABI | typeof FARM_ABI | typeof LAUNCHPAD_ABI | typeof SEAPORT_ABI | typeof DIVIDENDS_ABI | typeof MINTER_ABI | typeof WARP_ROUTER_ABI, data: Hex): { functionName: string; args: readonly unknown[] } | null {
@@ -149,7 +162,7 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
     const m = tryDecode(MULTICALL3_ABI, data)
     if (m) {
       const [calls] = m.args as [ReadonlyArray<{ target: Hex; callData: Hex }>]
-      return { kind: 'multicall', to, calls: calls.map((c) => ({ target: c.target, data: c.callData })) }
+      return { kind: 'multicall', to, value, calls: calls.map((c) => ({ target: c.target, data: c.callData })) }
     }
   }
 
@@ -177,11 +190,20 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
     }
     if (e721.functionName === 'transferFrom' || e721.functionName === 'safeTransferFrom') {
       const [from, dest, tokenId] = e721.args as [Hex, Hex, bigint]
-      // ERC-20 transferFrom shares the selector with ERC-721 transferFrom; both read the same way here.
-      if (e721.functionName === 'transferFrom' && e20?.functionName === 'transferFrom') {
-        return { kind: 'erc20_transfer', token: to, from, to: dest, amount: tokenId }
-      }
-      return { kind: 'erc721_transfer', token: to, from, to: dest, tokenId }
+      // `safeTransferFrom` is ERC-721 only — no ambiguity there.
+      if (e721.functionName === 'safeTransferFrom') return { kind: 'erc721_transfer', token: to, from, to: dest, tokenId }
+      /*
+        `transferFrom(address,address,uint256)` is the same selector and the
+        same layout in both standards, so the third word is an amount or a
+        token id and the calldata cannot say which. This used to resolve to
+        ERC-20 whenever the ERC-20 ABI also matched — which it always does —
+        so every NFT transfer was described as a token amount, and item #250000
+        read as "250,000". Decide from evidence, and when there is none, say so
+        rather than guess.
+      */
+      if (input.standardHint === 'erc721' || known?.role === 'nft') return { kind: 'erc721_transfer', token: to, from, to: dest, tokenId }
+      if (input.standardHint === 'erc20') return { kind: 'erc20_transfer', token: to, from, to: dest, amount: tokenId }
+      return { kind: 'ambiguous_transfer_from', token: to, from, to: dest, value: tokenId }
     }
     if (e721.functionName === 'approve') {
       const [dest, tokenId] = e721.args as [Hex, bigint]
