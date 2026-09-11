@@ -98,13 +98,14 @@ test('home balances, send to a broadcast, receive, allowances revoke', async () 
     await expect(popup.getByTestId('accessory-pending')).toBeHidden({ timeout: 20_000 })
 
     // Activity lists it as confirmed.
-    await popup.getByTestId('tabs').getByText('Activity').click()
+    // The dock is gone: Activity is a tile on Home.
+    await popup.getByTestId('key-activity').click()
     await expect(popup.getByTestId('activity')).toBeVisible()
     await expect(popup.getByTestId('activity')).toContainText('Send 2.5 FIX', { timeout: 10_000 })
     await expect(popup.getByTestId('activity')).toContainText('Confirmed')
 
     // Allowances: the unlimited Permit2 allowance is found; Revoke goes through the sheet.
-    await popup.getByTestId('tabs').getByText('Home').click()
+    await popup.getByTestId('rail-home').click()
     await popup.getByTestId('settings-key').click()
     await popup.getByTestId('settings-approvals').click()
     await expect(popup.getByTestId('allowances')).toBeVisible()

@@ -5,10 +5,10 @@
  * technical details, reorders, hides or removes; the header's Add opens the
  * four ways in. Nothing technical is printed on a row — it lives in Details.
  */
-import { Body, Column, Dot, Icon, IconButton, Input, Key, Pill, Plate, Pressable, Row, ScrollView, Signature, metrics, paint, shortAddress } from '@boltvault/ui'
+import { Body, Column, Dot, Icon, IconButton, Input, Key, Pill, Plate, Pressable, Row, ScrollView, metrics, paint } from '@boltvault/ui'
 import type { AccountView, SeedView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
-import { AccountRow, kindLabel, useAccountTotal } from '../components/accounts/AccountRow'
+import { AccountRow } from '../components/accounts/AccountRow'
 import { AccountDetailsSheet, ConfirmSheet, MenuSheet, RenameSheet, RevealSheet, type MenuItem } from '../components/accounts/AccountSheets'
 import { AddAccountSheet } from '../components/accounts/AddAccountSheet'
 import { PageHeader } from '../components/PageHeader'
@@ -36,7 +36,6 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
   const [ledger, setLedger] = useState<{ available: boolean; devices: ReadonlyArray<{ deviceId: string; model: string }> } | null>(null)
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const seeds = vault?.seeds ?? []
-  const activeTotal = useAccountTotal(active?.id ?? '')
 
   // The Ledger's presence, for the hero's status line; only a full page can ask the browser for the device.
   useEffect(() => {
@@ -143,65 +142,33 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
     <Column flex={1}>
       <ScrollView contentContainerStyle={{ padding: inset, gap: 12 }} testID="accounts">
         <PageHeader title={t({ id: 'accounts.title', message: 'Accounts' })} right={<Pill label={t({ id: 'acct.add', message: 'Add' })} icon={<Icon name="plus" size={14} color={paint.arc} />} tone="arc" onPress={() => setSheet({ kind: 'add' })} testID="add-account-open" />} />
-        {active ? (
-          <Plate role="raised" gap="$2" testID="current-account">
-            {/*
-              Two rows, not one. The identity and its menu sit together; the
-              money sits under them. Four things across a 320 px popup row —
-              signature, name, total, menu — do not fit, and adding the menu to
-              the old single row pushed the total over the "Active" mark.
-            */}
-            <Row gap="$3" alignItems="center">
-              <Signature address={active.address} size={40} />
-              <Column flex={1} minWidth={0} alignItems="flex-start">
-                <Row gap="$2" alignItems="center" flexShrink={1} minWidth={0}>
-                  <Body size="title" numberOfLines={1} flexShrink={1}>
-                    {active.label}
-                  </Body>
-                  <Row gap={4} alignItems="center" flexShrink={0}>
-                    <Dot color={paint.arc} size={6} />
-                    <Body tone="arc" size="caption">
-                      {t({ id: 'acct.active', message: 'Active' })}
-                    </Body>
-                  </Row>
-                </Row>
-                <Pressable onPress={() => copy(active)} accessibilityRole="button" accessibilityLabel={t({ id: 'acct.copy', message: 'Copy address' })} style={{ minHeight: 44, marginVertical: -11, justifyContent: 'center', alignSelf: 'flex-start' }} testID="current-copy">
-                  <Row gap={4} alignItems="center">
-                    <Body tone={copiedId === active.id ? 'arc' : 'mute'} size="caption" fontVariant={['tabular-nums']}>
-                      {copiedId === active.id ? t({ id: 'copied', message: 'Copied' }) : shortAddress(active.address)}
-                    </Body>
-                    <Icon name={copiedId === active.id ? 'check' : 'copy'} size={12} color={copiedId === active.id ? paint.arc : paint.mute} />
-                  </Row>
-                </Pressable>
-              </Column>
-              <IconButton icon="more" label={t({ id: 'acct.menu', message: 'Account options' })} onPress={() => setSheet({ kind: 'menu', account: active })} testID="current-menu" />
-            </Row>
-            <Row justifyContent="space-between" alignItems="center" gap="$2">
-              <Body tone="mute" size="caption" numberOfLines={1} flexShrink={1}>
-                {kindLabel(active)}
-              </Body>
-              {activeTotal ? (
-                <Body fontWeight="600" fontVariant={['tabular-nums']} flexShrink={0} testID="current-total">
-                  {activeTotal}
+        {/*
+          The active account is NOT lifted out of its group.
+
+          It used to be a plate of its own above the list, and the group it
+          belonged to then rendered without it — so a fresh wallet with one
+          account showed "Seed 1" as an empty heading under a card. Owner:
+          "leave the active wallet in its parent, and just have the 'Active'
+          indicator present next to the account that is active", which
+          `AccountRow` has always drawn. What the plate carried that a row does
+          not is the Ledger's connection state, and that keeps a strip here.
+        */}
+        {active?.kind === 'ledger' ? (
+          <Plate role="raised" gap="$2" testID="current-hardware">
+            <Row gap="$2" alignItems="center" justifyContent="space-between" minHeight={36}>
+              <Row gap={6} alignItems="center" flexShrink={1}>
+                <Dot color={ledger && ledger.devices.length > 0 ? paint.surge : paint.mute} size={6} />
+                <Body tone="mute" size="caption" numberOfLines={1}>
+                  {ledger && ledger.devices.length > 0 ? t({ id: 'acct.ledger.on', message: 'Ledger connected' }) : t({ id: 'acct.ledger.off', message: 'Ledger is not connected' })}
                 </Body>
-              ) : null}
-            </Row>
-            {active.kind === 'ledger' ? (
-              <Row gap="$2" alignItems="center" justifyContent="space-between" borderTopWidth={1} borderTopColor="$edge" paddingTop={8} minHeight={36} testID="current-hardware">
-                <Row gap={6} alignItems="center" flexShrink={1}>
-                  <Dot color={ledger && ledger.devices.length > 0 ? paint.surge : paint.mute} size={6} />
-                  <Body tone="mute" size="caption" numberOfLines={1}>
-                    {ledger && ledger.devices.length > 0 ? t({ id: 'acct.ledger.on', message: 'Ledger connected' }) : t({ id: 'acct.ledger.off', message: 'Ledger is not connected' })}
-                  </Body>
-                </Row>
-                {!(ledger && ledger.devices.length > 0) ? <Pill label={t({ id: 'acct.ledger.connect', message: 'Connect' })} tone="arc" size="sm" onPress={connectLedger} testID="current-connect" /> : null}
               </Row>
-            ) : null}
+              {!(ledger && ledger.devices.length > 0) ? <Pill label={t({ id: 'acct.ledger.connect', message: 'Connect' })} tone="arc" size="sm" onPress={connectLedger} testID="current-connect" /> : null}
+            </Row>
           </Plate>
         ) : null}
         {accounts.length > 6 ? <Input value={query} onChange={setQuery} placeholder={t({ id: 'acct.search', message: 'Search accounts' })} testID="accounts-search" /> : null}
         {groups.map((g) => {
-          const visible = g.items.filter((a) => !a.hidden && a.id !== active?.id && matches(a))
+          const visible = g.items.filter((a) => !a.hidden && matches(a))
           const hidden = g.items.filter((a) => a.hidden && matches(a))
           if (q && visible.length === 0 && hidden.length === 0) return null
           const open = showHidden[g.id] ?? false

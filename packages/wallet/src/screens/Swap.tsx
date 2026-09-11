@@ -64,7 +64,6 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   const { flow: anyFlow, setActive, dismiss } = useSwapFlow()
   const flow = anyFlow && (anyFlow.kind === 'swap' || anyFlow.kind === 'limit' || anyFlow.kind === 'limit_cancel') ? anyFlow : null
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
-  const wide = body === 'extension-tab'
   const [mode, setMode] = useState<'swap' | 'limit'>('swap')
   // Limit orders are a build feature (off by default); without it the screen is Swap only.
   const [limitOn, setLimitOn] = useState(false)
@@ -332,7 +331,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
         {/* Title row: Swap (or Swap · Limit) and the slippage pill (owner item W2). */}
         {/* `metrics.header` so the home key below fits without moving anything. */}
         <Row justifyContent="space-between" alignItems="center" minHeight={metrics.header} gap="$2">
-          <HomeKey show={wide} />
+          <HomeKey />
           {limitOn ? (
             <Column width={180}>
               <Segmented

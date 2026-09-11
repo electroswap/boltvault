@@ -317,10 +317,21 @@ export async function createFixtureEngine(scenario: FixtureScenario, options: Fi
       schedule: { input: z.object({}).passthrough(), handler: async () => schedule },
       addresses: { input: z.object({}).passthrough(), handler: async () => ({ sink: SINK, schedule: schedule.address }) },
     })
-    // M7: verified Hyperlane corridors from Electroneum, a quote, and one USDC transfer mid-flight.
+    // M7: verified Hyperlane corridors, a quote, and one USDC transfer mid-flight.
     const USDC_ETN = '0x3187deAd7A2Bd6770F5Fe81495D1B715926AAe6e'
     const USDT_ETN = '0x48E722f1458b253c2FB0E573F939318D7Dbd54e7'
+    const USDC_ETH = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    /*
+      Corridors in BOTH directions.
+
+      They only ever ran outward from Electroneum here, which was fine while the
+      screen opened there — and the moment the default corridor became Ethereum
+      USDC → Electroneum (the direction people actually arrive in), the fixture
+      answered "no Hyperlane corridor starts on this chain" and the harness
+      screenshotted an error state as the bridge's resting face.
+    */
     const routes: BridgeRoute[] = [
+      { symbol: 'USDC', fromChainId: 1, toChainId: 52014, token: USDC_ETH, router: USDC_ETH, standard: 'collateral', decimals: 6, verified: true, reason: null },
       { symbol: 'USDC', fromChainId: 52014, toChainId: 1, token: USDC_ETN, router: USDC_ETN, standard: 'synthetic', decimals: 6, verified: true, reason: null },
       { symbol: 'USDC', fromChainId: 52014, toChainId: 8453, token: USDC_ETN, router: USDC_ETN, standard: 'synthetic', decimals: 6, verified: true, reason: null },
       { symbol: 'USDC', fromChainId: 52014, toChainId: 43114, token: USDC_ETN, router: USDC_ETN, standard: 'synthetic', decimals: 6, verified: true, reason: null },

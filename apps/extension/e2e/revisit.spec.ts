@@ -17,12 +17,31 @@
  * 80 ms is exactly the flicker being reported and a settled assertion cannot
  * see it.
  */
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { launchWithExtension } from './extension'
 import { createVault, engineCall } from './flows'
 
 /** Anything that means "this screen has nothing to show yet". */
 const LOADERS = ['home-loading', 'screen-loading', 'rack-loading', 'approval-loading']
+
+/**
+ * One lap: Home → a root → back to Home.
+ *
+ * The dock is gone, so "click tab-swap" is no longer a thing you can do —
+ * Swap and Activity are tiles on Home and carry a home key of their own.
+ * The point of the test is unchanged: leave a screen, come back, and see
+ * whether it rebuilds itself from nothing.
+ */
+async function lap(p: Page, name: 'swap' | 'activity'): Promise<void> {
+  await p.getByTestId(`key-${name}`).click({ timeout: 15_000 }).catch(() => undefined)
+  await p.waitForTimeout(1_500)
+  // The first-swap coach is an overlay over the screen, and the way home is
+  // now inside the screen rather than on a dock beneath it — so it has to go
+  // first. It only appears once.
+  await p.getByTestId('swap-coach-ok').click({ timeout: 2_000 }).catch(() => undefined)
+  await p.getByTestId('rail-home').click({ timeout: 15_000 }).catch(() => undefined)
+  await p.waitForTimeout(1_500)
+}
 
 test('revisiting a tab never shows a loader again', async () => {
   test.setTimeout(180_000)
@@ -43,13 +62,8 @@ test('revisiting a tab never shows a loader again', async () => {
 
     // Lap one: every tab's first visit. A loader here is legitimate — the
     // chunk really is arriving and the screen really has nothing yet.
-    for (const name of ['swap', 'activity', 'home'] as const) {
-      await p
-        .getByTestId(`tab-${name}`)
-        .click({ timeout: 15_000 })
-        .catch(() => undefined)
-      await p.waitForTimeout(1_500)
-    }
+    await lap(p, 'swap')
+    await lap(p, 'activity')
 
     // Only now start watching. Everything from here is a revisit.
     await p.evaluate((loaders) => {
@@ -65,17 +79,13 @@ test('revisiting a tab never shows a loader again', async () => {
     // Two more laps of revisits.
     for (const round of [0, 1]) {
       void round
-      for (const name of ['swap', 'activity', 'home'] as const) {
-        await p
-          .getByTestId(`tab-${name}`)
-          .click({ timeout: 15_000 })
-          .catch(() => undefined)
-        await p.waitForTimeout(1_500)
-      }
+      await lap(p, 'swap')
+      await lap(p, 'activity')
     }
 
     // Returning to Home must show the total straight away, never a dash.
-    await p.getByTestId('tab-swap').click({ timeout: 15_000 }).catch(() => undefined)
+    await p.getByTestId('key-swap').click({ timeout: 15_000 }).catch(() => undefined)
+    await p.getByTestId('swap-coach-ok').click({ timeout: 2_000 }).catch(() => undefined)
     await p.waitForTimeout(1_200)
     await p.evaluate(() => {
       const w = window as unknown as { __dash: boolean }
@@ -88,7 +98,7 @@ test('revisiting a tab never shows a loader again', async () => {
       }
       requestAnimationFrame(tick)
     })
-    await p.getByTestId('tab-home').click({ timeout: 15_000 }).catch(() => undefined)
+    await p.getByTestId('rail-home').click({ timeout: 15_000 }).catch(() => undefined)
     await p.waitForTimeout(2_500)
     const dashed = await p.evaluate(() => (window as unknown as { __dash: boolean }).__dash)
     console.log(`balance showed a dash on return: ${dashed}`)

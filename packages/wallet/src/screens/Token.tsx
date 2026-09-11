@@ -223,6 +223,16 @@ export function Token({ chainId, address, body }: { chainId: number; address: st
           </Row>
         </Plate>
 
+        {/*
+          Three verbs, not four.
+
+          A fourth key took the row below the width a label needs: on a narrow
+          body "Receive" broke its last letter onto a second line, which the
+          owner photographed. Bridging is also not the same kind of act as the
+          other three — it is a corridor to another chain, and it now says so on
+          a line of its own below, where there is room to name the bridge that
+          carries it.
+        */}
         <Row gap="$2" testID="token-keys">
           <Column flex={1}>
             <Key label={t({ id: 'key.send', message: 'Send' })} kind="secondary" size="compact" onPress={() => router.navigate('send', { token: address, chainId })} testID="token-send" />
@@ -235,12 +245,20 @@ export function Token({ chainId, address, body }: { chainId: number; address: st
               <Key label={t({ id: 'key.swap', message: 'Swap' })} kind="secondary" size="compact" onPress={() => router.setTab('swap', isNative ? undefined : { tokenIn: 'native', tokenOut: address })} testID="token-swap" />
             </Column>
           ) : null}
-          {bridgeable ? (
-            <Column flex={1}>
-              <Key label={t({ id: 'key.bridge', message: 'Bridge' })} kind="secondary" size="compact" onPress={() => router.navigate('bridge', { chainId, token: address })} testID="token-bridge" />
-            </Column>
-          ) : null}
         </Row>
+
+        {bridgeable ? (
+          <Plate role="recessed" paddingVertical={6} paddingHorizontal="$3" testID="token-bridgeline">
+            <Row alignItems="center" gap="$2">
+              <Column flex={1} minWidth={0}>
+                <Body tone="mute" size="caption">
+                  {t({ id: 'token.bridge.note', message: 'The same asset on other chains, over the Hyperlane Nexus bridge.' })}
+                </Body>
+              </Column>
+              <Key label={t({ id: 'key.bridge', message: 'Bridge' })} kind="secondary" size="compact" onPress={() => router.navigate('bridge', { chainId, token: address })} testID="token-bridge" />
+            </Row>
+          </Plate>
+        ) : null}
 
         {/* Market */}
         <Column gap="$2" testID="token-market">

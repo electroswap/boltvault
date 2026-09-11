@@ -1,5 +1,5 @@
 /** Backup quiz for a seed that was created but not confirmed (the gate, §8.1). */
-import { Backdrop, Body, Column, EsWordmark, Icon, Input, Key, Plate, Row, ScrollView, WordGrid, metrics, paint, useWindowDimensions } from '@boltvault/ui'
+import { Backdrop, Body, Column, EsWordmark, Icon, IconButton, Input, Key, Plate, Row, ScrollView, WordGrid, metrics, paint, useWindowDimensions } from '@boltvault/ui'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
@@ -50,9 +50,18 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
     <Column flex={1} backgroundColor="$void" testID="backup">
       <Backdrop scene={scene} width={width} height={height} reducedMotion={reducedMotion} />
       <ScrollView style={{ zIndex: 1 }} contentContainerStyle={{ padding: metrics.insetWide, gap: 16 }}>
-        <Row gap="$2">
+        {/*
+          A way out. With no dock (see TabShell) a screen without Back is a room
+          without a door, and this one is reached from the Accounts sheet by
+          anyone who wanted to look — not only by the gate. It is deliberately
+          NOT shown once the words are on screen: leaving mid-reveal with the
+          phrase still in state is the one exit worth making people think about,
+          and `useSecretGuard` clears it on unmount either way.
+        */}
+        <Row gap="$2" alignItems="center">
+          {words ? null : <IconButton icon="back" label={t({ id: 'back', message: 'Back' })} onPress={() => router.back()} testID="backup-back" />}
           <Icon name="lock" size={18} color={paint.mute} />
-          <Body size="title">{t({ id: 'backup.title', message: 'Back up your recovery phrase' })}</Body>
+          <Body size="title" flexShrink={1}>{t({ id: 'backup.title', message: 'Back up your recovery phrase' })}</Body>
         </Row>
         {done ? (
           <Column gap="$3">

@@ -24,6 +24,9 @@ import { swapFlowStore, useSwapFlow } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
 
 const ETN = 52014
+/** Ethereum mainnet — where the USDC most people are bridging in actually is. */
+const ETHEREUM = 1
+const DEFAULT_ASSET = 'USDC' as const
 type Origin = { chainId: number; enabled: boolean; symbols: Array<'USDC' | 'USDT'> }
 
 export interface BridgeProps {
@@ -66,7 +69,16 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
   const { flow, dismiss } = useActiveFlow(['bridge'])
   const [chains, setChains] = useState<ChainView[]>([])
   const [origins, setOrigins] = useState<Origin[]>([])
-  const [fromChain, setFromChain] = useState(initialChain ?? ETN)
+  /*
+    The default corridor is Ethereum USDC → Electroneum USDC.
+
+    It opened on Electroneum and took whatever route happened to be first,
+    which is the corridor nobody arrives wanting: the reason to open this screen
+    is to bring value IN. Owner: "make the default bridge route Ethereum USDC to
+    Electroneum USDC." Coming from a token screen still wins — `initialChain`
+    and `initialToken` are that path, and they say what you were looking at.
+  */
+  const [fromChain, setFromChain] = useState(initialChain ?? ETHEREUM)
   const [preferredTo, setPreferredTo] = useState<number | null>(null)
   const [routes, setRoutes] = useState<BridgeRoute[]>([])
   const [symbol, setSymbol] = useState<'USDC' | 'USDT' | null>(null)
@@ -97,7 +109,8 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
       if (!alive) return
       setRoutes(rs)
       const fromToken = initialToken ? rs.find((r) => r.token.toLowerCase() === initialToken.toLowerCase())?.symbol : undefined
-      setSymbol((s) => fromToken ?? (s && rs.some((r) => r.symbol === s) ? s : (rs[0]?.symbol ?? null)))
+      const preferred = rs.some((r) => r.symbol === DEFAULT_ASSET) ? DEFAULT_ASSET : (rs[0]?.symbol ?? null)
+      setSymbol((s) => fromToken ?? (s && rs.some((r) => r.symbol === s) ? s : preferred))
     }, () => undefined)
     return () => {
       alive = false
@@ -109,7 +122,9 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
   useEffect(() => {
     setToChain((c) => {
       if (preferredTo !== null && destinations.some((d) => d.toChainId === preferredTo)) return preferredTo
-      return c && destinations.some((d) => d.toChainId === c) ? c : (destinations[0]?.toChainId ?? null)
+      if (c && destinations.some((d) => d.toChainId === c)) return c
+      // Electroneum is home: when it is one of the ends, it is the one you meant.
+      return destinations.some((d) => d.toChainId === ETN) ? ETN : (destinations[0]?.toChainId ?? null)
     })
   }, [destinations, preferredTo])
   const route = destinations.find((d) => d.toChainId === toChain) ?? null

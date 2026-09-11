@@ -11,6 +11,9 @@ import { useOpenInTab } from '../../hooks/useOpenInTab'
 import { t } from '../../i18n'
 import { KeystonePicker, LedgerPicker, TrezorPicker } from '../HardwarePickers'
 
+/** Names resolve on Electroneum: `.etn` through its UniversalResolver. */
+const ETN = 52014
+
 type Way = 'seed' | 'imported' | 'watch' | 'hardware'
 type HwKind = 'ledger' | 'trezor' | 'keystone'
 
@@ -105,8 +108,33 @@ export function AddAccountSheet({ open, onClose, onAdded, reducedMotion = false 
               ) : null}
               {on && w.id === 'watch' ? (
                 <Column gap="$2" paddingLeft={48}>
-                  <Input value={field} onChange={setField} placeholder="0x…" testID="add-watch-input" />
-                  <Key label={t({ id: 'acct.add.watch.key', message: 'Watch this address' })} size="compact" disabled={busy || !/^0x[0-9a-fA-F]{40}$/.test(field.trim())} onPress={() => void run(async () => { await engine.accounts.addWatch({ address: field.trim() }) })} testID="add-watch-submit" />
+                  {/*
+                    A name is an address here too.
+
+                    The key was gated on `/^0x…{40}$/`, so `brad.etn` could be
+                    typed and never accepted — while onboarding's watch step has
+                    always resolved names through `engine.names`. Two doors to
+                    the same thing disagreeing about what an address is.
+                  */}
+                  <Input value={field} onChange={setField} placeholder="0x… or name.etn" autoCapitalize="none" testID="add-watch-input" />
+                  <Key
+                    label={t({ id: 'acct.add.watch.key', message: 'Watch this address' })}
+                    size="compact"
+                    disabled={busy || field.trim().length === 0}
+                    onPress={() =>
+                      void run(async () => {
+                        const raw = field.trim()
+                        if (/^0x[0-9a-fA-F]{40}$/.test(raw)) {
+                          await engine.accounts.addWatch({ address: raw })
+                          return
+                        }
+                        const hit = await engine.names.resolve({ chainId: ETN, name: raw })
+                        if (!hit.address) throw new Error(t({ id: 'ob.watch.noname', message: 'That name does not resolve to an address.' }))
+                        await engine.accounts.addWatch({ address: hit.address })
+                      })
+                    }
+                    testID="add-watch-submit"
+                  />
                 </Column>
               ) : null}
               {on && w.id === 'hardware' ? (
