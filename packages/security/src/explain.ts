@@ -6,6 +6,7 @@
 import { formatUnits, type Hex } from 'viem'
 import { decodeMessage, type DecodedCall, type ParsedTypedData } from './decode'
 import { knownContract } from './registry'
+import { UR_MSG_SENDER, UR_ROUTER_SELF, type UrCommand } from './ur'
 import type { AssessmentContext, SignRequest, Simulation, Statement } from './types'
 
 const DOMAIN_NAMES: Readonly<Record<number, string>> = { 52014: 'Electroneum', 1: 'Ethereum', 8453: 'Base', 43114: 'Avalanche' }
@@ -39,6 +40,42 @@ function who(ctx: AssessmentContext, chainId: number, address: string): string {
   const k = knownContract(chainId, address)
   if (k) return k.name
   return `${address.slice(0, 6)}…${address.slice(-4)}`
+}
+
+/**
+ * A Universal Router recipient, in the user's terms.
+ *
+ * The router uses two sentinels in place of an address, and rendering either
+ * as a hex string tells the reader nothing. An address that is one of the
+ * user's own accounts is "you" — so anything that is *not* "you" stands out,
+ * which is the whole point of printing it.
+ */
+function urWho(ctx: AssessmentContext, chainId: number, recipient: Hex): string {
+  const r = recipient.toLowerCase()
+  if (r === UR_MSG_SENDER.toLowerCase()) return 'you'
+  if (r === UR_ROUTER_SELF.toLowerCase()) return 'the router, to be swept below'
+  if (ctx.own.some((a) => a.toLowerCase() === r)) return 'you'
+  return who(ctx, chainId, recipient)
+}
+
+/**
+ * The tokens at each end of a router path, so amounts can be shown with their
+ * symbol and decimals instead of as raw integers labelled "units".
+ * V2 carries an address array; V3 packs `token | fee | token | …` into bytes.
+ */
+function pathTokens(c: Extract<UrCommand, { type: `V${'2' | '3'}_SWAP_EXACT_${'IN' | 'OUT'}` }>): ['native' | Hex, 'native' | Hex] {
+  if (Array.isArray(c.path)) {
+    const p = c.path as readonly Hex[]
+    const first = p[0]
+    const last = p[p.length - 1]
+    return [first ?? 'native', last ?? 'native']
+  }
+  const hex = (c.path as Hex).slice(2)
+  if (hex.length < 40) return ['native', 'native']
+  const tin = `0x${hex.slice(0, 40)}` as Hex
+  const tout = `0x${hex.slice(-40)}` as Hex
+  // An exact-out path is encoded backwards: the output token comes first.
+  return c.type === 'V3_SWAP_EXACT_OUT' ? [tout, tin] : [tin, tout]
 }
 
 function amount(ctx: AssessmentContext, token: 'native' | Hex, raw: bigint, chainId: number): string {
@@ -165,19 +202,38 @@ export function explainCall(decoded: DecodedCall, ctx: AssessmentContext, chainI
       ]
     }
     case 'universal_router': {
+      /*
+        Every command that moves value says where it goes.
+
+        This switch used to end in `default: break`, so `SWEEP`, `TRANSFER`,
+        the batch permit-transfers and a Seaport sub-call produced no statement
+        at all — and the swap arms held `recipient` in scope and never read it.
+        A call could therefore swap the user's balance into the router and
+        sweep it to someone else, and the sheet's only line was "Swap N units
+        for at least 1 units". Silence reads as "nothing happens here", which
+        is the opposite of what was about to happen.
+      */
       const out: Statement[] = []
       for (const c of decoded.decoded.commands) {
         switch (c.type) {
           case 'V3_SWAP_EXACT_IN':
-          case 'V2_SWAP_EXACT_IN':
-            out.push({ text: `Swap ${c.amountIn.toString()} units for at least ${c.amountOut.toString()} units`, tone: 'neutral' })
+          case 'V2_SWAP_EXACT_IN': {
+            const [tin, tout] = pathTokens(c)
+            out.push({ text: `Swap ${amount(ctx, tin, c.amountIn, chainId)} for at least ${amount(ctx, tout, c.amountOut, chainId)}, sent to ${urWho(ctx, chainId, c.recipient)}`, tone: 'neutral' })
             break
+          }
           case 'V3_SWAP_EXACT_OUT':
-          case 'V2_SWAP_EXACT_OUT':
-            out.push({ text: `Swap at most ${c.amountIn.toString()} units for ${c.amountOut.toString()} units`, tone: 'neutral' })
+          case 'V2_SWAP_EXACT_OUT': {
+            const [tin, tout] = pathTokens(c)
+            out.push({ text: `Swap at most ${amount(ctx, tin, c.amountIn, chainId)} for ${amount(ctx, tout, c.amountOut, chainId)}, sent to ${urWho(ctx, chainId, c.recipient)}`, tone: 'neutral' })
             break
+          }
           case 'PERMIT2_PERMIT':
             out.push({ text: `Allow ${who(ctx, chainId, c.spender)} to move ${amount(ctx, c.token, c.amount, chainId)} until the permit expires`, tone: 'neutral' })
+            break
+          case 'PERMIT2_PERMIT_BATCH':
+            for (const d of c.details)
+              out.push({ text: `Allow ${who(ctx, chainId, c.spender)} to move ${amount(ctx, d.token, d.amount, chainId)} until the permit expires`, tone: 'neutral' })
             break
           case 'PAY_PORTION':
             out.push({ text: `${(Number(c.bips) / 100).toFixed(2)}% of the output goes to ${who(ctx, chainId, c.recipient)}`, tone: 'out' })
@@ -186,15 +242,30 @@ export function explainCall(decoded: DecodedCall, ctx: AssessmentContext, chainI
             out.push({ text: `Wrap ${amount(ctx, 'native', c.amount, chainId)}`, tone: 'neutral' })
             break
           case 'UNWRAP_WETH':
-            out.push({ text: 'Receive the output as ETN', tone: 'in' })
+            out.push({ text: `Unwrap to ETN, sent to ${urWho(ctx, chainId, c.recipient)}`, tone: 'in' })
             break
           case 'PERMIT2_TRANSFER_FROM':
-            out.push({ text: `Move ${amount(ctx, c.token, c.amount, chainId)} to ${who(ctx, chainId, c.recipient)}`, tone: 'out' })
+            out.push({ text: `Move ${amount(ctx, c.token, c.amount, chainId)} to ${urWho(ctx, chainId, c.recipient)}`, tone: 'out' })
+            break
+          case 'PERMIT2_TRANSFER_FROM_BATCH':
+            for (const tr of c.transfers)
+              out.push({ text: `Move ${amount(ctx, tr.token, tr.amount, chainId)} to ${urWho(ctx, chainId, tr.to)}`, tone: 'out' })
+            break
+          case 'SWEEP':
+            out.push({ text: `Send everything left of ${who(ctx, chainId, c.token)} to ${urWho(ctx, chainId, c.recipient)}`, tone: 'out' })
+            break
+          case 'TRANSFER':
+            out.push({ text: `Send ${amount(ctx, c.token, c.amount, chainId)} to ${urWho(ctx, chainId, c.recipient)}`, tone: 'out' })
+            break
+          case 'BALANCE_CHECK_ERC20':
+            out.push({ text: `Check the balance of ${who(ctx, chainId, c.token)} — nothing moves`, tone: 'neutral' })
+            break
+          case 'SEAPORT_V1_5':
+            out.push({ text: `Fulfil a marketplace order through the router for ${amount(ctx, 'native', c.value, chainId)}`, tone: 'out' })
+            out.push({ text: 'The order inside this call was not decoded — what you receive for it cannot be shown here', tone: 'warn' })
             break
           case 'UNKNOWN':
             out.push({ text: `Unknown router command 0x${c.byte.toString(16)}`, tone: 'warn' })
-            break
-          default:
             break
         }
       }

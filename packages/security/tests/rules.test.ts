@@ -140,6 +140,39 @@ describe('transactions', () => {
     expect(codes(run(tx(A.universalRouter as Hex, data)))).toContain('DAPP_TIPS_THIRD_PARTY')
     expect(codes(run(tx(A.universalRouter as Hex, data), {}, 'internal:swap'))).not.toContain('DAPP_TIPS_THIRD_PARTY')
   })
+  /*
+    The drainer shape: swap the user's balance into the router, then sweep it
+    to someone else. Both commands were silent — `SWEEP` had no statement arm
+    at all and the swap arm never read its `recipient` — so the sheet's only
+    line was "Swap N units for at least 1 units" at `info` severity, with no
+    delay and no typed confirmation. One tap and the input was gone.
+  */
+  it('a router call that sweeps the output to a stranger is named and blocked', () => {
+    const commands = `0x${[UR_COMMAND.V3_SWAP_EXACT_IN, UR_COMMAND.SWEEP].map((b) => b.toString(16).padStart(2, '0')).join('')}` as Hex
+    const path = `0x${TOKEN.slice(2)}000bb8${A.wetn.slice(2)}` as Hex
+    const inputs = [
+      encodeAbiParameters(parseAbiParameters('address, uint256, uint256, bytes, bool'), ['0x0000000000000000000000000000000000000002', 10n ** 18n, 1n, path, true]),
+      encodeAbiParameters(parseAbiParameters('address, address, uint256'), [TOKEN, UNKNOWN, 0n]),
+    ]
+    const data = encodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commands, inputs, 1n] })
+    const a = run(tx(A.universalRouter as Hex, data))
+    expect(codes(a)).toContain('UR_RECIPIENT_NOT_SELF')
+    // A minimum-out of one wei against a whole token is not a floor.
+    expect(codes(a)).toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
+    expect(a.severity).toBe('danger')
+    // The sweep is on the sheet, and it names where the money goes.
+    const text = a.statements.map((s) => s.text).join('\n')
+    expect(text).toContain('0x2222…2222')
+    expect(text.toLowerCase()).toContain('send everything left')
+  })
+
+  it('a router call that pays the user is not flagged', () => {
+    const commands = `0x${UR_COMMAND.SWEEP.toString(16).padStart(2, '0')}` as Hex
+    const inputs = [encodeAbiParameters(parseAbiParameters('address, address, uint256'), [TOKEN, ME, 0n])]
+    const data = encodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commands, inputs, 1n] })
+    expect(codes(run(tx(A.universalRouter as Hex, data)))).not.toContain('UR_RECIPIENT_NOT_SELF')
+  })
+
   it('a failed simulation is danger and cannot be lowered by a clean one', () => {
     const req = tx(UNKNOWN, encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [UNKNOWN, 1n] }))
     const failed = assess({ origin: ORIGIN, chainId: 52014, account: ME, request: req, context: emptyContext(), simulation: { mode: 'trace', ok: false, revertReason: 'nope', deltas: [], approvals: [] } })

@@ -50,6 +50,8 @@ export type RiskCode =
   | 'ORIGIN_SCAM'
   | 'ORIGIN_FIRST_TIME'
   | 'CHAIN_MISMATCH'
+  | 'UR_RECIPIENT_NOT_SELF'
+  | 'SWAP_MIN_OUT_IMPLAUSIBLE'
 
 export interface RiskRule {
   readonly code: RiskCode

@@ -468,6 +468,86 @@ function recipientOf(decoded: DecodedCall | null): Hex | null {
   }
 }
 
+/** The router's two stand-ins for an address; neither is a third party. */
+const UR_SENTINELS = new Set(['0x0000000000000000000000000000000000000001', '0x0000000000000000000000000000000000000002'])
+
+/**
+ * T1: a router call whose output lands anywhere but the user's own account.
+ *
+ * The commands inside `execute` can swap the user's balance into the router
+ * and then sweep it elsewhere. That is a legitimate shape — it is how a swap
+ * with a fee works — so the test is not "is there a sweep" but "does any
+ * recipient belong to someone other than you". `PAY_PORTION` is excluded: the
+ * fee sink has its own pinned rules (`feeSinkRules`, `dappTipsThirdParty`).
+ */
+export const urRecipientNotSelf: Rule = ({ decoded, context, chainId, account }) => {
+  if (decoded?.kind !== 'universal_router') return null
+  const recipients: Hex[] = []
+  for (const c of decoded.decoded.commands) {
+    switch (c.type) {
+      case 'V2_SWAP_EXACT_IN':
+      case 'V2_SWAP_EXACT_OUT':
+      case 'V3_SWAP_EXACT_IN':
+      case 'V3_SWAP_EXACT_OUT':
+      case 'SWEEP':
+      case 'TRANSFER':
+      case 'PERMIT2_TRANSFER_FROM':
+      case 'WRAP_ETH':
+      case 'UNWRAP_WETH':
+        recipients.push(c.recipient)
+        break
+      case 'PERMIT2_TRANSFER_FROM_BATCH':
+        for (const tr of c.transfers) recipients.push(tr.to)
+        break
+      default:
+        break
+    }
+  }
+  const own = [account, ...context.own]
+  const stranger = recipients.find(
+    (r) => !UR_SENTINELS.has(r.toLowerCase()) && !own.some((o) => sameAddress(o, r)),
+  )
+  if (!stranger) return null
+  const reference = [...context.sentTo, ...context.addressBook, ...context.own]
+  const poison = poisonCheck(stranger, reference)
+  if (poison.hit)
+    return {
+      code: 'RECIPIENT_LOOKALIKE',
+      severity: 'block',
+      title: 'This swap sends the output to an address that imitates one you use',
+      detail: `It shares the first and last characters with ${poison.match ?? ''} but is a different address.`,
+    }
+  return {
+    code: 'UR_RECIPIENT_NOT_SELF',
+    severity: 'danger',
+    title: 'This swap sends the output somewhere else',
+    detail: `Part of this swap pays ${label(context, chainId, stranger)}, not you. A swap you asked for pays you.`,
+  }
+}
+
+/**
+ * T1: a minimum-out so far below the input that it is not a floor at all.
+ *
+ * Six orders of magnitude of slack, which is decimals-agnostic and therefore
+ * safe as a heuristic: no honest pair is off by a million. It catches the
+ * drainer shape of "accept literally one wei in return", which is otherwise
+ * indistinguishable from a sane minimum once the amounts are raw integers.
+ */
+export const swapMinOutImplausible: Rule = ({ decoded }) => {
+  if (decoded?.kind !== 'universal_router') return null
+  for (const c of decoded.decoded.commands) {
+    if (c.type !== 'V2_SWAP_EXACT_IN' && c.type !== 'V3_SWAP_EXACT_IN') continue
+    if (c.amountIn > 0n && c.amountOut <= c.amountIn / 1_000_000n)
+      return {
+        code: 'SWAP_MIN_OUT_IMPLAUSIBLE',
+        severity: 'danger',
+        title: 'This swap accepts almost nothing in return',
+        detail: 'The smallest amount this swap will accept is so far below what you are putting in that it offers no protection at all.',
+      }
+  }
+  return null
+}
+
 export const recipientRules: Rule = ({ request, decoded, context, chainId, account }) => {
   if (request.kind !== 'transaction') return null
   const to = recipientOf(decoded)
@@ -620,6 +700,8 @@ export const ALL_RULES: readonly Rule[] = [
   feeSinkRules,
   bridgeRecipientRule,
   dappTipsThirdParty,
+  urRecipientNotSelf,
+  swapMinOutImplausible,
   unknownFunction,
   newContract,
   recipientRules,
