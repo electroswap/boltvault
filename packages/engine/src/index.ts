@@ -27,6 +27,20 @@ export { SitesService } from './namespaces/sites'
 export { ChainsService, toChainView, type HeadSource } from './namespaces/chains'
 export { Governor, RateLimited, governedFetch, type GovernorSnapshot, type HostBudget } from './governor'
 export { authHeaders, walletAuthHeader, keyIdOf, pathOf, signingString, type AuthInput } from './apiAuth'
+export {
+  ClientFailures,
+  clientFailuresFor,
+  CLIENT_FAILURE_PATH,
+  normalise as normaliseClientFailure,
+  stripPermitSignatures,
+  type ClientFailureDeps,
+  type ClientFailureInput,
+  type ClientFailureReport,
+  type FailureKind,
+  type FailureOperation,
+  type FailureStage,
+  type SwapFailureDetail,
+} from './clientFailureApi'
 // The polling cadence is a property of the chain, and the UI polls too: it is
 // re-exported here so a screen does not need a dependency on the registry.
 export { pollMs, type PollMode } from '@boltvault/chains'
@@ -42,11 +56,11 @@ export { NamesService, ETN_UNIVERSAL_RESOLVER } from './namespaces/names'
 export { AllowancesService } from './namespaces/allowances'
 export { ContactsStore } from './namespaces/contacts'
 export { SendService, type SendInput } from './namespaces/send'
-export { SwapService, type SwapInput, type SwapDeps } from './namespaces/swap'
+export { SwapService, swapFailureReport, type SwapInput, type SwapDeps, type SwapQuoteView, type SwapDiagnostics } from './namespaces/swap'
 export { HolderService, type FeeAddresses } from './namespaces/holder'
 export { DynoWeight, twap, type DynoWeightValue, type DynoWeightDeps } from './dynoweight'
 export { LimitService, type LimitInput } from './namespaces/limit'
-export { FlowStore, type FlowStepRun } from './namespaces/flows'
+export { FlowStore, FlowReceiptError, type FlowStepRun, type FlowStepFailure } from './namespaces/flows'
 export { HardwareService, type HardwareDeps, type LedgerStatusView, type LedgerDeviceView } from './namespaces/hardware'
 export { ExploreService } from './namespaces/explore'
 export { NftService, marketplaceConfig } from './namespaces/nft'

@@ -17,6 +17,7 @@ import {
   quoteOne,
   bestRouteExactOut,
   detectTax,
+  isTaxUnknown,
   sellsAreRefused,
   custodyIsUnsafe,
   encodeApprovePermit2,
@@ -47,14 +48,15 @@ import {
 import type { Platform } from '@boltvault/platform'
 import { formatUnits, maxUint256, parseUnits, type Hex } from 'viem'
 import { z } from 'zod'
+import type { ClientFailureInput, ClientFailures, FailureKind, FailureStage, FailureTaxProbe } from '../clientFailureApi'
 import { EngineError } from '../errors'
 import type { NamespaceSpec } from '../host'
 import { readMany } from '../multicall'
 import type { Quoter, QuoterInput } from '../quoterApi'
-import { AccountIdSchema, type SwapFlow, type SwapHop, type SwapQuote, type SwapStep, type TokenView } from '../schema'
+import { AccountIdSchema, type ActivityEntry, type SwapFlow, type SwapHop, type SwapQuote, type SwapStep, type TokenView } from '../schema'
 import type { SettingsStore } from '../settingsStore'
 import type { ChainsService } from './chains'
-import { type FlowStepRun, type FlowStore } from './flows'
+import { FlowReceiptError, type FlowStepFailure, type FlowStepRun, type FlowStore } from './flows'
 import type { HolderService } from './holder'
 import type { ProviderService } from './provider'
 import type { TokensService } from './tokens'
@@ -82,6 +84,15 @@ export interface SwapDeps {
    * with no API cannot answer, and silence must never be read as "blocked".
    */
   readonly safety?: { level(chainId: number, address: string): Promise<TokenSafetyLevel | null> }
+  /**
+   * Where a swap that did not work gets reported (§3.7, `clientFailureApi`).
+   *
+   * Absent when the build ships no wallet key — the route answers 401 without
+   * one — and in tests. Every use of it is fire-and-forget: nothing on the
+   * user's path may await it, and a swap that already failed must not be made
+   * slower or more likely to fail by being reported.
+   */
+  readonly failures?: ClientFailures
 }
 
 /** ElectroSwap's project safety levels, as the market data reports them. */
@@ -124,6 +135,45 @@ export interface SwapQuoteView extends SwapQuote {
   readonly tradeType: TradeType
   /** The most an exact-output swap may spend. `'0'` on an exact-in quote, where the input is already fixed. */
   readonly maximumInRaw: string
+  /** Only on a quote that actually got a price; a skeleton has nothing to explain. */
+  readonly diagnostics?: SwapDiagnostics
+}
+
+/**
+ * Everything a failure report needs and no screen does.
+ *
+ * It rides on `SwapQuoteView` for the same reason `tradeType` does, and it is
+ * deliberately not in `SwapQuoteSchema`: none of it is drawn, and the account
+ * state in it is the most personal thing the wallet ever sends anywhere. The
+ * quote is the only place these facts exist at once — by the time a swap fails,
+ * three steps later, the balances have been read and forgotten and the routing
+ * service's answer is long gone.
+ */
+export interface SwapDiagnostics {
+  readonly provenance: QuoteProvenance
+  readonly account: SwapAccountState
+  /** Both probes as measured, plus whether this chain has a detector to ask at all. */
+  readonly tax: { readonly in: TaxProbe; readonly out: TaxProbe; readonly detector: boolean }
+}
+
+/** What the routing service said about the quote it served beyond the price, or why it was not used. */
+export interface QuoteProvenance {
+  /** The service's own `quoteId`: the join back to its log for this exact quote. */
+  readonly id: string | null
+  readonly cached: boolean | null
+  readonly blockNumber: string | null
+  readonly fallbackReason: string | null
+}
+
+/** What the account held when the quote was priced. Most swaps fail on one of these rather than on a router bug. */
+export interface SwapAccountState {
+  readonly account: string
+  readonly balanceIn: string
+  readonly nativeBalance: string
+  /** Null on a native-input swap, which needs no ERC-20 allowance and holds no Permit2 permit. */
+  readonly erc20Allowance: string | null
+  readonly permit2Amount: string | null
+  readonly permit2Expiration: number | null
 }
 
 const ZERO = '0x0000000000000000000000000000000000000000' as Hex
@@ -230,11 +280,20 @@ export class SwapService {
    * wallet falls back to quoting for itself. It is never the reason a swap is
    * refused.
    */
-  private async route(input: QuoterInput, addresses: QuoteAddresses, read: EsReader): Promise<{ quote: RouteQuote; source: 'api' | 'onchain' } | null> {
+  private async route(input: QuoterInput, addresses: QuoteAddresses, read: EsReader): Promise<{ quote: RouteQuote; source: 'api' | 'onchain'; provenance: QuoteProvenance } | null> {
     const quoter = this.deps.quoter
+    /*
+      Why the service was not used, kept even on the happy path to nothing.
+
+      "The wallet quoted on chain" and "the wallet quoted on chain because the
+      service said `3 splits`" are different bug reports, and the second one is
+      the answer. It is one string, only ever read by a failure report.
+    */
+    let fallbackReason: string | null = quoter ? null : 'no routing service in this build'
     if (quoter) {
       const served = await quoter.route(input)
-      if (served.kind === 'route') return { quote: served.quote, source: 'api' }
+      if (served.kind === 'route') return { quote: served.quote, source: 'api', provenance: { id: served.id, cached: served.cached, blockNumber: served.blockNumber, fallbackReason: null } }
+      fallbackReason = served.reason
     }
     /*
       Only now, and only because the service could not answer.
@@ -247,7 +306,7 @@ export class SwapService {
       the mini-router is what stands when it is unreachable.
     */
     const onChain = await bestRoute(input.tokenIn, input.tokenOut, input.amountIn, addresses, read)
-    return onChain ? { quote: onChain.best, source: 'onchain' } : null
+    return onChain ? { quote: onChain.best, source: 'onchain', provenance: { id: null, cached: null, blockNumber: null, fallbackReason } } : null
   }
 
   async quote(input: SwapInput): Promise<SwapQuoteView> {
@@ -366,6 +425,12 @@ export class SwapService {
     let probe: RouteQuote | null = null
     let taxIn: TaxProbe = null
     let taxOut: TaxProbe = null
+    /*
+      The routing service is exact-in only, so an exact-output trade never asks
+      it at all — which is a fallback reason like any other, and the one a
+      reader of "why did this not use the API price" needs first.
+    */
+    let provenance: QuoteProvenance = { id: null, cached: null, blockNumber: null, fallbackReason: exactOut ? 'exact-out is priced on chain' : null }
 
     if (exactOut) {
       /*
@@ -399,6 +464,7 @@ export class SwapService {
         gasEstimate = routed.quote.gasEstimate
         amountOut = routed.quote.amountOut
         source = routed.source
+        provenance = routed.provenance
       }
     }
     if (!candidate) {
@@ -430,7 +496,7 @@ export class SwapService {
       uncertainty is reported rather than either assumed away or treated as
       fatal.
     */
-    const taxUnknown = taxIn === 'unavailable' || taxOut === 'unavailable'
+    const taxUnknown = isTaxUnknown(taxIn) || isTaxUnknown(taxOut)
     const taxBips = taxSlippageBips(taxIn, taxOut)
     /*
       A token the detector could not sell back is not a token with a large fee.
@@ -578,6 +644,18 @@ export class SwapService {
       quotedAt: d.platform.now(),
       ok: problems.length === 0,
       problems,
+      diagnostics: {
+        provenance,
+        account: {
+          account: owner,
+          balanceIn: balanceIn.toString(),
+          nativeBalance: nativeBalance.toString(),
+          erc20Allowance: nativeIn ? null : erc20Allowance.toString(),
+          permit2Amount: p2 ? p2[0].toString() : null,
+          permit2Expiration: p2 ? Number(p2[1]) : null,
+        },
+        tax: { in: taxIn, out: taxOut, detector: A.feeOnTransferDetector !== null },
+      },
     }
   }
 
@@ -615,6 +693,19 @@ export class SwapService {
     const tag = d.platform.now().toString(36)
     let permit: PermitInput | undefined
     const steps: FlowStepRun[] = []
+    /*
+      Three facts the failure report needs, kept where the flow can still see
+      them after the step that produced them has thrown.
+
+      `swapStage` is the one that cannot be recovered from the error: the swap
+      step re-quotes, encodes and then broadcasts, and all three throw
+      `EngineError`s that look alike from the outside. The step says where it
+      had got to as it goes, which is cheaper and more honest than guessing from
+      a message.
+    */
+    let swapStage: FailureStage = 'quote'
+    let encoded = first
+    let swapCall: { to: string; value: string; data: string } | null = null
 
     if (first.steps.includes('approve')) {
       steps.push({
@@ -653,6 +744,7 @@ export class SwapService {
       step: 'swap',
       waitReceipt: true,
       run: async (flowId) => {
+        swapStage = 'quote'
         // The tier is re-read at sign time; if it moved, the whole quote is redone (never a stale bips).
         const tier = await d.holder.tier(input.accountId, chainId, true)
         let quote = first
@@ -691,6 +783,11 @@ export class SwapService {
           }
           d.flows.setQuote(flowId, quote)
         }
+        // From here the quote is settled and everything left is building bytes:
+        // a report about what follows describes the trade that was encoded, not
+        // the one the sheet was opened on.
+        encoded = quote
+        swapStage = 'sign'
         const bips = quote.fee.bips
         const sink = (quote.fee.sink ?? null) as Hex | null
         if (bips > 0 && !sink) throw new EngineError('invalid_argument', 'In-wallet swaps are off on this network — no fee address is set for it in this build.')
@@ -722,6 +819,16 @@ export class SwapService {
         const enc = exactOut
           ? encodeSwapExactOut({ ...shared, amountOut: BigInt(quote.receiveRaw), maximumIn: ceiling < spendCeiling ? ceiling : spendCeiling })
           : encodeSwap({ ...shared, amountIn, quotedOut: BigInt(quote.amountOutRaw), slippageBips: quote.slippageBips + quote.taxBips })
+        /*
+          The bytes as handed over, kept so a failure can be replayed on a fork.
+          Decimal, not the `0x` form below: the report's `value` is a raw amount
+          like every other amount that crosses a wallet boundary. The Permit2
+          signature inside `data` is stripped by the reporter, not here — the
+          transaction itself needs it, and the one copy that leaves the wallet
+          is the one that must not carry it.
+        */
+        swapCall = { to: enc.to, value: enc.value.toString(), data: enc.data }
+        swapStage = 'broadcast'
         return d.provider.runInternal({
           kind: 'send_transaction',
           origin: 'internal:swap',
@@ -742,7 +849,22 @@ export class SwapService {
         })
       },
     })
-    const flow = await d.flows.start({ kind: 'swap', accountId: input.accountId, chainId, quote: first, steps })
+    const failures = d.failures
+    const flow = await d.flows.start({
+      kind: 'swap',
+      accountId: input.accountId,
+      chainId,
+      quote: first,
+      steps,
+      /*
+        A declined sheet stops here and goes no further.
+
+        `ClientFailures` refuses a `rejected` report as well, twice over — but
+        "the wallet never reports a user saying no" should be visible at the
+        place the decision is made, not only in the thing it is handed to.
+      */
+      ...(failures ? { onFailed: (f: FlowStepFailure) => (f.rejected ? undefined : failures.report(swapFailureReport({ failure: f, quote: encoded, chainId, stage: swapStage, call: swapCall }))) } : {}),
+    })
     return { flowId: flow.id, requestId: flow.steps[0]?.requestId ?? null }
   }
 
@@ -752,6 +874,173 @@ export class SwapService {
 
   flows(accountId?: string): SwapFlow[] {
     return this.deps.flows.list(accountId)
+  }
+}
+
+/**
+ * Which stage a failed step belongs to.
+ *
+ * The approve and permit steps name themselves rather than deferring to the
+ * phase: a reverted approve filed as `receipt/revert` loses the only thing that
+ * made it diagnosable, which is that it was the approve and not the swap. Only
+ * the swap step has three places to fail, and `stage` is what it was told it
+ * had reached.
+ */
+function stageOf(failure: FlowStepFailure, stage: FailureStage): FailureStage {
+  if (failure.step === 'approve') return 'approve'
+  if (failure.step === 'permit') return 'permit'
+  if (failure.phase === 'receipt') return 'receipt'
+  // The sheet was decided and the send came back against us.
+  if (failure.phase === 'result') return 'broadcast'
+  return stage
+}
+
+/**
+ * What kind of failure this was, from the error itself wherever possible.
+ *
+ * `EngineError` carries a code, so the common cases are read rather than
+ * guessed: a rejection and a validation refusal are exact. The patterns below
+ * are for what an RPC endpoint hands back, which is prose and varies by node.
+ * They are ordered so a certainty beats a guess — a mined receipt with a zero
+ * status is a revert whatever the message says about it.
+ */
+function kindOf(error: unknown, entry: ActivityEntry | null): FailureKind {
+  const message = error instanceof Error ? error.message : String(error)
+  if (error instanceof EngineError) {
+    if (error.code === 'rejected') return 'rejected'
+    if (error.code === 'timeout') return 'timeout'
+    if (error.code === 'invalid_argument') return 'validation'
+  }
+  if (/rejected/i.test(message)) return 'rejected'
+  if (entry?.status === 'failed') return 'revert'
+  // A receipt wait that produced no row at all ran out the clock; one that
+  // produced a `replaced` row is a transaction that was superseded, which is
+  // not a revert and not a timeout.
+  if (error instanceof FlowReceiptError) return entry === null ? 'timeout' : 'unknown'
+  if (/revert/i.test(message)) return 'revert'
+  if (/timed out|timeout|deadline/i.test(message)) return 'timeout'
+  if (/network|fetch|socket|econn|dns/i.test(message)) return 'network'
+  return 'unknown'
+}
+
+/**
+ * The revert reason and the custom-error selector, when the message carries them.
+ *
+ * Nodes answer a refused `eth_sendRawTransaction` with `execution reverted: X`,
+ * or — for a custom error, which is most of Permit2 and the Universal Router —
+ * with four bytes and no words at all. Both fields are nullable and nothing
+ * downstream depends on either, so a pattern that misses costs a null rather
+ * than a wrong answer.
+ */
+function revertOf(message: string): { revertReason: string | null; revertSelector: string | null } {
+  const reason = /execution reverted:?\s*([^\n"]+)/i.exec(message)
+  const selector = /\b(0x[0-9a-fA-F]{8})\b/.exec(message)
+  return { revertReason: reason?.[1]?.trim() ?? null, revertSelector: selector?.[1] ?? null }
+}
+
+/**
+ * One side's tax probe in the endpoint's vocabulary.
+ *
+ * The reason a probe failed travels, because the reasons are not equally
+ * interesting. `no-pair` is the ordinary case — the detector reverts
+ * `PairLookupFailed` for any token with no V2 pair against the base, and most
+ * tokens have no reason to have one. `probe-reverted` is the finding: the pair
+ * existed, the loan went out, and the token fought it. Reporting the first as
+ * the second, which an earlier `TaxProbe` had no way not to do, sends a reader
+ * of this log after a defect that is not there.
+ *
+ * A null probe is two different things and the detector settles which: no
+ * detector on this chain, or a side that was not probed because it *is* the
+ * wrapped native and cannot tax itself.
+ */
+function probeOf(probe: TaxProbe, detector: boolean): FailureTaxProbe | null {
+  const blank = { buyFeeBps: null, sellFeeBps: null, sellReverted: null, externalTransferFailed: null, feeTakenOnTransfer: null }
+  if (isTaxUnknown(probe)) return { status: probe.reason, ...blank }
+  if (probe === null) return detector ? null : { status: 'no-detector', ...blank }
+  return {
+    status: 'measured',
+    buyFeeBps: probe.buyFeeBps,
+    sellFeeBps: probe.sellFeeBps,
+    sellReverted: probe.sellReverted,
+    externalTransferFailed: probe.externalTransferFailed,
+    feeTakenOnTransfer: probe.feeTakenOnTransfer,
+  }
+}
+
+/**
+ * A failed swap step as the client-failure endpoint takes it.
+ *
+ * Pure, and exported, because everything interesting about this is the mapping
+ * and the mapping is worth asserting against the real schema without booting an
+ * engine: the stage, the kind, and the fact that a rejection never gets this
+ * far. `ClientFailures` does the clamping and the signature stripping, so this
+ * is free to hand over whatever it has.
+ */
+export function swapFailureReport(input: {
+  readonly failure: FlowStepFailure
+  readonly quote: SwapQuoteView
+  readonly chainId: number
+  /** How far the swap step had got. Ignored for the approve and permit steps, which name themselves. */
+  readonly stage: FailureStage
+  readonly call: { to: string; value: string; data: string } | null
+}): ClientFailureInput {
+  const { failure, quote } = input
+  const message = failure.error instanceof Error ? failure.error.message : String(failure.error)
+  const entry = failure.error instanceof FlowReceiptError ? failure.error.entry : null
+  const diagnostics = quote.diagnostics
+  return {
+    chainId: input.chainId,
+    operation: 'swap',
+    failure: {
+      stage: stageOf(failure, input.stage),
+      kind: kindOf(failure.error, entry),
+      message,
+      ...revertOf(message),
+      txHash: failure.hash ?? entry?.hash ?? null,
+      blockNumber: entry?.blockNumber === undefined || entry?.blockNumber === null ? null : String(entry.blockNumber),
+      /*
+        The receipt watcher reads `status` and `blockNumber` and nothing else,
+        so the wallet does not know what the transaction actually spent. Null is
+        the honest answer; sending the pre-flight estimate under this name would
+        be worse than sending nothing.
+      */
+      gasUsed: null,
+    },
+    /*
+      Only the swap step's bytes are worth keeping. An approve is one ERC-20
+      call and a permit is one signature, both reconstructible from the trade —
+      and the permit's calldata is the one thing in this whole flow that must
+      never be recorded.
+    */
+    call: failure.step === 'swap' ? input.call : null,
+    state: diagnostics?.account ?? null,
+    swap: {
+      quote: {
+        id: diagnostics?.provenance.id ?? null,
+        // The wallet has exactly two routers, and `route.source` records which
+        // priced this quote; 'client-fallback' is the web app's third option.
+        source: quote.route.source === 'api' ? 'routing-api' : 'onchain-mini-router',
+        cached: diagnostics?.provenance.cached ?? null,
+        blockNumber: diagnostics?.provenance.blockNumber ?? null,
+        fallbackReason: diagnostics?.provenance.fallbackReason ?? null,
+      },
+      trade: {
+        type: quote.tradeType === 'exactOut' ? 'exact-out' : 'exact-in',
+        tokenIn: { address: quote.tokenIn, symbol: quote.symbolIn, decimals: quote.decimalsIn },
+        tokenOut: { address: quote.tokenOut, symbol: quote.symbolOut, decimals: quote.decimalsOut },
+        amountIn: quote.amountInRaw,
+        slippageBips: quote.slippageBips,
+        taxBips: quote.taxBips,
+      },
+      quoted: { amountOut: quote.amountOutRaw, minimumOut: quote.minimumOutRaw, gasEstimate: quote.gasEstimate, priceImpactPct: quote.priceImpactPct },
+      route: quote.route.hops.map((h) => ({ protocol: h.kind, tokenIn: h.tokenIn, tokenOut: h.tokenOut, feeTier: h.fee ?? null })),
+      // `parseQuote` refuses a split route outright and the mini-router never
+      // produces one, so this is always one — stated rather than left null,
+      // because null would read as "the client did not know".
+      splits: 1,
+      tax: { in: probeOf(diagnostics?.tax.in ?? null, diagnostics?.tax.detector ?? false), out: probeOf(diagnostics?.tax.out ?? null, diagnostics?.tax.detector ?? false) },
+      fee: { bips: quote.fee.bips, sink: quote.fee.sink, onInput: quote.fee.onInput },
+    },
   }
 }
 

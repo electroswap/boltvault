@@ -57,7 +57,13 @@ export interface QuoterInput {
 }
 
 export type QuoterOutcome =
-  | { readonly kind: 'route'; readonly quote: RouteQuote; readonly cached: boolean; readonly blockNumber: string | null }
+  /**
+   * `id` is the service's own `quoteId`, which it logs beside the quote it
+   * served. It is the only thing that joins a failure report back to the half
+   * of the story the server already has, so it is carried even though nothing
+   * in the pricing path reads it.
+   */
+  | { readonly kind: 'route'; readonly quote: RouteQuote; readonly cached: boolean; readonly blockNumber: string | null; readonly id: string | null }
   /** Asked and got no usable answer. The caller quotes on chain; the reason is for the log, not the user. */
   | { readonly kind: 'none'; readonly reason: string }
 
@@ -180,6 +186,7 @@ export function parseQuote(body: unknown, input: QuoterInput): QuoterOutcome {
     },
     cached: body['cached'] === true,
     blockNumber: typeof quote['blockNumber'] === 'string' ? quote['blockNumber'] : null,
+    id: typeof body['quoteId'] === 'string' ? body['quoteId'] : null,
   }
 }
 

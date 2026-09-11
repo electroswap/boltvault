@@ -429,11 +429,14 @@ describe('swap on the testnet mock', () => {
      * makes `createEngine` build a `Quoter` at all — and a fetch that answers
      * `ROUTING_URL` with `serve`.
      */
-    const withQuoter = async (opts: { serve?: () => Response; quoterUrl?: string | null } = {}): Promise<{ quote: () => Promise<Awaited<ReturnType<Engine['engine']['swap']['quote']>>>; asked: string[] }> => {
+    const withQuoter = async (opts: { serve?: () => Response; quoterUrl?: string | null } = {}): Promise<{ quote: () => Promise<Awaited<ReturnType<Engine['engine']['swap']['quote']>>>; asked: string[]; posted: { url: string; body: string }[]; extra: Engine; accountId: string; owner: Hex }> => {
       const asked: string[] = []
-      const fetchImpl: typeof fetch = async (target) => {
+      /** Bodies as well as URLs, so a failure report can be read rather than merely counted. */
+      const posted: { url: string; body: string }[] = []
+      const fetchImpl: typeof fetch = async (target, init) => {
         const url = String(target)
         asked.push(url)
+        if (init?.method === 'POST') posted.push({ url, body: String(init.body ?? '') })
         if (url.includes('tokenlist.json')) return new Response(JSON.stringify(LIST), { status: 200, headers: { 'content-type': 'application/json' } })
         if (url === ROUTING_URL && opts.serve) return opts.serve()
         return new Response('not found', { status: 404 })
@@ -460,7 +463,7 @@ describe('swap on the testnet mock', () => {
       rpc.state.balances.set(owner.toLowerCase(), 5n * 10n ** 18n)
       balances.set(owner.toLowerCase(), 12_500_000n)
       const accountId = created.accounts[0]?.id ?? ''
-      return { quote: () => extra.engine.swap.quote({ accountId, chainId: TESTNET, tokenIn: TOKEN, tokenOut: 'native', amountIn: '1' }), asked }
+      return { quote: () => extra.engine.swap.quote({ accountId, chainId: TESTNET, tokenIn: TOKEN, tokenOut: 'native', amountIn: '1' }), asked, posted, extra, accountId, owner }
     }
 
     /*
@@ -629,6 +632,67 @@ describe('swap on the testnet mock', () => {
       expect(q.amountOutRaw).toBe(ONCHAIN_OUT.toString())
       expect(asked.some((url) => url.includes('tokenlist.json'))).toBe(true)
       expect(asked.filter((url) => /quote/i.test(url))).toEqual([])
+    })
+
+    /**
+     * A swap that reverted on chain, reported — and not reported (§3.7).
+     *
+     * The keyed engines above are the only ones in this file that build a
+     * reporter at all, which is why this case lives here: without a wallet key
+     * the route answers 401, so there is nothing to ask and `createEngine`
+     * builds nothing. What is left to prove is the part no unit test can reach —
+     * that the consent toggle in the settings document is actually the thing
+     * wired to it, and that a reverted receipt reaches the endpoint with the
+     * stage and the account state a reader would need to reproduce it.
+     */
+    it('reports a swap whose receipt came back reverted, and says nothing at all while diagnostics are off', async () => {
+      const h = await withQuoter()
+      const reports = (): { url: string; body: string }[] => h.posted.filter((entry) => entry.url.includes('/api/wallet/client-failure'))
+      /** One native-in swap — a single sheet, no permit — taken by the chain and then failed. */
+      const revertOne = async (): Promise<void> => {
+        const { flowId } = await h.extra.engine.swap.execute({ accountId: h.accountId, chainId: TESTNET, tokenIn: 'native', tokenOut: TOKEN, amountIn: '0.1' })
+        const flow = await waitStep(h.extra, flowId, 0, 'signing')
+        const before = rpc.state.transactions.size
+        await h.extra.engine.approvals.decide({ id: flow.steps[0]?.requestId ?? '', approve: true })
+        await expect.poll(() => rpc.state.transactions.size, { timeout: 10_000 }).toBe(before + 1)
+        // Status 0: mined, and against us. This is the failure the endpoint exists for.
+        for (const t of rpc.state.transactions.values()) if (t.blockNumber === null) t.status = 0
+        rpc.advanceBlocks()
+        /*
+          The step is patched failed and the flow a tick later, so the event this
+          waits on can arrive between the two. Assert the step, then let the flow
+          catch up.
+        */
+        expect((await waitStep(h.extra, flowId, 0, 'failed')).steps[0]?.status).toBe('failed')
+        await expect.poll(() => h.extra.swap.flow(flowId)?.status, { timeout: 10_000 }).toBe('failed')
+      }
+
+      await revertOne()
+      // `crashReports` is off in the defaults, so this revert is nobody's business.
+      await expect.poll(() => h.posted.length, { timeout: 2_000 }).toBeGreaterThan(0)
+      expect(reports()).toEqual([])
+
+      await h.extra.engine.settings.set({ crashReports: true })
+      await revertOne()
+      await expect.poll(() => reports().length, { timeout: 10_000 }).toBe(1)
+      const report = JSON.parse(reports()[0]?.body ?? '{}') as {
+        client: string
+        operation: string
+        failure: { stage: string; kind: string; blockNumber: string | null }
+        state: { account: string; nativeBalance: string | null } | null
+        swap: { trade: { tokenIn: { address: string }; tokenOut: { address: string } }; quote: { source: string } } | null
+        call: { to: string; data: string } | null
+      }
+      expect(report).toMatchObject({ client: 'extension-worker', operation: 'swap', failure: { stage: 'receipt', kind: 'revert' } })
+      // The block the revert landed in, which is what makes it replayable.
+      expect(report.failure.blockNumber).toMatch(/^\d+$/)
+      expect(report.state?.account.toLowerCase()).toBe(h.owner.toLowerCase())
+      expect(report.swap?.trade.tokenIn.address).toBe('native')
+      expect(report.swap?.trade.tokenOut.address.toLowerCase()).toBe(TOKEN.toLowerCase())
+      expect(report.swap?.quote.source).toBe('onchain-mini-router')
+      // The bytes are the swap's own, and a native-in swap carries no permit to strip.
+      expect(report.call?.to.toLowerCase()).toBe(UR.toLowerCase())
+      expect(decodeUniversalRouter(report.call?.data as Hex)?.commands.some((c) => c.type === 'PERMIT2_PERMIT')).toBe(false)
     })
   })
 })

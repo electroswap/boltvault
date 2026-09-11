@@ -5,7 +5,7 @@ import { assess, decodeCalldata, decodeUniversalRouter, emptyContext } from '@bo
 import { keccak256, type Hex } from 'viem'
 import { describe, expect, it } from 'vitest'
 import { FOT_DETECTOR_ABI } from '../src/swap/abis'
-import { custodyIsUnsafe, detectTax, sellsAreRefused, type TokenTax } from '../src/swap/fot'
+import { custodyIsUnsafe, detectTax, sellsAreRefused, type TaxUnknown, type TokenTax } from '../src/swap/fot'
 import { bestRoute, bestRouteExactOut, candidates, deliveredMinimumOut, encodeSwap, encodeSwapExactOut, feeAmount, minimumOut, permitCovers, permitSingleTypedData, protocolRuns, quoteOne, tierFor, DYNO_WEIGHT_ONE, FALLBACK_SCHEDULE, MAX_CANDIDATES, taxSlippageBips, encodeSubmitOrder, encodeCloseOrder, COMMAND, CONTRACT_BALANCE, ROUTER_AS_RECIPIENT, V2_FEE_FLAG, V3_FEES, type Candidate, type EncodeSwapInput, type Hop, type QuoteAddresses, type ReadCall, type ReadResult } from '../src/swap'
 
 const A = ELECTRONEUM_ADDRESSES[52014]
@@ -710,6 +710,9 @@ describe('permit2', () => {
   from the compiled contract and pinned here.
 */
 /** A measured tax, with the flags defaulted, so a case says only what it is about. */
+/** Asked, and could not say. The reason is what a failure report has to carry. */
+const unknownTax = (reason: TaxUnknown['reason'] = 'no-pair'): TaxUnknown => ({ unavailable: true, reason })
+
 const tax = (over: Partial<TokenTax>): TokenTax => ({ buyFeeBps: 0, sellFeeBps: 0, sellReverted: false, externalTransferFailed: false, feeTakenOnTransfer: false, ...over })
 
 describe('the fee-on-transfer probe reports what it knows', () => {
@@ -728,7 +731,8 @@ describe('the fee-on-transfer probe reports what it knows', () => {
 
   it('says "unavailable" when the call fails, and "null" when there is no detector', async () => {
     const failed = async () => [{ ok: false as const }]
-    expect(await detectTax(DETECTOR, BOLT, WETN, failed)).toBe('unavailable')
+    // The call never came back; that is not a statement about the token.
+    expect(await detectTax(DETECTOR, BOLT, WETN, failed)).toStrictEqual(unknownTax('not-answered'))
     // No detector on this chain is a different fact, and not one to report.
     expect(await detectTax(null, BOLT, WETN, failed)).toBeNull()
   })
@@ -742,10 +746,23 @@ describe('the fee-on-transfer probe reports what it knows', () => {
     the interface makes today, where one unpaired token in a batch reports 0% tax
     for every token in it.
   */
-  it('refuses to read an unmeasured probe as an untaxed token', async () => {
+  it('refuses to read an unmeasured probe as an untaxed token, and says which kind it was', async () => {
+    /*
+      The reason travels, because the reasons are not equally interesting. A
+      token with no V2 pair against the base is unremarkable and common; a pair
+      that exists and a token that fought the loan is a finding. Collapsing them
+      sends a reader of the failure log after a defect that is not there.
+    */
+    const reasons: Record<number, string> = { 1: 'no-pair', 2: 'pair-too-thin', 3: 'probe-reverted' }
     for (const status of [1, 2, 3]) {
-      expect(await detectTax(DETECTOR, BOLT, WETN, answer({ status, buyFeeBps: 0n, sellFeeBps: 0n }))).toBe('unavailable')
+      const probe = await detectTax(DETECTOR, BOLT, WETN, answer({ status, buyFeeBps: 0n, sellFeeBps: 0n }))
+      expect(probe).toStrictEqual(unknownTax(reasons[status] as TaxUnknown['reason']))
+      // And whatever the reason, none of it reads as a measurement.
+      expect(taxSlippageBips(probe, null)).toBe(0)
+      expect(custodyIsUnsafe(probe)).toBe(false)
     }
+    // A status nobody has seen before is still not a measurement.
+    expect(await detectTax(DETECTOR, BOLT, WETN, answer({ status: 9, buyFeeBps: 0n, sellFeeBps: 0n }))).toStrictEqual(unknownTax('probe-reverted'))
   })
 
   /*
@@ -759,7 +776,7 @@ describe('the fee-on-transfer probe reports what it knows', () => {
   it('carries the honeypot flag rather than a plausible number', async () => {
     const probe = await detectTax(DETECTOR, BOLT, WETN, answer({ buyFeeBps: 300n, sellFeeBps: 10_000n, sellReverted: true }))
     expect(sellsAreRefused(probe)).toBe(true)
-    expect(sellsAreRefused('unavailable')).toBe(false)
+    expect(sellsAreRefused(unknownTax())).toBe(false)
     expect(sellsAreRefused(null)).toBe(false)
   })
 
@@ -782,7 +799,7 @@ describe('the fee-on-transfer probe reports what it knows', () => {
     // An ordinary token keeps the shape it has always had.
     expect(custodyIsUnsafe(await detectTax(DETECTOR, BOLT, WETN, answer({ buyFeeBps: 0n, sellFeeBps: 0n })))).toBe(false)
     // And a probe that could not answer is not evidence of anything.
-    expect(custodyIsUnsafe('unavailable')).toBe(false)
+    expect(custodyIsUnsafe(unknownTax())).toBe(false)
     expect(custodyIsUnsafe(null)).toBe(false)
   })
 
@@ -793,8 +810,8 @@ describe('the fee-on-transfer probe reports what it knows', () => {
     minimum received is enforced on chain whether or not the probe answered.
   */
   it('contributes no slippage when it could not answer', async () => {
-    expect(taxSlippageBips('unavailable', 'unavailable')).toBe(0)
-    expect(taxSlippageBips('unavailable', tax({ buyFeeBps: 250 }))).toBe(250)
+    expect(taxSlippageBips(unknownTax(), unknownTax())).toBe(0)
+    expect(taxSlippageBips(unknownTax(), tax({ buyFeeBps: 250 }))).toBe(250)
   })
 })
 

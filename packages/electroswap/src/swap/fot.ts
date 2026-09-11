@@ -35,9 +35,28 @@ export interface TokenTax {
  * exactly when it matters. Folding them together meant every failure read as
  * "no tax": a reverting probe, a malformed answer, a rate-limited node.
  */
-export type TaxProbe = TokenTax | 'unavailable' | null
+export type TaxProbe = TokenTax | TaxUnknown | null
 
-/** `ProbeStatus.Measured` — anything else means the fees are not a measurement. */
+/**
+ * The probe did not produce a measurement, and why.
+ *
+ * The reason used to be thrown away — every failure collapsed to one value — and
+ * that turned out to matter the moment a failure report tried to say what had
+ * happened. `no-pair` is the ordinary case, because the detector reverts
+ * `PairLookupFailed` for any token with no V2 pair against the base, and a token
+ * not having one is an unremarkable thing. `probe-reverted` is the interesting
+ * one: the pair exists, the loan went out, and the token fought it. Reporting
+ * the first as the second sends somebody looking for a defect that is not there.
+ */
+export interface TaxUnknown {
+  readonly unavailable: true
+  readonly reason: 'no-pair' | 'pair-too-thin' | 'probe-reverted' | 'not-answered'
+}
+
+const unknown = (reason: TaxUnknown['reason']): TaxUnknown => ({ unavailable: true, reason })
+
+/** `ProbeStatus` from the detector: 0 measured, 1 no pair, 2 pair too thin, 3 the probe itself reverted. */
+const STATUS: Readonly<Record<number, TaxUnknown['reason']>> = { 1: 'no-pair', 2: 'pair-too-thin', 3: 'probe-reverted' }
 const MEASURED = 0
 
 /*
@@ -56,9 +75,10 @@ export async function detectTax(detector: Hex | null, token: Hex, baseToken: Hex
   if (!detector) return null
   const call: ReadCall = { address: detector, abi: FOT_DETECTOR_ABI, functionName: 'inspect', args: [token, baseToken, amountToBorrow] }
   const [r] = await read([call]).catch(() => [undefined])
-  if (!r?.ok || !r.value || typeof r.value !== 'object') return 'unavailable'
+  // The call itself did not come back: an RPC failure, not a statement about the token.
+  if (!r?.ok || !r.value || typeof r.value !== 'object') return unknown('not-answered')
   const v = r.value as { status: number; buyFeeBps: bigint; sellFeeBps: bigint; sellReverted: boolean; externalTransferFailed: boolean; feeTakenOnTransfer: boolean }
-  if (typeof v.buyFeeBps !== 'bigint' || typeof v.sellFeeBps !== 'bigint') return 'unavailable'
+  if (typeof v.buyFeeBps !== 'bigint' || typeof v.sellFeeBps !== 'bigint') return unknown('not-answered')
   /*
     A status the wallet did not ask for is not a measurement.
 
@@ -68,7 +88,7 @@ export async function detectTax(detector: Hex | null, token: Hex, baseToken: Hex
     exists to prevent: a token nobody could measure, reported as a token with no
     fee.
   */
-  if (Number(v.status) !== MEASURED) return 'unavailable'
+  if (Number(v.status) !== MEASURED) return unknown(STATUS[Number(v.status)] ?? 'probe-reverted')
   return {
     buyFeeBps: Number(v.buyFeeBps),
     sellFeeBps: Number(v.sellFeeBps),
@@ -78,9 +98,14 @@ export async function detectTax(detector: Hex | null, token: Hex, baseToken: Hex
   }
 }
 
+/** The probe was asked and could not say. Distinct from there being no detector at all. */
+export function isTaxUnknown(probe: TaxProbe): probe is TaxUnknown {
+  return probe !== null && 'unavailable' in probe
+}
+
 /** A probe that produced an actual measurement, or null. */
 export function taxOf(probe: TaxProbe): TokenTax | null {
-  return probe === 'unavailable' ? null : probe
+  return probe === null || isTaxUnknown(probe) ? null : probe
 }
 
 /** The token could be bought and then not sold. Measured, not guessed. */

@@ -18,6 +18,50 @@ export interface FlowStepRun {
   readonly waitReceipt?: boolean
 }
 
+/**
+ * A step that did not finish, described well enough to report.
+ *
+ * `phase` is the part of the step that broke, and the three parts fail for
+ * genuinely different reasons: `run` throws before there is a sheet at all (a
+ * re-quote, an encoder refusal), `result` rejects once the sheet has been
+ * decided (a rejection, a broadcast that failed), and `receipt` means the chain
+ * took the transaction and then went against it. A report that could not tell
+ * them apart would name the wrong stage for most failures.
+ */
+export interface FlowStepFailure {
+  readonly step: SwapStep
+  readonly index: number
+  readonly phase: 'run' | 'result' | 'receipt'
+  readonly error: unknown
+  /** The user declined the sheet. Never telemetry — this exists so a reporter can drop it. */
+  readonly rejected: boolean
+  readonly requestId: string | null
+  /** The step's transaction hash, when it had got that far. */
+  readonly hash: string | null
+}
+
+/**
+ * A receipt that went against the flow, carrying the row that says so.
+ *
+ * The message is all the screen needs. A failure report needs the block the
+ * revert landed in, and the activity row is the only place the flow ever sees
+ * it — rejecting with a bare `Error` threw it away.
+ */
+export class FlowReceiptError extends Error {
+  override readonly name = 'FlowReceiptError'
+  constructor(
+    message: string,
+    readonly entry: ActivityEntry | null,
+  ) {
+    super(message)
+  }
+}
+
+/** The wallet's own word for a declined sheet; `ProviderService` rejects with exactly this (`EngineError('rejected')`). */
+function isRejection(message: string): boolean {
+  return /rejected/i.test(message)
+}
+
 export interface FlowDeps {
   readonly platform: Platform
   readonly bus: EventBus
@@ -61,6 +105,16 @@ export class FlowStore {
     this.patch(id, { steps })
   }
 
+  /** Tell the caller a step failed, and never let that telling become the failure. */
+  private notifyFailed(onFailed: ((failure: FlowStepFailure) => void) | undefined, failure: FlowStepFailure): void {
+    if (!onFailed) return
+    try {
+      onFailed(failure)
+    } catch {
+      // A flow that already failed must not fail twice; a listener never breaks it.
+    }
+  }
+
   /** A step re-quoted (the tier moved at sign time): keep the sheet and the screen on the same numbers. */
   setQuote(id: string, quote: SwapQuote): void {
     if (this.flows.has(id)) this.patch(id, { quote })
@@ -72,7 +126,7 @@ export class FlowStore {
       let off: (() => void) | null = null
       const timer = setTimeout(() => {
         off?.()
-        reject(new Error('The network did not confirm this step in time.'))
+        reject(new FlowReceiptError('The network did not confirm this step in time.', null))
       }, RECEIPT_TIMEOUT_MS)
       const settle = (e: ActivityEntry): boolean => {
         if (e.status === 'confirmed') {
@@ -84,7 +138,7 @@ export class FlowStore {
         if (e.status === 'failed' || e.status === 'replaced') {
           clearTimeout(timer)
           off?.()
-          reject(new Error(e.status === 'failed' ? 'The network refused this step.' : 'This step was replaced.'))
+          reject(new FlowReceiptError(e.status === 'failed' ? 'The network refused this step.' : 'This step was replaced.', e))
           return true
         }
         return false
@@ -108,8 +162,20 @@ export class FlowStore {
    * Start a flow. Resolves as soon as the first step's approval exists (so the
    * screen can open the sheet); the rest runs in the background and reports
    * through events. `quote` is re-evaluated by the caller inside a step's `run`.
+   *
+   * `onFailed` is told about every step that does not finish, before the flow's
+   * own state is patched. It is a notification and nothing else: it cannot
+   * change the outcome, and `notifyFailed` swallows whatever it throws, because
+   * a flow that already failed must not fail twice.
    */
-  async start(input: { kind: SwapFlow['kind']; accountId: string; chainId: number; quote: SwapQuote | null; steps: readonly FlowStepRun[] }): Promise<SwapFlow> {
+  async start(input: {
+    kind: SwapFlow['kind']
+    accountId: string
+    chainId: number
+    quote: SwapQuote | null
+    steps: readonly FlowStepRun[]
+    onFailed?: (failure: FlowStepFailure) => void
+  }): Promise<SwapFlow> {
     const id = `flow-${this.deps.platform.now().toString(36)}-${(++this.counter).toString(36)}`
     const flow: SwapFlow = {
       id,
@@ -132,7 +198,21 @@ export class FlowStore {
       try {
         for (let i = 0; i < input.steps.length; i++) {
           const s = input.steps[i] as FlowStepRun
-          const { requestId, result } = await s.run(id)
+          let started: { requestId: string | null; result: Promise<unknown> }
+          try {
+            started = await s.run(id)
+          } catch (err) {
+            /*
+              Raising the sheet is where a swap's own refusals land — the
+              sign-time re-quote saying the price moved, the encoder refusing a
+              route it cannot express. The outer catch below already marks the
+              flow failed, and rethrowing keeps that behaviour exactly; this
+              only makes sure the step is named before it does.
+            */
+            this.notifyFailed(input.onFailed, { step: s.step, index: i, phase: 'run', error: err, rejected: isRejection(err instanceof Error ? err.message : String(err)), requestId: null, hash: null })
+            throw err
+          }
+          const { requestId, result } = started
           this.patchStep(id, i, { requestId, status: requestId ? 'signing' : 'submitted' })
           if (i === 0) firstReady()
           let value: unknown
@@ -140,7 +220,8 @@ export class FlowStore {
             value = await result
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err)
-            const rejected = /rejected/i.test(message)
+            const rejected = isRejection(message)
+            this.notifyFailed(input.onFailed, { step: s.step, index: i, phase: 'result', error: err, rejected, requestId, hash: null })
             this.patchStep(id, i, { status: rejected ? 'rejected' : 'failed' })
             this.patch(id, { status: rejected ? 'rejected' : 'failed', error: rejected ? null : message })
             return
@@ -151,6 +232,7 @@ export class FlowStore {
             try {
               await this.waitReceipt(requestId)
             } catch (err) {
+              this.notifyFailed(input.onFailed, { step: s.step, index: i, phase: 'receipt', error: err, rejected: false, requestId, hash })
               this.patchStep(id, i, { status: 'failed' })
               this.patch(id, { status: 'failed', error: err instanceof Error ? err.message : String(err) })
               return

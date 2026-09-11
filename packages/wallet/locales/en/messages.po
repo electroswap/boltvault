@@ -15,13 +15,13 @@ msgstr "Development build."
 
 #: packages/wallet/src/screens/About.tsx
 msgctxt "about.crash"
-msgid "Send crash reports"
-msgstr "Send crash reports"
+msgid "Send diagnostics"
+msgstr "Send diagnostics"
 
 #: packages/wallet/src/screens/About.tsx
 msgctxt "about.crash.hint"
-msgid "Off by default. A crash sends the message and stack to ElectroSwap — addresses, secrets and URLs scrubbed — nothing else, ever."
-msgstr "Off by default. A crash sends the message and stack to ElectroSwap — addresses, secrets and URLs scrubbed — nothing else, ever."
+msgid "Off by default, and only to ElectroSwap. A crash sends the message and stack, with addresses, secrets and URLs scrubbed. A swap that fails also sends the trade, the route and — so the failure can be reproduced — your address and the balances it involved. Never a signature, and never when you simply decline a sheet."
+msgstr "Off by default, and only to ElectroSwap. A crash sends the message and stack, with addresses, secrets and URLs scrubbed. A swap that fails also sends the trade, the route and — so the failure can be reproduced — your address and the balances it involved. Never a signature, and never when you simply decline a sheet."
 
 #: packages/wallet/src/screens/About.tsx
 msgctxt "about.dev"

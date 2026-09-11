@@ -1,8 +1,8 @@
 {
   "about.build": "Build {h} — reproducible; the hash is published with every release.",
   "about.build.dev": "Development build.",
-  "about.crash": "Send crash reports",
-  "about.crash.hint": "Off by default. A crash sends the message and stack to ElectroSwap — addresses, secrets and URLs scrubbed — nothing else, ever.",
+  "about.crash": "Send diagnostics",
+  "about.crash.hint": "Off by default, and only to ElectroSwap. A crash sends the message and stack, with addresses, secrets and URLs scrubbed. A swap that fails also sends the trade, the route and — so the failure can be reproduced — your address and the balances it involved. Never a signature, and never when you simply decline a sheet.",
   "about.dev": "Development build",
   "about.dev.body": "This build talks to {o} instead of ElectroSwap’s servers. Prices, activity, the marketplace and the launchpad come from there.",
   "about.encryption": "Encryption",

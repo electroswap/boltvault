@@ -86,7 +86,17 @@ export function About({ body }: { body: 'extension-popup' | 'extension-tab' | 'm
       </Plate>
 
       <Plate gap="$2" testID="about-crash">
-        <Toggle value={settings?.crashReports ?? false} onChange={(v) => set({ crashReports: v })} label={t({ id: 'about.crash', message: 'Send crash reports' })} hint={t({ id: 'about.crash.hint', message: 'Off by default. A crash sends the message and stack to ElectroSwap — addresses, secrets and URLs scrubbed — nothing else, ever.' })} testID="about-crash-toggle" />
+        {/*
+          One toggle, and the copy has to cover everything behind it.
+
+          It used to say "the message and stack — nothing else, ever", which
+          stopped being true the day a failed swap started reporting itself:
+          that report carries the account address and the balances involved,
+          because a revert cannot be reproduced without them. Consent has to
+          name what is actually sent, so this says so rather than leaving the
+          old promise standing over new behaviour.
+        */}
+        <Toggle value={settings?.crashReports ?? false} onChange={(v) => set({ crashReports: v })} label={t({ id: 'about.crash', message: 'Send diagnostics' })} hint={t({ id: 'about.crash.hint', message: 'Off by default, and only to ElectroSwap. A crash sends the message and stack, with addresses, secrets and URLs scrubbed. A swap that fails also sends the trade, the route and — so the failure can be reproduced — your address and the balances it involved. Never a signature, and never when you simply decline a sheet.' })} testID="about-crash-toggle" />
       </Plate>
 
       <Plate gap="$2" testID="about-links">

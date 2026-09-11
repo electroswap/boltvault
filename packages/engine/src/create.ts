@@ -14,6 +14,7 @@ import { z } from 'zod'
 import { ActivityStore } from './activityStore'
 import type { ApprovalPayload } from './approvalPayloads'
 import { createSealedStores } from './blobs'
+import { clientFailuresFor, CLIENT_FAILURE_PATH } from './clientFailureApi'
 import { FeeLadders } from './feeLadder'
 import { migrateSealed } from './migrateSealed'
 import { ApprovalStore } from './approvals'
@@ -498,6 +499,30 @@ export function createEngine(deps: EngineDeps): Engine {
   })
   const flows = new FlowStore({ platform: deps.platform, bus: host.events, activity })
   /*
+    Where a swap that did not work gets reported (§3.7, `clientFailureApi`).
+
+    Two gates, and both of them are hard. Without a key there is nothing to ask:
+    the route answers 401 without a per-request signature, exactly as the fee
+    ladder does. And `enabled` is the user's diagnostics toggle, read fresh on
+    every send — a report carries the account address and its balances, which is
+    more personal than the stack trace the same toggle already covers, so it is
+    off unless the user has said otherwise. A settings document that will not
+    read is a no, not a maybe.
+  */
+  const failures = clientFailuresFor({
+    fetch: fetchImpl,
+    url: `${apiOrigin}${CLIENT_FAILURE_PATH}`,
+    ...(deps.clientKey ? { key: deps.clientKey } : {}),
+    now: () => deps.platform.now(),
+    // The engine only ever runs in the extension's background worker or on the
+    // phone; `extension-page` is the page context's own crash reporter.
+    client: (deps.body ?? 'extension') === 'mobile' ? 'mobile' : 'extension-worker',
+    // The engine's `clientVersion` is `BoltVault/1.2.3`; the endpoint wants the
+    // version the way `/api/wallet/crash` sends it, which is bare.
+    version: (deps.clientVersion ?? 'BoltVault/0.1.0').replace(/^BoltVault\//, ''),
+    enabled: () => settings.get().then((s) => s.crashReports, () => false),
+  })
+  /*
     The routing service (§8.6), asked before the on-chain mini-router.
 
     Without a key there is nothing to ask: the service's origin check refuses an
@@ -526,6 +551,7 @@ export function createEngine(deps: EngineDeps): Engine {
     holder,
     flows,
     ...(quoter ? { quoter } : {}),
+    ...(failures ? { failures } : {}),
     // `explore` is built further down; the arrow only runs once a quote is asked for.
     safety: { level: (chainId, address) => explore.safetyLevel(chainId, address) },
   })
