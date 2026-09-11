@@ -40,7 +40,13 @@ import {
   type Simulation,
   type TraceFrame,
 } from '@boltvault/security'
-import type { Hex } from 'viem'
+import {
+  recoverAddress,
+  recoverMessageAddress,
+  recoverTransactionAddress,
+  recoverTypedDataAddress,
+  type Hex,
+} from 'viem'
 import { privateKeyToAccount, type LocalAccount } from 'viem/accounts'
 import type { ActivityStore } from '../activityStore'
 import {
@@ -896,7 +902,14 @@ export class ProviderService {
       case 'sign_message': {
         const payload = request.payload as Extract<ApprovalPayload, { kind: 'sign_message' }>
         const account = await this.signer(intent.accountId)
-        return account.signMessage({ message: { raw: payload.message as Hex } })
+        const message = { raw: payload.message as Hex }
+        const signature = await account.signMessage({ message })
+        ProviderService.assertSignedBy(
+          await recoverMessageAddress({ message, signature }),
+          account.address,
+          'message',
+        )
+        return signature
       }
       case 'eth_sign': {
         const payload = request.payload as Extract<ApprovalPayload, { kind: 'eth_sign' }>
@@ -904,7 +917,13 @@ export class ProviderService {
         // A device never signs a raw hash (§4.6: eth_sign is 4200 for hardware accounts).
         if (!account.sign)
           throw new RpcError(RPC.UNSUPPORTED_METHOD, 'This account cannot sign a raw hash.')
-        return account.sign({ hash: payload.hash as Hex })
+        const signature = await account.sign({ hash: payload.hash as Hex })
+        ProviderService.assertSignedBy(
+          await recoverAddress({ hash: payload.hash as Hex, signature }),
+          account.address,
+          'message',
+        )
+        return signature
       }
       case 'sign_typed_data': {
         const payload = request.payload as Extract<ApprovalPayload, { kind: 'sign_typed_data' }>
@@ -912,7 +931,17 @@ export class ProviderService {
         const typed = normaliseTypedData(
           typeof payload.typedData === 'string' ? safeJson(payload.typedData) : payload.typedData,
         )
-        return account.signTypedData(typed as never)
+        const signature = await account.signTypedData(typed as never)
+        // Recovered against the very object that was signed, not a re-derivation of it.
+        ProviderService.assertSignedBy(
+          await recoverTypedDataAddress({
+            ...(typed as Record<string, unknown>),
+            signature,
+          } as never),
+          account.address,
+          'message',
+        )
+        return signature
       }
       case 'send_transaction': {
         const payload = request.payload as Extract<ApprovalPayload, { kind: 'send_transaction' }>
@@ -946,13 +975,39 @@ export class ProviderService {
     throw new RpcError(RPC.UNAUTHORIZED, 'This account cannot sign here.')
   }
 
+  /*
+    Every signature this engine hands back is recovered against the address it
+    was asked for, first.
+
+    Nothing else checks it. A device that answers the wrong request, a path
+    that selects the wrong account, a transport that swaps bytes in flight, a
+    device picked by a model-level id when two are plugged in — all of them end
+    with a valid signature from the wrong key, and without this the wallet
+    broadcasts it and the funds leave an account the user never chose. It is
+    one `recover` per signature, and it turns a whole class of silent failures
+    into a loud one.
+  */
+  private static assertSignedBy(got: string, expected: string, what: string): void {
+    if (got.toLowerCase() === expected.toLowerCase()) return
+    throw new RpcError(
+      RPC.INTERNAL,
+      `The ${what} was signed by a different account than the one selected. Check that the right device is connected and the right account is chosen.`,
+    )
+  }
+
   /** Remote sign, the signing side: the prepared fields exactly as the requester sent them, signed and returned raw (§6). */
   private async signOnly(
     intent: Extract<ApprovalIntent, { kind: 'send_transaction' }>,
     tx: PreparedTx,
   ): Promise<Hex> {
     const account = await this.signer(intent.accountId)
-    return account.signTransaction(toSerializable(intent.chainId, tx))
+    const serialized = await account.signTransaction(toSerializable(intent.chainId, tx))
+    ProviderService.assertSignedBy(
+      await recoverTransactionAddress({ serializedTransaction: serialized as never }),
+      account.address,
+      'transaction',
+    )
+    return serialized
   }
 
   private async broadcast(
@@ -989,6 +1044,12 @@ export class ProviderService {
     try {
       const account = await this.signer(intent.accountId)
       raw = await account.signTransaction(toSerializable(intent.chainId, tx))
+      // Before it can be broadcast, it has to have come from the account we asked.
+      ProviderService.assertSignedBy(
+        await recoverTransactionAddress({ serializedTransaction: raw as never }),
+        account.address,
+        'transaction',
+      )
     } catch (err) {
       const reason = err instanceof Error ? err.message : 'signing failed'
       await d.activity

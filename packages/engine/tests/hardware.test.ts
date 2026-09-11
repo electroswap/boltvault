@@ -92,6 +92,29 @@ describe('a Ledger account through the engine', () => {
     await expect.poll(async () => (await engine.engine.activity.list({ accountId: ledgerAccountId })).find((e) => e.id === requestId)?.status, { timeout: 10_000 }).toBe('confirmed')
   })
 
+  /*
+    The device signs with the key it holds; the wallet broadcasts for the
+    account the user chose. Nothing used to check those were the same key — so
+    a second device plugged into the same port, a path picked by a model-level
+    id, or a transport that swapped bytes all ended with a valid signature from
+    an account the user never selected, and the wallet sent it.
+
+    Here the account record names an address the device cannot produce. The
+    signature comes back well-formed and belongs to a different key, and the
+    broadcast must not happen.
+  */
+  it('refuses to broadcast a signature that recovers to a different account', async () => {
+    const before = rpc.state.transactions.size
+    const impostor = '0x00000000000000000000000000000000000000ff'
+    const view = await engine.engine.accounts.addHardware({ kind: 'ledger', address: impostor, path: pathFor('ledgerLive', 9), deviceId: 'fake', label: 'Wrong device' })
+    rpc.state.balances.set(impostor.toLowerCase(), 5n * 10n ** 18n)
+    const { requestId } = await engine.engine.send.submit({ accountId: view.id, chainId: TESTNET, token: 'native', to: FRIEND, amount: '1' })
+    await approvalById(engine, requestId)
+    await engine.engine.approvals.decide({ id: requestId, approve: true })
+    await expect.poll(async () => (await engine.engine.activity.list({ accountId: view.id })).find((e) => e.id === requestId)?.status, { timeout: 10_000 }).toBe('failed')
+    expect(rpc.state.transactions.size).toBe(before)
+  })
+
   it('a contract call with blind signing off fails honestly, and never twice', async () => {
     const before = rpc.state.transactions.size
     const { requestId } = await engine.engine.allowances.revoke({ accountId: ledgerAccountId, chainId: TESTNET, token: '0x1111111111111111111111111111111111111111', spender: FRIEND, standard: 'erc20' })
