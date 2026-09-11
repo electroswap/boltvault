@@ -121,6 +121,7 @@ export function emptyContext(overrides: Partial<AssessmentContext> = {}): Assess
     tokens: {},
     balances: {},
     labels: {},
+    nftFloors: {},
     ethSignEnabled: false,
     now: 0,
     ...overrides,

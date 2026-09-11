@@ -39,6 +39,8 @@ export type RiskCode =
   | 'RECIPIENT_IS_CONTRACT'
   | 'RECIPIENT_NO_CODE_ON_DEST'
   | 'LARGE_SEND'
+  | 'VALUE_EXCEEDS_BUDGET'
+  | 'CLIPBOARD_MISMATCH'
   | 'SIM_FAILED'
   | 'SIM_INCOMPLETE'
   | 'SIM_UNAVAILABLE'
@@ -120,6 +122,24 @@ export interface AssessmentContext {
   readonly labels: Readonly<Record<string, string>>
   readonly ethSignEnabled: boolean
   readonly now: number
+  /**
+   * Collection floor prices in the chain's native base units, by lowercase NFT
+   * contract. `SEAPORT_UNDERPRICED` is the only reader: without a floor there
+   * is nothing to call a listing cheap against.
+   */
+  readonly nftFloors: Readonly<Record<string, bigint>>
+  /**
+   * The connected origin's native spend cap and what it has already spent,
+   * both in base units (§4.6). Absent means no cap. Never a fiat amount:
+   * prices are display-only (§3.4 step 6), so a USD budget would rest on a
+   * number this wallet does not treat as authoritative.
+   */
+  readonly originBudget?: { readonly limit: bigint; readonly spent: bigint } | null
+  /**
+   * The last address the wallet itself put on the clipboard, and when (§3.6).
+   * The clipboard check has nothing to compare against but this.
+   */
+  readonly lastCopiedAddress?: { readonly address: Hex; readonly at: number } | null
   /** BOLT's address on this chain, for farm-boost statements; optional. */
   readonly boltToken?: Hex
   /** For `internal:bridge`: whether the recipient is a contract on the origin and on the destination (§8.7). */

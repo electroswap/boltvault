@@ -8,4 +8,5 @@ export { deltasFromTrace, simulationFromTrace, mergeDeltas, estimateSimulation, 
 export { knownContract, isKnownSpender, knownSpenders, permit2Address, registerKnownContract, type KnownContract, type ContractRole } from './registry'
 export { registrableOrigin, hostOf, isScamOrigin, typosquat, levenshtein, normaliseHomoglyphs, PROTECTED_HOSTS, type TyposquatHit } from './origin'
 export { poisonCheck, sameAddress, inSet, type PoisonResult } from './poison'
+export { clipboardCheck, CLIPBOARD_WINDOW_MS, type ClipboardCheck, type CopiedAddress } from './clipboard'
 export { ERC20_ABI, ERC721_ABI, ERC1155_ABI, PERMIT2_ABI, WETH_ABI, UNIVERSAL_ROUTER_ABI, MULTICALL3_ABI, TOPICS } from './abis'

@@ -6,6 +6,7 @@
 import { formatUnits, type Hex } from 'viem'
 import { decodeCalldata, decodeMessage, parseTypedData, type DecodedCall, type ParsedTypedData } from './decode'
 import { typosquat, hostOf, isScamOrigin } from './origin'
+import { clipboardCheck } from './clipboard'
 import { inSet, poisonCheck, sameAddress } from './poison'
 import { isKnownSpender, knownContract } from './registry'
 import type { AssessmentContext, RiskRule, SignRequest, Simulation } from './types'
@@ -38,6 +39,16 @@ function amountText(ctx: AssessmentContext, token: string, amount: bigint): stri
   const t = ctx.tokens[token.toLowerCase()]
   if (!t) return `${amount.toString()} units`
   return `${formatUnits(amount, t.decimals)} ${t.symbol}`
+}
+
+/**
+ * A native amount in words, the same way explain.ts says it. Eighteen
+ * decimals is not a guess: every chain in the registry uses them for its
+ * native coin, and a chain that did not would be wrong in the statements too.
+ */
+function nativeText(chainId: number, amount: bigint): string {
+  const symbol = chainId === 52014 || chainId === 5201420 ? 'ETN' : 'native'
+  return `${formatUnits(amount, 18)} ${symbol}`
 }
 
 // ---- origin ----------------------------------------------------------------------------
@@ -257,6 +268,53 @@ export const seaportRules: Rule = ({ request, typed, context, chainId }) => {
     }
   }
   return null
+}
+
+/** Seaport's `ItemType`: 0 native, 1 ERC-20, 2 ERC-721, 3 ERC-1155. */
+const SEAPORT_NATIVE = 0
+const SEAPORT_ERC721 = 2
+const SEAPORT_ERC1155 = 3
+
+/**
+ * How far below the floor a listing has to be before this fires: a tenth.
+ *
+ * `SEAPORT_ZERO_CONSIDERATION` catches the give-away; this catches its quieter
+ * sibling, where a signature the user believes is a log-in lists the piece for
+ * dust the attacker is glad to pay. A seller who wants out fast discounts, and
+ * pricing a piece is the owner's business — but nobody honestly asks a tenth
+ * of what the cheapest piece in the collection is going for, so that is the
+ * line. Above it the wallet says nothing.
+ */
+export const SEAPORT_UNDERPRICED_DIVISOR = 10n
+
+/**
+ * A listing priced far below the collection floor (§3.4 `SEAPORT_UNDERPRICED`).
+ *
+ * Separate from `seaportRules` rather than folded into it: that one returns on
+ * the first finding, and an underpriced order on an unknown marketplace is two
+ * facts, not one.
+ */
+export const seaportUnderpriced: Rule = ({ request, typed, context, chainId }) => {
+  if (request.kind !== 'typed_data' || !typed || typed.decoded.kind !== 'seaport_order') return null
+  const d = typed.decoded
+  // The give-away has its own, blunter rule; saying both would be noise.
+  if (d.zeroConsideration) return null
+  // A listing: exactly one piece leaves, and only native coin comes back.
+  if (d.offer.length !== 1) return null
+  const item = d.offer[0]
+  if (!item || (item.itemType !== SEAPORT_ERC721 && item.itemType !== SEAPORT_ERC1155)) return null
+  if (!d.consideration.length || d.consideration.some((c) => c.itemType !== SEAPORT_NATIVE)) return null
+  const floor = context.nftFloors[item.token.toLowerCase()]
+  if (floor === undefined || floor <= 0n) return null
+  // Every consideration item is a share of one price (seller + creator + platform).
+  const total = d.consideration.reduce((sum, c) => sum + c.amount, 0n)
+  if (total * SEAPORT_UNDERPRICED_DIVISOR >= floor) return null
+  return {
+    code: 'SEAPORT_UNDERPRICED',
+    severity: 'danger',
+    title: 'Far below what this collection sells for',
+    detail: `This lists ${label(context, chainId, item.token)} #${item.identifier.toString()} for ${nativeText(chainId, total)} while the collection's floor is ${nativeText(chainId, floor)}. Whoever fills it keeps the difference.`,
+  }
 }
 
 // ---- transactions ---------------------------------------------------------------------------
@@ -647,6 +705,53 @@ export const largeSend: Rule = ({ request, decoded, context }) => {
   return null
 }
 
+/**
+ * The per-origin spend budget (§4.6, §3.4 `VALUE_EXCEEDS_BUDGET`).
+ *
+ * Expressed in the chain's own units, never in fiat: prices are display-only
+ * (§3.4 step 6), so a USD cap would let a price feed decide what the user is
+ * allowed to sign. "Remaining" is the cap minus what this origin has already
+ * moved, so a budget is a budget rather than a per-transaction limit.
+ */
+export const valueExceedsBudget: Rule = ({ request, context, chainId, origin }) => {
+  if (request.kind !== 'transaction') return null
+  const budget = context.originBudget
+  if (!budget) return null
+  const remaining = budget.limit > budget.spent ? budget.limit - budget.spent : 0n
+  if (request.tx.value <= remaining) return null
+  const who = hostOf(origin) ?? origin
+  return {
+    code: 'VALUE_EXCEEDS_BUDGET',
+    severity: 'danger',
+    title: 'Over the limit you set for this site',
+    detail: `${who} has ${nativeText(chainId, remaining)} left of the ${nativeText(chainId, budget.limit)} you allowed it, and this asks for ${nativeText(chainId, request.tx.value)}. Raise the limit in Settings › Connected sites if you meant to.`,
+  }
+}
+
+/**
+ * The clipboard check (§3.6): the recipient is not the address the wallet put
+ * on the clipboard a moment ago.
+ *
+ * Recipients already in the reference set are exempt — an address the user has
+ * sent to, saved, or owns cannot be a swapped-in one, and without the
+ * exemption "copy my receive address, then pay a saved contact" would be
+ * second-guessed every time.
+ */
+export const clipboardHijack: Rule = ({ request, decoded, context }) => {
+  if (request.kind !== 'transaction') return null
+  const to = recipientOf(decoded)
+  if (!to) return null
+  if (inSet(to, [...context.sentTo, ...context.addressBook, ...context.own])) return null
+  const check = clipboardCheck(to, context.lastCopiedAddress, context.now)
+  if (!check.mismatch || !check.copied) return null
+  return {
+    code: 'CLIPBOARD_MISMATCH',
+    severity: 'danger',
+    title: 'The address you pasted is not the one you copied',
+    detail: `BoltVault copied ${check.copied} a moment ago, and this sends to ${to}. Software that watches the clipboard swaps addresses exactly like this — copy it again and compare every character.`,
+  }
+}
+
 export const simulationRules: Rule = ({ request, simulation, decoded }) => {
   if (request.kind !== 'transaction' || !simulation) return null
   if (!simulation.ok)
@@ -728,6 +833,7 @@ export const ALL_RULES: readonly Rule[] = [
   permit2Rules,
   erc2612Rules,
   seaportRules,
+  seaportUnderpriced,
   authorizationList,
   chainMismatch,
   approveRules,
@@ -740,7 +846,9 @@ export const ALL_RULES: readonly Rule[] = [
   unknownFunction,
   newContract,
   recipientRules,
+  clipboardHijack,
   largeSend,
+  valueExceedsBudget,
   simulationRules,
 ]
 

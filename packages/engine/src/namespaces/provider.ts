@@ -14,6 +14,7 @@
  * are identical.
  */
 import { getChain, pollMs } from '@boltvault/chains'
+import { ElectroSwapClient, fetchCollections } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
 import {
   RPC,
@@ -36,17 +37,20 @@ import {
   simulationFromTrace,
   type Assessment,
   type AssessmentContext,
+  type ContractInfo,
   type SignRequest,
   type Simulation,
   type TraceFrame,
 } from '@boltvault/security'
 import {
+  parseUnits,
   recoverAddress,
   recoverMessageAddress,
   recoverTransactionAddress,
   recoverTypedDataAddress,
   type Hex,
 } from 'viem'
+import { z } from 'zod'
 import { privateKeyToAccount, type LocalAccount } from 'viem/accounts'
 import type { ActivityStore } from '../activityStore'
 import {
@@ -60,7 +64,7 @@ import { authHeaders } from '../apiAuth'
 import { APPROVAL_TTL_MS, type ApprovalStore } from '../approvals'
 import { EngineError } from '../errors'
 import type { EventBus } from '../host'
-import type { ActivityEntry, ApprovalRequest, AccountView } from '../schema'
+import type { ActivityEntry, ApprovalRequest, AccountView, SimulationSnapshot } from '../schema'
 import type { SettingsStore } from '../settingsStore'
 import type { MessageChannelLike } from '../transport'
 import type { ChainsService } from './chains'
@@ -124,10 +128,94 @@ export interface PortInfo {
  * a better subscription, only a more expensive one.
  */
 
+/** Seaport's `ItemType` for the two NFT standards; the offer side of a listing. */
+const SEAPORT_ERC721 = 2
+const SEAPORT_ERC1155 = 3
+
+/** Neither age nor verification changes on the timescale of a signature. */
+const CONTRACT_FACTS_TTL_MS = 6 * 60 * 60 * 1000
+/** A floor moves, but not between two sheets. */
+const FLOOR_TTL_MS = 5 * 60 * 1000
+/** Hard ceiling on the explorer detour: a signature never waits on it. */
+const EXPLORER_TIMEOUT_MS = 1_500
+
+const UNKNOWN_CONTRACT_FACTS = { ageDays: null, verified: null } as const
+
+/** Blockscout v2, only the fields §3.4 asks for, all of them optional. */
+const ExplorerAddressSchema = z.object({
+  is_verified: z.boolean().nullable().optional(),
+  creation_transaction_hash: z.string().nullable().optional(),
+  creation_tx_hash: z.string().nullable().optional(),
+})
+const ExplorerTxSchema = z.object({ timestamp: z.string().nullable().optional() })
+
+/**
+ * A floor quoted as an ETN number into base units.
+ *
+ * `toFixed(18)` rather than the number itself because `String(1e-7)` is
+ * exponential and `parseUnits` would refuse it; anything at or above 1e21
+ * formats exponentially even so, and a floor that large is not a floor.
+ */
+/**
+ * The preview, flattened for the history row (§3.4 step 7).
+ *
+ * Decimal strings throughout: the activity blob is JSON, and `JSON.stringify`
+ * refuses bigint. Capped at twenty entries a side — a row is a record of what
+ * the user was told, not a second copy of the trace.
+ */
+function snapshotOf(sim: Simulation | null): SimulationSnapshot | null {
+  if (!sim) return null
+  return {
+    mode: sim.mode,
+    ok: sim.ok,
+    ...(sim.revertReason ? { revertReason: sim.revertReason.slice(0, 500) } : {}),
+    ...(sim.gas !== undefined ? { gas: sim.gas.toString() } : {}),
+    deltas: sim.deltas.slice(0, 20).map((d) => ({
+      asset: d.asset,
+      standard: d.standard,
+      amount: d.amount.toString(),
+      ...(d.tokenId !== undefined ? { tokenId: d.tokenId.toString() } : {}),
+      ...(d.counterparty ? { counterparty: d.counterparty } : {}),
+    })),
+    approvals: sim.approvals.slice(0, 20).map((a) => ({
+      token: a.token,
+      spender: a.spender,
+      amount: a.amount === 'all' ? 'all' : a.amount.toString(),
+      standard: a.standard,
+    })),
+    ...(sim.note ? { note: sim.note.slice(0, 500) } : {}),
+  }
+}
+
+function floorToWei(floorEtn: number | null): bigint | null {
+  if (floorEtn === null || !Number.isFinite(floorEtn) || floorEtn <= 0 || floorEtn >= 1e21) return null
+  try {
+    return parseUnits(floorEtn.toFixed(18), 18)
+  } catch {
+    return null
+  }
+}
+
 export class ProviderService {
   private remote: RemoteSigner | null = null
   /** Origins whose transport could not vouch for them (WalletConnect without Verify). */
   private unverified = new Set<string>()
+  /** Explorer answers by `chainId:address`; failures are cached too, so a dead explorer is asked once. */
+  private readonly contractFactsCache = new Map<
+    string,
+    { at: number; facts: { ageDays: number | null; verified: boolean | null } }
+  >()
+  /** Collection floors in base units by `chainId:address`; `null` means the index has none. */
+  private readonly floorCache = new Map<string, { at: number; wei: bigint | null }>()
+  private marketClient: ElectroSwapClient | null = null
+  /**
+   * The preview each pending approval was shown with, by request id (§3.4
+   * step 7). It lives beside the approval rather than inside its payload
+   * because the payload is the object the sheet renders, and this is for the
+   * history row. A worker restart loses it; the row is then simply written
+   * without a snapshot, which is what the optional field is for.
+   */
+  private readonly snapshots = new Map<string, { at: number; snapshot: SimulationSnapshot }>()
 
   /** Remote sign is wired after construction: it needs the provider and the provider needs it. */
   setRemote(remote: RemoteSigner): void {
@@ -585,6 +673,8 @@ export class ProviderService {
           },
         }
         const simulation = await this.simulate(intent.chainId, prepared, request)
+        // §3.4 step 7: the history row must be able to show the preview the user was shown.
+        this.rememberSnapshot(ProviderService.snapshotKey(intent.chainId, prepared.tx), simulation)
         const assessment = await this.assessment(
           intent.origin,
           intent.chainId,
@@ -633,26 +723,34 @@ export class ProviderService {
     const accounts = await d.vault.accounts()
     const activity = await d.activity.list({ chainId }).catch(() => [] as ActivityEntry[])
     const sentTo = activity.filter((e) => e.category !== 'RECEIVE' && e.to).map((e) => e.to as Hex)
+    const addressBook = d.addressBook ? await d.addressBook().catch(() => [] as string[]) : []
+    const own = accounts.map((a) => a.address as Hex)
     /*
       Addresses that have only ever sent to this account, never been sent to.
 
-      `RECIPIENT_POISON_SOURCE` reads this and the field was never populated,
-      so the rule could not fire. A duster plants a lookalike by sending a tiny
-      amount; the address then appears in history and looks familiar. It is
-      deliberately not part of the lookalike reference set — §3.6 explains why
-      that would invert the attack — but choosing one as a recipient is worth
-      saying out loud.
+      `RECIPIENT_POISON_SOURCE` reads this and it was read off the wrong field:
+      a RECEIVE row's `to` is the user's own account, so the set was either
+      empty or the user's own addresses, and the rule could not fire. The
+      counterparty is `from`, which is what the schema documents it as.
+
+      A duster plants a lookalike by sending a tiny amount; the address then
+      appears in history and looks familiar. It is deliberately kept out of the
+      lookalike reference set — §3.6 explains why including it would invert the
+      attack — but choosing one as a recipient is worth saying out loud, and
+      anything the user has actually sent to, saved, or owns is not a duster.
     */
-    const sentToSet = new Set(sentTo.map((a) => a.toLowerCase()))
+    const referenced = new Set(
+      [...sentTo, ...addressBook, ...own].map((a) => a.toLowerCase()),
+    )
     const inboundOnly = [
       ...new Set(
         activity
-          .filter((e) => e.category === 'RECEIVE' && e.to)
-          .map((e) => (e.to as string).toLowerCase())
-          .filter((a) => !sentToSet.has(a)),
+          .filter((e) => e.category === 'RECEIVE' && e.from)
+          .map((e) => (e.from as string).toLowerCase())
+          .filter((a) => !referenced.has(a)),
       ),
     ] as Hex[]
-    const contracts: Record<string, { hasCode: boolean }> = {}
+    const contracts: Record<string, ContractInfo> = {}
     const balances: Record<string, bigint> = {}
     const probe: Hex[] = []
     if (request.kind === 'transaction' && request.tx.to) probe.push(request.tx.to)
@@ -665,7 +763,17 @@ export class ProviderService {
       const code = (await d.chains
         .rpc(chainId, 'eth_getCode', [address, 'latest'])
         .catch(() => '0x')) as string
-      contracts[address.toLowerCase()] = { hasCode: typeof code === 'string' && code.length > 2 }
+      const hasCode = typeof code === 'string' && code.length > 2
+      /*
+        `NEW_CONTRACT` wants the code's age and whether its source is published
+        (§3.4), and neither is on the chain — only an explorer has them. The
+        lookup is therefore bounded and fail-soft: cached per address, capped
+        by a short deadline, and every failure answers "unknown", which the
+        rule reads as nothing to say. A signature never waits on an explorer.
+      */
+      contracts[address.toLowerCase()] = hasCode
+        ? { hasCode, ...(await this.contractFacts(chainId, address)) }
+        : { hasCode }
     }
     if (request.kind === 'transaction' && request.tx.value > 0n) {
       const bal = (await d.chains
@@ -696,7 +804,6 @@ export class ProviderService {
         }
       }
     }
-    const addressBook = d.addressBook ? await d.addressBook().catch(() => [] as string[]) : []
     const tokens = d.tokenInfo
       ? await d
           .tokenInfo(chainId)
@@ -710,19 +817,222 @@ export class ProviderService {
       addressBook: addressBook as Hex[],
       tokens,
       labels,
-      own: accounts.map((a) => a.address as Hex),
+      own,
       firstTimeOrigin: d.sites.registry.isFirstTime(origin),
       contracts,
       balances,
+      nftFloors: await this.nftFloors(chainId, request),
       ethSignEnabled: settings.ethSignEnabled,
       now: d.platform.now(),
       // Our own swap must pay exactly what the schedule said (T10); anything else never sees the field.
       ...(origin === 'internal:swap' ? { expectedFee } : {}),
       ...(origin === 'internal:bridge' ? { bridgeRecipient } : {}),
+      originBudget: this.originBudget(origin, activity),
+      lastCopiedAddress: this.lastCopiedAddress(),
       originVerified: !this.unverified.has(origin),
       scamOrigins: d.statics?.scamOrigins() ?? [],
     })
     return assess({ origin, chainId, account, request, context, simulation })
+  }
+
+  /**
+   * What the origin may still spend (§4.6 `budget`, §3.4 `VALUE_EXCEEDS_BUDGET`).
+   *
+   * "Spent" is read off the history rather than a counter: the write-ahead row
+   * exists before the signature does (§3.4 step 7), so the log is the one
+   * record that cannot drift from what was actually sent, and a failed
+   * transaction — which moved nothing — does not count against the cap. The
+   * rows are the chain's, which is the right scope: a session is on one chain.
+   */
+  private originBudget(
+    origin: string,
+    activity: readonly ActivityEntry[],
+  ): { limit: bigint; spent: bigint } | null {
+    const budget = this.deps.sites.registry.get(origin)?.budget
+    if (budget === undefined) return null
+    let limit: bigint
+    try {
+      limit = BigInt(budget)
+    } catch {
+      return null
+    }
+    let spent = 0n
+    for (const e of activity) {
+      if (e.origin !== origin || e.status === 'failed') continue
+      try {
+        spent += BigInt(e.value)
+      } catch {
+        // a row whose value cannot be read is not evidence of a spend
+      }
+    }
+    return { limit, spent }
+  }
+
+  /** The §3.6 clipboard record, typed for the firewall. */
+  private lastCopiedAddress(): { address: Hex; at: number } | null {
+    const copied = this.deps.sites.lastCopiedAddress()
+    return copied ? { address: copied.address as Hex, at: copied.at } : null
+  }
+
+  /**
+   * A contract's age and whether its source is published — what `NEW_CONTRACT`
+   * needs and the chain cannot say (§3.4).
+   *
+   * Cached for hours because neither fact changes on the timescale of a
+   * signature, and failures are cached too: an explorer that is down must not
+   * be asked again on every sheet. Nothing here can block a signature — the
+   * deadline is short, every path answers `null` ("unknown"), and the rule
+   * reads unknown as nothing to say.
+   *
+   * Only the contract address leaves, never the user's (§3.8). The shape is
+   * Blockscout's v2 API, which is what Electroneum runs; an explorer that
+   * answers something else simply stays unknown.
+   */
+  private async contractFacts(
+    chainId: number,
+    address: Hex,
+  ): Promise<{ ageDays: number | null; verified: boolean | null }> {
+    const key = `${chainId}:${address.toLowerCase()}`
+    const now = this.deps.platform.now()
+    const hit = this.contractFactsCache.get(key)
+    if (hit && now - hit.at < CONTRACT_FACTS_TTL_MS) return hit.facts
+    const facts = await this.readExplorer(chainId, address).catch(() => UNKNOWN_CONTRACT_FACTS)
+    this.contractFactsCache.set(key, { at: now, facts })
+    return facts
+  }
+
+  private async readExplorer(
+    chainId: number,
+    address: Hex,
+  ): Promise<{ ageDays: number | null; verified: boolean | null }> {
+    const base = getChain(chainId)?.explorer?.url?.replace(/\/+$/, '')
+    if (!base) return UNKNOWN_CONTRACT_FACTS
+    const f = this.deps.fetch ?? globalThis.fetch
+    const abort = new AbortController()
+    const deadline = setTimeout(() => abort.abort(), EXPLORER_TIMEOUT_MS)
+    try {
+      const res = await f(`${base}/api/v2/addresses/${address}`, {
+        signal: abort.signal,
+        headers: { accept: 'application/json' },
+      })
+      if (!res.ok) return UNKNOWN_CONTRACT_FACTS
+      const info = ExplorerAddressSchema.safeParse(await res.json())
+      if (!info.success) return UNKNOWN_CONTRACT_FACTS
+      const verified = info.data.is_verified ?? null
+      // Blockscout renamed this field; both spellings are in the wild.
+      const creation = info.data.creation_transaction_hash ?? info.data.creation_tx_hash ?? null
+      let ageDays: number | null = null
+      if (creation) {
+        const txRes = await f(`${base}/api/v2/transactions/${creation}`, {
+          signal: abort.signal,
+          headers: { accept: 'application/json' },
+        })
+        if (txRes.ok) {
+          const tx = ExplorerTxSchema.safeParse(await txRes.json())
+          const at = tx.success && tx.data.timestamp ? Date.parse(tx.data.timestamp) : Number.NaN
+          if (Number.isFinite(at))
+            ageDays = Math.max(0, (this.deps.platform.now() - at) / 86_400_000)
+        }
+      }
+      return { ageDays, verified }
+    } finally {
+      clearTimeout(deadline)
+    }
+  }
+
+  /**
+   * Collection floors for a Seaport order, so `SEAPORT_UNDERPRICED` has
+   * something to call a listing cheap against (§3.4).
+   *
+   * Only for a Seaport typed-data request, only for the collections that order
+   * actually offers, and only on Electroneum — the floors come from
+   * ElectroSwap's own marketplace index, which is the only marketplace this
+   * wallet knows. Cached, and fail-soft: no floor means no finding, never a
+   * blocked signature. Only the collection address leaves (§3.8).
+   */
+  private async nftFloors(chainId: number, request: SignRequest): Promise<Record<string, bigint>> {
+    if (request.kind !== 'typed_data') return {}
+    if (chainId !== 52014 && chainId !== 5201420) return {}
+    const decoded = parseTypedData(request.typedData)?.decoded
+    if (!decoded || decoded.kind !== 'seaport_order') return {}
+    const collections = [
+      ...new Set(
+        decoded.offer
+          .filter((o) => o.itemType === SEAPORT_ERC721 || o.itemType === SEAPORT_ERC1155)
+          .map((o) => o.token.toLowerCase()),
+      ),
+    ]
+    if (!collections.length) return {}
+    const now = this.deps.platform.now()
+    const out: Record<string, bigint> = {}
+    const wanted: string[] = []
+    for (const address of collections) {
+      const hit = this.floorCache.get(`${chainId}:${address}`)
+      if (hit && now - hit.at < FLOOR_TTL_MS) {
+        if (hit.wei !== null) out[address] = hit.wei
+      } else wanted.push(address)
+    }
+    if (!wanted.length) return out
+    const client = this.market()
+    if (!client) return out
+    try {
+      const rows = await fetchCollections(client, chainId, { addresses: wanted }, wanted.length)
+      const seen = new Set<string>()
+      for (const row of rows) {
+        const address = row.address.toLowerCase()
+        seen.add(address)
+        const wei = floorToWei(row.floorEtn)
+        this.floorCache.set(`${chainId}:${address}`, { at: now, wei })
+        if (wei !== null) out[address] = wei
+      }
+      // A collection the index does not know has no floor; remember that too.
+      for (const address of wanted)
+        if (!seen.has(address)) this.floorCache.set(`${chainId}:${address}`, { at: now, wei: null })
+    } catch {
+      // The marketplace index is not reachable: the order is simply assessed without a floor.
+    }
+    return out
+  }
+
+  /**
+   * Keyed by the prepared transaction rather than the approval id, because the
+   * preview is produced before the approval exists and belongs to exactly
+   * these bytes at exactly this nonce.
+   */
+  private static snapshotKey(chainId: number, tx: PreparedTx): string {
+    return `${chainId}:${tx.from.toLowerCase()}:${tx.nonce}:${tx.to ?? ''}:${tx.value}:${tx.data}`
+  }
+
+  private rememberSnapshot(key: string, simulation: Simulation | null): void {
+    const snapshot = snapshotOf(simulation)
+    if (!snapshot) return
+    const now = this.deps.platform.now()
+    // An approval that is never decided expires; its snapshot must not outlive it.
+    for (const [k, v] of this.snapshots) if (now - v.at > APPROVAL_TTL_MS) this.snapshots.delete(k)
+    this.snapshots.set(key, { at: now, snapshot })
+  }
+
+  private takeSnapshot(key: string): SimulationSnapshot | null {
+    const hit = this.snapshots.get(key)
+    if (!hit) return null
+    this.snapshots.delete(key)
+    return hit.snapshot
+  }
+
+  /** ElectroSwap's GraphQL, built once. The same endpoint the trace route sits beside (§9.2). */
+  private market(): ElectroSwapClient | null {
+    if (this.marketClient) return this.marketClient
+    const d = this.deps
+    if (!d.apiOrigin) return null
+    const url = `${d.apiOrigin.replace(/\/+$/, '')}/graphql`
+    const key = d.clientKey
+    this.marketClient = new ElectroSwapClient({
+      url,
+      fetchImpl: d.fetch ?? globalThis.fetch,
+      // The API verifies the signature over an EMPTY body on this route (see create.ts).
+      ...(key ? { authHeaders: (method: string, at: string) => authHeaders({ key, method, url: at, now: d.platform.now() }) } : {}),
+    })
+    return this.marketClient
   }
 
   /**
@@ -1119,6 +1429,7 @@ export class ProviderService {
       await d.activity.list({ chainId: intent.chainId }).catch(() => [] as ActivityEntry[])
     ).find((e) => e.id === request.id)
     if (prior?.hash) return prior.hash as Hex
+    const snapshot = this.takeSnapshot(ProviderService.snapshotKey(intent.chainId, tx))
     const entry: ActivityEntry = {
       id: request.id,
       hash: null,
@@ -1134,6 +1445,13 @@ export class ProviderService {
       riskCodes: assessment.rules.map((r) => r.code),
       status: 'pending',
       blockNumber: null,
+      /*
+        §3.4 step 7 asks for the simulation snapshot beside the statements and
+        the risk codes, "so Activity can show what the user was told". Only the
+        mode ever crossed into the approval payload, so the row could say a
+        preview happened but never what it said.
+      */
+      ...(snapshot ? { simulation: snapshot } : {}),
     }
     // Write-ahead (§3.4 step 7): the row exists before the signature, so a device refusal or a lost worker still leaves a trace.
     if (!prior) await d.activity.append(entry)

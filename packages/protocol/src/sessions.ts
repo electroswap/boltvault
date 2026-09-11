@@ -15,6 +15,15 @@ export interface ConnectedSite {
   lastAccounts?: string[]
   connectedAt?: number
   lastUsed?: number
+  /**
+   * The origin's native spend cap (§4.6), in base units as a decimal string.
+   * Undefined means no limit.
+   *
+   * Token units, never fiat: prices are display-only (§3.4 step 6), so a USD
+   * cap would put a price feed in the signing path and let it decide what the
+   * user may sign.
+   */
+  budget?: string
   /** Tab title/favicon captured by the engine from the tab, not supplied by the page. */
   title?: string
   icon?: string
@@ -69,6 +78,8 @@ export class SiteRegistry {
       ...(params.accounts ? { lastAccounts: params.accounts } : {}),
       connectedAt: params.now ?? prev?.connectedAt ?? Date.now(),
       lastUsed: params.now ?? Date.now(),
+      // A reconnect is not a reason to forget a limit the user set.
+      ...(prev?.budget !== undefined ? { budget: prev.budget } : {}),
       ...(params.title ?? prev?.title ? { title: params.title ?? prev?.title } : {}),
       ...(params.icon ?? prev?.icon ? { icon: params.icon ?? prev?.icon } : {}),
     }
@@ -96,6 +107,20 @@ export class SiteRegistry {
     }
     await this.persist()
     return chainId
+  }
+
+  /**
+   * Set (decimal string, base units) or clear (null) an origin's spend cap.
+   *
+   * A budget can be set before the site has ever connected — the row is
+   * created disconnected, exactly as a chain preference is.
+   */
+  async setBudget(origin: string, budget: string | null): Promise<void> {
+    const row = this.sites[origin] ?? { origin, chainId: this._homeChainId, accountId: '', connected: false }
+    if (budget === null) delete row.budget
+    else row.budget = budget
+    this.sites[origin] = row
+    await this.persist()
   }
 
   async touch(origin: string, now: number): Promise<void> {

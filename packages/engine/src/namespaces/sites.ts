@@ -23,6 +23,8 @@ export const SiteSchema = z.object({
   lastAccounts: z.array(z.string()).optional(),
   connectedAt: z.number().int().nonnegative().optional(),
   lastUsed: z.number().int().nonnegative().optional(),
+  /** The origin's native spend cap (§4.6), base units as a decimal string. */
+  budget: z.string().regex(/^\d+$/).max(40).optional(),
   title: z.string().max(200).optional(),
   icon: z.string().max(2048).optional(),
 })
@@ -62,6 +64,7 @@ function toView(s: ConnectedSite): SiteView {
     connected: s.connected,
     connectedAt: s.connectedAt ?? null,
     lastUsed: s.lastUsed ?? null,
+    budget: s.budget ?? null,
     title: s.title ?? null,
     icon: s.icon ?? null,
   }
@@ -72,6 +75,16 @@ export type SiteChange = { origin: string; kind: 'disconnected' } | { origin: st
 export class SitesService {
   readonly registry: SiteRegistry
   private readonly changeListeners = new Set<(change: SiteChange) => void>()
+  /**
+   * The last address the wallet itself put on the clipboard (§3.6).
+   *
+   * In memory and never persisted: it is a sixty-second fact, and the only
+   * thing that can catch clipboard-hijack malware is the wallet's own memory
+   * of what it copied — the clipboard by then is already lying. It lives here
+   * beside the per-origin sessions because §3.6's other identity state does,
+   * and because the firewall reads the site registry anyway.
+   */
+  private copied: { address: string; at: number } | null = null
 
   /** Provider-side listeners: a site the user disconnected or re-chained from Settings must hear it. */
   onChange(listener: (change: SiteChange) => void): () => void {
@@ -141,6 +154,32 @@ export class SitesService {
     return toView(row)
   }
 
+  /**
+   * Set or clear an origin's native spend cap (§4.6). Base units as a decimal
+   * string; `null` removes the cap.
+   */
+  async setBudget(origin: string, budget: string | null): Promise<SiteView> {
+    if (budget !== null && !/^\d+$/.test(budget))
+      throw new EngineError('invalid_argument', 'A budget is an amount in the chain’s own units, as a whole number.')
+    await this.registry.setBudget(origin, budget)
+    this.emit()
+    const row = this.registry.get(origin)
+    if (!row) throw new EngineError('internal', 'site vanished')
+    return toView(row)
+  }
+
+  /**
+   * The UI calls this the moment it copies an address to the clipboard, so the
+   * firewall can tell a paste apart from a swap (§3.6).
+   */
+  noteAddressCopied(address: string): void {
+    this.copied = { address, at: this.platform.now() }
+  }
+
+  lastCopiedAddress(): { address: string; at: number } | null {
+    return this.copied
+  }
+
   async disconnect(origin: string): Promise<void> {
     await this.registry.disconnect(origin)
     this.emit()
@@ -166,6 +205,21 @@ export function sitesNamespace(sites: SitesService): NamespaceSpec {
       handler: (arg) => {
         const { origin, chainId } = arg as { origin: string; chainId: number }
         return sites.setChain(origin, chainId)
+      },
+    },
+    setBudget: {
+      input: z.object({ origin: OriginSchema, budget: z.string().regex(/^\d+$/).max(40).nullable() }),
+      handler: (arg) => {
+        const { origin, budget } = arg as { origin: string; budget: string | null }
+        return sites.setBudget(origin, budget)
+      },
+    },
+    /** §3.6: the UI records every address it copies, so a paste can be checked against it. */
+    noteAddressCopied: {
+      input: z.object({ address: z.string().regex(/^0x[0-9a-fA-F]{40}$/) }),
+      handler: async (arg) => {
+        sites.noteAddressCopied((arg as { address: string }).address)
+        return null
       },
     },
     disconnect: {

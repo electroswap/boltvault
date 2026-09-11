@@ -79,6 +79,12 @@ export const SiteViewSchema = z.object({
   connected: z.boolean(),
   connectedAt: z.number().int().nonnegative().nullable(),
   lastUsed: z.number().int().nonnegative().nullable(),
+  /**
+   * The origin's native spend cap (§4.6), base units as a decimal string;
+   * null means no limit. Token units, never fiat — prices are display-only
+   * (§3.4 step 6).
+   */
+  budget: z.string().regex(/^\d+$/).nullable().default(null),
   title: z.string().nullable(),
   icon: z.string().nullable(),
 })
@@ -260,6 +266,48 @@ export const ActivityCategorySchema = z.enum([
 ])
 export type ActivityCategory = z.infer<typeof ActivityCategorySchema>
 
+/**
+ * What the preview said at sign time, kept with the history row (§3.4 step 7).
+ *
+ * Small and JSON-safe on purpose: the activity blob is sealed and rewritten on
+ * every append, and the wire guard rejects raw bytes while `JSON.stringify`
+ * refuses bigint — so every amount here is a decimal string and the lists are
+ * capped. This is the record of what the user was told, not a second copy of
+ * the trace.
+ */
+export const SimulationSnapshotSchema = z.object({
+  mode: z.enum(['trace', 'estimate', 'none']),
+  ok: z.boolean(),
+  revertReason: z.string().max(500).optional(),
+  gas: z.string().regex(/^\d+$/).optional(),
+  deltas: z
+    .array(
+      z.object({
+        /** 'native' or a token address. */
+        asset: z.string(),
+        standard: z.enum(['native', 'erc20', 'erc721', 'erc1155']),
+        /** Signed decimal string; negative left the account. */
+        amount: z.string().regex(/^-?\d+$/),
+        tokenId: z.string().regex(/^\d+$/).optional(),
+        counterparty: z.string().optional(),
+      }),
+    )
+    .max(20),
+  approvals: z
+    .array(
+      z.object({
+        token: z.string(),
+        spender: z.string(),
+        /** A decimal string, or 'all' for setApprovalForAll. */
+        amount: z.string(),
+        standard: z.enum(['erc20', 'erc721', 'erc1155']),
+      }),
+    )
+    .max(20),
+  note: z.string().max(500).optional(),
+})
+export type SimulationSnapshot = z.infer<typeof SimulationSnapshotSchema>
+
 /** One entry of the encrypted local log (master plan §8.12). Written before broadcast. */
 export const ActivityEntrySchema = z.object({
   id: z.string(),
@@ -281,6 +329,12 @@ export const ActivityEntrySchema = z.object({
   token: z.string().nullable().optional(),
   /** Counterparty for inbound entries. */
   from: z.string().nullable().optional(),
+  /**
+   * The preview the user was shown before signing (§3.4 step 7). Absent on
+   * rows written before this field existed, and on any path that had no
+   * preview to show.
+   */
+  simulation: SimulationSnapshotSchema.nullable().optional(),
 })
 export type ActivityEntry = z.infer<typeof ActivityEntrySchema>
 
