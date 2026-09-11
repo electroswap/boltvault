@@ -22,6 +22,16 @@ export const TOP_TOKENS = `query TopTokens($chain: Chain) { topTokens(chain: $ch
 /** Token details › chart (plan B5): one duration of price history with the period's high and low. */
 export const PRICE_HISTORY = `query PriceHistory($address: String, $chain: Chain, $duration: HistoryDuration!) { token(address: $address, chain: $chain) { market(currency: USD) { priceHistory(duration: $duration) { timestamp value } high: priceHighLow(duration: $duration, highLow: HIGH) { value } low: priceHighLow(duration: $duration, highLow: LOW) { value } } } }`
 
+/**
+ * The per-account activity feed (§8.12, §9.2). It hangs off `portfolios`
+ * rather than being a query of its own, and the API reads DIRECTION for the
+ * address that asked — the same stored row is a send to one party and a
+ * receive to the other — so the owner must be the address whose feed this is.
+ *
+ * `quantity` comes back in whole units, not raw.
+ */
+export const WALLET_ACTIVITY = `query WalletActivity($owner: String!, $chains: [Chain!], $page: Int, $pageSize: Int) { portfolios(ownerAddresses: [$owner]) { assetActivities(chains: $chains, page: $page, pageSize: $pageSize) { id timestamp type chain addresses transaction { blockNumber hash from to status } details { __typename ... on TransactionDetails { type hash transactionStatus assetChanges { __typename ... on TokenTransfer { tokenStandard sender recipient quantity direction asset { address symbol decimals standard } } ... on NftTransfer { nftStandard sender recipient direction asset { tokenId name collection { nftContracts { address } } } } } } } } } }`
+
 export const TOKEN_DETAIL = `query TokenDetail($address: String, $chain: Chain) { token(address: $address, chain: $chain) { id address symbol name decimals standard ${MARKET} sparkline: market(currency: USD) { priceHistory(duration: DAY) { timestamp value } } project { description homepageUrl twitterUrl telegramUrl safetyLevel isSpam logoUrl } } }`
 
 const COLLECTION = `id collectionId name description isVerified numAssets image { url } bannerImage { url } nftContracts { address standard name symbol totalSupply } listingFees { payoutAddress basisPoints } markets(currencies: [ETN]) { floorPrice { value } totalVolume { value } volume(duration: DAY) { value } owners listings { value } percentListed { value } }`
