@@ -284,7 +284,11 @@ export class HardwareService {
       throw new EngineError('invalid_argument', plain(err))
     }
     const got = sig.requestId ? Array.from(sig.requestId, (b) => b.toString(16).padStart(2, '0')).join('') : null
-    if (got && got !== input.id) throw new EngineError('invalid_argument', 'That signature answers a different request. Scan the QR for this one.')
+    // The binding is required, not optional: a signature that carries no request
+    // id is not evidence that this request was the one the device answered, and
+    // nothing downstream re-checks it (the engine never recovers a signature
+    // against the expected address).
+    if (!got || got !== input.id) throw new EngineError('invalid_argument', 'That signature answers a different request. Scan the QR for this one.')
     clearTimeout(p.timer)
     this.keystone.delete(input.id)
     this.emitKeystone()

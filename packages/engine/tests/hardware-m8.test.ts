@@ -8,7 +8,7 @@
  */
 import { createMemoryPlatform } from '@boltvault/platform/memory'
 import { FakeTrezorConnect, pathFor } from '@boltvault/hardware'
-import { FakeKeystone, encodeSignRequest } from '@boltvault/hardware/keystone'
+import { FakeKeystone, encodeSignRequest, encodeSignature } from '@boltvault/hardware/keystone'
 import { startMockRpc, type MockRpc } from '@boltvault/testing'
 import { parseTransaction, recoverTransactionAddress, type Hex, type TransactionSerialized } from 'viem'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -143,6 +143,15 @@ describe('Keystone through the pending table', () => {
     // A wrong answer (another request's id) is refused; the right one signs.
     const other = await device.answer(encodeSignRequest({ requestId: new Uint8Array(16).fill(1), signData: new Uint8Array([9]), dataType: 'personal_message', path: row.path, xfp: device.xfp }))
     await expect(engine.engine.hardware.keystoneSubmit({ id: pending.id, parts: other })).rejects.toThrow(/different request/)
+    /*
+      An answer carrying no request id at all used to be accepted: the binding
+      check was `got && got !== id`, which skips entirely when `got` is null.
+      Nothing downstream re-checks it — the engine never recovers a signature
+      against the expected address — so an unbound signature was taken on
+      trust. The binding is required now.
+    */
+    const unbound = encodeSignature({ signature: new Uint8Array(65).fill(7), requestId: null })
+    await expect(engine.engine.hardware.keystoneSubmit({ id: pending.id, parts: unbound })).rejects.toThrow(/different request/)
     const answer = await device.answer(pending.frames)
     await engine.engine.hardware.keystoneSubmit({ id: pending.id, parts: answer })
     const { raw } = await firstRaw(rpc)
