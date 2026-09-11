@@ -4,6 +4,12 @@
  * the three fee lines, and the approve → permit → swap flow through three
  * internal sheets, ending in a Universal Router call whose PAY_PORTION pays
  * the configured sink at the schedule's bips (T10).
+ *
+ * The last block covers the other price this wallet can get: ElectroSwap's
+ * routing service (§8.6). The engine under test in every case above carries no
+ * wallet key, so it builds no `Quoter` at all and never asks — which is what
+ * keeps this suite off the network — and the service's cases each build their
+ * own engine on the same mock chain.
  */
 import { createMemoryPlatform } from '@boltvault/platform/memory'
 import { decodeUniversalRouter, UR_COMMAND } from '@boltvault/security'
@@ -27,6 +33,21 @@ const SINK = '0x00000000000000000000000000000000000051ab' as Hex
 const LIST = { name: 'fixture', tokens: [{ chainId: TESTNET, address: TOKEN, name: 'Fixture Token', symbol: 'FIX', decimals: 6 }] }
 const str = (v: string): Hex => encodeAbiParameters(parseAbiParameters('string'), [v])
 const u = (v: bigint): Hex => encodeAbiParameters(parseAbiParameters('uint256'), [v])
+
+/** Where the extra engines' routing service lives; nothing listens, the injected fetch answers. */
+const ROUTING_URL = 'https://routing.test/routing/quote'
+/** 1 FIX in, and what the mock QuoterV2 answers for it: the price to beat. */
+const ONE_FIX = 1_000_000n
+const ONCHAIN_OUT = 2n * 10n ** 18n
+/** An output the given number of bips below what the wallet can prove for itself. */
+const shortBy = (bips: bigint): bigint => (ONCHAIN_OUT * (10_000n - bips)) / 10_000n
+
+const tokenRef = (address: Hex): Record<string, unknown> => ({ address, symbol: 'T', decimals: 18, chainId: TESTNET })
+const v3hop = (tokenIn: Hex, tokenOut: Hex, fee = '3000'): Record<string, unknown> => ({ type: 'v3-pool', tokenIn: tokenRef(tokenIn), tokenOut: tokenRef(tokenOut), fee, liquidity: '1', sqrtRatioX96: '1', tickCurrent: 0 })
+const jsonBody = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+/** A 200 in the routing service's own shape, for `amountIn` FIX. */
+const routingQuote = (route: readonly unknown[], amountOut: bigint, amountIn = ONE_FIX): Response =>
+  jsonBody({ routing: 'CLASSIC', quote: { blockNumber: '1', amount: amountIn.toString(), quote: amountOut.toString(), gasUseEstimate: '180000', route, routeString: '' }, allQuotes: [], quoteId: 'q-1', cached: false })
 
 function payloadOf(req: ApprovalRequest): NonNullable<ReturnType<typeof parseApprovalPayload>> {
   const p = parseApprovalPayload(req.payload)
@@ -72,6 +93,12 @@ describe('swap on the testnet mock', () => {
   const allowances = new Map<string, bigint>()
   let permitNonce = 0
   let dynoBalance = 25_000n * 10n ** 18n
+  /** Every URL this engine asked for, so "never asked the routing service" is assertable. */
+  const fetched: string[] = []
+  /** Off for the one case where the mini-router has no answer and the service is the only price. */
+  let poolsOnChain = true
+  /** Extra engines built by the routing-service cases, disposed with this one. */
+  const extras: Engine[] = []
 
   beforeAll(async () => {
     resetMulticallCache()
@@ -103,6 +130,7 @@ describe('swap on the testnet mock', () => {
     // The V3 quoter answers the 0.3 % pool at 1 FIX = 2 WETN-units (scaled by decimals); everything else fails to quote.
     rpc.state.calls.set(QUOTER.toLowerCase(), ({ data }) => {
       const sel = data.slice(0, 10)
+      if (!poolsOnChain) throw new Error('no pool')
       if (sel === '0xc6a5026a') {
         // quoteExactInputSingle((tokenIn, tokenOut, amountIn, fee, sqrtPriceLimitX96))
         const amountIn = BigInt(`0x${data.slice(10 + 64 * 2, 10 + 64 * 3)}`)
@@ -116,6 +144,7 @@ describe('swap on the testnet mock', () => {
       throw new Error('no pair')
     })
     const fetchImpl: typeof fetch = async (input) => {
+      fetched.push(String(input))
       if (String(input).includes('tokenlist.json')) return new Response(JSON.stringify(LIST), { status: 200, headers: { 'content-type': 'application/json' } })
       return new Response('not found', { status: 404 })
     }
@@ -134,6 +163,7 @@ describe('swap on the testnet mock', () => {
   })
 
   afterAll(async () => {
+    for (const extra of extras) extra.dispose()
     engine.dispose()
     await rpc.close()
   })
@@ -280,5 +310,163 @@ describe('swap on the testnet mock', () => {
     const done = await waitStep(engine, flowId, 0, 'rejected')
     expect(done.status).toBe('rejected')
     expect(rpc.state.transactions.size).toBe(before)
+  })
+
+  /**
+   * ElectroSwap's routing service as the first price (§8.6).
+   *
+   * The service walks the whole pool graph instead of sixteen fixed candidates,
+   * so it is asked on every quote — but the mini-router is quoted alongside it,
+   * unconditionally, because a divergence check needs something to check
+   * against. A served price at or above the local one is taken at face value; a
+   * served price below it is taken only inside a narrow band, since that is the
+   * figure `minimumOut` is derived from. Everything else falls back to the chain,
+   * and the swap stays usable in every one of those cases.
+   */
+  describe('the routing service', () => {
+    /**
+     * A second engine on the same mock chain, with a wallet key — which is what
+     * makes `createEngine` build a `Quoter` at all — and a fetch that answers
+     * `ROUTING_URL` with `serve`.
+     */
+    const withQuoter = async (opts: { serve?: () => Response; quoterUrl?: string | null } = {}): Promise<{ quote: () => Promise<Awaited<ReturnType<Engine['engine']['swap']['quote']>>>; asked: string[] }> => {
+      const asked: string[] = []
+      const fetchImpl: typeof fetch = async (target) => {
+        const url = String(target)
+        asked.push(url)
+        if (url.includes('tokenlist.json')) return new Response(JSON.stringify(LIST), { status: 200, headers: { 'content-type': 'application/json' } })
+        if (url === ROUTING_URL && opts.serve) return opts.serve()
+        return new Response('not found', { status: 404 })
+      }
+      const extra = createEngine({
+        platform: createMemoryPlatform(),
+        kdf: KDF,
+        receiptPollMs: 20,
+        fetch: fetchImpl,
+        electroswapUrl: null,
+        pricesUrl: null,
+        staticsUrl: null,
+        clientKey: 'test-wallet-key',
+        quoterUrl: opts.quoterUrl === undefined ? ROUTING_URL : opts.quoterUrl,
+      })
+      extras.push(extra)
+      await extra.ready
+      const created = await extra.engine.vault.create({ password: PASSWORD })
+      const words = created.mnemonic.split(' ')
+      const quiz = await extra.engine.vault.backupQuiz({ seedId: created.seedId })
+      await extra.engine.vault.confirmBackup({ seedId: created.seedId, answers: quiz.positions.map((position) => ({ position, word: words[position - 1] ?? '' })) })
+      await extra.chains.setRpc(TESTNET, rpc.url)
+      const owner = created.accounts[0]?.address as Hex
+      rpc.state.balances.set(owner.toLowerCase(), 5n * 10n ** 18n)
+      balances.set(owner.toLowerCase(), 12_500_000n)
+      const accountId = created.accounts[0]?.id ?? ''
+      return { quote: () => extra.engine.swap.quote({ accountId, chainId: TESTNET, tokenIn: TOKEN, tokenOut: 'native', amountIn: '1' }), asked }
+    }
+
+    /*
+      This is the test that keeps every other test in this file off the network:
+      a build with no wallet key has nothing to present to the service — its
+      origin check refuses an extension outright — so no `Quoter` is built and
+      no request is made.
+    */
+    it('is never asked by a build that ships no wallet key', async () => {
+      const q = await engine.engine.swap.quote({ accountId, chainId: TESTNET, tokenIn: TOKEN, tokenOut: 'native', amountIn: '1' })
+      expect(q.route.source).toBe('onchain')
+      expect(q.amountOutRaw).toBe(ONCHAIN_OUT.toString())
+      // This engine's fetch is recorded and did run — it served the token list —
+      // so an empty list of quote requests is a fact rather than an absence.
+      expect(fetched.some((url) => url.includes('tokenlist.json'))).toBe(true)
+      expect(fetched.filter((url) => /quote/i.test(url))).toEqual([])
+    })
+
+    it('prices the trade when it answers with a route the wallet can execute', async () => {
+      // Ten per cent above what the chain's own quoter says, so the figure in the
+      // quote can only have come from the service.
+      const apiOut = (ONCHAIN_OUT * 11_000n) / 10_000n
+      const { quote, asked } = await withQuoter({ serve: () => routingQuote([[v3hop(TOKEN, WETN, '3000')]], apiOut) })
+      const q = await quote()
+      expect(q.route.source).toBe('api')
+      expect(q.amountOutRaw).toBe(apiOut.toString())
+      expect(q.route.label).toBe('V3 0.3%')
+      expect(q.route.hops).toEqual([{ kind: 'v3', tokenIn: TOKEN.toLowerCase(), tokenOut: WETN.toLowerCase(), fee: 3000 }])
+      expect(asked).toContain(ROUTING_URL)
+    })
+
+    /*
+      The headline case for the feature: a pair whose liquidity sits somewhere
+      the sixteen candidates never reach. Before the service was asked this quote
+      was "No route on ElectroSwap for this pair."
+    */
+    it('is the whole price when the mini-router finds no route at all', async () => {
+      const apiOut = 4n * 10n ** 18n
+      const { quote } = await withQuoter({ serve: () => routingQuote([[v3hop(TOKEN, WETN, '500')]], apiOut) })
+      poolsOnChain = false
+      try {
+        const q = await quote()
+        expect(q.route.source).toBe('api')
+        expect(q.amountOutRaw).toBe(apiOut.toString())
+        expect(q.problems.join(' ')).not.toMatch(/no route/i)
+      } finally {
+        poolsOnChain = true
+      }
+    })
+
+    it('is trusted for a price a little under the local one, which is two routers disagreeing at two moments', async () => {
+      const { quote } = await withQuoter({ serve: () => routingQuote([[v3hop(TOKEN, WETN, '3000')]], shortBy(50n)) })
+      const q = await quote()
+      expect(q.route.source).toBe('api')
+      expect(q.amountOutRaw).toBe(shortBy(50n).toString())
+    })
+
+    it('is still trusted at exactly the edge of the band, so the comparison cannot drift', async () => {
+      const { quote } = await withQuoter({ serve: () => routingQuote([[v3hop(TOKEN, WETN, '3000')]], shortBy(100n)) })
+      expect((await quote()).route.source).toBe('api')
+      const past = await withQuoter({ serve: () => routingQuote([[v3hop(TOKEN, WETN, '3000')]], shortBy(101n)) })
+      expect((await past.quote()).route.source).toBe('onchain')
+    })
+
+    /*
+      Not a preference for the better number: a security bound. `minimumOut` is
+      derived from the quoted output, so signing a figure five per cent light
+      leaves five per cent of room for somebody to take — and the wallet can
+      prove for itself that the price is there.
+    */
+    it('is overruled by the chain when its price is materially worse than the wallet can prove', async () => {
+      const { quote } = await withQuoter({ serve: () => routingQuote([[v3hop(TOKEN, WETN, '3000')]], shortBy(500n)) })
+      const q = await quote()
+      expect(q.route.source).toBe('onchain')
+      expect(q.amountOutRaw).toBe(ONCHAIN_OUT.toString())
+    })
+
+    /*
+      Three ways of not answering, one outcome. The split route is the sharp one:
+      it is a perfectly good quote at a better price that `encodeSwap` has no
+      room to express, so taking its number would show a price the wallet cannot
+      honour.
+    */
+    it('falls back to the chain on a 500, on a 200 that says "Not found", and on a split route', async () => {
+      const refusals: ReadonlyArray<() => Response> = [
+        () => jsonBody({ state: 'Error' }, 500),
+        () => jsonBody({ state: 'Not found' }),
+        () => routingQuote([[v3hop(TOKEN, WETN, '3000')], [v3hop(TOKEN, WETN, '500')]], 9n * 10n ** 18n),
+      ]
+      for (const serve of refusals) {
+        const { quote, asked } = await withQuoter({ serve })
+        const q = await quote()
+        expect(asked).toContain(ROUTING_URL)
+        expect(q.route.source).toBe('onchain')
+        expect(q.amountOutRaw).toBe(ONCHAIN_OUT.toString())
+        expect(q.route.label).toBe('V3 0.3%')
+      }
+    })
+
+    it('is not asked at all when the build turns it off, key or no key', async () => {
+      const { quote, asked } = await withQuoter({ quoterUrl: null, serve: () => routingQuote([[v3hop(TOKEN, WETN, '3000')]], 9n * 10n ** 18n) })
+      const q = await quote()
+      expect(q.route.source).toBe('onchain')
+      expect(q.amountOutRaw).toBe(ONCHAIN_OUT.toString())
+      expect(asked.some((url) => url.includes('tokenlist.json'))).toBe(true)
+      expect(asked.filter((url) => /quote/i.test(url))).toEqual([])
+    })
   })
 })

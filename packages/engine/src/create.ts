@@ -65,6 +65,7 @@ import {
   type ApprovalRequest,
   type Settings,
 } from './schema'
+import { DEFAULT_QUOTER_PATH, Quoter } from './quoterApi'
 import { SettingsStore } from './settingsStore'
 import { createInProcessTransport } from './transport'
 
@@ -100,6 +101,13 @@ export interface EngineDeps {
   readonly electroswapUrl?: string | null
   /** GeckoTerminal base URL override (tests); `null` disables display prices off Electroneum (§10.4). */
   readonly pricesUrl?: string | null
+  /**
+   * ElectroSwap routing service override (§8.6); defaults to
+   * `{apiOrigin}{DEFAULT_QUOTER_PATH}`. A local quoter serves it at
+   * `http://localhost:3007/api/quote` instead, so a dev build points here.
+   * `null` disables it and the wallet quotes on chain only.
+   */
+  readonly quoterUrl?: string | null
   /** WebHID (`navigator.hid`) in the extension worker; absent elsewhere (§2.7 S7). */
   readonly hid?: HidProvider | null
   /** A Ledger transport that is not WebHID (BLE on the phone). */
@@ -433,6 +441,24 @@ export function createEngine(deps: EngineDeps): Engine {
     ...(ladders ? { ladders } : {}),
   })
   const flows = new FlowStore({ platform: deps.platform, bus: host.events, activity })
+  /*
+    The routing service (§8.6), asked before the on-chain mini-router.
+
+    Without a key there is nothing to ask: the service's origin check refuses an
+    extension outright — a `chrome-extension://` origin is on no allow-list — and
+    the key is the one thing that gets past it. A keyless build (and every test)
+    therefore quotes on chain, which is what shipped before this and is a correct
+    price, just a narrower search.
+  */
+  const quoter =
+    deps.clientKey && deps.quoterUrl !== null
+      ? new Quoter({
+          fetch: fetchImpl,
+          url: deps.quoterUrl ?? `${apiOrigin}${DEFAULT_QUOTER_PATH}`,
+          key: deps.clientKey,
+          now: () => deps.platform.now(),
+        })
+      : undefined
   const swap = new SwapService({
     statics,
     platform: deps.platform,
@@ -443,6 +469,7 @@ export function createEngine(deps: EngineDeps): Engine {
     settings,
     holder,
     flows,
+    ...(quoter ? { quoter } : {}),
   })
   const limit = new LimitService({
     platform: deps.platform,

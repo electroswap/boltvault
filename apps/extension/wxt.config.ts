@@ -100,6 +100,14 @@ export default defineConfig({
       __API_ORIGIN__: JSON.stringify((process.env['WXT_BOLTVAULT_API'] ?? 'https://electroswap.io').replace(/\/+$/, '')),
       __LIMIT_ORDERS__: JSON.stringify(process.env['WXT_BOLTVAULT_LIMIT_ORDERS'] === '1'),
       /*
+        The routing service (§8.6). Empty means "derive it from the API origin",
+        which is right for every release — ElectroSwap mounts the quoter at
+        `/routing/quote` on the same host. A local quoter serves the same handler
+        at `http://localhost:3007/api/quote`, which is not a path the origin
+        implies, so a dev build has to name it outright.
+      */
+      __QUOTER_URL__: JSON.stringify(process.env['WXT_QUOTER_URL'] ?? ''),
+      /*
         The wallet key (§9.1). A client identifier, not a secret — every
         install ships the same one — so it buys access, not trust, and every
         bound that matters is applied by the API regardless of it. Empty means

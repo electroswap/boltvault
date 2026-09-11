@@ -99,6 +99,24 @@ function classify(route: SwapRoute): 'v2' | 'v3' | 'mixed' {
 
 export function encodeSwap(input: EncodeSwapInput): EncodedSwap {
   if (input.route.hops.length === 0) throw new Error('empty route')
+  /*
+    A mixed route is refused here rather than encoded into a revert.
+
+    V2 and V3 hops in one path used to fall through to the packed-path branch
+    below, where a V2 hop is marked with the `0x800000` fee sentinel. That
+    sentinel is a MixedRouteQuoter convention: the Universal Router does not
+    read it, and would look for a V3 pool at fee tier 8388608, which does not
+    exist. So the calldata was well formed, accepted by every check the wallet
+    makes, and reverted on chain with the user's gas.
+
+    The mini-router already declines to generate such a route (see `candidates`)
+    — but it is no longer the only source of one. The routing service will
+    return a mixed route whenever MIXED is in its protocol set, so the guard
+    belongs at the point where the mistake becomes calldata, not at each
+    caller. Lift it when the encoder learns to partition a mixed route into one
+    command per contiguous same-protocol section.
+  */
+  if (classify(input.route) === 'mixed') throw new Error('mixed route')
   const commands: number[] = []
   const inputs: Hex[] = []
   let payerIsUser = true
@@ -125,7 +143,7 @@ export function encodeSwap(input: EncodeSwapInput): EncodedSwap {
     const path = [input.route.hops[0]?.tokenIn as Hex, ...input.route.hops.map((h) => h.tokenOut)]
     push(COMMAND.V2_SWAP_EXACT_IN, encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountIn, uint256 amountOutMin, address[] path, bool payerIsUser'), [swapRecipient, input.amountIn, routerMinOut, path, payerIsUser]))
   } else {
-    // V3 and mixed routes share the packed-path form; the UR reads the 0x800000 flag for V2 hops.
+    // A single-protocol V3 path; `classify` has already refused anything mixed.
     push(COMMAND.V3_SWAP_EXACT_IN, encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountIn, uint256 amountOutMin, bytes path, bool payerIsUser'), [swapRecipient, input.amountIn, routerMinOut, v3Path(input.route.hops), payerIsUser]))
   }
 

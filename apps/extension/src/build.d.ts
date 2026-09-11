@@ -6,3 +6,5 @@ declare const __API_ORIGIN__: string
 declare const __WALLET_KEY__: string
 /** Limit orders on the Swap screen (`WXT_BOLTVAULT_LIMIT_ORDERS=1`); off by default. */
 declare const __LIMIT_ORDERS__: boolean
+/** Routing service URL (`WXT_QUOTER_URL`); '' derives it from `__API_ORIGIN__`. */
+declare const __QUOTER_URL__: string

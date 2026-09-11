@@ -1,6 +1,7 @@
 /**
- * Swap (master plan §8.6): the mini-router quotes on chain, the wallet fee
- * comes from the holder tier (§8.18), and execution is a flow of internal
+ * Swap (master plan §8.6): ElectroSwap's routing service prices the trade and
+ * the mini-router quotes on chain whenever it cannot, the wallet fee comes from
+ * the holder tier (§8.18), and execution is a flow of internal
  * approvals — approve Permit2 once per token, a per-swap exact PermitSingle
  * signature, then the Universal Router call with PAY_PORTION to the pinned
  * sink. The tier is re-read at sign time; a moved tier re-quotes, and the
@@ -24,10 +25,13 @@ import {
   priceImpactPct,
   taxSlippageBips,
   type BestQuote,
+  type Hop,
   type PermitInput,
   type QuoteAddresses,
   type ReadCall as EsReadCall,
+  type Reader as EsReader,
   type ReadResult as EsReadResult,
+  type RouteQuote,
 } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
 import { formatUnits, maxUint256, parseUnits, type Hex } from 'viem'
@@ -35,7 +39,8 @@ import { z } from 'zod'
 import { EngineError } from '../errors'
 import type { NamespaceSpec } from '../host'
 import { readMany } from '../multicall'
-import { AccountIdSchema, type SwapFlow, type SwapQuote, type SwapStep, type TokenView } from '../schema'
+import type { Quoter, QuoterInput, QuoterOutcome } from '../quoterApi'
+import { AccountIdSchema, type SwapFlow, type SwapHop, type SwapQuote, type SwapStep, type TokenView } from '../schema'
 import type { SettingsStore } from '../settingsStore'
 import type { ChainsService } from './chains'
 import { type FlowStepRun, type FlowStore } from './flows'
@@ -55,6 +60,12 @@ export interface SwapDeps {
   readonly statics?: { isDisabled(feature: 'swap' | 'limit'): boolean }
   readonly holder: HolderService
   readonly flows: FlowStore
+  /**
+   * ElectroSwap's routing service (§8.6), asked before the mini-router. Absent
+   * when the build ships no wallet key — the service answers 401 without one,
+   * so there would be nothing to ask — and in tests, which quote on chain.
+   */
+  readonly quoter?: Quoter
 }
 
 export interface SwapInput {
@@ -75,6 +86,8 @@ const DEADLINE_S = 20 * 60
 const BIPS_CEILING = 10_000
 /** Hard clamp, so a path that ever skips the refusal still leaves a non-zero floor. */
 const MAX_EFFECTIVE_SLIPPAGE_BPS = 9_900
+/** How far below the mini-router's price a served quote may sit and still be used (§8.6). */
+const MAX_SERVED_SHORTFALL_BPS = 100
 const hex = (n: bigint): Hex => `0x${n.toString(16)}`
 const isEtn = (chainId: number): chainId is 52014 | 5201420 => chainId === 52014 || chainId === 5201420
 const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
@@ -94,6 +107,44 @@ export function rateOf(amountIn: bigint, amountOut: bigint, decimalsIn: number, 
   const i = Number(formatUnits(amountIn, decimalsIn))
   const o = Number(formatUnits(amountOut, decimalsOut))
   return i > 0 && Number.isFinite(o) ? o / i : null
+}
+
+/**
+ * A quoted hop as the encoder needs it.
+ *
+ * `SwapHopSchema` leaves `fee` optional because a V2 hop has none, so a V3 hop
+ * that arrived without one used to be encoded as 0.3% — a tier that may have no
+ * pool behind it at all, and on a pair where it does, simply the wrong price.
+ * The quote now has two possible authors, one of them a service over the
+ * network, and guessing is the one thing that must not happen on the path to
+ * calldata the user signs. Refuse and let the caller re-quote instead.
+ */
+function encodableHop(h: SwapHop): Hop {
+  if (h.kind === 'v2') return { kind: 'v2', tokenIn: h.tokenIn as Hex, tokenOut: h.tokenOut as Hex }
+  if (h.fee === undefined) throw new EngineError('invalid_argument', 'That route came back without a fee tier. Start the swap again to re-price it.')
+  return { kind: 'v3', tokenIn: h.tokenIn as Hex, tokenOut: h.tokenOut as Hex, fee: h.fee }
+}
+
+/**
+ * Is the served price one the wallet is willing to stand behind?
+ *
+ * §8.6 words the rule as "> 1% divergence → on-chain wins", which is symmetric.
+ * It is applied asymmetrically here, and deliberately: the two directions are
+ * not the same risk. A served price *above* the mini-router's is what the
+ * service is for — an AlphaRouter that walks the whole pool graph finds routes
+ * sixteen fixed candidates cannot, and rejecting those would discard the entire
+ * benefit. A served price *below* it is the dangerous one, because it is the
+ * number `minimumOut` is derived from: accept a figure 5% light and the swap is
+ * signed with 5% of room for somebody to take. So a better price is taken at
+ * face value, and a worse one only inside the band that ordinary disagreement
+ * between two routers at two moments can explain.
+ *
+ * No local price at all — the mini-router found no route — is not a failed
+ * comparison, it is the headline case, and the served route stands.
+ */
+function servedIsFair(served: bigint, local: bigint): boolean {
+  if (local <= 0n || served >= local) return true
+  return (local - served) * BigInt(BIPS_CEILING) <= local * BigInt(MAX_SERVED_SHORTFALL_BPS)
 }
 
 export class SwapService {
@@ -124,13 +175,47 @@ export class SwapService {
       taxBips: 0,
       taxUnknown: false,
       fee: { bips: 0, tier: 0, name: '', amountRaw: '0', sink: null, source: 'fallback', nextTierAt: null, nextTierBips: null },
-      route: { label: '', hops: [] },
+      route: { label: '', hops: [], source: 'onchain' },
       gasEstimate: '0',
       steps: [],
       quotedAt: this.deps.platform.now(),
       ok: false,
       problems,
     }
+  }
+
+  /**
+   * The routing service first, the on-chain mini-router when it cannot answer.
+   *
+   * "Cannot answer" is deliberately wide: unreachable, slow, rate limited, no
+   * route, a route the encoder cannot express, or a price materially worse than
+   * the wallet can prove for itself. All of those land in the same place, which
+   * is the behaviour that shipped before the service was asked at all — so the
+   * worst it can do to a quote is cost it one bounded round trip, in parallel
+   * with work the wallet was doing anyway. It is never the reason a swap is
+   * refused.
+   */
+  private async route(input: QuoterInput, addresses: QuoteAddresses, read: EsReader): Promise<{ quote: RouteQuote; source: 'api' | 'onchain' } | null> {
+    const quoter = this.deps.quoter
+    /*
+      Both at once, and the on-chain quote unconditionally.
+
+      §8.6 asks for a divergence check on the served price, and a check needs
+      something to check against. Asking only when the service declines would
+      leave the one case that actually costs a user unguarded: a quote below the
+      real price is signed with a `minOut` below the real price, which is room a
+      sandwich can take. (A quote *above* it is the harmless direction — the
+      minimum is then unreachable and the swap reverts.) Quoting on chain anyway
+      costs nothing that was not already being spent, and it turns the service
+      from something trusted into something corroborated.
+    */
+    const [served, onChain] = await Promise.all([
+      quoter ? quoter.route(input) : Promise.resolve<QuoterOutcome>({ kind: 'none', reason: 'no quoter' }),
+      bestRoute(input.tokenIn, input.tokenOut, input.amountIn, addresses, read),
+    ])
+    const local = onChain?.best ?? null
+    if (served.kind === 'route' && servedIsFair(served.quote.amountOut, local?.amountOut ?? 0n)) return { quote: served.quote, source: 'api' }
+    return local ? { quote: local, source: 'onchain' } : null
   }
 
   async quote(input: SwapInput): Promise<SwapQuote> {
@@ -190,16 +275,25 @@ export class SwapService {
     // Route, spot (for impact) and taxes in as few batches as the reader allows.
     const addresses = quoteAddresses(chainId)
     const probeIn = amountIn / 1000n
-    const [best, probe, taxIn, taxOut] = await Promise.all([
-      bestRoute(wrappedIn, wrappedOut, amountIn, addresses, read),
+    const [routed, probe, taxIn, taxOut] = await Promise.all([
+      this.route({ chainId, tokenIn: wrappedIn, tokenOut: wrappedOut, amountIn, recipient: owner }, addresses, read),
+      /*
+        The spot probe stays on chain.
+
+        It is a thousandth of the trade, quoted only to divide into the real
+        output for the price impact figure, and the routing service allows
+        thirty requests per five minutes — spending two of them per keystroke
+        to price a rounding error would starve the quote that matters.
+      */
       probeIn > 0n ? bestRoute(wrappedIn, wrappedOut, probeIn, addresses, read) : Promise.resolve<BestQuote | null>(null),
       same(wrappedIn, wetn) ? Promise.resolve(null) : detectTax(A.feeOnTransferDetector as Hex | null, wrappedIn, wetn, read),
       same(wrappedOut, wetn) ? Promise.resolve(null) : detectTax(A.feeOnTransferDetector as Hex | null, wrappedOut, wetn, read),
     ])
-    if (!best) {
+    if (!routed) {
       problems.push('No route on ElectroSwap for this pair.')
       return { ...withState, problems }
     }
+    const best = routed.quote
     /*
       A probe that could not answer is not a probe that said "no tax" — and it
       is not a reason to refuse the swap either.
@@ -215,7 +309,7 @@ export class SwapService {
     */
     const taxUnknown = taxIn === 'unavailable' || taxOut === 'unavailable'
     const taxBips = taxSlippageBips(taxIn, taxOut)
-    const amountOut = best.best.amountOut
+    const amountOut = best.amountOut
     const bips = tier.bips
     const sink = tier.sink
     // There is no sink contract any more: the fee goes to an address named in
@@ -248,7 +342,7 @@ export class SwapService {
       if (!p2 || !permitCovers({ amount: p2[0], expiration: Number(p2[1]), nonce: Number(p2[2]) }, amountIn, nowS)) steps.push('permit')
     }
     steps.push('swap')
-    const gas = best.best.gasEstimate + 90_000n + (steps.includes('approve') ? 55_000n : 0n) + (steps.includes('permit') ? 35_000n : 0n)
+    const gas = best.gasEstimate + 90_000n + (steps.includes('approve') ? 55_000n : 0n) + (steps.includes('permit') ? 35_000n : 0n)
     const feeWei = gas * gasPrice
     if (amountIn > balanceIn) problems.push(`Not enough ${inView.symbol}.`)
     if ((nativeIn ? amountIn : 0n) + feeWei > nativeBalance) problems.push('Not enough ETN for the network fee.')
@@ -263,7 +357,7 @@ export class SwapService {
       taxBips,
       taxUnknown,
       fee: { ...withState.fee, amountRaw: feeAmount(amountOut, bips).toString() },
-      route: { label: best.best.candidate.label, hops: best.best.candidate.route.hops.map((h) => (h.kind === 'v3' ? { kind: 'v3' as const, tokenIn: h.tokenIn, tokenOut: h.tokenOut, fee: h.fee } : { kind: 'v2' as const, tokenIn: h.tokenIn, tokenOut: h.tokenOut })) },
+      route: { label: best.candidate.label, source: routed.source, hops: best.candidate.route.hops.map((h) => (h.kind === 'v3' ? { kind: 'v3' as const, tokenIn: h.tokenIn, tokenOut: h.tokenOut, fee: h.fee } : { kind: 'v2' as const, tokenIn: h.tokenIn, tokenOut: h.tokenOut })) },
       gasEstimate: gas.toString(),
       steps,
       quotedAt: d.platform.now(),
@@ -368,7 +462,7 @@ export class SwapService {
         if (bips > 0 && !sink) throw new EngineError('invalid_argument', 'In-wallet swaps are off on this network — no fee address is set for it in this build.')
         const nowS = Math.floor(d.platform.now() / 1000)
         const enc = encodeSwap({
-          route: { hops: quote.route.hops.map((h) => (h.kind === 'v3' ? { kind: 'v3' as const, tokenIn: h.tokenIn as Hex, tokenOut: h.tokenOut as Hex, fee: h.fee ?? 3000 } : { kind: 'v2' as const, tokenIn: h.tokenIn as Hex, tokenOut: h.tokenOut as Hex })) },
+          route: { hops: quote.route.hops.map((h) => encodableHop(h)) },
           amountIn,
           quotedOut: BigInt(quote.amountOutRaw),
           slippageBips: quote.slippageBips + quote.taxBips,

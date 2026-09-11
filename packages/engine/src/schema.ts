@@ -462,7 +462,17 @@ export const SwapQuoteSchema = z.object({
     nextTierAt: z.string().nullable(),
     nextTierBips: z.number().int().nonnegative().nullable(),
   }),
-  route: z.object({ label: z.string(), hops: z.array(SwapHopSchema) }),
+  route: z.object({
+    label: z.string(),
+    hops: z.array(SwapHopSchema),
+    /**
+     * Which router priced this. The routing service is asked first (§8.6) and
+     * the on-chain mini-router answers when it cannot, so a quote cannot say
+     * where its price came from unless it is recorded. Defaulted so quotes
+     * cached before this field existed still parse.
+     */
+    source: z.enum(['api', 'onchain']).default('onchain'),
+  }),
   gasEstimate: z.string(),
   steps: z.array(SwapStepSchema),
   quotedAt: z.number().int().nonnegative(),

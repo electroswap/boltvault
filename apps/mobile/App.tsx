@@ -141,7 +141,7 @@ export default function App() {
     let alive = true
     Promise.all([createMobilePlatform(), createWalletKit().catch(() => null)])
       .then(([platform, walletKit]) => {
-        if (alive) setEngine(createEngine({ platform, ledger: mobileLedgerProvider(), walletKit, body: 'mobile', clientVersion: `BoltVault/${process.env['EXPO_PUBLIC_APP_VERSION'] ?? '0.1.0'}`, ...(process.env['EXPO_PUBLIC_BOLTVAULT_API'] ? { apiOrigin: process.env['EXPO_PUBLIC_BOLTVAULT_API'] } : {}), ...(process.env['EXPO_PUBLIC_BOLTVAULT_KEY'] ? { clientKey: process.env['EXPO_PUBLIC_BOLTVAULT_KEY'] } : {}), features: { limitOrders: process.env['EXPO_PUBLIC_BOLTVAULT_LIMIT_ORDERS'] === '1' } }))
+        if (alive) setEngine(createEngine({ platform, ledger: mobileLedgerProvider(), walletKit, body: 'mobile', clientVersion: `BoltVault/${process.env['EXPO_PUBLIC_APP_VERSION'] ?? '0.1.0'}`, ...(process.env['EXPO_PUBLIC_BOLTVAULT_API'] ? { apiOrigin: process.env['EXPO_PUBLIC_BOLTVAULT_API'] } : {}), ...(process.env['EXPO_PUBLIC_BOLTVAULT_KEY'] ? { clientKey: process.env['EXPO_PUBLIC_BOLTVAULT_KEY'] } : {}), ...(process.env['EXPO_PUBLIC_QUOTER_URL'] ? { quoterUrl: process.env['EXPO_PUBLIC_QUOTER_URL'] } : {}), features: { limitOrders: process.env['EXPO_PUBLIC_BOLTVAULT_LIMIT_ORDERS'] === '1' } }))
       })
       .catch((err: unknown) => console.error('platform failed', err))
     return () => {

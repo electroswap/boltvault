@@ -97,13 +97,48 @@ describe('universal router encoding mirrors the SDK', () => {
     expect(swap?.type === 'V3_SWAP_EXACT_IN' && swap.recipient === ME).toBe(true)
   })
 
-  it('a permit leads the plan; mixed routes carry the V2 flag in the path', () => {
+  it('a permit leads the plan, and a two-hop V3 path is packed into the one swap command', () => {
     const permit = { token: BOLT, amount: 1_000_000n, expiration: 1_900_001_800, nonce: 3, spender: UR, sigDeadline: 1_900_001_800n, signature: `0x${'ab'.repeat(65)}` as Hex }
-    const enc = encodeSwap({ ...base, route: { hops: [{ kind: 'v3', tokenIn: BOLT, tokenOut: WETN, fee: 3000 }, { kind: 'v2', tokenIn: WETN, tokenOut: USDC }] }, nativeIn: false, nativeOut: false, fee: { sink: SINK, bips: 50 }, permit })
-    expect(enc.commands[0]).toBe(COMMAND.PERMIT2_PERMIT)
+    const enc = encodeSwap({ ...base, route: { hops: [{ kind: 'v3', tokenIn: BOLT, tokenOut: WETN, fee: 3000 }, { kind: 'v3', tokenIn: WETN, tokenOut: USDC, fee: 500 }] }, nativeIn: false, nativeOut: false, fee: { sink: SINK, bips: 50 }, permit })
+    expect(enc.commands).toEqual([COMMAND.PERMIT2_PERMIT, COMMAND.V3_SWAP_EXACT_IN, COMMAND.PAY_PORTION, COMMAND.SWEEP])
     const [p, swap] = decodeUniversalRouter(enc.data)?.commands ?? []
     expect(p?.type === 'PERMIT2_PERMIT' && p.spender === UR && p.amount === 1_000_000n && p.token === BOLT).toBe(true)
-    expect(swap?.type === 'V3_SWAP_EXACT_IN' && swap.path.toLowerCase().includes('800000')).toBe(true)
+    if (swap?.type !== 'V3_SWAP_EXACT_IN') throw new Error('unreachable')
+    // token, uint24 fee, token, uint24 fee, token — packed, in route order.
+    expect(swap.path.toLowerCase()).toBe(`0x${BOLT.slice(2)}000bb8${WETN.slice(2)}0001f4${USDC.slice(2)}`.toLowerCase())
+  })
+
+  /*
+    A mixed route is refused rather than encoded into a revert.
+
+    V2 and V3 hops in one path used to fall through to the packed-path branch,
+    where a V2 hop is marked with the `0x800000` fee sentinel. That sentinel is a
+    MixedRouteQuoter convention: the Universal Router does not read it, and would
+    look for a V3 pool at fee tier 8388608, which does not exist. The calldata was
+    well formed, passed every check the wallet makes, and reverted on chain with
+    the user's gas. The mini-router declines to generate such a route, but it is
+    no longer the only source of one — the routing service will return a mixed
+    route whenever MIXED is in its protocol set — so the guard lives where the
+    mistake becomes calldata.
+  */
+  it('refuses a route that mixes V2 and V3 hops, in either order', () => {
+    const mixed = { ...base, nativeIn: false, nativeOut: false, fee: { sink: SINK, bips: 50 } }
+    expect(() => encodeSwap({ ...mixed, route: { hops: [{ kind: 'v3', tokenIn: BOLT, tokenOut: WETN, fee: 3000 }, { kind: 'v2', tokenIn: WETN, tokenOut: USDC }] } })).toThrow('mixed route')
+    expect(() => encodeSwap({ ...mixed, route: { hops: [{ kind: 'v2', tokenIn: BOLT, tokenOut: WETN }, { kind: 'v3', tokenIn: WETN, tokenOut: USDC, fee: 3000 }] } })).toThrow('mixed route')
+    // The guard is about mixing, not about length: both single-protocol multi-hop
+    // routes still encode, each as the one command its protocol has.
+    const v2Hops = encodeSwap({ ...mixed, route: { hops: [{ kind: 'v2', tokenIn: BOLT, tokenOut: WETN }, { kind: 'v2', tokenIn: WETN, tokenOut: USDC }] } })
+    expect(v2Hops.commands).toEqual([COMMAND.V2_SWAP_EXACT_IN, COMMAND.PAY_PORTION, COMMAND.SWEEP])
+    const v3Hops = encodeSwap({ ...mixed, route: { hops: [{ kind: 'v3', tokenIn: BOLT, tokenOut: WETN, fee: 3000 }, { kind: 'v3', tokenIn: WETN, tokenOut: USDC, fee: 500 }] } })
+    expect(v3Hops.commands).toEqual([COMMAND.V3_SWAP_EXACT_IN, COMMAND.PAY_PORTION, COMMAND.SWEEP])
+    const [asV2] = decodeUniversalRouter(v2Hops.data)?.commands ?? []
+    const [asV3] = decodeUniversalRouter(v3Hops.data)?.commands ?? []
+    if (asV2?.type !== 'V2_SWAP_EXACT_IN' || asV3?.type !== 'V3_SWAP_EXACT_IN') throw new Error('unreachable')
+    expect(asV2.path.map((t) => t.toLowerCase())).toEqual([BOLT, WETN, USDC].map((t) => t.toLowerCase()))
+    // The V3 path is packed exactly as it was before the guard, and carries no
+    // `0x800000` — there is no V2 hop left in it to mark.
+    expect(asV3.path.toLowerCase()).toBe(`0x${BOLT.slice(2)}000bb8${WETN.slice(2)}0001f4${USDC.slice(2)}`.toLowerCase())
+    expect(asV3.path.toLowerCase()).not.toContain('800000')
   })
 })
 
