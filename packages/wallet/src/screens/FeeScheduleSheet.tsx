@@ -16,7 +16,7 @@
  * a rung you can name, how far you are into it, and what the next one saves.
  */
 import { Body, Column, Gauge, Key, Plate, Row, Sheet, StatStrip, shortAddress } from '@boltvault/ui'
-import type { FeeScheduleView, HolderTier } from '@boltvault/engine'
+import { ELECTRONEUM_TESTNET_CHAIN_ID, type FeeScheduleView, type HolderTier } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { formatBolt, formatBoltPart, formatPct } from '../format'
@@ -159,7 +159,9 @@ export function FeeScheduleSheet({ open, onClose, accountId, chainId, onGetBolt,
         <Body tone="mute" size="caption" testID="fee-recipient">
           {schedule?.sink
             ? t({ id: 'fee.recipient', message: 'The fee goes to {a}, in the same transaction as the swap. Every payment is on the explorer.', values: { a: shortAddress(schedule.sink) } })
-            : t({ id: 'fee.recipient.none', message: 'In-wallet swaps are off on this network — no fee address is set for it in this build.' })}
+            : chainId === ELECTRONEUM_TESTNET_CHAIN_ID
+              ? t({ id: 'fee.recipient.testnet', message: 'Swaps on testnet pay no fee at all — there is no fee address here and nothing worth collecting.' })
+              : t({ id: 'fee.recipient.none', message: 'In-wallet swaps are off on this network — no fee address is set for it in this build.' })}
         </Body>
       </Column>
     </Sheet>

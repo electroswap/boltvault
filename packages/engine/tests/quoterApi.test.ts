@@ -2,12 +2,13 @@
  * ElectroSwap's routing service, read as untrusted input (§8.6).
  *
  * `parseQuote` is the only gate between a JSON body off the network and
- * calldata the user signs. `encodeSwap` refuses an empty hop list and a mixed
- * route and nothing else, so a split route, a V3 hop naming a fee tier with no
- * pool behind it, or a path that does not start where the money is would all
- * encode into something that reverts on chain with the user's gas. Every body
- * below is one the real service can produce — including the 200 that says
- * `{state:'Not found'}`, which is how "no route" arrives.
+ * calldata the user signs. `encodeSwap` refuses an empty hop list and nothing
+ * else — it partitions a mixed route rather than refusing it now — so a split
+ * route, a V3 hop naming a fee tier with no pool behind it, or a path that does
+ * not start where the money is would all encode into something that reverts on
+ * chain with the user's gas. Every body below is one the real service can
+ * produce — including the 200 that says `{state:'Not found'}`, which is how "no
+ * route" arrives.
  *
  * The `Quoter` cases are about the network rather than the payload: the service
  * allows thirty requests per five minutes and the Swap screen re-quotes on a
@@ -230,16 +231,48 @@ describe('parseQuote refuses everything else', () => {
   })
 
   /*
-    The case the whole function exists for. A V2 hop inside a packed V3 path is
-    marked with the `0x800000` sentinel, which is a MixedRouteQuoter convention
-    the Universal Router does not read — it would look for a V3 pool at fee tier
-    8388608 and find none. `encodeSwap` now refuses it, so reaching it at all
-    would turn a working quote into a thrown error at sign time; the request
-    asks for V2 and V3 without MIXED, and this is the belt to that braces.
+    A mixed route is accepted now, because the encoder can express one.
+
+    `encodeSwap` emits one command per contiguous same-protocol run of the
+    route, so a V3 hop followed by a V2 hop is two Universal Router commands
+    chained through the router — not a single packed path marking the V2 hop
+    with the `0x800000` MixedRouteQuoter sentinel that the router does not read.
+    That sentinel was the reason for the refusal: it addressed a V3 pool at fee
+    tier 8388608 that does not exist, so the calldata was well formed and
+    reverted on chain with the user's gas. With the encoder partitioning, the
+    request asks for MIXED on purpose and this is the parse that has to keep up.
   */
-  it('a route mixing a V2 and a V3 hop, which no protocol set should have produced', () => {
-    expect(parseQuote(served([[v3(FIX, MID, '3000'), v2(MID, WETN)]]), input)).toEqual({ kind: 'none', reason: 'mixed protocols' })
-    expect(parseQuote(served([[v2(FIX, MID), v3(MID, WETN, '500')]]), input)).toEqual({ kind: 'none', reason: 'mixed protocols' })
+  it('a route mixing a V2 and a V3 hop, which the encoder now partitions instead of refusing', () => {
+    const v3ThenV2 = routed(served([[v3(FIX, MID, '3000'), v2(MID, WETN)]]))
+    expect(v3ThenV2.quote.candidate.kind).toBe('mixed')
+    expect(v3ThenV2.quote.candidate.route.hops).toEqual([
+      { kind: 'v3', tokenIn: FIX, tokenOut: MID, fee: 3000 },
+      { kind: 'v2', tokenIn: MID, tokenOut: WETN },
+    ])
+    const v2ThenV3 = routed(served([[v2(FIX, MID), v3(MID, WETN, '500')]]))
+    expect(v2ThenV3.quote.candidate.kind).toBe('mixed')
+    expect(v2ThenV3.quote.candidate.route.hops).toEqual([
+      { kind: 'v2', tokenIn: FIX, tokenOut: MID },
+      { kind: 'v3', tokenIn: MID, tokenOut: WETN, fee: 500 },
+    ])
+    /*
+      A mixed route has no single protocol to name, so each hop names itself, in
+      order — the same words the mini-router's own mixed candidates carry, so the
+      Swap screen does not change wording depending on which router answered.
+    */
+    expect(v3ThenV2.quote.candidate.label).toBe('V3 0.3% → V2')
+    expect(v2ThenV3.quote.candidate.label).toBe('V2 → V3 0.05%')
+    const mixedAddresses: QuoteAddresses = { quoterV2: MID, mixedRouteQuoter: MID2, v2Router02: MID, bases: [MID] }
+    const onChain = new Set(candidates(FIX, WETN, mixedAddresses, { mixed: true }).map((c) => c.label))
+    expect(onChain.has('V3 0.3% → V2')).toBe(true)
+    expect(onChain.has('V2 → V3 0.3%')).toBe(true)
+    // Three hops, two runs: the kind is about mixing, not about length.
+    const three = routed(served([[v2(FIX, MID), v3(MID, MID2, '500'), v3(MID2, WETN, '3000')]]))
+    expect(three.quote.candidate.kind).toBe('mixed')
+    expect(three.quote.candidate.label).toBe('V2 → V3 0.05% → V3 0.3%')
+    // And a single-protocol route is labelled exactly as it was.
+    expect(routed(served([[v3(FIX, MID, '500'), v3(MID, WETN, '3000')]])).quote.candidate.label).toBe('V3 0.05% → 0.3%')
+    expect(routed(served([[v2(FIX, MID), v2(MID, WETN)]])).quote.candidate.label).toBe('V2 via')
   })
 
   it('a route that does not start at the token being sold', () => {
@@ -294,7 +327,7 @@ const pool: Serve = (_call, init) => {
 }
 
 describe('Quoter.route around the network', () => {
-  it('asks for one unsplit EXACT_INPUT on V2 and V3, with the key and the recipient the service reads unguarded', async () => {
+  it('asks for one unsplit EXACT_INPUT on V2, V3 and MIXED, with the key and the recipient the service reads unguarded', async () => {
     const h = harness(pool)
     expect((await h.quoter.route(input)).kind).toBe('route')
     expect(h.calls).toHaveLength(1)
@@ -320,9 +353,17 @@ describe('Quoter.route around the network', () => {
     expect(sent.tokenIn).toBe(FIX)
     expect(sent.tokenOut).toBe(WETN)
     expect(sent.amount).toBe(AMOUNT.toString())
-    // No MIXED: the encoder cannot express a mixed path, so the router must not
-    // be allowed to find one. Same bargain for splitting.
-    expect(sent.protocols).toEqual(['V2', 'V3'])
+    /*
+      MIXED is asked for now: `encodeSwap` emits one command per contiguous
+      same-protocol run, so a route crossing protocols is executable and leaving
+      it out of the protocol set would give up liquidity for nothing.
+
+      `maxSplits` is the opposite bargain and has not moved. A split route
+      genuinely has no encoding — one command carries one path, so there is
+      nowhere to put the second leg — and encoding only the first would swap a
+      fraction of the input and sweep the rest.
+    */
+    expect(sent.protocols).toEqual(['V2', 'V3', 'MIXED'])
     expect(sent.maxSplits).toBe(1)
     /*
       `configs` is not cosmetic: the service reads `req.body.configs[0].recipient`

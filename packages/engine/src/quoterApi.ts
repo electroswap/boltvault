@@ -108,11 +108,25 @@ function parseHops(raw: readonly unknown[]): readonly Hop[] | null {
   return hops
 }
 
+function kindOf(hops: readonly Hop[]): 'v2' | 'v3' | 'mixed' {
+  const kinds = new Set(hops.map((h) => h.kind))
+  return kinds.size === 1 ? (hops[0]?.kind ?? 'v3') : 'mixed'
+}
+
+/** One hop, named the way the mini-router names it. */
+const hopLabel = (h: Hop): string => (h.kind === 'v3' ? `V3 ${h.fee / 10_000}%` : 'V2')
+
 /** The mini-router's vocabulary, so the Swap screen reads the same whichever router answered. */
 function labelFor(hops: readonly Hop[]): string {
-  const first = hops[0]
-  if (first?.kind === 'v3') return `V3 ${hops.map((h) => `${(h.kind === 'v3' ? h.fee : 0) / 10_000}%`).join(' → ')}`
-  return hops.length === 1 ? 'V2' : 'V2 via'
+  switch (kindOf(hops)) {
+    case 'v2':
+      return hops.length === 1 ? 'V2' : 'V2 via'
+    case 'v3':
+      return `V3 ${hops.map((h) => `${(h.kind === 'v3' ? h.fee : 0) / 10_000}%`).join(' → ')}`
+    // A mixed route has no single protocol to name, so each hop names itself.
+    default:
+      return hops.map(hopLabel).join(' → ')
+  }
 }
 
 /** The parsed body, or a reason it cannot be used. Exported for the tests, which own the sharp cases. */
@@ -150,15 +164,6 @@ export function parseQuote(body: unknown, input: QuoterInput): QuoterOutcome {
   if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_HOPS) return { kind: 'none', reason: 'bad hop list' }
   const hops = parseHops(raw)
   if (!hops || hops.length === 0) return { kind: 'none', reason: 'bad hop' }
-  /*
-    Mixed V2/V3 in one path is the failure this whole function exists for. The
-    packed path marks a V2 hop with the `0x800000` fee sentinel, which is a
-    MixedRouteQuoter convention the Universal Router does not read — it would
-    look for a V3 pool at fee tier 8388608 and find none. The mini-router
-    refuses to generate such a route for the same reason; the service will
-    happily return one if MIXED is in its protocol set.
-  */
-  if (hops.some((h) => h.kind !== hops[0]?.kind)) return { kind: 'none', reason: 'mixed protocols' }
   // The path has to start where the money is, end where the user wants it, and join up in between.
   if (!same(hops[0]?.tokenIn ?? '', input.tokenIn)) return { kind: 'none', reason: 'wrong tokenIn' }
   if (!same(hops[hops.length - 1]?.tokenOut ?? '', input.tokenOut)) return { kind: 'none', reason: 'wrong tokenOut' }
@@ -168,7 +173,7 @@ export function parseQuote(body: unknown, input: QuoterInput): QuoterOutcome {
   return {
     kind: 'route',
     quote: {
-      candidate: { route: { hops }, kind: hops[0]?.kind === 'v2' ? 'v2' : 'v3', label: labelFor(hops) },
+      candidate: { route: { hops }, kind: kindOf(hops), label: labelFor(hops) },
       amountOut,
       // The service's own estimate when it gave one; otherwise the mini-router's per-hop figure.
       gasEstimate: gas !== null && gas > 0n ? gas : 150_000n * BigInt(hops.length),
@@ -227,9 +232,11 @@ export class Quoter {
 
         `protocols` is only read at the top level. The interface nests it under
         `configs[0]`, where it is silently ignored and the router falls back to
-        V3 + V2 + MIXED; asking here for V2 and V3 without MIXED is what keeps a
-        route the encoder cannot express from being generated in the first
-        place. `maxSplits` is the same bargain for splitting.
+        this same set. MIXED is asked for deliberately: `encodeSwap` emits one
+        command per contiguous same-protocol run, so a route that crosses
+        protocols is executable, and refusing to ask for one would leave
+        liquidity on the table for no reason. `maxSplits` is different — a split
+        route genuinely has no encoding, so the request caps it at one.
       */
       const body = JSON.stringify({
         tokenInChainId: input.chainId,
@@ -238,7 +245,7 @@ export class Quoter {
         tokenOut: input.tokenOut,
         amount: input.amountIn.toString(),
         type: 'EXACT_INPUT',
-        protocols: ['V2', 'V3'],
+        protocols: ['V2', 'V3', 'MIXED'],
         maxSplits: 1,
         configs: [{ recipient: input.recipient }],
       })

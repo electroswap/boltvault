@@ -617,6 +617,9 @@ export const urRecipientNotSelf: Rule = ({ decoded, context, chainId, account })
   }
 }
 
+/** The Universal Router's "spend whatever you are holding" sentinel (`Constants.CONTRACT_BALANCE`, 1 << 255). */
+const UR_CONTRACT_BALANCE = 1n << 255n
+
 /**
  * T1: a minimum-out so far below the input that it is not a floor at all.
  *
@@ -624,19 +627,36 @@ export const urRecipientNotSelf: Rule = ({ decoded, context, chainId, account })
  * safe as a heuristic: no honest pair is off by a million. It catches the
  * drainer shape of "accept literally one wei in return", which is otherwise
  * indistinguishable from a sane minimum once the amounts are raw integers.
+ *
+ * The two numbers come from opposite ends of the route, because a mixed route
+ * is encoded as one command per protocol run and neither end alone carries
+ * both. The amount actually being spent is on the FIRST swap; every section
+ * after it is paid `CONTRACT_BALANCE`, which is 1 << 255 and would make the
+ * threshold astronomically large — every honest swap would read as implausible.
+ * The only real floor is on the LAST swap; the sections before it carry a
+ * minimum of zero, because their output is an intermediate token in an amount
+ * nobody knows until the pools answer, and reading those as floors flagged
+ * every honest V2→V3 trade. Chaining through the router is what makes the pair
+ * meaningful: the last section's minimum bounds the whole route, and the first
+ * section's input is what the user is putting in. A single-command swap is the
+ * case where both are the same command, which is how this rule began.
  */
 export const swapMinOutImplausible: Rule = ({ decoded }) => {
   if (decoded?.kind !== 'universal_router') return null
-  for (const c of decoded.decoded.commands) {
-    if (c.type !== 'V2_SWAP_EXACT_IN' && c.type !== 'V3_SWAP_EXACT_IN') continue
-    if (c.amountIn > 0n && c.amountOut <= c.amountIn / 1_000_000n)
-      return {
-        code: 'SWAP_MIN_OUT_IMPLAUSIBLE',
-        severity: 'danger',
-        title: 'This swap accepts almost nothing in return',
-        detail: 'The smallest amount this swap will accept is so far below what you are putting in that it offers no protection at all.',
-      }
-  }
+  const swaps = decoded.decoded.commands.filter((c) => c.type === 'V2_SWAP_EXACT_IN' || c.type === 'V3_SWAP_EXACT_IN')
+  const first = swaps[0]
+  const last = swaps[swaps.length - 1]
+  if (first?.type !== 'V2_SWAP_EXACT_IN' && first?.type !== 'V3_SWAP_EXACT_IN') return null
+  if (last?.type !== 'V2_SWAP_EXACT_IN' && last?.type !== 'V3_SWAP_EXACT_IN') return null
+  // A first section paid from the router's balance names no size, so there is nothing to compare against.
+  if (first.amountIn === UR_CONTRACT_BALANCE || first.amountIn <= 0n) return null
+  if (last.amountOut <= first.amountIn / 1_000_000n)
+    return {
+      code: 'SWAP_MIN_OUT_IMPLAUSIBLE',
+      severity: 'danger',
+      title: 'This swap accepts almost nothing in return',
+      detail: 'The smallest amount this swap will accept is so far below what you are putting in that it offers no protection at all.',
+    }
   return null
 }
 

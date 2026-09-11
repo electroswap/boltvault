@@ -12,7 +12,17 @@ import { V2_FEE_FLAG, v3PackedPathExactOut, type Hop, type SwapRoute } from './e
 export const V3_FEES = [100, 500, 3000, 10000] as const
 /** Fee tiers tried for intermediate hops (all four would be 16 combos on their own). */
 const HOP_FEES = [500, 3000] as const
-export const MAX_CANDIDATES = 16
+/*
+  Sixteen became twenty-four when mixed routes came back.
+
+  The whole set is one `eth_call` through Multicall3, so the number is a gas
+  budget, not a request budget — and a public RPC caps `eth_call` gas where our
+  own node does not. It is still far below what it replaced: the routing service
+  is asked first now, and the spot probe quotes one route instead of all of
+  them, so a quote that used to cost thirty-two simulated swaps every time costs
+  one when the service answers and twenty-five when it does not.
+*/
+export const MAX_CANDIDATES = 24
 
 export interface QuoteAddresses {
   readonly quoterV2: Hex
@@ -59,8 +69,15 @@ function v3PackedPath(hops: readonly Hop[]): Hex {
 
 const eq = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
 
-/** Every path worth asking about, in a fixed order, capped at MAX_CANDIDATES. */
-export function candidates(tokenIn: Hex, tokenOut: Hex, addresses: QuoteAddresses): Candidate[] {
+/**
+ * Every path worth asking about, in a fixed order, capped at MAX_CANDIDATES.
+ *
+ * `mixed` is opt-in because only exact-in can use one: `callForExactOut` has no
+ * mixed branch, and `encodeSwapExactOut` refuses a mixed route outright — so
+ * generating them for an exact-output quote would spend slots on calls that
+ * revert and answers that could not be encoded.
+ */
+export function candidates(tokenIn: Hex, tokenOut: Hex, addresses: QuoteAddresses, opts: { readonly mixed?: boolean } = {}): Candidate[] {
   const out: Candidate[] = []
   out.push({ kind: 'v2', label: 'V2', route: { hops: [{ kind: 'v2', tokenIn, tokenOut }] } })
   for (const fee of V3_FEES) out.push({ kind: 'v3', label: `V3 ${fee / 10_000}%`, route: { hops: [{ kind: 'v3', tokenIn, tokenOut, fee }] } })
@@ -76,8 +93,21 @@ export function candidates(tokenIn: Hex, tokenOut: Hex, addresses: QuoteAddresse
     route. Round-robin means the cap trims the tail of every base evenly
     instead of eliminating whole bases.
   */
+  /*
+    Mixed sits second in each base's list, right behind the all-V2 hop and ahead
+    of the V3 fee combinations, because it reaches liquidity neither of them can:
+    a pair whose first leg only has a V2 pool and whose second leg only has a V3
+    one is invisible to every other candidate here. Only the deepest fee tier is
+    tried in each direction — two candidates per base rather than four — since
+    the point is to find the pool at all, not to tune it.
+  */
+  const withMixed = opts.mixed === true && addresses.mixedRouteQuoter !== null
   const perBase: Candidate[][] = bases.map((base) => {
     const forBase: Candidate[] = [{ kind: 'v2', label: 'V2 via', route: { hops: [{ kind: 'v2', tokenIn, tokenOut: base }, { kind: 'v2', tokenIn: base, tokenOut }] } }]
+    if (withMixed) {
+      forBase.push({ kind: 'mixed', label: 'V2 → V3 0.3%', route: { hops: [{ kind: 'v2', tokenIn, tokenOut: base }, { kind: 'v3', tokenIn: base, tokenOut, fee: 3000 }] } })
+      forBase.push({ kind: 'mixed', label: 'V3 0.3% → V2', route: { hops: [{ kind: 'v3', tokenIn, tokenOut: base, fee: 3000 }, { kind: 'v2', tokenIn: base, tokenOut }] } })
+    }
     for (const f1 of HOP_FEES) {
       for (const f2 of HOP_FEES) {
         forBase.push({ kind: 'v3', label: `V3 ${f1 / 10_000}% → ${f2 / 10_000}%`, route: { hops: [{ kind: 'v3', tokenIn, tokenOut: base, fee: f1 }, { kind: 'v3', tokenIn: base, tokenOut, fee: f2 }] } })
@@ -92,22 +122,6 @@ export function candidates(tokenIn: Hex, tokenOut: Hex, addresses: QuoteAddresse
       if (c) out.push(c)
     }
   }
-  /*
-      Mixed V2/V3 routes are quoted but not generated, because the encoder
-      cannot express them.
-
-      `encodeSwap` emits a single `V3_SWAP_EXACT_IN` carrying a packed path
-      whose V2 hops are marked with the `0x800000` fee sentinel. That sentinel
-      is a MixedRouteQuoter convention — the Universal Router does not read it,
-      and would look for a V3 pool at fee tier 8388608, which does not exist.
-      So a mixed route can win the quote and then produce calldata that cannot
-      execute: the user sees the best price and the swap reverts.
-
-      Until the encoder partitions a mixed route into one command per
-      contiguous same-protocol section, the honest thing is not to offer a
-      price the wallet cannot honour. Re-enable alongside that change.
-    */
-  void addresses.mixedRouteQuoter
   return out.slice(0, MAX_CANDIDATES)
 }
 
@@ -140,6 +154,44 @@ function parse(c: Candidate, r: ReadResult): RouteQuote | null {
   return typeof amountOut === 'bigint' && amountOut > 0n ? { candidate: c, amountOut, gasEstimate: typeof gas === 'bigint' ? gas : 150_000n } : null
 }
 
+/**
+ * The pools this pair has directly, priced at the real size.
+ *
+ * Five candidates — the V2 pair and the four V3 tiers — quoted in one call, as
+ * a check on an answer that came from somewhere else. It exists because the
+ * routing service prices from a pool list (`GET /api/pools/3`) rather than from
+ * the chain, and a pool missing from that list is invisible to it at any size:
+ * on 2026-09-11 the list held eleven V3 pools and named only the 0.3% WETN/BOLT
+ * pool, while the 0.05% pool beside it paid 2.64% more on a 3 ETN swap. The
+ * chain cannot have that blind spot, because a fee tier either has a pool or
+ * reverts.
+ *
+ * Deliberately only the direct pools. Re-running the whole candidate set would
+ * be quoting the trade twice, which is what asking the service was meant to
+ * stop; the multi-hop search is what the service is genuinely better at, and
+ * this does not second-guess it.
+ */
+export async function bestDirect(tokenIn: Hex, tokenOut: Hex, amountIn: bigint, addresses: QuoteAddresses, read: Reader): Promise<RouteQuote | null> {
+  const direct = candidates(tokenIn, tokenOut, addresses).filter((c) => c.route.hops.length === 1)
+  const results = await read(direct.map((c) => callFor(c, amountIn, addresses))).catch(() => direct.map(() => ({ ok: false }) as ReadResult))
+  const quotes = direct.map((c, i) => parse(c, results[i] ?? { ok: false })).filter((q): q is RouteQuote => q !== null)
+  return quotes.reduce<RouteQuote | null>((best, q) => (best === null || q.amountOut > best.amountOut ? q : best), null)
+}
+
+/**
+ * One route, quoted.
+ *
+ * The spot probe behind the price-impact figure used to re-run the whole
+ * candidate set at a thousandth of the trade — sixteen simulated swaps in a
+ * second `eth_call`, to divide one number into another. The route is already
+ * chosen by then, and the honest reference is that route's own price at a size
+ * too small to move it, not the best price some other route might have offered.
+ */
+export async function quoteOne(candidate: Candidate, amountIn: bigint, addresses: QuoteAddresses, read: Reader): Promise<RouteQuote | null> {
+  const [r] = await read([callFor(candidate, amountIn, addresses)]).catch(() => [undefined])
+  return parse(candidate, r ?? { ok: false })
+}
+
 export interface BestQuote {
   readonly best: RouteQuote
   readonly all: readonly RouteQuote[]
@@ -150,7 +202,7 @@ export interface BestQuote {
  * route within 0.1 % of the best wins for simplicity and gas.
  */
 export async function bestRoute(tokenIn: Hex, tokenOut: Hex, amountIn: bigint, addresses: QuoteAddresses, read: Reader): Promise<BestQuote | null> {
-  const cands = candidates(tokenIn, tokenOut, addresses)
+  const cands = candidates(tokenIn, tokenOut, addresses, { mixed: true })
   const results = await read(cands.map((c) => callFor(c, amountIn, addresses)))
   const quotes = cands.map((c, i) => parse(c, results[i] ?? { ok: false })).filter((q): q is RouteQuote => q !== null)
   if (quotes.length === 0) return null

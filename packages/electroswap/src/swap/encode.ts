@@ -3,8 +3,9 @@
  * command sequence mirrors `@electroswap/universal-router-sdk`'s
  * `UniswapTrade.encode` byte for byte:
  *
- *   [PERMIT2_PERMIT]  [WRAP_ETH → router]  V2/V3/mixed swaps (recipient =
- *   router when it must custody)  PAY_PORTION(outputWrapped, sink, bips)
+ *   [PERMIT2_PERMIT]  [WRAP_ETH → router]  one swap command per contiguous
+ *   same-protocol run of the route (recipient = router when it must custody)
+ *   PAY_PORTION(outputWrapped, sink, bips)
  *   UNWRAP_WETH(recipient, minOut) | SWEEP(output, recipient, minOut)
  *
  * with `minOut` reduced by the fee after PAY_PORTION exactly as the SDK does.
@@ -111,32 +112,32 @@ export function v3PackedPathExactOut(hops: readonly Hop[]): Hex {
   return encodePacked(types, values)
 }
 
-/** Split a route into runs of the same kind (the SDK encodes a mixed route as one V3-style path through the mixed quoter / UR). */
 function classify(route: SwapRoute): 'v2' | 'v3' | 'mixed' {
   const kinds = new Set(route.hops.map((h) => h.kind))
   return kinds.size === 1 ? (route.hops[0]?.kind ?? 'v3') : 'mixed'
 }
 
+/**
+ * The route split into contiguous runs of one protocol.
+ *
+ * A run is the unit the Universal Router actually has a command for: there is
+ * `V2_SWAP_EXACT_IN` and there is `V3_SWAP_EXACT_IN`, and nothing that reads a
+ * path containing both. `partitionMixedRouteByProtocol` in
+ * `sdks/router-sdk/src/utils/index.ts` splits a mixed route the same way, and
+ * the universal-router-sdk emits one command per section from it.
+ */
+export function protocolRuns(hops: readonly Hop[]): Hop[][] {
+  const runs: Hop[][] = []
+  for (const hop of hops) {
+    const open = runs[runs.length - 1]
+    if (open && open[0]?.kind === hop.kind) open.push(hop)
+    else runs.push([hop])
+  }
+  return runs
+}
+
 export function encodeSwap(input: EncodeSwapInput): EncodedSwap {
   if (input.route.hops.length === 0) throw new Error('empty route')
-  /*
-    A mixed route is refused here rather than encoded into a revert.
-
-    V2 and V3 hops in one path used to fall through to the packed-path branch
-    below, where a V2 hop is marked with the `0x800000` fee sentinel. That
-    sentinel is a MixedRouteQuoter convention: the Universal Router does not
-    read it, and would look for a V3 pool at fee tier 8388608, which does not
-    exist. So the calldata was well formed, accepted by every check the wallet
-    makes, and reverted on chain with the user's gas.
-
-    The mini-router already declines to generate such a route (see `candidates`)
-    — but it is no longer the only source of one. The routing service will
-    return a mixed route whenever MIXED is in its protocol set, so the guard
-    belongs at the point where the mistake becomes calldata, not at each
-    caller. Lift it when the encoder learns to partition a mixed route into one
-    command per contiguous same-protocol section.
-  */
-  if (classify(input.route) === 'mixed') throw new Error('mixed route')
   const commands: number[] = []
   const inputs: Hex[] = []
   let payerIsUser = true
@@ -158,14 +159,49 @@ export function encodeSwap(input: EncodeSwapInput): EncodedSwap {
   const routerMustCustody = input.fee !== null || input.nativeOut
   const swapRecipient = routerMustCustody ? ROUTER_AS_RECIPIENT : input.recipient
   const routerMinOut = input.quotedOut - (input.quotedOut * BigInt(input.slippageBips)) / BIPS
-  const kind = classify(input.route)
-  if (kind === 'v2') {
-    const path = [input.route.hops[0]?.tokenIn as Hex, ...input.route.hops.map((h) => h.tokenOut)]
-    push(COMMAND.V2_SWAP_EXACT_IN, encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountIn, uint256 amountOutMin, address[] path, bool payerIsUser'), [swapRecipient, input.amountIn, routerMinOut, path, payerIsUser]))
-  } else {
-    // A single-protocol V3 path; `classify` has already refused anything mixed.
-    push(COMMAND.V3_SWAP_EXACT_IN, encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountIn, uint256 amountOutMin, bytes path, bool payerIsUser'), [swapRecipient, input.amountIn, routerMinOut, v3Path(input.route.hops), payerIsUser]))
-  }
+
+  /*
+    One command per contiguous same-protocol run, which is how a mixed route is
+    expressed — `partitionMixedRouteByProtocol` in the router-sdk, then one
+    command per section in `universal-router-sdk`'s `uniswap.ts`. A
+    single-protocol route is the one-section case of the same loop and encodes
+    byte for byte as it did before.
+
+    The route used to be squeezed into a single `V3_SWAP_EXACT_IN` whose packed
+    path marked V2 hops with the `0x800000` sentinel. That is a
+    MixedRouteQuoterV1 convention for *quoting*; `V3SwapRouter` has no such
+    concept, and derives a pool address for fee tier 8388608 — which no contract
+    occupies — so the calldata was well formed, passed every check the wallet
+    makes, and reverted on chain with the user's gas.
+
+    Sections are chained through the router rather than by paying the next V2
+    pair directly the way the SDK does. The SDK's version is one ERC-20 transfer
+    cheaper, but it requires deriving the pair address here from the factory and
+    an init-code hash, and a wrong hash sends the whole trade to an address with
+    no contract behind it. `ROUTER_AS_RECIPIENT` makes the router derive the
+    pair from its own immutables instead: `Payments.pay` and
+    `V3SwapRouter.v3SwapExactInput` both read `CONTRACT_BALANCE` as "whatever
+    you are holding", so each section picks up exactly what the last one left.
+
+    Only the final section carries a minimum. An intermediate one cannot: its
+    output is an intermediate token, and the amount is not known until the pools
+    answer. The floor that matters is enforced twice at the end anyway — on the
+    last swap, and again by the SWEEP or UNWRAP_WETH that delivers.
+  */
+  const runs = protocolRuns(input.route.hops)
+  runs.forEach((hops, i) => {
+    const isLast = i === runs.length - 1
+    const recipient = isLast ? swapRecipient : ROUTER_AS_RECIPIENT
+    const amountIn = i === 0 ? input.amountIn : CONTRACT_BALANCE
+    const amountOutMin = isLast ? routerMinOut : 0n
+    const payer = payerIsUser && i === 0
+    if (hops[0]?.kind === 'v2') {
+      const path = [hops[0].tokenIn, ...hops.map((h) => h.tokenOut)]
+      push(COMMAND.V2_SWAP_EXACT_IN, encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountIn, uint256 amountOutMin, address[] path, bool payerIsUser'), [recipient, amountIn, amountOutMin, path, payer]))
+    } else {
+      push(COMMAND.V3_SWAP_EXACT_IN, encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountIn, uint256 amountOutMin, bytes path, bool payerIsUser'), [recipient, amountIn, amountOutMin, v3Path(hops), payer]))
+    }
+  })
 
   const outputToken = input.route.hops[input.route.hops.length - 1]?.tokenOut as Hex
   let minimumOut = routerMinOut
@@ -250,8 +286,15 @@ export interface EncodedSwapExactOut {
  */
 export function encodeSwapExactOut(input: EncodeSwapExactOutInput): EncodedSwapExactOut {
   if (input.route.hops.length === 0) throw new Error('empty route')
-  // The same refusal as `encodeSwap`, for the same reason: the `0x800000` V2
-  // sentinel is a quoter convention the Universal Router does not read.
+  /*
+    Exact-in learned to partition a mixed route; exact-out has not, and upstream
+    has not either — `encodeMixedRouteToPath` is marked "only supports exactIn
+    route encodings" and `MixedRouteTrade` is exact-in only. Working backwards
+    through a chain of sections means solving each section's input from the next
+    section's required input, which the router's `CONTRACT_BALANCE` chaining
+    cannot express: there is no "whatever you are holding" for an amount you
+    have not acquired yet. So this stays a refusal rather than a revert.
+  */
   if (classify(input.route) === 'mixed') throw new Error('mixed route')
   if (input.amountOut <= 0n) throw new Error('empty output')
   if (input.maximumIn <= 0n) throw new Error('no spending ceiling')

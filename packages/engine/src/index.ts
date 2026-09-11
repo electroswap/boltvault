@@ -30,6 +30,8 @@ export { authHeaders, walletAuthHeader, keyIdOf, pathOf, signingString, type Aut
 // The polling cadence is a property of the chain, and the UI polls too: it is
 // re-exported here so a screen does not need a dependency on the registry.
 export { pollMs, type PollMode } from '@boltvault/chains'
+// Screens need to tell "no fee here" from "swaps are off here"; the wallet does not depend on @boltvault/chains.
+export { ELECTRONEUM_TESTNET_CHAIN_ID } from '@boltvault/chains'
 export { SyncService, MemoryRelay, HttpRelay, type Relay, type SyncDeps } from './namespaces/sync'
 export { createEngine, type Engine, type EngineDeps } from './create'
 export * from './approvalPayloads'

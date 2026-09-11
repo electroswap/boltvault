@@ -167,6 +167,67 @@ describe('transactions', () => {
   })
 
   /*
+    A partitioned route's intermediate sections are not floors.
+
+    `encodeSwap` emits one Universal Router command per contiguous
+    same-protocol run of a mixed route, chained through the router: every
+    section after the first is paid `CONTRACT_BALANCE` (`1 << 255`, "whatever
+    you are holding") and carries `amountOutMin: 0`, because its output is an
+    intermediate token in an amount nobody knows until the pools answer. Judging
+    each command on its own read every honest V2→V3 trade as "accepts almost
+    nothing in return", so only the last swap is judged — the sections are
+    chained, so the final minimum bounds the whole route, and a drainer's single
+    swap is still the last one.
+
+    The bytes below are the shape `encodeSwap` produces, not an invention: the
+    router sentinel as the intermediate recipient, `CONTRACT_BALANCE` as the
+    second section's input, zero as the first section's minimum.
+  */
+  describe('a swap minimum that offers no protection', () => {
+    const ROUTER_AS_RECIPIENT = '0x0000000000000000000000000000000000000002' as Hex
+    /** `1 << 255` — the Universal Router's "whatever you are holding" sentinel. */
+    const CONTRACT_BALANCE = 1n << 255n
+    const ONE_TOKEN = 10n ** 18n
+    const V3_PATH = `0x${TOKEN.slice(2)}000bb8${A.wetn.slice(2)}` as Hex
+
+    /** One V3 section into the router, then a V2 section that delivers, exactly as the encoder chains them. */
+    const partitioned = (finalMin: bigint): Hex => {
+      const commands = `0x${[UR_COMMAND.V3_SWAP_EXACT_IN, UR_COMMAND.V2_SWAP_EXACT_IN].map((b) => b.toString(16).padStart(2, '0')).join('')}` as Hex
+      const inputs = [
+        encodeAbiParameters(parseAbiParameters('address, uint256, uint256, bytes, bool'), [ROUTER_AS_RECIPIENT, ONE_TOKEN, 0n, V3_PATH, true]),
+        encodeAbiParameters(parseAbiParameters('address, uint256, uint256, address[], bool'), [ME, CONTRACT_BALANCE, finalMin, [A.wetn as Hex, TOKEN], false]),
+      ]
+      return encodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commands, inputs, 1n] })
+    }
+
+    /** A single swap command, which is both the first section and the last. */
+    const oneSwap = (min: bigint): Hex => {
+      const commands = `0x${UR_COMMAND.V3_SWAP_EXACT_IN.toString(16).padStart(2, '0')}` as Hex
+      const inputs = [encodeAbiParameters(parseAbiParameters('address, uint256, uint256, bytes, bool'), [ME, ONE_TOKEN, min, V3_PATH, true])]
+      return encodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commands, inputs, 1n] })
+    }
+
+    it('a partitioned route with a real floor at the end is not flagged', () => {
+      // Two whole tokens out for one token in: a floor, by any reading.
+      expect(codes(run(tx(A.universalRouter as Hex, partitioned(2n * ONE_TOKEN))))).not.toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
+    })
+
+    it('a partitioned route that would accept a wei at the end is still flagged', () => {
+      const a = run(tx(A.universalRouter as Hex, partitioned(1n)))
+      expect(codes(a)).toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
+      expect(a.severity).toBe('danger')
+    })
+
+    it('a single swap that would accept a wei is still flagged, and a sane one is not', () => {
+      expect(codes(run(tx(A.universalRouter as Hex, oneSwap(1n))))).toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
+      expect(codes(run(tx(A.universalRouter as Hex, oneSwap(2n * ONE_TOKEN))))).not.toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
+      // A millionth of the input is the line itself: at it, not below it.
+      expect(codes(run(tx(A.universalRouter as Hex, oneSwap(ONE_TOKEN / 1_000_000n))))).toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
+      expect(codes(run(tx(A.universalRouter as Hex, oneSwap(ONE_TOKEN / 1_000_000n + 1n))))).not.toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
+    })
+  })
+
+  /*
     "Run 3 calls through Multicall3" was the same sentence whether the batch
     checked three balances or granted three unlimited approvals: the inner
     calldata was decoded and then thrown away.

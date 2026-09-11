@@ -29,6 +29,8 @@ const QUOTER = '0x945ec22FFc3f88aeD031C1C4d051B82282736B41' as Hex
 const V2_ROUTER = '0x5410F10a5E214AF03EA601Ca8C76b665A786BCe1' as Hex
 const DYNO = '0x162D5a58096b63D89D83e0C66b4731A6CC8b10aF' as Hex
 const SINK = '0x00000000000000000000000000000000000051ab' as Hex
+/** An intermediate the mock chain has no pool for; only the service ever names it. */
+const MID = '0x6666666666666666666666666666666666666666' as Hex
 
 const LIST = { name: 'fixture', tokens: [{ chainId: TESTNET, address: TOKEN, name: 'Fixture Token', symbol: 'FIX', decimals: 6 }] }
 const str = (v: string): Hex => encodeAbiParameters(parseAbiParameters('string'), [v])
@@ -44,6 +46,8 @@ const shortBy = (bips: bigint): bigint => (ONCHAIN_OUT * (10_000n - bips)) / 10_
 
 const tokenRef = (address: Hex): Record<string, unknown> => ({ address, symbol: 'T', decimals: 18, chainId: TESTNET })
 const v3hop = (tokenIn: Hex, tokenOut: Hex, fee = '3000'): Record<string, unknown> => ({ type: 'v3-pool', tokenIn: tokenRef(tokenIn), tokenOut: tokenRef(tokenOut), fee, liquidity: '1', sqrtRatioX96: '1', tickCurrent: 0 })
+/** The other shape the service returns, which carries reserves and names no fee. */
+const v2hop = (tokenIn: Hex, tokenOut: Hex): Record<string, unknown> => ({ type: 'v2-pool', tokenIn: tokenRef(tokenIn), tokenOut: tokenRef(tokenOut), reserve0: '4000000', reserve1: '8000000' })
 const jsonBody = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 /** A 200 in the routing service's own shape, for `amountIn` FIX. */
 const routingQuote = (route: readonly unknown[], amountOut: bigint, amountIn = ONE_FIX): Response =>
@@ -95,6 +99,24 @@ describe('swap on the testnet mock', () => {
   let dynoBalance = 25_000n * 10n ** 18n
   /** Every URL this engine asked for, so "never asked the routing service" is assertable. */
   const fetched: string[] = []
+  /*
+    Every quoting call the mock chain saw, so "which candidates were priced" is a
+    fact rather than an absence. `kind` is the call, not the candidate:
+    `quoteExactInput` takes a packed path and is only ever made for a multi-hop
+    V3 route, so its presence is what separates the full candidate search from
+    the five direct pools.
+  */
+  interface QuoteCall {
+    readonly kind: 'v2' | 'v3-single' | 'v3-path'
+    readonly amountIn: bigint
+    readonly fee: number | null
+  }
+  const quoted: QuoteCall[] = []
+  const forgetQuotes = (): void => {
+    quoted.length = 0
+  }
+  const atFullSize = (): QuoteCall[] => quoted.filter((c) => c.amountIn === ONE_FIX)
+  const atProbeSize = (): QuoteCall[] => quoted.filter((c) => c.amountIn === ONE_FIX / 1000n)
   /** Off for the one case where the mini-router has no answer and the service is the only price. */
   let poolsOnChain = true
   /** Extra engines built by the routing-service cases, disposed with this one. */
@@ -130,17 +152,22 @@ describe('swap on the testnet mock', () => {
     // The V3 quoter answers the 0.3 % pool at 1 FIX = 2 WETN-units (scaled by decimals); everything else fails to quote.
     rpc.state.calls.set(QUOTER.toLowerCase(), ({ data }) => {
       const sel = data.slice(0, 10)
-      if (!poolsOnChain) throw new Error('no pool')
       if (sel === '0xc6a5026a') {
         // quoteExactInputSingle((tokenIn, tokenOut, amountIn, fee, sqrtPriceLimitX96))
         const amountIn = BigInt(`0x${data.slice(10 + 64 * 2, 10 + 64 * 3)}`)
         const fee = Number(BigInt(`0x${data.slice(10 + 64 * 3, 10 + 64 * 4)}`))
+        quoted.push({ kind: 'v3-single', amountIn, fee })
+        if (!poolsOnChain) throw new Error('no pool')
         if (fee !== 3000) throw new Error('no pool')
         return encodeAbiParameters(parseAbiParameters('uint256, uint160, uint32, uint256'), [amountIn * 2n * 10n ** 12n, 0n, 0, 90_000n])
       }
+      // quoteExactInput(bytes path, uint256 amountIn): the head is (offset, amountIn).
+      if (sel === '0xcdca1753') quoted.push({ kind: 'v3-path', amountIn: BigInt(`0x${data.slice(10 + 64, 10 + 64 * 2)}`), fee: null })
       throw new Error('no route')
     })
-    rpc.state.calls.set(V2_ROUTER.toLowerCase(), () => {
+    rpc.state.calls.set(V2_ROUTER.toLowerCase(), ({ data }) => {
+      // getAmountsOut(uint256 amountIn, address[] path).
+      if (data.slice(0, 10) === '0xd06ca61f') quoted.push({ kind: 'v2', amountIn: BigInt(`0x${data.slice(10, 10 + 64)}`), fee: null })
       throw new Error('no pair')
     })
     const fetchImpl: typeof fetch = async (input) => {
@@ -168,18 +195,87 @@ describe('swap on the testnet mock', () => {
     await rpc.close()
   })
 
-  it('knows the tier from the shipped ladder, but will not swap without a recipient', async () => {
+  /*
+    Testnet has no fee recipient in `fees.json`, and that used to refuse the swap.
+
+    On mainnet it still does — a fee destination that can change underneath the
+    user is one an attacker can change, so the recipient is a build constant and
+    a chain naming none has in-wallet swap switched off. Testnet is not that
+    bargain: there is no revenue to protect on a chain whose funds are valueless,
+    so refusing there protected nothing and broke the one thing testnet is for.
+    It swaps fee-free instead.
+  */
+  it('knows the tier from the shipped ladder, and swaps fee-free because testnet names no recipient', async () => {
     const tier = await engine.engine.holder.tier({ accountId, chainId: TESTNET })
     // The ladder needs no contract, so the tier is known even here; what is
-    // missing is somewhere to pay, and that is what stops the swap.
+    // missing is somewhere to pay.
     expect(tier).toMatchObject({ bips: 30, tier: 2, name: 'Magneto', source: 'config', sink: null })
     const q = await engine.engine.swap.quote({ accountId, chainId: TESTNET, tokenIn: TOKEN, tokenOut: 'native', amountIn: '1' })
-    expect(q.ok).toBe(false)
-    // The words, not just the refusal: this is the line the owner reads when a
-    // chain has no recipient, and it used to name a sink contract that no
-    // longer exists anywhere in the wallet.
-    expect(q.problems.join(' ')).toMatch(/no fee address is set/i)
-    expect(q.problems.join(' ')).not.toMatch(/sink/i)
+    expect(q.ok, q.problems.join(' ')).toBe(true)
+    expect(q.problems).toEqual([])
+    // The rung is still named — the ladder is real here, it just costs nothing.
+    expect(q.fee).toMatchObject({ bips: 0, tier: 2, name: 'Magneto', sink: null, source: 'config' })
+    expect(BigInt(q.fee.amountRaw)).toBe(0n)
+    // Nothing comes off the top, so the whole output is the user's.
+    expect(q.receiveRaw).toBe(q.amountOutRaw)
+    // The words, not just the absence of a refusal: this is the line the owner
+    // reads when a MAINNET chain has no recipient, and it must not appear here.
+    expect(q.problems.join(' ')).not.toMatch(/no fee address is set/i)
+  })
+
+  it('encodes that swap with no PAY_PORTION at all, and the firewall accepts the absence', async () => {
+    /*
+      ETN in needs only the swap step, so this reaches the sheet without an
+      approve or a permit and is rejected before anything broadcasts — the later
+      cases count transactions on this same mock chain.
+    */
+    const before = rpc.state.transactions.size
+    const { flowId } = await engine.engine.swap.execute({ accountId, chainId: TESTNET, tokenIn: 'native', tokenOut: TOKEN, amountIn: '0.1' })
+    let flow = await waitStep(engine, flowId, 0, 'signing')
+    expect(flow.steps.map((s) => s.step)).toEqual(['swap'])
+    expect(flow.quote?.fee.bips).toBe(0)
+    const req = await approvalById(engine, flow.steps[0]?.requestId ?? '')
+    expect(req.origin).toBe('internal:swap')
+    const payload = payloadOf(req)
+    if (payload.kind !== 'send_transaction') throw new Error('unreachable')
+    const ur = decodeUniversalRouter(payload.tx.data as Hex)
+    // PAY_PORTION reverts on zero bips, so a fee-free swap must not carry one —
+    // and with no fee to take, the router has no reason to custody the output
+    // either, so the swap pays the user directly and there is no SWEEP.
+    expect(ur?.commands.map((c) => c.type)).toEqual(['WRAP_ETH', 'V3_SWAP_EXACT_IN'])
+    expect(ur?.commands.some((c) => c.type === 'PAY_PORTION')).toBe(false)
+    /*
+      `feeSinkRules` has a zero-bips branch that requires the ABSENCE of a
+      portion exactly as firmly as it requires a correct one otherwise, and this
+      is the path that reaches it: `expectedFee` arrives as `{ sink: 0x0…0,
+      bips: 0 }`, so a portion appearing here would block rather than pass.
+    */
+    expect(payload.assessment.presentation.blocked).toBe(false)
+    expect(payload.assessment.rules.map((r) => r.code)).not.toContain('FEE_SINK_MISMATCH')
+    expect(payload.assessment.rules.map((r) => r.code)).not.toContain('FEE_TIER_MISMATCH')
+    await engine.engine.approvals.decide({ id: req.id, approve: false })
+    flow = await waitStep(engine, flowId, 0, 'rejected')
+    expect(flow.status).toBe('rejected')
+    expect(rpc.state.transactions.size).toBe(before)
+  })
+
+  /*
+    The mainnet half of the gate, from the only angle the harness can reach it.
+
+    `swap.quote` refuses any chain that is not one of the two Electroneum ones,
+    and mainnet's recipient is named in `fees.json`, so there is no way from
+    inside the wallet to produce a non-testnet ETN chain with a null recipient —
+    which is the point. `holder.configure` exists for a chain the config leaves
+    open and refuses one it names, so the wording above cannot be reached on
+    mainnet by any runtime message. (The same sentence on the firewall side —
+    `feeSinkRules` with no `expectedFee` — is pinned in
+    `packages/security/tests/rules.test.ts`.)
+  */
+  it('cannot have the mainnet recipient removed at runtime, which is why testnet is the only exception', async () => {
+    await expect(engine.engine.holder.configure({ chainId: 52014, sink: null, schedule: null })).rejects.toThrow(/set in the build/i)
+    expect((await engine.engine.holder.schedule({ chainId: 52014 })).sink).toBeTruthy()
+    // And the config leaves testnet open, which is what let the case above set one.
+    expect((await engine.engine.holder.schedule({ chainId: TESTNET })).sink).toBeNull()
   })
 
   it('pays the configured recipient at the ladder\u2019s bips once one is set', async () => {
@@ -315,13 +411,19 @@ describe('swap on the testnet mock', () => {
   /**
    * ElectroSwap's routing service as the first price (§8.6).
    *
-   * The service walks the whole pool graph instead of sixteen fixed candidates,
-   * so it is asked on every quote — but the mini-router is quoted alongside it,
-   * unconditionally, because a divergence check needs something to check
-   * against. A served price at or above the local one is taken at face value; a
-   * served price below it is taken only inside a narrow band, since that is the
-   * figure `minimumOut` is derived from. Everything else falls back to the chain,
-   * and the swap stays usable in every one of those cases.
+   * It is asked first and the mini-router runs only if it could not answer —
+   * the fifteen simulated swaps of a full candidate search are the wallet's
+   * largest single draw on an RPC endpoint, re-run on a 250 ms debounce while
+   * somebody types an amount, and spending them to check an answer already in
+   * hand buys a comparison rather than a price.
+   *
+   * One thing is still checked, because it is a blind spot rather than a
+   * disagreement: the service prices from a pool list (`GET /api/pools/3`)
+   * rather than from the chain, so a pool missing from that list is missing at
+   * every size. The five DIRECT pools are therefore priced alongside a served
+   * answer — one call, not fifteen — and the better of the two wins. The
+   * multi-hop search is the part the service is genuinely better at, and this
+   * does not second-guess it.
    */
   describe('the routing service', () => {
     /**
@@ -394,8 +496,8 @@ describe('swap on the testnet mock', () => {
 
     /*
       The headline case for the feature: a pair whose liquidity sits somewhere
-      the sixteen candidates never reach. Before the service was asked this quote
-      was "No route on ElectroSwap for this pair."
+      the mini-router's fixed candidates never reach. Before the service was
+      asked, this quote was "No route on ElectroSwap for this pair."
     */
     it('is the whole price when the mini-router finds no route at all', async () => {
       const apiOut = 4n * 10n ** 18n
@@ -411,31 +513,111 @@ describe('swap on the testnet mock', () => {
       }
     })
 
-    it('is trusted for a price a little under the local one, which is two routers disagreeing at two moments', async () => {
-      const { quote } = await withQuoter({ serve: () => routingQuote([[v3hop(TOKEN, WETN, '3000')]], shortBy(50n)) })
+    /*
+      The budget, which is the whole point of asking the service first.
+
+      A full candidate search is fifteen simulated swaps here — five direct plus
+      five through each of the two bases — and it does not run when the service
+      answers. What runs instead is `bestDirect`: the V2 pair and the four V3
+      tiers, at the real size, in one call. `quoteExactInput` takes a packed path
+      and is only ever made for a multi-hop candidate, so its absence is what
+      says the search did not happen.
+    */
+    it('prices the five direct pools and nothing else when the service answers', async () => {
+      // Ten per cent above what the chain's own quoter says, so the figure in the
+      // quote can only have come from the service and no direct pool displaces it.
+      const apiOut = (ONCHAIN_OUT * 11_000n) / 10_000n
+      const { quote } = await withQuoter({ serve: () => routingQuote([[v3hop(TOKEN, WETN, '3000')]], apiOut) })
+      forgetQuotes()
       const q = await quote()
       expect(q.route.source).toBe('api')
-      expect(q.amountOutRaw).toBe(shortBy(50n).toString())
-    })
-
-    it('is still trusted at exactly the edge of the band, so the comparison cannot drift', async () => {
-      const { quote } = await withQuoter({ serve: () => routingQuote([[v3hop(TOKEN, WETN, '3000')]], shortBy(100n)) })
-      expect((await quote()).route.source).toBe('api')
-      const past = await withQuoter({ serve: () => routingQuote([[v3hop(TOKEN, WETN, '3000')]], shortBy(101n)) })
-      expect((await past.quote()).route.source).toBe('onchain')
+      expect(q.amountOutRaw).toBe(apiOut.toString())
+      expect(atFullSize()).toHaveLength(5)
+      expect(atFullSize().filter((c) => c.kind === 'v2')).toHaveLength(1)
+      expect(atFullSize().filter((c) => c.kind === 'v3-single').map((c) => c.fee)).toEqual([100, 500, 3000, 10_000])
+      expect(quoted.some((c) => c.kind === 'v3-path')).toBe(false)
+      // Everything else the chain was asked is the impact probe, on the winning
+      // route at a thousandth of the size — one call, not a second search.
+      expect(atProbeSize()).toEqual([{ kind: 'v3-single', amountIn: ONE_FIX / 1000n, fee: 3000 }])
+      expect(quoted).toHaveLength(6)
     })
 
     /*
-      Not a preference for the better number: a security bound. `minimumOut` is
-      derived from the quoted output, so signing a figure five per cent light
-      leaves five per cent of room for somebody to take — and the wallet can
-      prove for itself that the price is there.
+      The defect this check exists for, in the shape it was measured in.
+
+      On 2026-09-11 `GET /api/pools/3` listed eleven V3 pools and named only the
+      0.3 % WETN/BOLT pool, so the service answered WETN→BOLT with a V2 route
+      paying 1297115670894749461 while the 0.05 % pool beside it paid
+      1332394001904452715 — 2.64 % more, an order of magnitude above the wallet's
+      own fee, on the pair most people trade. A fee tier either has a pool or
+      reverts, so the chain cannot have that blind spot. This is not a divergence
+      band and not a second opinion on routing: it is the five pools the service
+      may simply not know about.
     */
-    it('is overruled by the chain when its price is materially worse than the wallet can prove', async () => {
-      const { quote } = await withQuoter({ serve: () => routingQuote([[v3hop(TOKEN, WETN, '3000')]], shortBy(500n)) })
+    it('is overruled by a direct pool it could not see, because it prices from a pool list and not from the chain', async () => {
+      const { quote } = await withQuoter({ serve: () => routingQuote([[v2hop(TOKEN, WETN)]], shortBy(264n)) })
       const q = await quote()
       expect(q.route.source).toBe('onchain')
       expect(q.amountOutRaw).toBe(ONCHAIN_OUT.toString())
+      // Not just the better number — the better route. The served answer was a
+      // V2 pair; what the user gets is the V3 pool the chain could prove.
+      expect(q.route.label).toBe('V3 0.3%')
+      // Cased as the registry spells it, because this hop came off the chain and not through the service's lowercasing parse.
+      expect(q.route.hops.map((h) => ({ ...h, tokenIn: h.tokenIn.toLowerCase(), tokenOut: h.tokenOut.toLowerCase() }))).toEqual([{ kind: 'v3', tokenIn: TOKEN.toLowerCase(), tokenOut: WETN.toLowerCase(), fee: 3000 }])
+    })
+
+    /*
+      And the limit of it: strictly better, or the service's answer stands.
+
+      The service walks the whole pool graph and finds multi-hop routes fifteen
+      fixed candidates cannot. Swapping one of those for a direct pool that
+      merely ties would throw away the reason for asking, so the comparison is
+      `>` and not `>=`.
+    */
+    it('keeps the service’s route when a direct pool ties it, or pays less', async () => {
+      // Exactly the on-chain direct price: a tie, and the service still wins.
+      const tie = await withQuoter({ serve: () => routingQuote([[v3hop(TOKEN, WETN, '500')]], ONCHAIN_OUT) })
+      const tied = await tie.quote()
+      expect(tied.route.source).toBe('api')
+      expect(tied.route.label).toBe('V3 0.05%')
+      expect(tied.amountOutRaw).toBe(ONCHAIN_OUT.toString())
+      // And a genuine multi-hop win, of the kind no direct pool can reach.
+      const multi = await withQuoter({ serve: () => routingQuote([[v3hop(TOKEN, MID, '500'), v3hop(MID, WETN, '3000')]], ONCHAIN_OUT * 2n) })
+      const q = await multi.quote()
+      expect(q.route.source).toBe('api')
+      expect(q.amountOutRaw).toBe((ONCHAIN_OUT * 2n).toString())
+      expect(q.route.hops).toHaveLength(2)
+      /*
+        The impact probe cannot price that route on this mock chain — there is no
+        pool behind the packed path — and the quote is still usable. A probe that
+        could not answer decorates nothing; it never refuses the swap.
+      */
+      expect(q.ok, q.problems.join(' ')).toBe(true)
+      expect(q.priceImpactPct).toBeNull()
+    })
+
+    /*
+      The impact probe follows the winner.
+
+      It used to be a second `bestRoute` at a thousandth of the trade — fifteen
+      more simulated swaps on every keystroke, to produce one number to divide
+      into another. Quoting the route that actually won is one call, and it is
+      the more honest comparison: price impact means "what did going this big
+      through THIS path cost", not "what might some other path have charged for a
+      dust trade".
+    */
+    it('probes the winning route for the impact figure, not the candidate set again', async () => {
+      forgetQuotes()
+      const q = await engine.engine.swap.quote({ accountId, chainId: TESTNET, tokenIn: TOKEN, tokenOut: 'native', amountIn: '1' })
+      expect(q.route.source).toBe('onchain')
+      expect(q.route.label).toBe('V3 0.3%')
+      // No service to answer, so the full search does run: five direct plus five
+      // through each of the two bases the testnet addresses leave available.
+      expect(atFullSize()).toHaveLength(15)
+      expect(atFullSize().some((c) => c.kind === 'v3-path')).toBe(true)
+      // And exactly one call at the probe size, for the path that won.
+      expect(atProbeSize()).toEqual([{ kind: 'v3-single', amountIn: ONE_FIX / 1000n, fee: 3000 }])
+      expect(q.priceImpactPct).not.toBeNull()
     })
 
     /*
