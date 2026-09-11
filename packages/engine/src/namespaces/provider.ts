@@ -13,7 +13,7 @@
  * re-signed with the same prepared fields, so the raw bytes — and the hash —
  * are identical.
  */
-import { getChain, pollMs } from '@boltvault/chains'
+import { getChain, isElectroneumChainId, pollMs } from '@boltvault/chains'
 import { ElectroSwapClient, fetchCollections } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
 import {
@@ -163,6 +163,23 @@ export interface ContractFactsAt {
 }
 
 const UNKNOWN_CONTRACT_FACTS: ContractFactsAt = { deployedAt: null, verified: null }
+
+/**
+ * The chains on which these two facts can be obtained at all.
+ *
+ * Both sources are Electroneum's. The API serves Electroneum and its testnet
+ * and rejects any other chain at validation; the explorer path speaks
+ * Blockscout's v2 API, which of the chains in the registry only Electroneum's
+ * explorer serves — the rest are Etherscan-family and answer that path with a
+ * 404 or a page of HTML.
+ *
+ * So a lookup anywhere else was always going to come back unknown, having first
+ * spent a doomed request and up to the whole deadline with a signing prompt
+ * waiting on it. Unknown without leaving the device is the same answer, sooner.
+ */
+function contractFactsAnswerable(chainId: number): boolean {
+  return isElectroneumChainId(chainId)
+}
 
 /** Blockscout v2, only the fields §3.4 asks for, all of them optional. */
 const ExplorerAddressSchema = z.object({
@@ -973,6 +990,8 @@ export class ProviderService {
    * failure, which the rule reads as nothing to say.
    */
   private async lookUpContract(chainId: number, address: Hex): Promise<ContractFactsAt> {
+    // Nobody can answer for this chain, so do not ask anybody (§3.4).
+    if (!contractFactsAnswerable(chainId)) return UNKNOWN_CONTRACT_FACTS
     const fromApi = await this.deps.contractFacts?.(chainId, address).catch(() => null)
     if (fromApi && (fromApi.deployedAt !== null || fromApi.verified !== null)) return fromApi
     return this.readExplorer(chainId, address).catch(() => UNKNOWN_CONTRACT_FACTS)

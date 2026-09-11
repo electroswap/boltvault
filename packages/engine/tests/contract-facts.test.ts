@@ -308,3 +308,72 @@ describe('the API answers first, and the explorer catches what it cannot', () =>
     expect(explorerCalls).toBeGreaterThan(before)
   })
 })
+
+/*
+  On a chain nobody can answer for, the answer is unknown and no request is
+  made at all.
+
+  The API serves Electroneum and its testnet and rejects anything else at
+  validation, and the explorer path speaks Blockscout's v2 API, which of the
+  chains in the registry only Electroneum's explorer serves. So on the other
+  nine a lookup was always going to come back unknown — after spending a doomed
+  request and up to the whole deadline, with a signing prompt waiting on it.
+*/
+const ETHEREUM = 1
+const ON_ETHEREUM = '0xee00000000000000000000000000000000000001' as Hex
+
+describe('a chain nobody can answer for costs nothing to not answer', () => {
+  let rpc: MockRpc
+  let engine: Engine
+  let address: Hex
+  let accountId: string
+  /** Every outbound call that is a contract-facts lookup, by either route. */
+  let lookups: string[] = []
+
+  beforeAll(async () => {
+    lookups = []
+    const countingFetch: typeof fetch = async (input, init) => {
+      const url = String(input)
+      if (url.includes('/api/v2/addresses/') || url.includes('/api/v2/transactions/')) lookups.push(url)
+      if (url === API) {
+        const body = String((init as { body?: unknown } | undefined)?.body ?? '')
+        if (body.includes('ContractFacts')) lookups.push('graphql:ContractFacts')
+        return json({ data: {} })
+      }
+      return new Response('not found', { status: 404 })
+    }
+    rpc = await startMockRpc({ chainId: ETHEREUM })
+    rpc.state.code.set(ON_ETHEREUM.toLowerCase(), '0x6080')
+    engine = createEngine({ platform: createMemoryPlatform(), kdf: KDF, receiptPollMs: 20, fetch: countingFetch, staticsUrl: null, electroswapUrl: API })
+    await engine.ready
+    const created = await engine.engine.vault.create({ password: PASSWORD })
+    address = created.accounts[0]?.address as Hex
+    accountId = created.accounts[0]?.id ?? ''
+    await engine.chains.setRpc(ETHEREUM, rpc.url)
+    rpc.state.balances.set(address.toLowerCase(), 10n ** 18n)
+  })
+
+  afterAll(async () => {
+    engine.dispose()
+    await rpc.close()
+  })
+
+  it('says nothing about the contract, and asks neither the API nor an explorer', async () => {
+    const client = dapp(engine, 'https://ethereum.example')
+    const p = client.request('eth_requestAccounts')
+    const connectReq = await nextApproval(engine)
+    await engine.engine.approvals.decide({ id: connectReq.id, approve: true, data: { accountId, chainId: ETHEREUM } })
+    await p
+
+    const send = client.request('eth_sendTransaction', [{ from: address, to: ON_ETHEREUM, data: '0xdeadbeef' }])
+    const req = await nextApproval(engine)
+    const payload = parseApprovalPayload(req.payload)
+    if (payload?.kind !== 'send_transaction') throw new Error('expected a transaction sheet')
+    expect(payload.assessment.rules.map((r) => r.code)).not.toContain('NEW_CONTRACT')
+    await engine.engine.approvals.decide({ id: req.id, approve: false })
+    await send.catch(() => undefined)
+
+    // The point of the change: not one request, by either route.
+    expect(lookups).toEqual([])
+  })
+})

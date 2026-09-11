@@ -325,15 +325,16 @@ export function createEngine(deps: EngineDeps): Engine {
       cache shared by every caller, so the same router is not looked up once per
       wallet, and it is the same answer the web interface gets.
 
-      Only for the chains it serves: the `Chain` enum has Electroneum and its
-      testnet and nothing else, so asking about Ethereum would be a validation
-      error rather than an answer. Null here means "not asked" or "did not
-      know", and the provider falls through to the explorer — which is also
-      what happens for a build with no API at all. `electroswap` is built
-      further down; the arrow only runs once a sheet is being assessed.
+      Which chains are worth asking about is the provider's decision, not this
+      one's — it short-circuits to unknown before it ever calls this, so there
+      is no second chain list here to drift out of step with that one.
+
+      Null means "did not know", and the provider falls through to the explorer,
+      which is also what happens in a build with no API at all. `electroswap` is
+      built further down; the arrow only runs once a sheet is being assessed.
     */
     contractFacts: async (chainId, address) => {
-      if (!electroswap || !isElectroneumChainId(chainId)) return null
+      if (!electroswap) return null
       const facts = await fetchContractFacts(electroswap, chainId, address, deps.platform.now())
       return facts ? { deployedAt: facts.deployedAt, verified: facts.verified } : null
     },
