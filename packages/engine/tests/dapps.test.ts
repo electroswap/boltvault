@@ -58,8 +58,17 @@ describe('external dApp transports', () => {
   })
 
   it('opens a WebView session on the committed origin, answers SAFE reads without a sheet, refuses non-http pages', async () => {
-    const s = await engine.engine.dapps.open({ url: 'https://app.electroswap.io/swap?x=1', kind: 'webview' })
+    /*
+      `verified` used to default to true for any WebView session, which made
+      the trust chip say the same thing for an HTTPS dApp and for a cleartext
+      page an attacker had rewritten in flight. The caller states what it
+      observed; the Browser screen passes `origin.startsWith('https://')`.
+    */
+    const s = await engine.engine.dapps.open({ url: 'https://app.electroswap.io/swap?x=1', kind: 'webview', verified: true })
     expect(s).toMatchObject({ origin: 'https://app.electroswap.io', kind: 'webview', verified: true })
+    const unverified = await engine.engine.dapps.open({ url: 'http://plain.example/', kind: 'webview', verified: false })
+    expect(unverified).toMatchObject({ kind: 'webview', verified: false })
+    await engine.engine.dapps.close({ sessionId: unverified.sessionId })
     const chain = await engine.engine.dapps.request({ sessionId: s.sessionId, id: 1, method: 'eth_chainId', params: [] })
     expect(chain).toEqual({ result: '0xcb2e' })
     const accounts = await engine.engine.dapps.request({ sessionId: s.sessionId, id: 2, method: 'eth_accounts', params: [] })

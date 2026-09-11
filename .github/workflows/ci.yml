@@ -92,3 +92,20 @@ jobs:
       # Proves the shared screens resolve and bundle under Metro; native builds
       # run on EAS from M9 onward.
       - run: pnpm --filter @boltvault/mobile bundle
+      # App Links and Universal Links only verify against a real signing
+      # fingerprint and a real Team ID. With the placeholders still in place the
+      # association files verify for nobody, every `https://wallet.electroswap.io`
+      # link falls back to the browser or a disambiguation dialog, and another
+      # app that claims the same host is indistinguishable to the user. These
+      # must not be able to reach a release branch.
+      # Warns while the values are still outstanding, and fails outright on a
+      # release ref, so they cannot ship unnoticed.
+      - name: association files carry no placeholders
+        run: |
+          if grep -rn 'REPLACE' apps/mobile/well-known/ apps/mobile/app.json apps/mobile/eas.json; then
+            if [ "${{ startsWith(github.ref, 'refs/tags/') || startsWith(github.ref, 'refs/heads/release/') }}" = "true" ]; then
+              echo "::error::placeholder values above must be filled in before release"
+              exit 1
+            fi
+            echo "::warning::placeholder values above must be filled in before release"
+          fi

@@ -47,7 +47,8 @@ function eip681(raw: string): LinkAction | null {
 export function parseLink(raw: string): LinkAction | null {
   const s = raw.trim()
   if (!s) return null
-  if (s.startsWith('wc:')) return { kind: 'wc', uri: s }
+  // The raw form gets the same shape check as the one arriving through a link.
+  if (s.startsWith('wc:')) return isWcPairingUri(s) ? { kind: 'wc', uri: s } : null
   if (s.startsWith('ethereum:')) return eip681(s)
   let u: URL
   try {
@@ -64,8 +65,16 @@ export function parseLink(raw: string): LinkAction | null {
   const q = query(u)
   switch (head) {
     case 'wc': {
-      const uri = q['uri'] ?? ''
-      return uri.startsWith('wc:') ? { kind: 'wc', uri } : null
+      /*
+        Any string starting `wc:` used to be forwarded to the WalletConnect SDK
+        untouched. A pairing URI has a shape — a 64-hex topic, version 2, and a
+        64-hex symmetric key — and anything that does not have it is not a
+        pairing, so it has no business reaching the relay. The pairing itself
+        still proceeds without a prompt, which is the expected WalletConnect
+        flow; what follows it is a Connect sheet that can no longer be
+        inherited from someone else's session.
+      */
+      return isWcPairingUri(q['uri'] ?? '') ? { kind: 'wc', uri: q['uri'] ?? '' } : null
     }
     case 'launchpad': {
       const pool = Address.safeParse(second ?? '')
@@ -83,8 +92,11 @@ export function parseLink(raw: string): LinkAction | null {
       return { kind: 'screen', screen: head }
     case 'browser':
     case 'open': {
+      // HTTPS only: an inbound link must not be able to put a page that can be
+      // rewritten in flight inside the wallet's own chrome. Where it then goes
+      // is still subject to the firewall's origin rules at signing time.
       const url = q['url'] ?? ''
-      return /^https?:\/\//.test(url) ? { kind: 'screen', screen: 'browser', url } : null
+      return /^https:\/\//i.test(url) ? { kind: 'screen', screen: 'browser', url } : null
     }
     case undefined:
     case 'home':
@@ -92,4 +104,15 @@ export function parseLink(raw: string): LinkAction | null {
     default:
       return null
   }
+}
+
+/** A WalletConnect v2 pairing URI: `wc:<64 hex>@2?…symKey=<64 hex>`. */
+const HEX64 = /^[0-9a-f]{64}$/i
+export function isWcPairingUri(uri: string): boolean {
+  if (!uri.startsWith('wc:')) return false
+  const [head, queryString = ''] = uri.slice(3).split('?')
+  const [topic, version] = (head ?? '').split('@')
+  if (!topic || !HEX64.test(topic) || version !== '2') return false
+  const symKey = new URLSearchParams(queryString).get('symKey') ?? ''
+  return HEX64.test(symKey)
 }

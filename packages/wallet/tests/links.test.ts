@@ -10,9 +10,27 @@ const REF = '0x1111111111111111111111111111111111111111'
 
 describe('parseLink', () => {
   it('pairs WalletConnect from the raw uri, the app scheme and the universal host', () => {
-    expect(parseLink('wc:abc@2?relay-protocol=irn&symKey=00')).toEqual({ kind: 'wc', uri: 'wc:abc@2?relay-protocol=irn&symKey=00' })
-    expect(parseLink('boltvault://wc?uri=wc%3Aabc%402%3FsymKey%3D00')).toEqual({ kind: 'wc', uri: 'wc:abc@2?symKey=00' })
-    expect(parseLink('https://wallet.electroswap.io/wc?uri=wc%3Aabc%402')).toEqual({ kind: 'wc', uri: 'wc:abc@2' })
+    const topic = 'a'.repeat(64)
+    const key = 'b'.repeat(64)
+    const uri = `wc:${topic}@2?relay-protocol=irn&symKey=${key}`
+    expect(parseLink(uri)).toEqual({ kind: 'wc', uri })
+    expect(parseLink(`boltvault://wc?uri=${encodeURIComponent(uri)}`)).toEqual({ kind: 'wc', uri })
+    expect(parseLink(`https://wallet.electroswap.io/wc?uri=${encodeURIComponent(uri)}`)).toEqual({ kind: 'wc', uri })
+  })
+
+  /*
+    Anything beginning `wc:` used to be forwarded to the relay SDK untouched.
+    A pairing URI has a shape; something that does not have it is not a
+    pairing and has no business reaching the network.
+  */
+  it('refuses anything wearing the wc: prefix that is not a pairing uri', () => {
+    const topic = 'a'.repeat(64)
+    const key = 'b'.repeat(64)
+    expect(parseLink('wc:abc@2?symKey=00')).toBeNull() // topic and key too short
+    expect(parseLink(`wc:${topic}@1?symKey=${key}`)).toBeNull() // v1 is dead
+    expect(parseLink(`wc:${topic}@2`)).toBeNull() // no symKey
+    expect(parseLink(`wc:${'z'.repeat(64)}@2?symKey=${key}`)).toBeNull() // not hex
+    expect(parseLink('boltvault://wc?uri=wc%3Anonsense')).toBeNull()
     expect(parseLink('boltvault://wc?uri=https%3A%2F%2Fevil')).toBeNull()
   })
 

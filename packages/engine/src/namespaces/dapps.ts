@@ -42,7 +42,13 @@ export class DappsService {
     const origin = registrableOrigin(input.url)
     if (!origin) throw new EngineError('invalid_argument', 'Only http(s) pages can connect.')
     const sessionId = Array.from(this.deps.random(8), (b) => b.toString(16).padStart(2, '0')).join('')
-    const live: Live = { view: { sessionId, origin, kind: input.kind, verified: input.verified ?? input.kind === 'webview', openedAt: this.deps.now() }, listeners: new Set(), disconnects: new Set(), pending: new Map(), stop: () => undefined }
+/*
+      "Verified" used to default to true for every WebView session, which made
+      the trust chip a constant: it said the same thing for an HTTPS dApp and
+      for a cleartext page an attacker had rewritten in flight. The caller
+      knows what it observed; it has to say so.
+    */
+    const live: Live = { view: { sessionId, origin, kind: input.kind, verified: input.verified ?? false, openedAt: this.deps.now() }, listeners: new Set(), disconnects: new Set(), pending: new Map(), stop: () => undefined }
     const channel: MessageChannelLike = {
       post: (message) => {
         const r = ResponseShape.safeParse(message)

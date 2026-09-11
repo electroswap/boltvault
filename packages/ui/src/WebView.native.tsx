@@ -50,7 +50,8 @@ export function WebView({ url, injectedScriptBeforeLoad, onMessage, onNavigate, 
       setSupportMultipleWindows={false}
       javaScriptEnabled
       domStorageEnabled
-      originWhitelist={['https://*', 'http://*']}
+      // Cleartext navigations go to the OS browser, not into the wallet's chrome.
+      originWhitelist={['https://*']}
       style={{ flex: 1, backgroundColor: '#060913' }}
       testID={testID}
     />

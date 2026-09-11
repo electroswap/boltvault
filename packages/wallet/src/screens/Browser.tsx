@@ -31,7 +31,11 @@ function originOf(url: string): string | null {
 function normalise(input: string): string {
   const s = input.trim()
   if (!s) return HOME
-  if (/^https?:\/\//.test(s)) return s
+  // A wallet browser has no reason to speak cleartext: anything typed as
+  // http:// is upgraded rather than carried, so a page that can be rewritten
+  // in flight never gets to hold a provider.
+  if (/^http:\/\//i.test(s)) return `https://${s.slice(7)}`
+  if (/^https:\/\//i.test(s)) return s
   if (/^[\w.-]+\.[a-z]{2,}(\/.*)?$/i.test(s)) return `https://${s}`
   return `https://duckduckgo.com/?q=${encodeURIComponent(s)}`
 }
@@ -57,7 +61,8 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
       setSession(null)
       return
     }
-    engine.dapps.open({ url: origin, kind: 'webview' }).then(
+    // Only a page the OS actually fetched over TLS is vouched for.
+    engine.dapps.open({ url: origin, kind: 'webview', verified: origin.startsWith('https://') }).then(
       (s) => {
         if (alive) setSession(s)
         else void engine.dapps.close({ sessionId: s.sessionId })
