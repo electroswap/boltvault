@@ -2884,6 +2884,16 @@ msgid "{n} pending"
 msgstr "{n} pending"
 
 #: packages/wallet/src/screens/Home.tsx
+msgctxt "home.browser.a11y"
+msgid "Open the in-app browser"
+msgstr "Open the in-app browser"
+
+#: packages/wallet/src/screens/Home.tsx
+msgctxt "home.browser.bar"
+msgid "Search or enter address"
+msgstr "Search or enter address"
+
+#: packages/wallet/src/screens/Home.tsx
 msgctxt "home.create.body"
 msgid "Create a new recovery phrase or import one you already have. Electroneum is your home chain."
 msgstr "Create a new recovery phrase or import one you already have. Electroneum is your home chain."
@@ -3122,11 +3132,6 @@ msgstr "Swap"
 msgctxt "key.tokens"
 msgid "Tokens"
 msgstr "Tokens"
-
-#: packages/wallet/src/screens/Home.tsx
-msgctxt "key.web"
-msgid "Web"
-msgstr "Web"
 
 #: packages/wallet/src/components/HardwarePrompt.tsx
 msgctxt "keystone.body"

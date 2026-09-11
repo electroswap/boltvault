@@ -35,6 +35,17 @@ const harnessHost = {
   copy: async () => undefined,
   currentTab: async () => (dapp === 'none' ? null : dapp === 'off' ? { origin: 'https://example.com', host: 'example.com', favicon: null } : { origin: 'https://app.electroswap.io', host: 'app.electroswap.io', favicon: null }),
   ...(dapp === 'connected' ? { body: 'harness' as const } : {}),
+  /*
+    At mobile size, declare the capability a phone has.
+    `host.browser` is how a screen asks "is there an in-app browser here" —
+    Home's address bar and Explore's browser key both read it — so without it
+    the `mobile` shots were the phone's dimensions showing the extension's
+    surface area, and the one baseline that should have caught a missing
+    mobile-only control could not see it. Only the capability is declared;
+    `providerScript` is empty because nothing in the harness loads a page, and
+    `Browser.tsx` renders the web `WebView` stub here in any case.
+  */
+  ...(body === 'mobile' ? { browser: { providerScript: '' } } : {}),
 }
 
 const root = document.getElementById('root')

@@ -5,7 +5,7 @@
  * on the dock. Tapping the total opens the Portfolio. The Grid is drawn by
  * TabShell behind this screen; the holder tier warms it.
  */
-import { ActionGrid, Body, BoltMark, ChainMark, Column, EsWordmark, Icon, IconButton, Ignition, Key, LiveFilament, Pill, Plate, Pressable, Rotor, Row, RollingReadout, Seat, ScrollView, metrics, paint, type ActionTileBadge, type IconName, type RotorItem } from '@boltvault/ui'
+import { ActionGrid, Body, BoltMark, ChainMark, Column, EsWordmark, Icon, IconButton, Ignition, Key, LiveFilament, Pill, Plate, Pressable, Rotor, Row, RollingReadout, Seat, ScrollView, edge, metrics, paint, radius, type ActionTileBadge, type IconName, type RotorItem } from '@boltvault/ui'
 import { cacheKey, type BridgeStatus, type CampaignView, type Inventory, type TokenDetailView } from '@boltvault/engine'
 import { useEffect, useRef, useState } from 'react'
 import { ChainScopeSheet, ScopePill, useHomeScope } from '../components/ChainScope'
@@ -155,16 +155,11 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     read is a thing that came to you, which is a header's job rather than a
     tile's.
 
-    Nine stays nine on the phone, where Web takes Activity's cell.
-
-    The browser was built at M9 and then had one door: an icon in the header of
-    Explore's tokens segment. A dApp browser nobody can find is a dApp browser
-    nobody has, so it needs a tile — but a tenth breaks the 3×3 into a row of
-    one, and `ActionGrid` is three columns by design. Activity is the cell that
-    can go, because it is also the third tab in the dock: losing the tile costs
-    a tap from one screen, while the browser had no other way in at all. On the
-    extension nothing moves — there is no in-app browser there, since the
-    extension already lives in one.
+    Nine, and the browser is not a tenth. It went in here once, taking
+    Activity's cell on the phone on the reasoning that the dock carried
+    Activity anyway — which is exactly backwards, because there is no dock:
+    the tile *is* Activity's only door. The browser gets the address bar at the
+    foot instead (below), which is both more room and a truer shape for it.
   */
   const tiles: readonly Tile[] = [
     { id: 'swap', icon: 'swap', label: t({ id: 'tab.swap', message: 'Swap' }), badge: null, onPress: () => router.setTab('swap') },
@@ -175,9 +170,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     { id: 'collectibles', icon: 'nft', label: t({ id: 'key.collectibles', message: 'Collectibles' }), badge: offers > 0 ? { text: t({ id: 'home.badge.offers', message: '{n} offers', values: { n: offers } }), tone: 'ember' } : null, onPress: () => router.navigate('explore', { segment: 'collectibles' }) },
     { id: 'launchpad', icon: 'launch', label: t({ id: 'key.launchpad', message: 'Launchpad' }), badge: live > 0 ? { text: t({ id: 'home.badge.live', message: '{n} live', values: { n: live } }), tone: 'arc' } : null, onPress: () => router.navigate('explore', { segment: 'launch' }) },
     { id: 'farms', icon: 'farm', label: t({ id: 'key.farms', message: 'Farms' }), badge: toCollect > 0n ? { text: t({ id: 'home.badge.collect', message: '{d} DYNO', values: { d: dyno >= 10 ? dyno.toFixed(0) : dyno.toFixed(1) } }), tone: 'surge' } : null, onPress: () => router.navigate('explore', { segment: 'farms' }) },
-    host.browser
-      ? { id: 'web', icon: 'globe', label: t({ id: 'key.web', message: 'Web' }), badge: null, onPress: () => router.navigate('browser') }
-      : { id: 'activity', icon: 'activity', label: t({ id: 'tab.activity', message: 'Activity' }), badge: pendingTx > 0 ? { text: t({ id: 'home.badge.pending', message: '{n} pending', values: { n: pendingTx } }), tone: 'arc' } : null, onPress: () => router.setTab('activity') },
+    { id: 'activity', icon: 'activity', label: t({ id: 'tab.activity', message: 'Activity' }), badge: pendingTx > 0 ? { text: t({ id: 'home.badge.pending', message: '{n} pending', values: { n: pendingTx } }), tone: 'arc' } : null, onPress: () => router.setTab('activity') },
   ]
   /*
     ETN's own price does not come from the market list.
@@ -504,6 +497,52 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
               instead of leaving a third of the screen bare under it.
             */}
             <Column flex={1} minHeight={8} />
+
+            {/*
+              The way into the in-app browser (§5.3), on the bodies that have
+              one — the phone, never the extension, which is already in a
+              browser.
+
+              It is drawn as an empty address bar rather than as a key or a
+              tile: the well, the radius and the mute placeholder are the
+              `Input` face, so it reads as the thing it opens instead of as a
+              button that happens to be named Web. Tapping anywhere on it opens
+              the Browser, where the real field takes over; nothing is typed
+              here, because a second URL input on Home would be a second place
+              for the same text to live.
+
+              It sits directly above the price strip, in the room the phone has
+              under the grid and the popup does not — the same slack the spacer
+              above was added to absorb.
+            */}
+            {host.browser ? (
+              <Ignition active={ignite} reducedMotion={reducedMotion} order={4}>
+                <Pressable
+                  onPress={() => router.navigate('browser')}
+                  accessibilityRole="button"
+                  accessibilityLabel={t({ id: 'home.browser.a11y', message: 'Open the in-app browser' })}
+                  testID="home-browser-bar"
+                  style={{
+                    // The `Input` face exactly, down to the four pixels over
+                    // the hit floor — this is meant to read as that field.
+                    minHeight: metrics.hit + 4,
+                    borderRadius: radius.well,
+                    borderWidth: 1,
+                    borderColor: edge,
+                    backgroundColor: paint.well,
+                    paddingHorizontal: 14,
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Row gap="$2" alignItems="center">
+                    <Icon name="search" size={16} color={paint.mute} />
+                    <Body tone="mute" numberOfLines={1} flexShrink={1}>
+                      {t({ id: 'home.browser.bar', message: 'Search or enter address' })}
+                    </Body>
+                  </Row>
+                </Pressable>
+              </Ignition>
+            ) : null}
 
             {/* The status strip: the site under the popup, and ETN's price. */}
             <Ignition active={ignite} reducedMotion={reducedMotion} order={4}>
