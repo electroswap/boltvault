@@ -183,6 +183,27 @@ describe('provider service', () => {
     expect(await verifyTypedData({ address, signature: sig, domain: { name: 'Fixture', chainId: TESTNET }, types: { Ping: typed.types.Ping }, primaryType: 'Ping', message: { note: 'hi', n: 42n } })).toBe(true)
   })
 
+  /*
+    The firewall's decoder reads domain numbers with a strict grammar, and the
+    signer used to read them with `BigInt(String(x))`, which also accepts " 1",
+    "\n1" and "+1". A domain the decoder recorded as having no chainId would
+    still be signed bound to that chain, so TYPED_DATA_DOMAIN_MISMATCH could
+    not fire and a mainnet permit could be signed from an Electroneum session.
+    The signer now fails closed on anything the decoder would not read.
+  */
+  it('refuses typed data whose domain chainId is not a plain integer, without raising a sheet', async () => {
+    const a = dapp(engine, ORIGIN_A)
+    const typed = {
+      types: { EIP712Domain: [{ name: 'name', type: 'string' }, { name: 'chainId', type: 'uint256' }], Ping: [{ name: 'note', type: 'string' }] },
+      primaryType: 'Ping',
+      domain: { name: 'Fixture', chainId: ' 1' },
+      message: { note: 'hi' },
+    }
+    await expect(a.request('eth_signTypedData_v4', [address, JSON.stringify(typed)])).rejects.toBeDefined()
+    // No approval was created: the user is never shown a sheet for something unsignable.
+    expect(engine.approvals.list()).toHaveLength(0)
+  })
+
   it('prepares, previews, signs and broadcasts a transaction; activity is written first and confirmed later', async () => {
     const a = dapp(engine, ORIGIN_A)
     const p = a.request('eth_sendTransaction', [{ from: address, to: address, value: '0x1' }])

@@ -543,6 +543,14 @@ export class ProviderService {
         )
         const typedJson =
           typeof intent.typedData === 'string' ? safeJson(intent.typedData) : intent.typedData
+        /*
+          Reject anything the signer could not read strictly, here rather than
+          at signing time. Failing later would put a sheet in front of the user
+          for something that can never be signed, and — because an approval
+          survives a failed execution so a device refusal can be retried — would
+          leave that sheet pending for good.
+        */
+        normaliseTypedData(typedJson)
         return {
           kind: 'sign_typed_data',
           from: intent.from,
@@ -877,21 +885,32 @@ export class ProviderService {
         })
         return true
       }
+      /*
+        Every case below signs what the approval record holds, never what the
+        live intent holds. The record is the object the sheet rendered and the
+        firewall assessed; the intent can still be replaced after the sheet is
+        up, because `approve()` re-attaches to a pending request by the
+        page-supplied `clientRequestId`. Signing the intent would mean signing
+        something the user was never shown (§3.3, §3.4).
+      */
       case 'sign_message': {
+        const payload = request.payload as Extract<ApprovalPayload, { kind: 'sign_message' }>
         const account = await this.signer(intent.accountId)
-        return account.signMessage({ message: { raw: intent.message } })
+        return account.signMessage({ message: { raw: payload.message as Hex } })
       }
       case 'eth_sign': {
+        const payload = request.payload as Extract<ApprovalPayload, { kind: 'eth_sign' }>
         const account = await this.signer(intent.accountId)
         // A device never signs a raw hash (§4.6: eth_sign is 4200 for hardware accounts).
         if (!account.sign)
           throw new RpcError(RPC.UNSUPPORTED_METHOD, 'This account cannot sign a raw hash.')
-        return account.sign({ hash: intent.hash })
+        return account.sign({ hash: payload.hash as Hex })
       }
       case 'sign_typed_data': {
+        const payload = request.payload as Extract<ApprovalPayload, { kind: 'sign_typed_data' }>
         const account = await this.signer(intent.accountId)
         const typed = normaliseTypedData(
-          typeof intent.typedData === 'string' ? safeJson(intent.typedData) : intent.typedData,
+          typeof payload.typedData === 'string' ? safeJson(payload.typedData) : payload.typedData,
         )
         return account.signTypedData(typed as never)
       }
@@ -1122,13 +1141,29 @@ export function normaliseTypedData(input: unknown): unknown {
     }
     return value
   }
+  /*
+    The domain's numbers must be read by exactly the grammar the firewall's
+    decoder uses (`packages/security/src/decode.ts`), because the rule that
+    compares `domain.chainId` to the session reads it there and the signature
+    is produced from here. `BigInt(String(x))` is looser than that grammar —
+    it accepts " 1", "\n1" and "+1" — so a domain could be signed for a chain
+    the decoder had recorded as absent, and TYPED_DATA_DOMAIN_MISMATCH would
+    never fire. Fail closed instead: a domain number we cannot read strictly is
+    a rejected request, not a silently signed one.
+  */
+  const strictBig = (field: string, value: unknown): bigint => {
+    if (typeof value === 'bigint') return value
+    if (typeof value === 'number' && Number.isSafeInteger(value)) return BigInt(value)
+    if (typeof value === 'string' && /^(0x[0-9a-fA-F]+|\d+)$/.test(value)) return BigInt(value)
+    throw new EngineError('invalid_argument', `typed data domain field ${field} is not a plain integer`)
+  }
   const domainFields = types['EIP712Domain']
   const domain: Record<string, unknown> = { ...(t.domain ?? {}) }
-  if (domain['chainId'] !== undefined) domain['chainId'] = BigInt(String(domain['chainId']))
+  if (domain['chainId'] !== undefined) domain['chainId'] = strictBig('chainId', domain['chainId'])
   if (domainFields)
     for (const f of domainFields)
       if (/^u?int/.test(f.type) && domain[f.name] !== undefined)
-        domain[f.name] = BigInt(String(domain[f.name]))
+        domain[f.name] = strictBig(f.name, domain[f.name])
   const { EIP712Domain: _omit, ...rest } = types
   return {
     domain,
