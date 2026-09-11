@@ -45,9 +45,24 @@ export const FEE_SCHEDULE_ABI = parseAbi([
 ])
 
 /** Uniswap's FeeOnTransferDetector (the interface's useSwapTaxes). */
+/*
+  The detector ElectroSwap actually deployed, which returns two fields.
+
+  This ABI used to declare five — `feeTakenOnTransfer`, `externalTransferFailed`
+  and `sellReverted` as well — which is the shape of a *later* Uniswap
+  FeeOnTransferDetector. The deployed contract
+  (`contracts/electroswap/ElectroSwapV3`, verified) returns
+  `TokenFees{buyFeeBps, sellFeeBps}` and nothing else, so every decode of a
+  two-word return against a five-field tuple failed and the probe has never
+  once succeeded. The three extra fields were always `undefined`, which is why
+  the `sellReverted` guard never fired either.
+
+  It matches `packages/electroswap/abis/FeeOnTransferDetector.json`, which is
+  synced from the interface and had it right all along.
+*/
 export const FOT_DETECTOR_ABI = parseAbi([
-  'function validate(address token, address baseToken, uint256 amountToBorrow) returns ((uint256 buyFeeBps, uint256 sellFeeBps, bool feeTakenOnTransfer, bool externalTransferFailed, bool sellReverted) fees)',
-  'function batchValidate(address[] tokens, address baseToken, uint256 amountToBorrow) returns ((uint256 buyFeeBps, uint256 sellFeeBps, bool feeTakenOnTransfer, bool externalTransferFailed, bool sellReverted)[] fotResults)',
+  'function validate(address token, address baseToken, uint256 amountToBorrow) returns ((uint256 buyFeeBps, uint256 sellFeeBps) fees)',
+  'function batchValidate(address[] tokens, address baseToken, uint256 amountToBorrow) returns ((uint256 buyFeeBps, uint256 sellFeeBps)[] fotResults)',
 ])
 
 /** EsLimitOrderManagerV1 (apps/interface/src/abis/limit-orders.json, synced). */

@@ -22,7 +22,6 @@ import {
   permitCovers,
   permitSingleTypedData,
   priceImpactPct,
-  taxOf,
   taxSlippageBips,
   type BestQuote,
   type PermitInput,
@@ -76,8 +75,6 @@ const DEADLINE_S = 20 * 60
 const BIPS_CEILING = 10_000
 /** Hard clamp, so a path that ever skips the refusal still leaves a non-zero floor. */
 const MAX_EFFECTIVE_SLIPPAGE_BPS = 9_900
-/** A probe worth the name: a hundredth of the trade, with a floor so dust still probes. */
-const probeAmount = (amountIn: bigint): bigint => (amountIn / 100n > 1000n ? amountIn / 100n : 1000n)
 const hex = (n: bigint): Hex => `0x${n.toString(16)}`
 const isEtn = (chainId: number): chainId is 52014 | 5201420 => chainId === 52014 || chainId === 5201420
 const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
@@ -125,6 +122,7 @@ export class SwapService {
       priceImpactPct: null,
       slippageBips: input.slippageBips ?? DEFAULT_SLIPPAGE_BIPS,
       taxBips: 0,
+      taxUnknown: false,
       fee: { bips: 0, tier: 0, name: '', amountRaw: '0', sink: null, source: 'fallback', nextTierAt: null, nextTierBips: null },
       route: { label: '', hops: [] },
       gasEstimate: '0',
@@ -195,32 +193,27 @@ export class SwapService {
     const [best, probe, taxIn, taxOut] = await Promise.all([
       bestRoute(wrappedIn, wrappedOut, amountIn, addresses, read),
       probeIn > 0n ? bestRoute(wrappedIn, wrappedOut, probeIn, addresses, read) : Promise.resolve<BestQuote | null>(null),
-      // Sized to the trade: a 1,000-wei probe cannot measure a percentage tax
-      // and never crosses a threshold one. A hundredth of the input can.
-      same(wrappedIn, wetn) ? Promise.resolve(null) : detectTax(A.feeOnTransferDetector as Hex | null, wrappedIn, wetn, read, probeAmount(amountIn)),
-      same(wrappedOut, wetn) ? Promise.resolve(null) : detectTax(A.feeOnTransferDetector as Hex | null, wrappedOut, wetn, read, probeAmount(amountIn)),
+      same(wrappedIn, wetn) ? Promise.resolve(null) : detectTax(A.feeOnTransferDetector as Hex | null, wrappedIn, wetn, read),
+      same(wrappedOut, wetn) ? Promise.resolve(null) : detectTax(A.feeOnTransferDetector as Hex | null, wrappedOut, wetn, read),
     ])
     if (!best) {
       problems.push('No route on ElectroSwap for this pair.')
       return { ...withState, problems }
     }
     /*
-      A probe that could not answer is not a probe that said "no tax".
+      A probe that could not answer is not a probe that said "no tax" — and it
+      is not a reason to refuse the swap either.
 
-      Every failure path used to collapse to null, so a reverting detector, a
-      malformed answer or a rate-limited node all read as a clean token — on
-      exactly the tokens whose trick is charging on transfer. The wallet says
-      so and declines instead.
+      Every failure path used to collapse to `null`, so a reverting detector or
+      a rate-limited node read as a clean token. Turning that into a refusal
+      went too far the other way: the detector reverts `PairLookupFailed` for
+      any token with no V2 pair against WETN, which is an ordinary thing for a
+      token to be, and the protection that actually matters — the minimum
+      received, enforced on chain — does not depend on the probe at all. So the
+      uncertainty is reported rather than either assumed away or treated as
+      fatal.
     */
-    const measuredIn = taxOf(taxIn)
-    const measuredOut = taxOf(taxOut)
-    if (taxIn === 'unavailable' || taxOut === 'unavailable')
-      problems.push('BoltVault could not check whether this token charges a transfer tax, so swapping it from here is off. Try again in a moment.')
-    if (measuredIn?.sellReverted) problems.push('This token cannot be sold on ElectroSwap right now.')
-    if (measuredIn?.feeTakenOnTransfer === true && measuredIn.sellFeeBps === 0 && measuredOut === null) {
-      // The detector saw a transfer fee it could not size. Treat an unsized fee as unknown, not as zero.
-      problems.push('This token takes a fee on transfer that BoltVault could not measure.')
-    }
+    const taxUnknown = taxIn === 'unavailable' || taxOut === 'unavailable'
     const taxBips = taxSlippageBips(taxIn, taxOut)
     const amountOut = best.best.amountOut
     const bips = tier.bips
@@ -268,6 +261,7 @@ export class SwapService {
       rate: rateOf(amountIn, amountOut, inView.decimals, outView.decimals),
       priceImpactPct: impact,
       taxBips,
+      taxUnknown,
       fee: { ...withState.fee, amountRaw: feeAmount(amountOut, bips).toString() },
       route: { label: best.best.candidate.label, hops: best.best.candidate.route.hops.map((h) => (h.kind === 'v3' ? { kind: 'v3' as const, tokenIn: h.tokenIn, tokenOut: h.tokenOut, fee: h.fee } : { kind: 'v2' as const, tokenIn: h.tokenIn, tokenOut: h.tokenOut })) },
       gasEstimate: gas.toString(),

@@ -11,13 +11,16 @@ import type { ReadCall, Reader } from './quote'
 export interface TokenTax {
   readonly buyFeeBps: number
   readonly sellFeeBps: number
-  readonly feeTakenOnTransfer: boolean
-  readonly sellReverted: boolean
 }
 
 /**
  * "There is no detector on this chain" and "the detector did not answer" are
  * different facts, and both used to come back as `null`.
+ *
+ * `'unavailable'` is not evidence of a tax, and must not stop a swap: the
+ * detector reverts `PairLookupFailed` for any token with no V2 pair against
+ * the base, which is an ordinary thing for a token to be. It is a reason to
+ * say the tax is unknown, not a reason to refuse.
  *
  * They mean opposite things. The first says the wallet was never going to
  * know; the second says it asked about this particular token and could not
@@ -27,14 +30,26 @@ export interface TokenTax {
  */
 export type TaxProbe = TokenTax | 'unavailable' | null
 
-/** Probe one token against the wrapped native. */
+/*
+  Probe one token against the wrapped native.
+
+  `amountToBorrow` is an amount of `token` — the detector flash-borrows it from
+  the token/base pair and measures what arrives. It is deliberately a small
+  fixed number and not a fraction of the trade: the detector reports a *ratio*
+  in basis points, so a small borrow measures a percentage fee exactly as well
+  as a large one, while a large one is simply more likely to exceed the pair's
+  reserves and revert. Sizing it from the trade also got the asset wrong — the
+  input amount is denominated in the token being sold, not the one being
+  probed.
+*/
 export async function detectTax(detector: Hex | null, token: Hex, baseToken: Hex, read: Reader, amountToBorrow = 1000n): Promise<TaxProbe> {
   if (!detector) return null
   const call: ReadCall = { address: detector, abi: FOT_DETECTOR_ABI, functionName: 'validate', args: [token, baseToken, amountToBorrow] }
   const [r] = await read([call]).catch(() => [undefined])
   if (!r?.ok || !r.value || typeof r.value !== 'object') return 'unavailable'
-  const v = r.value as { buyFeeBps: bigint; sellFeeBps: bigint; feeTakenOnTransfer: boolean; sellReverted: boolean }
-  return { buyFeeBps: Number(v.buyFeeBps), sellFeeBps: Number(v.sellFeeBps), feeTakenOnTransfer: v.feeTakenOnTransfer, sellReverted: v.sellReverted }
+  const v = r.value as { buyFeeBps: bigint; sellFeeBps: bigint }
+  if (typeof v.buyFeeBps !== 'bigint' || typeof v.sellFeeBps !== 'bigint') return 'unavailable'
+  return { buyFeeBps: Number(v.buyFeeBps), sellFeeBps: Number(v.sellFeeBps) }
 }
 
 /** A probe that produced an actual measurement, or null. */

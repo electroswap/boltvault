@@ -537,6 +537,13 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
             <FeeRow label={t({ id: 'swap.min', message: 'Minimum received' })} value={quote && quote.amountOutRaw !== '0' ? `${formatRaw(quote.minimumOutRaw, quote.decimalsOut)} ${quote.symbolOut}` : '—'} tone="mute" testID="swap-min" />
             <FeeRow label={t({ id: 'swap.locked', message: 'Liquidity locked' })} value={lockText} tone={lockTone} testID="swap-locks" />
             {quote && quote.taxBips > 0 ? <FeeRow label={t({ id: 'swap.tax.label', message: 'Token tax' })} value={t({ id: 'swap.tax', message: '+{p} token tax', values: { p: formatPct(quote.taxBips) } })} tone="ember" testID="swap-tax" /> : null}
+            {/*
+              Said, not assumed and not fatal. The detector reverts for any
+              token with no V2 pair against WETN, which is an ordinary thing for
+              a token to be — but a tax that could not be measured is still a
+              tax the figures above do not account for.
+            */}
+            {quote?.taxUnknown ? <FeeRow label={t({ id: 'swap.tax.label', message: 'Token tax' })} value={t({ id: 'swap.tax.unknown', message: 'could not be checked' })} tone="ember" testID="swap-tax-unknown" /> : null}
             </>
             ) : null}
           </Plate>
