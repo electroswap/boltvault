@@ -128,6 +128,18 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   const [error, setError] = useState<string | null>(null)
   const [pickedAccount, setPickedAccount] = useState<string | null>(null)
   const [showRaw, setShowRaw] = useState(false)
+  /*
+    The transaction's own fields, for every signer.
+
+    These used to render only inside the "what your device shows" plate, which
+    is gated on a Ledger/Trezor/Keystone — so someone signing with a software
+    key could not see the destination, the value, the calldata or the nonce
+    anywhere in the product, and every address that did reach the screen was
+    truncated to eight nibbles. The statements stay the primary surface; this
+    is the fallback that has to exist when the decoder has nothing useful to
+    say (§3.4).
+  */
+  const [showTx, setShowTx] = useState(false)
 
   const request: ApprovalRequest | undefined = requestId
     ? pending.find((r) => r.id === requestId)
@@ -138,6 +150,18 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   useEffect(() => {
     engine.chains.list().then(setChains, () => undefined)
   }, [engine])
+
+  /*
+    A typed-data message the decoder cannot explain opens with its raw body
+    already showing. `TYPED_DATA_UNKNOWN` means the statements above are, by
+    definition, not describing what is about to be signed — so the one surface
+    that does describe it should not be behind a tap the user has no reason to
+    know to make.
+  */
+  const unknownTyped = assessment?.rules.some((r) => r.code === 'TYPED_DATA_UNKNOWN') ?? false
+  useEffect(() => {
+    if (unknownTyped) setShowRaw(true)
+  }, [unknownTyped])
 
   // Inert after the window gains focus or resizes (clickjacking, §3.5), and after the sheet first shows.
   useEffect(() => {
@@ -483,8 +507,14 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
         {/* Statements */}
         {assessment ? (
           <Plate role="raised" gap="$2" testID="approval-statements">
+            {/* Capped: a statement carries names a site or a contract chose, so no single one may consume the sheet and push the verb off screen. */}
             {assessment.statements.map((s, i) => (
-              <Body key={i} tone={toneOf(s.tone)} testID={`approval-statement-${i}`}>
+              <Body
+                key={i}
+                tone={toneOf(s.tone)}
+                numberOfLines={4}
+                testID={`approval-statement-${i}`}
+              >
                 {s.text}
               </Body>
             ))}
@@ -600,6 +630,40 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
         {/* Details */}
         {payload.kind === 'sign_typed_data' ? (
           <Column gap="$2">
+            {/*
+              The domain says which contract, on which chain, this signature is
+              valid for. It is the part of a typed-data message that decides
+              where the signature can be replayed, so it is always on screen —
+              never behind the raw-message toggle.
+            */}
+            <Plate gap="$1" testID="approval-domain">
+              <DetailRow
+                label={t({ id: 'typed.type', message: 'Message type' })}
+                value={payload.primaryType}
+                testID="approval-domain-type"
+              />
+              <DetailRow
+                label={t({ id: 'typed.domain', message: 'Domain' })}
+                value={payload.domainName ?? t({ id: 'typed.domain.none', message: 'not named' })}
+                testID="approval-domain-name"
+              />
+              <DetailRow
+                label={t({ id: 'typed.contract', message: 'Valid for contract' })}
+                value={
+                  typedDomain(payload.typedData).verifyingContract ??
+                  t({ id: 'typed.contract.none', message: 'not stated' })
+                }
+                testID="approval-domain-contract"
+              />
+              <DetailRow
+                label={t({ id: 'typed.chain', message: 'Valid on chain' })}
+                value={
+                  typedDomain(payload.typedData).chainId ??
+                  t({ id: 'typed.chain.none', message: 'not stated' })
+                }
+                testID="approval-domain-chain"
+              />
+            </Plate>
             <Body
               tone="mute"
               size="caption"
@@ -616,8 +680,9 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
             </Body>
             {showRaw ? (
               <Plate>
-                <Body size="caption" testID="approval-raw">
-                  {JSON.stringify(payload.typedData, null, 1).slice(0, 4000)}
+                {/* Truncation is stated, never silent: a cut the user cannot see is a cut they cannot account for. */}
+                <Body size="caption" selectable testID="approval-raw">
+                  {rawJson(payload.typedData)}
                 </Body>
               </Plate>
             ) : null}
@@ -630,6 +695,111 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
             </Body>
             <Body size="caption">{`${formatWei(payload.fee.maxTotalWei)} ${payload.fee.symbol}`}</Body>
           </Row>
+        ) : null}
+        {payload.kind === 'send_transaction' ? (
+          <Column gap="$2">
+            <Body
+              tone="mute"
+              size="caption"
+              onPress={() => setShowTx((v) => !v)}
+              testID="approval-tx-toggle"
+            >
+              {showTx
+                ? t({ id: 'approval.tx.hide', message: 'Hide the transaction details' })
+                : t({ id: 'approval.tx.show', message: 'Show the transaction details' })}
+            </Body>
+            {showTx ? (
+              <Plate gap="$1" testID="approval-tx">
+                <DetailRow
+                  label={t({ id: 'tx.to', message: 'To' })}
+                  value={payload.tx.to ?? t({ id: 'device.deploy', message: 'new contract' })}
+                  testID="approval-tx-to"
+                />
+                <DetailRow
+                  label={t({ id: 'tx.from', message: 'From' })}
+                  value={payload.tx.from}
+                  testID="approval-tx-from"
+                />
+                <DetailRow
+                  label={t({ id: 'tx.value', message: 'Value' })}
+                  value={`${formatWei(BigInt(payload.tx.value).toString())} ${payload.fee.symbol}`}
+                  testID="approval-tx-value"
+                />
+                <DetailRow
+                  label={t({ id: 'tx.chain', message: 'Network' })}
+                  value={chain ? `${chain.name} (${chain.chainId})` : String(chainId)}
+                  testID="approval-tx-chain"
+                />
+                <DetailRow
+                  label={t({ id: 'tx.nonce', message: 'Nonce' })}
+                  value={String(payload.tx.nonce)}
+                  testID="approval-tx-nonce"
+                />
+                <DetailRow
+                  label={t({ id: 'tx.gas', message: 'Gas limit' })}
+                  value={payload.fee.gasLimit}
+                  testID="approval-tx-gas"
+                />
+                <DetailRow
+                  label={t({ id: 'tx.maxfee', message: 'Max network fee' })}
+                  value={`${formatWei(payload.fee.maxTotalWei)} ${payload.fee.symbol}`}
+                  testID="approval-tx-maxfee"
+                />
+                {payload.tx.data && payload.tx.data !== '0x' ? (
+                  <>
+                    <DetailRow
+                      label={t({ id: 'tx.selector', message: 'Function' })}
+                      value={payload.tx.data.slice(0, 10)}
+                      testID="approval-tx-selector"
+                    />
+                    <DetailRow
+                      label={t({
+                        id: 'tx.data',
+                        message: 'Data ({n} bytes)',
+                        values: { n: Math.max(0, (payload.tx.data.length - 2) / 2) },
+                      })}
+                      value={payload.tx.data}
+                      testID="approval-tx-data"
+                    />
+                  </>
+                ) : (
+                  <DetailRow
+                    label={t({ id: 'tx.data', message: 'Data' })}
+                    value={t({ id: 'tx.data.none', message: 'none' })}
+                    testID="approval-tx-data"
+                  />
+                )}
+              </Plate>
+            ) : null}
+          </Column>
+        ) : null}
+        {payload.kind === 'sign_message' ? (
+          <Column gap="$2">
+            <Body
+              tone="mute"
+              size="caption"
+              onPress={() => setShowTx((v) => !v)}
+              testID="approval-msg-toggle"
+            >
+              {showTx
+                ? t({ id: 'approval.msg.hide', message: 'Hide the exact message' })
+                : t({ id: 'approval.msg.show', message: 'Show the exact message' })}
+            </Body>
+            {showTx ? (
+              <Plate gap="$1" testID="approval-msg">
+                <DetailRow
+                  label={t({ id: 'msg.signer', message: 'Signed by' })}
+                  value={payload.from}
+                  testID="approval-msg-from"
+                />
+                <DetailRow
+                  label={t({ id: 'msg.raw', message: 'Message' })}
+                  value={payload.text ?? payload.message}
+                  testID="approval-msg-body"
+                />
+              </Plate>
+            ) : null}
+          </Column>
         ) : null}
         {/*
           The device card and "no Ledger is connected" are one slot.
@@ -827,6 +997,56 @@ function formatWei(wei: string): string {
   const whole = n / 10n ** 18n
   const frac = (n % 10n ** 18n).toString().padStart(18, '0').slice(0, 6).replace(/0+$/, '')
   return frac ? `${whole}.${frac}` : whole.toString()
+}
+
+/** The raw JSON of a typed-data message, with any truncation stated rather than silent. */
+const RAW_MAX = 12_000
+function rawJson(value: unknown): string {
+  let text: string
+  try {
+    text = JSON.stringify(value, null, 1) ?? ''
+  } catch {
+    return '(this message could not be rendered)'
+  }
+  if (text.length <= RAW_MAX) return text
+  return `${text.slice(0, RAW_MAX)}\n… ${text.length - RAW_MAX} more characters not shown`
+}
+
+/**
+ * The domain of a typed-data message, read from the payload the sheet renders —
+ * which is the same record that gets signed, so what is shown here and what is
+ * hashed cannot drift apart.
+ */
+function typedDomain(value: unknown): { verifyingContract: string | null; chainId: string | null } {
+  const d = (value as { domain?: Record<string, unknown> } | null)?.domain
+  if (!d || typeof d !== 'object') return { verifyingContract: null, chainId: null }
+  const vc = d['verifyingContract']
+  const cid = d['chainId']
+  return {
+    verifyingContract: typeof vc === 'string' ? vc : null,
+    chainId: cid === undefined || cid === null ? null : String(cid),
+  }
+}
+
+/**
+ * A field of the thing being signed, shown in full.
+ *
+ * Deliberately not `DeviceRow`: that one is a one-line summary of what a
+ * hardware screen will say, so it truncates. This is the verification surface,
+ * so it wraps — an address the user cannot read all of is an address they
+ * cannot check, and 6+4 truncation is exactly what address poisoning aims at.
+ */
+function DetailRow({ label, value, testID }: { label: string; value: string; testID?: string }) {
+  return (
+    <Column gap={2}>
+      <Body tone="mute" size="caption">
+        {label}
+      </Body>
+      <Body size="caption" selectable testID={testID}>
+        {value}
+      </Body>
+    </Column>
+  )
 }
 
 function DeviceRow({ label, value }: { label: string; value: string }) {
