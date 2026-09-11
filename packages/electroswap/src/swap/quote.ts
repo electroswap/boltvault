@@ -71,10 +71,22 @@ export function candidates(tokenIn: Hex, tokenOut: Hex, addresses: QuoteAddresse
         out.push({ kind: 'v3', label: `V3 ${f1 / 10_000}% → ${f2 / 10_000}%`, route: { hops: [{ kind: 'v3', tokenIn, tokenOut: base, fee: f1 }, { kind: 'v3', tokenIn: base, tokenOut, fee: f2 }] } })
       }
     }
-    if (addresses.mixedRouteQuoter) {
-      out.push({ kind: 'mixed', label: 'V3 0.3% → V2', route: { hops: [{ kind: 'v3', tokenIn, tokenOut: base, fee: 3000 }, { kind: 'v2', tokenIn: base, tokenOut }] } })
-      out.push({ kind: 'mixed', label: 'V2 → V3 0.3%', route: { hops: [{ kind: 'v2', tokenIn, tokenOut: base }, { kind: 'v3', tokenIn: base, tokenOut, fee: 3000 }] } })
-    }
+    /*
+      Mixed V2/V3 routes are quoted but not generated, because the encoder
+      cannot express them.
+
+      `encodeSwap` emits a single `V3_SWAP_EXACT_IN` carrying a packed path
+      whose V2 hops are marked with the `0x800000` fee sentinel. That sentinel
+      is a MixedRouteQuoter convention — the Universal Router does not read it,
+      and would look for a V3 pool at fee tier 8388608, which does not exist.
+      So a mixed route can win the quote and then produce calldata that cannot
+      execute: the user sees the best price and the swap reverts.
+
+      Until the encoder partitions a mixed route into one command per
+      contiguous same-protocol section, the honest thing is not to offer a
+      price the wallet cannot honour. Re-enable alongside that change.
+    */
+    void addresses.mixedRouteQuoter
   }
   return out.slice(0, MAX_CANDIDATES)
 }

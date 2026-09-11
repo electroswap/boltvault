@@ -2,7 +2,7 @@ import { ELECTRONEUM_ADDRESSES } from '@boltvault/chains'
 import { decodeCalldata, decodeUniversalRouter } from '@boltvault/security'
 import type { Hex } from 'viem'
 import { describe, expect, it } from 'vitest'
-import { bestRoute, candidates, encodeSwap, feeAmount, minimumOut, permitCovers, permitSingleTypedData, tierFor, DYNO_WEIGHT_ONE, FALLBACK_SCHEDULE, MAX_CANDIDATES, taxSlippageBips, encodeSubmitOrder, encodeCloseOrder, COMMAND, ROUTER_AS_RECIPIENT, type QuoteAddresses, type ReadResult } from '../src/swap'
+import { bestRoute, candidates, deliveredMinimumOut, encodeSwap, feeAmount, minimumOut, permitCovers, permitSingleTypedData, tierFor, DYNO_WEIGHT_ONE, FALLBACK_SCHEDULE, MAX_CANDIDATES, taxSlippageBips, encodeSubmitOrder, encodeCloseOrder, COMMAND, ROUTER_AS_RECIPIENT, type QuoteAddresses, type ReadResult } from '../src/swap'
 
 const A = ELECTRONEUM_ADDRESSES[52014]
 const UR = A.universalRouter as Hex
@@ -55,6 +55,16 @@ describe('universal router encoding mirrors the SDK', () => {
     // routerMin = 497_500; after the 0.30 % fee: 497_500 − 1_492 = 496_008
     expect(sweep?.type === 'SWEEP' && sweep.recipient === ME && sweep.amount === 496_008n).toBe(true)
     expect(enc.minimumOut).toBe(496_008n)
+    /*
+      One number, three places. The screen used to compute its own floor with
+      `minimumOut` — fee first, then slippage — while the router enforces
+      slippage first and takes the fee from what survives. The two differ by
+      their rounding, so the sheet promised very slightly more than the bytes
+      guaranteed. `deliveredMinimumOut` is what the encoder writes, and is now
+      what the quote reports.
+    */
+    expect(deliveredMinimumOut(base.quotedOut, 30, base.slippageBips)).toBe(enc.minimumOut)
+    expect(sweep?.type === 'SWEEP' && sweep.amount === deliveredMinimumOut(base.quotedOut, 30, base.slippageBips)).toBe(true)
     // The firewall sees it as a router call with our fee.
     const decoded = decodeCalldata({ chainId: 52014, to: UR, data: enc.data, value: 0n })
     expect(decoded.kind).toBe('universal_router')
@@ -100,7 +110,15 @@ describe('mini-router', () => {
     expect(c.length).toBeLessThanOrEqual(MAX_CANDIDATES)
     expect(c[0]?.kind).toBe('v2')
     expect(c.slice(1, 5).every((x) => x.kind === 'v3' && x.route.hops.length === 1)).toBe(true)
-    expect(c.some((x) => x.kind === 'mixed')).toBe(true)
+    /*
+      Mixed V2/V3 routes are no longer offered: `encodeSwap` renders them as a
+      single V3 swap over a packed path carrying the `0x800000` MixedRouteQuoter
+      sentinel, which the Universal Router does not read — it would look for a
+      pool at fee tier 8388608. A mixed route could therefore win the quote and
+      then produce calldata that cannot execute. Re-enable when the encoder
+      partitions a mixed route into one command per protocol run.
+    */
+    expect(c.some((x) => x.kind === 'mixed')).toBe(false)
   })
   it('picks the best output and prefers a single hop within 0.1 %', async () => {
     const answers = (calls: readonly { functionName: string; args: readonly unknown[] }[]): ReadResult[] =>

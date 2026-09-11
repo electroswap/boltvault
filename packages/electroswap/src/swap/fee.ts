@@ -89,6 +89,22 @@ export function minimumOut(quotedOut: bigint, feeBips: number, slippageBips: num
   return afterFee - (afterFee * BigInt(slippageBips)) / BIPS
 }
 
+/**
+ * The floor the router will actually enforce — the number `encodeSwap` writes
+ * into the delivering `SWEEP`/`UNWRAP_WETH` command.
+ *
+ * It is not `minimumOut`. The router applies slippage first and takes the fee
+ * from what survives, so the two differ by their rounding, and the screen was
+ * quoting a floor a few wei above the one in the calldata — promising slightly
+ * more than the transaction guaranteed. Both sides use this now, so the number
+ * on the Swap screen, the number on the signing sheet and the `amountMin` in
+ * the bytes are one value.
+ */
+export function deliveredMinimumOut(quotedOut: bigint, feeBips: number, slippageBips: number): bigint {
+  const afterSlippage = routerMinimumOut(quotedOut, slippageBips)
+  return afterSlippage - feeAmount(afterSlippage, feeBips)
+}
+
 /** The router's own minimum-out check happens before the fee is taken: the pre-fee floor. */
 export function routerMinimumOut(quotedOut: bigint, slippageBips: number): bigint {
   return quotedOut - (quotedOut * BigInt(slippageBips)) / BIPS

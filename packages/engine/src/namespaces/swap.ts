@@ -17,11 +17,12 @@ import {
   encodeApprovePermit2,
   encodeSwap,
   feeAmount,
-  minimumOut,
+  deliveredMinimumOut,
   netAfterFee,
   permitCovers,
   permitSingleTypedData,
   priceImpactPct,
+  taxOf,
   taxSlippageBips,
   type BestQuote,
   type PermitInput,
@@ -75,6 +76,8 @@ const DEADLINE_S = 20 * 60
 const BIPS_CEILING = 10_000
 /** Hard clamp, so a path that ever skips the refusal still leaves a non-zero floor. */
 const MAX_EFFECTIVE_SLIPPAGE_BPS = 9_900
+/** A probe worth the name: a hundredth of the trade, with a floor so dust still probes. */
+const probeAmount = (amountIn: bigint): bigint => (amountIn / 100n > 1000n ? amountIn / 100n : 1000n)
 const hex = (n: bigint): Hex => `0x${n.toString(16)}`
 const isEtn = (chainId: number): chainId is 52014 | 5201420 => chainId === 52014 || chainId === 5201420
 const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
@@ -192,14 +195,32 @@ export class SwapService {
     const [best, probe, taxIn, taxOut] = await Promise.all([
       bestRoute(wrappedIn, wrappedOut, amountIn, addresses, read),
       probeIn > 0n ? bestRoute(wrappedIn, wrappedOut, probeIn, addresses, read) : Promise.resolve<BestQuote | null>(null),
-      same(wrappedIn, wetn) ? Promise.resolve(null) : detectTax(A.feeOnTransferDetector as Hex | null, wrappedIn, wetn, read).catch(() => null),
-      same(wrappedOut, wetn) ? Promise.resolve(null) : detectTax(A.feeOnTransferDetector as Hex | null, wrappedOut, wetn, read).catch(() => null),
+      // Sized to the trade: a 1,000-wei probe cannot measure a percentage tax
+      // and never crosses a threshold one. A hundredth of the input can.
+      same(wrappedIn, wetn) ? Promise.resolve(null) : detectTax(A.feeOnTransferDetector as Hex | null, wrappedIn, wetn, read, probeAmount(amountIn)),
+      same(wrappedOut, wetn) ? Promise.resolve(null) : detectTax(A.feeOnTransferDetector as Hex | null, wrappedOut, wetn, read, probeAmount(amountIn)),
     ])
     if (!best) {
       problems.push('No route on ElectroSwap for this pair.')
       return { ...withState, problems }
     }
-    if (taxIn?.sellReverted) problems.push('This token cannot be sold on ElectroSwap right now.')
+    /*
+      A probe that could not answer is not a probe that said "no tax".
+
+      Every failure path used to collapse to null, so a reverting detector, a
+      malformed answer or a rate-limited node all read as a clean token — on
+      exactly the tokens whose trick is charging on transfer. The wallet says
+      so and declines instead.
+    */
+    const measuredIn = taxOf(taxIn)
+    const measuredOut = taxOf(taxOut)
+    if (taxIn === 'unavailable' || taxOut === 'unavailable')
+      problems.push('BoltVault could not check whether this token charges a transfer tax, so swapping it from here is off. Try again in a moment.')
+    if (measuredIn?.sellReverted) problems.push('This token cannot be sold on ElectroSwap right now.')
+    if (measuredIn?.feeTakenOnTransfer === true && measuredIn.sellFeeBps === 0 && measuredOut === null) {
+      // The detector saw a transfer fee it could not size. Treat an unsized fee as unknown, not as zero.
+      problems.push('This token takes a fee on transfer that BoltVault could not measure.')
+    }
     const taxBips = taxSlippageBips(taxIn, taxOut)
     const amountOut = best.best.amountOut
     const bips = tier.bips
@@ -218,8 +239,13 @@ export class SwapService {
     const effectiveSlippage = Math.min(slippageBips + taxBips, MAX_EFFECTIVE_SLIPPAGE_BPS)
     if (slippageBips + taxBips >= BIPS_CEILING)
       problems.push('This token’s transfer tax plus your slippage would leave no minimum received. BoltVault will not sign a swap with no floor.')
-    const receive = netAfterFee(amountOut, bips)
-    const minOut = minimumOut(amountOut, bips, effectiveSlippage)
+    // What actually lands: the quoter's output, less the wallet fee, less the
+    // token's own transfer tax. The tax used to widen slippage only, so the
+    // "you receive" figure was the pre-tax number.
+    const receive = (netAfterFee(amountOut, bips) * BigInt(10_000 - Math.min(taxBips, 9_999))) / 10_000n
+    // The figure the router will enforce, not a parallel computation of it:
+    // the same function the encoder writes into the delivering command.
+    const minOut = deliveredMinimumOut(amountOut, bips, effectiveSlippage)
     const spot = probe ? rateOf(probeIn, probe.best.amountOut, inView.decimals, outView.decimals) : null
     const impact = priceImpactPct(amountIn, amountOut, spot, inView.decimals, outView.decimals)
 
