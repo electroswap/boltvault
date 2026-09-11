@@ -330,6 +330,13 @@ export const ActivityEntrySchema = z.object({
   /** Counterparty for inbound entries. */
   from: z.string().nullable().optional(),
   /**
+   * The calldata this wallet sent. §8.12 names it in the write-ahead record and
+   * it was the one field missing, which is why a stuck transaction could not be
+   * re-sent at a higher fee: there was nothing left to re-send. Absent on rows
+   * the wallet did not originate.
+   */
+  data: z.string().nullable().optional(),
+  /**
    * The preview the user was shown before signing (§3.4 step 7). Absent on
    * rows written before this field existed, and on any path that had no
    * preview to show.

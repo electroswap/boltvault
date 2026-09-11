@@ -1438,6 +1438,9 @@ export class ProviderService {
       to: tx.to,
       value: BigInt(tx.value).toString(),
       nonce: tx.nonce,
+      // Kept so a stuck transaction can be re-sent at the same nonce with a
+      // higher fee; without it Speed up has nothing to repeat (§8.12).
+      ...(tx.data && tx.data !== '0x' ? { data: tx.data } : {}),
       submittedAt: d.platform.now(),
       origin: intent.origin,
       category: categoryFor(assessment, tx, intent.origin),

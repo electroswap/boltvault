@@ -7,6 +7,7 @@ import { fromHex, type Argon2idParams } from '@boltvault/core'
 import type { HidProvider, LedgerTransportProvider, TrezorConnectLike } from '@boltvault/hardware'
 import type { WalletKitLike } from '@boltvault/connect'
 import { ElectroSwapClient } from '@boltvault/electroswap'
+import { isElectroneumChainId } from '@boltvault/chains'
 import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
 import { ActivityStore } from './activityStore'
@@ -20,6 +21,8 @@ import type { WalletEngine } from './contract'
 import { EngineError } from './errors'
 import { EngineHost } from './host'
 import { ActivityScanner, activityScanNamespace } from './namespaces/activityScan'
+import { ActivityFeedService } from './namespaces/activityFeed'
+import { TxService, txNamespace } from './namespaces/tx'
 import { AllowancesService, allowancesNamespace } from './namespaces/allowances'
 import { chainsNamespace, ChainsService, type HeadSource } from './namespaces/chains'
 import { ContactsStore, contactsNamespace } from './namespaces/contacts'
@@ -54,7 +57,7 @@ import { NotificationsService, notificationsNamespace } from './namespaces/notif
 import { CustomCollectionsService, customCollectionsNamespace } from './namespaces/nftCustom'
 import { PrefsService, prefsNamespace } from './namespaces/prefs'
 import { SitesService, sitesNamespace } from './namespaces/sites'
-import { HttpRelay, MemoryRelay, SyncService, syncNamespace, type Relay } from './namespaces/sync'
+import { createSyncStateStore, HttpRelay, MemoryRelay, SyncService, syncNamespace, type Relay } from './namespaces/sync'
 import { TokensService, tokensNamespace } from './namespaces/tokens'
 import { accountsNamespace, KEY_DEK, VaultManager, vaultNamespace } from './namespaces/vault'
 import {
@@ -281,15 +284,6 @@ export function createEngine(deps: EngineDeps): Engine {
     deps.relayFor ??
     ((url: string): Relay =>
       /^https?:\/\//.test(url) ? new HttpRelay(url, fetchImpl, deps.clientKey) : sharedMemoryRelay)
-  const sync = new SyncService(deps.platform, host.events, {
-    settings,
-    sites,
-    vault,
-    relayFor,
-    identity: sealed.syncIdentity,
-    devices: sealed.syncDevices,
-    meta: sealed.syncMeta,
-  })
   staticsRef = new StaticsService({
     platform: deps.platform,
     bus: host.events,
@@ -331,8 +325,16 @@ export function createEngine(deps: EngineDeps): Engine {
       }),
     tokenInfo: async (chainId) => {
       const out: Record<string, { symbol: string; decimals: number; name?: string }> = {}
+      /*
+        §6: a token a paired device sent is untrusted "for 'known token'
+        identity until confirmed on the receiving device". This map is what
+        tells the firewall a contract *is* USDC, so a token still waiting in
+        `sync.incoming()` is left out of it — it is visible in the wallet,
+        with its provenance, but it is nobody's idea of a known token.
+      */
+      const unconfirmed = new Set(await sync.unconfirmedTokens().catch(() => [] as string[]))
       for (const t of await tokens.universe(chainId))
-        if (t.address !== 'native')
+        if (t.address !== 'native' && !unconfirmed.has(`${chainId}:${t.address.toLowerCase()}`))
           out[t.address.toLowerCase()] = { symbol: t.symbol, decimals: t.decimals, name: t.name }
       return out
     },
@@ -353,6 +355,25 @@ export function createEngine(deps: EngineDeps): Engine {
     sealed.tokensCustom,
     sealed.tokenPrefs,
   )
+  /*
+    Sync reads six of the nine §6 families out of these stores, so it is built
+    after them. Its merge state (sequence numbers, last-pushed digests, what is
+    waiting to be confirmed) is a blob of its own: `syncMeta`'s flat
+    `applied: Record<string, number>` was the wall-clock map it replaces.
+  */
+  const syncState = createSyncStateStore(deps.platform, dek)
+  const sync = new SyncService(deps.platform, host.events, {
+    settings,
+    sites,
+    vault,
+    contacts,
+    tokens,
+    relayFor,
+    identity: sealed.syncIdentity,
+    devices: sealed.syncDevices,
+    meta: sealed.syncMeta,
+    state: syncState,
+  })
   const features = { limitOrders: deps.features?.limitOrders ?? false }
   /*
     The GraphQL endpoint is behind the general auth gate rather than the wallet
@@ -483,6 +504,9 @@ export function createEngine(deps: EngineDeps): Engine {
     settings,
     flows,
     enabled: features.limitOrders,
+    // Same gate as the swap path: a limit order is a swap with a delay, and a
+    // second door into the same trade is not a gate.
+    safety: { level: (chainId, address) => explore.safetyLevel(chainId, address) },
   })
   const watchlist = new WatchlistService({
     platform: notifyingPlatform,
@@ -628,6 +652,7 @@ export function createEngine(deps: EngineDeps): Engine {
       bridge.forget()
       watchlist.forget()
       sealed.forget()
+      syncState.forget()
       cacheShards.forget()
     } else {
       // The DEK is what the blobs are sealed under, so the one-shot move of the
@@ -693,6 +718,22 @@ export function createEngine(deps: EngineDeps): Engine {
       },
     },
   })
+  /*
+    Activity is the local log plus what the chain saw. The local log is written
+    before broadcast and knows only what this wallet did; a native ETN arrival
+    emits no log at all, so it can only ever come from the feed (§8.12).
+    Feed rows are merged at read time rather than appended, because "Clear =
+    wipes local rows only" — clearing history must not pretend the chain forgot.
+  */
+  const activityFeed = new ActivityFeedService({
+    platform: deps.platform,
+    electroswap,
+    activity,
+    cache,
+    addressOf: async (accountId) => (await vault.accounts()).find((a) => a.id === accountId)?.address ?? null,
+    isEtn: isElectroneumChainId,
+  })
+  const tx = new TxService({ platform: deps.platform, chains, vault, provider, activity })
   host.register('activity', {
     list: {
       input: z
@@ -703,12 +744,17 @@ export function createEngine(deps: EngineDeps): Engine {
         })
         .optional(),
       handler: (arg) =>
-        activity.list(
+        activityFeed.list(
           (arg as { accountId?: string; chainId?: number; limit?: number } | undefined) ?? {},
         ),
     },
+    detail: {
+      input: z.object({ id: z.string().min(1).max(128) }),
+      handler: (arg) => activityFeed.detail((arg as { id: string }).id),
+    },
     clear: { handler: () => activity.clear() },
   })
+  host.register('tx', txNamespace(tx))
   host.register('activityScan', activityScanNamespace(scanner))
   host.register('sync', syncNamespace(sync))
   host.register('tokens', tokensNamespace(tokens))

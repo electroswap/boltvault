@@ -12,6 +12,7 @@
  */
 import type { Cached } from './cache'
 import type { CustomCollection } from './namespaces/nftCustom'
+import type { SyncIncomingItem } from './namespaces/sync'
 import type {
   AboutView,
   AccountId,
@@ -72,6 +73,8 @@ import type {
   WcSessionView,
 } from './schema'
 
+export type { SyncIncomingItem }
+
 export type Unsubscribe = () => void
 
 export interface EngineEvents {
@@ -96,7 +99,8 @@ export interface VaultNamespace {
   /** A human interacted: the idle auto-lock timer restarts (debounced in the engine). */
   touch(): Promise<{ lockAt: number | null }>
   /** Seed reveal — password re-verified, UI-class senders only, quiet mode in the UI. */
-  reveal(input: { seedId: string; password: string }): Promise<{ mnemonic: string; passphraseSet: boolean }>
+  /** Any factor the vault is wrapped under — password, passkey PRF, or device key (§3.2). */
+  reveal(input: { seedId: string } & ({ password: string } | { credentialId: string; prfSecretHex: string } | { keyId: string; keyHex: string })): Promise<{ mnemonic: string; passphraseSet: boolean }>
   changePassword(input: { current: string; next: string }): Promise<VaultStatus>
   /** Changing who can open the vault costs the password, every time. */
   enrolPasskey(input: { credentialId: string; prfSecretHex: string; password: string }): Promise<VaultStatus>
@@ -134,11 +138,28 @@ export interface AccountsNamespace {
   previewDerivations(input: { mnemonic: string; passphrase?: string; count?: number }): Promise<{ bip44: string[]; ledgerLive: string[] }>
 }
 
+/** Replacing a transaction already in a node's pool (§8.12). */
+export interface TxNamespace {
+  /** Re-send the same call at the same nonce, priced to replace. Returns an approval request id. */
+  speedUp(input: { id: string }): Promise<{ requestId: string }>
+  /** Occupy the nonce with a transfer of nothing to yourself. Returns an approval request id. */
+  cancel(input: { id: string }): Promise<{ requestId: string }>
+  /** Whether Activity should offer either action for this row, and why not when it should not. */
+  replaceable(input: { id: string }): Promise<{ can: boolean; why: string | null }>
+}
+
 export interface SitesNamespace {
   list(): Promise<SiteView[]>
   get(input: { origin: string }): Promise<SiteView | null>
   setChain(input: { origin: string; chainId: number }): Promise<SiteView>
   disconnect(input: { origin: string }): Promise<void>
+  /** Per-origin spend cap in base units as a decimal string, or null to clear (§4.6). */
+  setBudget(input: { origin: string; budget: string | null }): Promise<SiteView>
+  /**
+   * Tell the engine the wallet just put this address on the clipboard, so a
+   * paste that does not match within a minute is caught (§3.6). Not persisted.
+   */
+  noteAddressCopied(input: { address: string }): Promise<null>
 }
 
 export interface ChainsNamespace {
@@ -422,7 +443,10 @@ export interface RemoteNamespace {
 
 /** The encrypted local activity log (§8.12). Locked vault = empty. */
 export interface ActivityNamespace {
+  /** The local log merged with the account feed, newest first (§8.12). */
   list(input?: { accountId?: AccountId; chainId?: number; limit?: number }): Promise<ActivityEntry[]>
+  /** One row by its id or its transaction hash, for the detail sheet. */
+  detail(input: { id: string }): Promise<ActivityEntry | null>
   clear(): Promise<void>
 }
 
@@ -443,6 +467,17 @@ export interface SyncNamespace {
   /** Push local state to every paired device; pull and apply theirs. */
   push(): Promise<{ pushed: number }>
   pull(): Promise<{ applied: number }>
+  /**
+   * Address-book entries and custom tokens a paired device sent that nobody
+   * has vouched for on this device yet (§6). They are present locally but
+   * untrusted: out of the lookalike reference set, out of the firewall's
+   * "known token" identity.
+   */
+  incoming(): Promise<SyncIncomingItem[]>
+  /** Vouch for one here; returns what is still waiting. */
+  confirmIncoming(input: { collection: SyncIncomingItem['collection']; key: string }): Promise<SyncIncomingItem[]>
+  /** Refuse one: it goes from this device, and the refusal does not travel back. */
+  rejectIncoming(input: { collection: SyncIncomingItem['collection']; key: string }): Promise<SyncIncomingItem[]>
 }
 
 export interface WalletEngine {
@@ -454,6 +489,7 @@ export interface WalletEngine {
   readonly settings: SettingsNamespace
   readonly portfolio: PortfolioNamespace
   readonly activity: ActivityNamespace
+  readonly tx: TxNamespace
   readonly activityScan: ActivityScanNamespace
   readonly tokens: TokensNamespace
   readonly names: NamesNamespace
