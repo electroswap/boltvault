@@ -31,6 +31,9 @@ import { useScreenBusy } from '../state/useScreenBusy'
 
 const ETN = 52014
 
+/** How much of a tall screen's slack each interval above the grid may take. */
+const SPREAD = 20
+
 export interface HomeProps {
   readonly body: 'extension-popup' | 'extension-tab' | 'mobile'
   readonly reducedMotionOverride?: boolean
@@ -423,6 +426,8 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
               </Plate>
             </Ignition>
 
+            <Column flex={1} maxHeight={SPREAD} />
+
             {gate ? (
               <Ignition active={ignite} reducedMotion={reducedMotion} order={2}>
                 {gate}
@@ -434,12 +439,15 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
             ) : null}
 
             {/*
-              A capped share of the slack above the grid, so the loosening is
-              not all at the bottom. Flexible but bounded: on a screen with room
-              it reads as air between the balance and the verbs, and on one
-              without it collapses to nothing rather than pushing the grid off.
+              The second of two equal shares. Owner: "justify the vertical
+              spacing between the mini-portfolio, the rotor and the actions
+              menu" — so the slack above the rotor and the slack above the grid
+              grow together, and the three blocks sit at even intervals instead
+              of the console and the rotor being paired against a lonely grid.
+              Capped, so a screen with a lot of room does not turn into three
+              plates at the corners.
             */}
-            <Column flex={1} maxHeight={22} />
+            <Column flex={1} maxHeight={SPREAD} />
 
             <Ignition active={ignite} reducedMotion={reducedMotion} order={3}>
               <ActionGrid items={tiles} layout={wide ? 'row' : 'stacked'} testID="keys" />

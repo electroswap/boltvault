@@ -34,6 +34,9 @@ import { FeeScheduleSheet } from './FeeScheduleSheet'
 import { statusLabel, stepLabel } from '../components/FlowPlate'
 
 const ETN = 52014
+
+/** The air above and below every line of the details card. */
+const ROW_PAD = 9
 const QUOTE_STALE_MS = 8_000
 const DURATIONS = [
   { id: '86400', label: '1 day' },
@@ -369,7 +372,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
             than laid on top of it (`MidButtonWrapper`: `border: 4px solid
             theme.surface1`).
           */}
-          <Row justifyContent="center" alignItems="center" gap={6} marginVertical={-20} zIndex={2}>
+          <Row justifyContent="center" alignItems="center" gap={2} marginVertical={-20} zIndex={2}>
             {lockPaint ? (
               <Column
                 width={44}
@@ -454,7 +457,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
           slippage, network cost, order routing.
         */}
         {mode === 'swap' ? (
-          <Plate role="recessed" gap={2} paddingVertical={2} paddingHorizontal="$3" testID="fee-stack">
+          <Plate role="recessed" gap={0} paddingVertical={2} paddingHorizontal="$3" testID="fee-stack">
             <Pressable
               onPress={() => setDetails((d) => !d)}
               accessibilityRole="button"
@@ -463,7 +466,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
               testID="swap-details-toggle"
             >
               <Row justifyContent="space-between" alignItems="center" gap="$2" minHeight={40}>
-                <Body tone={fresh ? 'ink' : 'mute'} size="caption" flexShrink={1} numberOfLines={1} testID="swap-rate">
+                <Body tone={fresh ? 'ink' : 'mute'} size="caption" fontWeight="600" flexShrink={1} numberOfLines={1} testID="swap-rate">
                   {quote && quote.amountOutRaw !== '0' ? (formatRate(quote.rate, quote.symbolIn, quote.symbolOut) ?? '') : t({ id: 'swap.details', message: 'Details' })}
                 </Body>
                 <Row gap="$1" alignItems="center" flexShrink={0}>
@@ -495,7 +498,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
               "Minimum received". A tap target may overlap its neighbours; text
               may not.
             */}
-            <Pressable onPress={() => setFeeSheet(true)} accessibilityRole="button" accessibilityLabel={t({ id: 'swap.fee.a11y', message: 'Wallet fee schedule' })} style={{ minHeight: 44, justifyContent: 'center' }} testID="swap-fee-line">
+            <Pressable onPress={() => setFeeSheet(true)} accessibilityRole="button" accessibilityLabel={t({ id: 'swap.fee.a11y', message: 'Wallet fee schedule' })} style={{ minHeight: 44, justifyContent: 'center', paddingVertical: ROW_PAD }} testID="swap-fee-line">
               <Row justifyContent="space-between" alignItems="flex-start" gap="$2">
                 <Row gap={4} alignItems="center">
                   <Body tone="mute" size="caption">
@@ -601,9 +604,19 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   )
 }
 
+/**
+ * One line of the details card.
+ *
+ * Padding rather than a height. Every row used to set `minHeight` and the card
+ * set a gap, so a row with one line of value and a row with three were centred
+ * in boxes of different sizes and the space between the *words* came out
+ * different on every pair — which is what the owner saw. Fixed padding and a
+ * height that follows the content puts the same air above and below every line
+ * whatever is in it.
+ */
 function FeeRow({ label, value, tone, testID }: { label: string; value: string; tone: 'mute' | 'ink' | 'ember' | 'burn' | 'surge'; testID: string }) {
   return (
-    <Row justifyContent="space-between" alignItems="center" minHeight={22} gap="$2">
+    <Row justifyContent="space-between" alignItems="center" paddingVertical={ROW_PAD} gap="$2">
       <Body tone="mute" size="caption">
         {label}
       </Body>
