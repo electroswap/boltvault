@@ -1,7 +1,7 @@
 /** Settings › Connected sites (master plan §8.14): origins as plugs, per-site chain, disconnect. */
-import { Body, ChainMark, Column, Input, Key, Pill, Plate, Row, ScrollView, metrics, shortAddress } from '@boltvault/ui'
+import { Body, ChainMark, Column, Input, Key, Pill, Plate, Row, ScrollView, Toggle, metrics, shortAddress } from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
-import type { ChainView, SiteView, WcSessionView } from '@boltvault/engine'
+import type { ChainView, Settings, SiteView, WcSessionView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
@@ -15,6 +15,7 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
   const [chains, setChains] = useState<ChainView[]>([])
   const [editing, setEditing] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [settings, setSettings] = useState<Settings | null>(null)
   const host = useHost()
   const [wc, setWc] = useState<{ available: boolean; sessions: WcSessionView[] } | null>(null)
   const [wcUri, setWcUri] = useState('')
@@ -25,6 +26,7 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
       if (e.type === 'connect.changed') setWc((prev) => ({ available: prev?.available ?? true, sessions: e.sessions }))
     })
     engine.sites.list().then(setSites, () => undefined)
+    engine.settings.get().then(setSettings, () => undefined)
     engine.connect.status().then((st) => setWc({ available: st.available, sessions: st.sessions }), () => setWc({ available: false, sessions: [] }))
     engine.chains.list().then(setChains, () => undefined)
     const offSites = engine.events.subscribe((e) => {
@@ -35,6 +37,10 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
       offWc()
     }
   }, [engine])
+
+  const setSetting = (patch: Partial<Settings>): void => {
+    engine.settings.set(patch).then(setSettings, () => undefined)
+  }
 
   const hostOf = (origin: string): string => {
     try {
@@ -47,6 +53,41 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 12 }} testID="sites">
       <PageHeader title={t({ id: 'sites.title', message: 'Connected sites' })} />
+
+      {/*
+        How BoltVault introduces itself to a page, which is connection
+        behaviour and therefore belongs beside the sites it decides for. Both
+        switches change what a page finds when it loads, so a page already
+        open keeps what it found — hence the line about reloading.
+
+        Every wallet worth the name offers EIP-6963, and BoltVault always
+        announces itself that way; these two are only for the older sites that
+        look for one `window.ethereum` and assume it is MetaMask.
+      */}
+      <Plate gap="$2" testID="sites-default">
+        <Toggle
+          value={settings?.defaultWallet ?? false}
+          onChange={(v) => setSetting({ defaultWallet: v })}
+          label={t({ id: 'sites.default', message: 'BoltVault is my default wallet' })}
+          hint={t({ id: 'sites.default.hint', message: 'Off. Sites that offer a wallet chooser find BoltVault either way. Turn this on and BoltVault also takes the single slot older sites reach for — which is the same slot another extension wants, so the last one to load wins and neither is reliable.' })}
+          testID="sites-default-toggle"
+        />
+      </Plate>
+
+      <Plate gap="$2" testID="sites-compat">
+        <Toggle
+          value={settings?.metaMaskCompat ?? false}
+          onChange={(v) => setSetting({ metaMaskCompat: v })}
+          label={t({ id: 'sites.compat', message: 'Answer to sites that only support MetaMask' })}
+          hint={t({ id: 'sites.compat.hint', message: 'Off. Some sites refuse anything that does not say it is MetaMask; with this on, BoltVault says so. Nothing else changes — every request still comes to you in this wallet’s own sheet — but a site will name MetaMask in its own copy, and a site that behaves differently for MetaMask will do that too.' })}
+          testID="sites-compat-toggle"
+        />
+      </Plate>
+
+      <Body tone="mute" size="caption" testID="sites-reload-note">
+        {t({ id: 'sites.reload', message: 'A page decides which wallet it is talking to when it loads. Reload any site you already have open for either of these to reach it.' })}
+      </Body>
+
       {sites.length === 0 ? (
         <Plate gap="$1">
           <Body tone="mute">{t({ id: 'sites.none', message: 'No site is connected. When a site asks to connect, it appears here with the account and chain it sees.' })}</Body>

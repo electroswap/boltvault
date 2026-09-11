@@ -11,11 +11,11 @@
  * Discharge lands the result here.
  */
 import { Body, Chip, Column, Discharge, Icon, Key, Pill, Plate, Pressable, Rim, Row, ScrollView, Segmented, TokenAvatar, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
-import { cacheKey, type LimitOrderView, type LimitQuote, type LiquidityView, type SwapQuote, type TokenView } from '@boltvault/engine'
+import { cacheKey, type ExploreToken, type LimitOrderView, type LimitQuote, type LiquidityView, type SwapQuote, type TokenView } from '@boltvault/engine'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { SlippageSheet } from '../components/SlippageSheet'
 import { SwapCoachSheet } from '../components/SwapCoachSheet'
-import { TokenPickerSheet } from '../components/TokenPickerSheet'
+import { TokenPickerSheet, type TokenSafety } from '../components/TokenPickerSheet'
 import { HomeKey } from '../components/HomeKey'
 import { useEngine } from '../engine/EngineProvider'
 import { useActivity } from '../hooks/useActivity'
@@ -162,6 +162,31 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   useEffect(() => {
     if (flow?.status === 'done') setFire((n) => n + 1)
   }, [flow?.status])
+
+  /*
+    Token safety, from the same feed Explore reads (§8.3). It is display-only
+    everywhere else in the product, and the swap path never consulted it at
+    all, so a token the market has marked BLOCKED could be bought in two taps.
+    What a screen can do about that is refuse to offer the verb and say why.
+
+    This is not a gate and must not be read as one: it fails open when the
+    market feed is unreachable, and it guards one screen rather than the code
+    that builds the transaction — a dApp, a deep link or a second surface
+    reaches `swap.execute` without passing here at all. The real refusal
+    belongs in `SwapService.quote`/`execute` (and `LimitService.place`), which
+    the wallet package may not edit.
+  */
+  const exploreTokens = useCached<ExploreToken[]>({
+    key: cacheKey('explore', 'tokens', ETN),
+    cached: (e) => e.explore.cachedTokens({ chainId: ETN }),
+    fresh: (e) => e.explore.tokens({ chainId: ETN }),
+    maxAgeMs: 10 * 60_000,
+  })
+  const safety = useMemo(() => {
+    const m = new Map<string, TokenSafety>()
+    for (const x of exploreTokens.value ?? []) if (x.safety) m.set(x.address.toLowerCase(), x.safety)
+    return m
+  }, [exploreTokens.value])
 
   // Locked liquidity behind the pair (owner item W3): the token side, never ETN itself.
   const lockToken = tokenOut && tokenOut !== 'native' ? tokenOut : tokenIn !== 'native' ? tokenIn : null
@@ -321,7 +346,14 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   const lockPaint = lockedPct > 0 ? (lockTone === 'surge' ? paint.surge : paint.ember) : null
   const lockRim = lockPaint ? (`${lockPaint}8c` as const) : null
   const problem = mode === 'swap' ? (quote?.problems[0] ?? null) : (limitQuote?.problems[0] ?? null)
-  const canSwap = mode === 'swap' ? !!quote?.ok && fresh && !busy : !!limitQuote?.ok && !busy
+  /*
+    A blocked token takes the key away on either side of the trade: buying one
+    and selling into one are the same transaction from the router's point of
+    view, and both are how the loss happens.
+  */
+  const blockedSide = safety.get(tokenOut.toLowerCase()) === 'BLOCKED' ? outView : safety.get(tokenIn.toLowerCase()) === 'BLOCKED' ? inView : null
+  const warnedSide = blockedSide !== null ? null : safety.get(tokenOut.toLowerCase()) === 'STRONG_WARNING' ? outView : safety.get(tokenIn.toLowerCase()) === 'STRONG_WARNING' ? inView : null
+  const canSwap = blockedSide === null && (mode === 'swap' ? !!quote?.ok && fresh && !busy : !!limitQuote?.ok && !busy)
   const receiveText = quote && quote.amountOutRaw !== '0' ? formatRaw(quote.receiveRaw, quote.decimalsOut) : '—'
   const keyLabel = mode === 'swap' ? (quote && quote.priceImpactPct !== null && quote.priceImpactPct > 15 ? t({ id: 'swap.key.anyway', message: 'Swap anyway' }) : t({ id: 'swap.key', message: 'Swap' })) : t({ id: 'swap.limit.key', message: 'Place order' })
 
@@ -585,6 +617,24 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
       </ScrollView>
 
       <ScreenFooter inset={inset} testID="swap-footer">
+        {blockedSide ? (
+          <Body tone="burn" size="caption" testID="swap-blocked">
+            {t({
+              id: 'swap.blocked',
+              message: '{s} is marked unsafe to trade. Its contract behaves in a way that takes money from the people who hold it — BoltVault will not swap it. Pick another token.',
+              values: { s: blockedSide.symbol },
+            })}
+          </Body>
+        ) : null}
+        {warnedSide ? (
+          <Body tone="ember" size="caption" testID="swap-warned">
+            {t({
+              id: 'swap.warned',
+              message: 'Strong warning on {s}. The market flags this token as risky to hold; read its page before you trade it.',
+              values: { s: warnedSide.symbol },
+            })}
+          </Body>
+        ) : null}
         {problem && (amount.trim() || minOut.trim()) ? (
           <Body tone="burn" size="caption" testID="swap-problem">
             {problem}
@@ -615,7 +665,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
           setFeeSheet(false)
         }}
       />
-      <TokenPickerSheet open={picker !== null} onClose={() => setPicker(null)} title={picker === 'in' ? t({ id: 'swap.pick.in', message: 'You pay' }) : t({ id: 'swap.pick.out', message: 'You receive' })} tokens={tokens} rows={rows} currency={currency} onPick={pick} reducedMotion={reducedMotion} />
+      <TokenPickerSheet open={picker !== null} onClose={() => setPicker(null)} title={picker === 'in' ? t({ id: 'swap.pick.in', message: 'You pay' }) : t({ id: 'swap.pick.out', message: 'You receive' })} tokens={tokens} rows={rows} currency={currency} onPick={pick} safety={safety} reducedMotion={reducedMotion} />
       <SlippageSheet open={slippageOpen} onClose={() => setSlippageOpen(false)} value={effectiveSlippage} onChange={setSlippage} reducedMotion={reducedMotion} />
       <SwapCoachSheet open={coachOpen} onDismiss={() => setPrefs({ swapCoachDismissed: true })} reducedMotion={reducedMotion} />
     </Column>

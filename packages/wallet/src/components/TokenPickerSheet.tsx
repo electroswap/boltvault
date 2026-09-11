@@ -3,9 +3,14 @@
  * balance and its value, sorted held-by-value → held-by-quantity → pinned →
  * the list. A pasted address the list does not know resolves through
  * `tokens.search` and can be picked straight away.
+ *
+ * Where the market knows a token's safety level, the row carries it: it was
+ * rendered as a lone exclamation mark on one Explore row and read nowhere
+ * else, which is not something a person can act on at the moment they choose
+ * what to swap.
  */
-import { Body, Column, Input, Pressable, Row, Sheet, TokenAvatar } from '@boltvault/ui'
-import type { PortfolioRow, TokenView } from '@boltvault/engine'
+import { Body, Column, Icon, Input, Pressable, Row, Sheet, TokenAvatar, paint } from '@boltvault/ui'
+import type { ExploreToken, PortfolioRow, TokenView } from '@boltvault/engine'
 import { useEffect, useMemo, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { formatFiat, formatQuantity } from '../format'
@@ -13,7 +18,24 @@ import { t } from '../i18n'
 
 const ETN = 52014
 
-export function TokenPickerSheet({ open, onClose, title, chainId = ETN, tokens, rows, currency, exclude, onPick, reducedMotion = false }: { open: boolean; onClose: () => void; title: string; chainId?: number; tokens: readonly TokenView[]; rows: readonly PortfolioRow[]; currency: 'USD' | 'ETN'; exclude?: string; onPick: (address: string) => void; reducedMotion?: boolean }) {
+/** The market's verdict on a token, as the ElectroSwap API reports it. */
+export type TokenSafety = NonNullable<ExploreToken['safety']>
+
+/** The word and the colour for a safety level; `VERIFIED` needs neither. */
+export function safetyMark(level: TokenSafety): { label: string; tone: 'ember' | 'burn' } | null {
+  switch (level) {
+    case 'BLOCKED':
+      return { label: t({ id: 'token.safety.blocked', message: 'Blocked' }), tone: 'burn' }
+    case 'STRONG_WARNING':
+      return { label: t({ id: 'token.safety.strong', message: 'Strong warning' }), tone: 'burn' }
+    case 'MEDIUM_WARNING':
+      return { label: t({ id: 'token.safety.warning', message: 'Warning' }), tone: 'ember' }
+    default:
+      return null
+  }
+}
+
+export function TokenPickerSheet({ open, onClose, title, chainId = ETN, tokens, rows, currency, exclude, onPick, safety, reducedMotion = false }: { open: boolean; onClose: () => void; title: string; chainId?: number; tokens: readonly TokenView[]; rows: readonly PortfolioRow[]; currency: 'USD' | 'ETN'; exclude?: string; onPick: (address: string) => void; /** Safety by lower-cased address, where the market has an opinion. */ safety?: ReadonlyMap<string, TokenSafety>; reducedMotion?: boolean }) {
   const engine = useEngine()
   const [query, setQuery] = useState('')
   const [found, setFound] = useState<TokenView[]>([])
@@ -58,6 +80,8 @@ export function TokenPickerSheet({ open, onClose, title, chainId = ETN, tokens, 
       <Column gap={2}>
         {shown.map((x) => {
           const r = held.get(x.address.toLowerCase())
+          const level = safety?.get(x.address.toLowerCase()) ?? null
+          const mark = level ? safetyMark(level) : null
           return (
             <Pressable key={x.address} onPress={() => onPick(x.address)} accessibilityRole="button" accessibilityLabel={x.symbol} style={{ minHeight: 52, justifyContent: 'center' }} testID={`swap-pick-${x.symbol}`}>
               <Row gap="$3" alignItems="center" paddingVertical={6}>
@@ -77,6 +101,14 @@ export function TokenPickerSheet({ open, onClose, title, chainId = ETN, tokens, 
                       <Body tone="ember" size="caption">
                         {t({ id: 'swap.pick.new', message: 'Not on the list' })}
                       </Body>
+                    ) : null}
+                    {mark ? (
+                      <Row gap={4} alignItems="center" testID={`swap-pick-safety-${x.symbol}`}>
+                        <Icon name="warn" size={12} color={mark.tone === 'burn' ? paint.burn : paint.ember} />
+                        <Body tone={mark.tone} size="caption">
+                          {mark.label}
+                        </Body>
+                      </Row>
                     ) : null}
                   </Row>
                   <Body tone="mute" size="caption" numberOfLines={1}>

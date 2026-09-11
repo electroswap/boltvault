@@ -73,6 +73,10 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
   const [filter, setFilter] = useState<Filter>('all')
   const [open, setOpen] = useState<ActivityEntry | null>(null)
   const [chains, setChains] = useState<ChainView[]>([])
+  // Clearing is irreversible, so it costs a deliberate second press (§8.12).
+  const [clearing, setClearing] = useState(false)
+  const [clearError, setClearError] = useState<string | null>(null)
+  const [clearBusy, setClearBusy] = useState(false)
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const accountId = active?.id ?? null
 
@@ -126,6 +130,27 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
     } catch {
       return o
     }
+  }
+
+  /*
+    `activity.clear` wipes the encrypted local rows for every account on this
+    device and nothing else — the chain still has every transaction, and
+    another paired device keeps its own copy. The sheet says exactly that,
+    because "clear history" reads like undoing something.
+  */
+  const clear = (): void => {
+    setClearBusy(true)
+    setClearError(null)
+    engine.activity.clear().then(
+      () => {
+        setClearBusy(false)
+        setClearing(false)
+      },
+      (err: unknown) => {
+        setClearBusy(false)
+        setClearError(err instanceof Error ? err.message : String(err))
+      },
+    )
   }
 
   return (
@@ -212,7 +237,40 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
             </Row>
           </Plate>
         ))}
+        {loaded && entries.length > 0 ? (
+          <Row justifyContent="flex-end" paddingTop="$2">
+            <Key label={t({ id: 'activity.clear', message: 'Clear history' })} kind="secondary" size="compact" onPress={() => { setClearError(null); setClearing(true) }} testID="activity-clear" />
+          </Row>
+        ) : null}
       </ScrollView>
+
+      <Sheet
+        open={clearing}
+        onClose={() => setClearing(false)}
+        title={t({ id: 'activity.clear.title', message: 'Clear history on this device?' })}
+        reducedMotion={reducedMotion}
+        footer={
+          <Column gap="$2">
+            <Key label={t({ id: 'activity.clear.key', message: 'Clear history' })} kind="danger" disabled={clearBusy} onPress={clear} testID="activity-clear-confirm" />
+            <Key label={t({ id: 'cancel', message: 'Cancel' })} kind="secondary" size="compact" disabled={clearBusy} onPress={() => setClearing(false)} testID="activity-clear-cancel" />
+          </Column>
+        }
+        testID="activity-clear-sheet"
+      >
+        <Column gap="$3">
+          <Body>
+            {t({ id: 'activity.clear.body', message: 'This erases the record kept on this device — every row, and the statements you were shown when you signed. There is no undo.' })}
+          </Body>
+          <Body tone="mute" size="caption">
+            {t({ id: 'activity.clear.scope', message: 'Nothing on the chain changes: the transactions themselves stay where they are, and an explorer still shows them. Another device you have paired keeps its own record.' })}
+          </Body>
+          {clearError ? (
+            <Body tone="burn" size="caption" testID="activity-clear-error">
+              {clearError}
+            </Body>
+          ) : null}
+        </Column>
+      </Sheet>
 
       <Sheet open={open !== null} onClose={() => setOpen(null)} title={open?.statements[0] ?? ''} reducedMotion={reducedMotion} footer={<Key label={t({ id: 'close', message: 'Close' })} kind="secondary" size="compact" onPress={() => setOpen(null)} />} testID="activity-detail">
         {open ? (

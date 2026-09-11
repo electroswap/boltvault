@@ -36,6 +36,7 @@ import { useHost } from '../host'
 import { useFeel } from '../feel'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
+import { COOLING_MS, needsCooling, needsStepUp, recipientOf } from '../state/safeguards'
 import { useApprovals } from '../state/useApprovals'
 import { useWalletState } from '../state/useWalletState'
 import { useScene } from '../state/useScene'
@@ -129,6 +130,18 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   const [pickedAccount, setPickedAccount] = useState<string | null>(null)
   const [showRaw, setShowRaw] = useState(false)
   /*
+    The large-send step-up (§3.4 point 6), which nothing in the product
+    performed: the rule fired, the button was greyed for 1.5 s, and
+    `vault.unlock` was never called from here. Proving the vault opens again is
+    the whole point of the safeguard — an unlocked wallet left on a desk is the
+    threat it is written against — so the verb stays shut until one of this
+    vault's own unlock factors answers.
+  */
+  const [stepUpDone, setStepUpDone] = useState(false)
+  const [stepUpPassword, setStepUpPassword] = useState('')
+  const [stepUpBusy, setStepUpBusy] = useState(false)
+  const [stepUpError, setStepUpError] = useState<string | null>(null)
+  /*
     The transaction's own fields, for every signer.
 
     These used to render only inside the "what your device shows" plate, which
@@ -172,15 +185,29 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
     setArmedAt(Date.now())
     setTyped('')
     setShowRaw(false)
+    setStepUpDone(false)
+    setStepUpPassword('')
+    setStepUpError(null)
   }, [request?.id])
+  /*
+    Read from the rule CODES, not their severity: the severity of both of these
+    was wrong, and a re-tuning of severities in the firewall must not silently
+    take either safeguard away again (`state/safeguards.ts`).
+  */
+  const codes = (assessment?.rules ?? []).map((r) => r.code)
+  const firstTimeRecipient = needsCooling(codes)
+  const largeSend = needsStepUp(codes)
   const delayMs = Math.max(
     assessment?.presentation.delayMs ?? 0,
     host.onWindowFocus ? FOCUS_INERT_MS : 0,
+    firstTimeRecipient ? COOLING_MS : 0,
   )
   const enableAt = armedAt + delayMs
+  // Half-second steps while it counts down, so the number on screen is the
+  // number of seconds actually left rather than one frozen figure.
   useEffect(() => {
     if (now >= enableAt) return
-    const id = setTimeout(() => setNow(Date.now()), enableAt - now + 10)
+    const id = setTimeout(() => setNow(Date.now()), Math.min(500, enableAt - now + 10))
     return () => clearTimeout(id)
   }, [now, enableAt])
   /*
@@ -301,6 +328,59 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   }, [engine, deviceName, probeLedger])
 
   /*
+    Which second factor to offer, read exactly as Unlock reads it: a wrap this
+    vault actually carries AND a body that can still produce the secret. A
+    device wrap outlives its keystore entry when the enrolled biometrics
+    change, so the wrap alone is not an offer.
+  */
+  const passkeyIds = (vault?.wraps ?? []).filter((w) => w.by === 'prf').map((w) => w.id)
+  const deviceWrapped = (vault?.wraps ?? []).some((w) => w.by === 'device')
+  const [passkeyOk, setPasskeyOk] = useState(false)
+  const [biometricOk, setBiometricOk] = useState(false)
+  useEffect(() => {
+    let alive = true
+    if (passkeyIds.length && host.passkeys) host.passkeys.supported().then((ok) => alive && setPasskeyOk(ok), () => undefined)
+    return () => {
+      alive = false
+    }
+  }, [host.passkeys, passkeyIds.length])
+  useEffect(() => {
+    let alive = true
+    if (deviceWrapped && host.deviceKey) host.deviceKey.available().then((ok) => alive && setBiometricOk(ok), () => undefined)
+    return () => {
+      alive = false
+    }
+  }, [host.deviceKey, deviceWrapped])
+
+  const stepUp = async (fn: () => Promise<void>): Promise<void> => {
+    setStepUpBusy(true)
+    setStepUpError(null)
+    try {
+      await fn()
+      setStepUpDone(true)
+      setStepUpPassword('')
+    } catch {
+      setStepUpError(t({ id: 'approval.stepup.fail', message: 'That did not open this vault. Nothing has been signed.' }))
+    } finally {
+      setStepUpBusy(false)
+    }
+  }
+  const stepUpWithPassword = (): Promise<void> => stepUp(async () => {
+    await engine.vault.unlock({ password: stepUpPassword })
+  })
+  const stepUpWithPasskey = (): Promise<void> => stepUp(async () => {
+    if (!host.passkeys) throw new Error('no passkeys here')
+    const r = await host.passkeys.get(passkeyIds)
+    await engine.vault.unlockWithPasskey({ credentialId: r.credentialId, prfSecretHex: r.prfSecretHex })
+  })
+  const stepUpWithDevice = (): Promise<void> => stepUp(async () => {
+    if (!host.deviceKey) throw new Error('no keystore here')
+    const keyHex = await host.deviceKey.read(t({ id: 'approval.stepup.reason', message: 'Confirm this send' }))
+    if (keyHex === null) throw new Error('cancelled')
+    await engine.vault.unlockWithDevice({ keyId: host.deviceKey.id, keyHex })
+  })
+
+  /*
     Leaving without deciding is a rejection.
 
     Android's back gesture pops this sheet like any other screen, and the
@@ -392,9 +472,12 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   const blocked = assessment?.presentation.blocked === true
   const needsTyped = assessment?.presentation.typedConfirmation ?? null
   const typedOk = !needsTyped || typed.trim().toLowerCase() === needsTyped.toLowerCase()
+  const stepUpPending = largeSend && !stepUpDone
   // A device that has told us it cannot sign holds the verb: pressing it would
   // only spend a round trip to be told the same thing.
-  const armed = now >= enableAt && typedOk && !busy && !signing && ledger?.ready !== false
+  const armed = now >= enableAt && typedOk && !stepUpPending && !busy && !signing && ledger?.ready !== false
+  const secondsLeft = Math.max(0, Math.ceil((enableAt - now) / 1000))
+  const recipient = payload.kind === 'send_transaction' ? recipientOf(payload.tx) : null
   const verb = verbFor(payload, request.origin)
 
   const decide = async (approve: boolean): Promise<void> => {
@@ -631,9 +714,85 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
           </Column>
         ) : null}
 
+        {/*
+          The first-time recipient, in full.
+
+          §3.6 is explicit that the whole address is shown and not truncated:
+          6+4 truncation is precisely the shape address poisoning is built to
+          survive, and the ends of a poisoned address are the part that
+          matches. So the plate shows all forty nibbles, selectable, and the
+          verb stays shut while it is being read.
+        */}
+        {firstTimeRecipient ? (
+          <Plate gap="$2" borderColor={paint.ember} testID="approval-first-time">
+            <Body tone="ember">
+              {t({ id: 'approval.firstTimeTo', message: 'You have never sent to this address' })}
+            </Body>
+            <Body tone="mute" size="caption">
+              {t({
+                id: 'approval.firstTimeTo.body',
+                message: 'Check the whole address against the one you were given — every character, not just the ends. An address that only matches at the ends is the commonest theft there is.',
+              })}
+            </Body>
+            {recipient ? (
+              <Body size="caption" selectable testID="approval-first-time-address">
+                {recipient}
+              </Body>
+            ) : null}
+            {secondsLeft > 0 ? (
+              <Body tone="ember" size="caption" testID="approval-cooling">
+                {t({ id: 'approval.cooling', message: '{n} seconds to read it.', values: { n: secondsLeft } })}
+              </Body>
+            ) : null}
+          </Plate>
+        ) : null}
+
+        {/*
+          The large-send step-up (§3.4 point 6). Settings promises it by name
+          and nothing performed it; the verb now waits on one of this vault's
+          own unlock factors, preferring the enrolled ones because a password
+          typed in front of whoever is standing there is the weaker proof.
+        */}
+        {largeSend ? (
+          <Plate gap="$2" borderColor={stepUpDone ? paint.arc : paint.ember} testID="approval-stepup">
+            <Body tone={stepUpDone ? 'arc' : 'ember'}>
+              {stepUpDone
+                ? t({ id: 'approval.stepup.done', message: 'Unlocked — you can continue' })
+                : t({ id: 'approval.stepup.title', message: 'Unlock again to send this much' })}
+            </Body>
+            {stepUpDone ? null : (
+              <>
+                <Body tone="mute" size="caption">
+                  {t({
+                    id: 'approval.stepup.body',
+                    message: 'This moves more than a tenth of what you hold of that token, so BoltVault asks who is at the keyboard before it signs — an open wallet is not the same as you.',
+                  })}
+                </Body>
+                {passkeyOk ? <Key label={t({ id: 'unlock.passkey', message: 'Unlock with passkey' })} kind="secondary" size="compact" disabled={stepUpBusy} onPress={() => void stepUpWithPasskey()} testID="approval-stepup-passkey" /> : null}
+                {biometricOk ? <Key label={t({ id: 'unlock.biometric', message: 'Unlock with biometrics' })} kind="secondary" size="compact" disabled={stepUpBusy} onPress={() => void stepUpWithDevice()} testID="approval-stepup-biometric" /> : null}
+                <Input
+                  value={stepUpPassword}
+                  onChange={setStepUpPassword}
+                  secure
+                  placeholder={t({ id: 'unlock.ph', message: 'Password' })}
+                  onSubmit={() => void stepUpWithPassword()}
+                  testID="approval-stepup-password"
+                />
+                {/* Argon2id takes a moment, and a key that looks inert is a key people press again. */}
+                <Key label={stepUpBusy ? t({ id: 'approval.stepup.checking', message: 'Checking…' }) : t({ id: 'unlock.key', message: 'Unlock' })} kind="secondary" size="compact" disabled={stepUpBusy || !stepUpPassword} onPress={() => void stepUpWithPassword()} testID="approval-stepup-submit" />
+                {stepUpError ? (
+                  <Body tone="burn" size="caption" testID="approval-stepup-error">
+                    {stepUpError}
+                  </Body>
+                ) : null}
+              </>
+            )}
+          </Plate>
+        ) : null}
+
         {/* Risk plates */}
         {assessment?.rules
-          .filter((r) => r.severity !== 'info')
+          .filter((r) => r.severity !== 'info' && r.code !== 'RECIPIENT_FIRST_TIME')
           .map((r) => (
             <Plate
               key={r.code}
@@ -791,7 +950,10 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
                   </>
                 ) : (
                   <DetailRow
-                    label={t({ id: 'tx.data', message: 'Data' })}
+                    /* Distinct from the `Data ({n} bytes)` label above: one id
+                       may not carry two source messages, and the extractor
+                       refuses the catalog outright while it does. */
+                    label={t({ id: 'tx.data.label', message: 'Data' })}
                     value={t({ id: 'tx.data.none', message: 'none' })}
                     testID="approval-tx-data"
                   />
@@ -985,6 +1147,16 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
               })}
             </Body>
           </Column>
+        ) : null}
+        {!blocked && !armed && !busy && !signing && secondsLeft > 0 ? (
+          <Body tone="ember" size="caption" testID="approval-wait">
+            {t({ id: 'approval.wait', message: '{verb} in {n} s', values: { verb, n: secondsLeft } })}
+          </Body>
+        ) : null}
+        {!blocked && stepUpPending && secondsLeft === 0 ? (
+          <Body tone="ember" size="caption" testID="approval-stepup-wait">
+            {t({ id: 'approval.stepup.wait', message: 'Unlock above to continue.' })}
+          </Body>
         ) : null}
         {blocked ? (
           <Body tone="burn" size="caption" testID="approval-blocked">

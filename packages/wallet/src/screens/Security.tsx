@@ -1,7 +1,7 @@
 /** Settings › Security (master plan §8.14): password, auto-lock, passkeys, export. */
-import { AnimatedQR, Body, Column, Icon, Input, Key, Plate, Row, ScrollView, metrics, paint } from '@boltvault/ui'
+import { AnimatedQR, Body, Column, Icon, Input, Key, Plate, Row, ScrollView, Toggle, metrics, paint } from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
-import type { AutoLock } from '@boltvault/engine'
+import type { AutoLock, Settings } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
@@ -27,6 +27,7 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
   const [exportCode, setExportCode] = useState('')
   const [frames, setFrames] = useState<string[] | null>(null)
   const [passkeysSupported, setPasskeysSupported] = useState(false)
+  const [settings, setSettings] = useState<Settings | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -46,6 +47,10 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
       alive = false
     }
   }, [host.passkeys])
+
+  useEffect(() => {
+    engine.settings.get().then(setSettings, () => undefined)
+  }, [engine])
 
   const run = async (fn: () => Promise<void>): Promise<void> => {
     setBusy(true)
@@ -210,6 +215,29 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
         {!passkeysSupported && !host.deviceKey ? (
           <Body tone="mute" size="caption">
             {t({ id: 'security.quick.unsupported', message: 'Neither passkeys nor a device keystore are available here.' })}
+          </Body>
+        ) : null}
+      </Plate>
+
+      {/*
+        `eth_sign` is the one signature whose contents nobody can read: a raw
+        32-byte hash, which may be a transaction that empties the account. The
+        engine refuses it by default and its refusal names this screen, so the
+        switch has to be here — and it has to say what it hands over, because
+        "legacy signing method" tells a person nothing about what they are
+        agreeing to.
+      */}
+      <Plate gap="$2" testID="eth-sign">
+        <Toggle
+          value={settings?.ethSignEnabled ?? false}
+          onChange={(v) => engine.settings.set({ ethSignEnabled: v }).then(setSettings, () => undefined)}
+          label={t({ id: 'security.ethsign', message: 'Allow raw hash signatures (eth_sign)' })}
+          hint={t({ id: 'security.ethsign.hint', message: 'Off. A site asking for one asks you to sign 32 bytes nobody can read back — it may be a transaction that moves everything you hold, and BoltVault cannot tell you which. Turn it on only for a site you trust that will not work otherwise, and turn it off again afterwards.' })}
+          testID="eth-sign-toggle"
+        />
+        {settings?.ethSignEnabled ? (
+          <Body tone="burn" size="caption" testID="eth-sign-on">
+            {t({ id: 'security.ethsign.on', message: 'On. Every eth_sign request still opens the full sheet with the hash shown, and it is still the most dangerous thing this wallet will do.' })}
           </Body>
         ) : null}
       </Plate>

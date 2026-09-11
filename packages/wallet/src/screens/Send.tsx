@@ -11,17 +11,20 @@
 import { BarLoader, Body, Column, Icon, Input, Key, Pill, Plate, Row, ScrollView, TokenAvatar, metrics, paint, shortAddress } from '@boltvault/ui'
 import type { ChainView, ContactView, SendQuote, Settings, TokenView } from '@boltvault/engine'
 import { useEffect, useMemo, useState } from 'react'
+import { formatUnits } from 'viem'
 import { AmountWell } from '../components/AmountWell'
 import { ChainSelectPill, ChainSheet, ManageNetworksKey, useChainBalances } from '../components/ChainSelect'
 import { PageHeader } from '../components/PageHeader'
 import { ScreenFooter } from '../components/ScreenFooter'
 import { TokenPickerSheet } from '../components/TokenPickerSheet'
 import { useEngine } from '../engine/EngineProvider'
+import { useHost } from '../host'
 import { useActivity } from '../hooks/useActivity'
 import { usePortfolio } from '../hooks/usePortfolio'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { useApprovals } from '../state/useApprovals'
+import { readScannedCode } from '../state/scanned'
 import { useWalletState } from '../state/useWalletState'
 import { formatAmountFiat, formatQuantity } from '../format'
 
@@ -29,6 +32,7 @@ const ETN = 52014
 
 export function Send({ body, token: initialToken, to: initialTo, requestId: initialRequestId, reducedMotion = false, chainId: initialChainId }: { body: 'extension-popup' | 'extension-tab' | 'mobile'; token?: string; to?: string; requestId?: string; reducedMotion?: boolean; chainId?: number }) {
   const engine = useEngine()
+  const host = useHost()
   const router = useRouter()
   const { active } = useWalletState()
   const { entries } = useActivity(active?.id ?? null)
@@ -49,6 +53,13 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
   const [requestId, setRequestId] = useState<string | null>(initialRequestId ?? null)
   const [chainOpen, setChainOpen] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
+  /*
+    A scanned payment request names a chain, a token and an amount as well as
+    an address, and the last two can only be applied once that chain's token
+    list has arrived — the amount is in base units, so its decimals decide
+    what the field should read. Parked here until then.
+  */
+  const [request, setRequest] = useState<{ chainId: number; token: string | null; amountBase: string | null } | null>(null)
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
 
   useEffect(() => {
@@ -79,6 +90,61 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
       clearTimeout(id)
     }
   }, [engine, active, chainId, token, to, amount])
+
+  /*
+    Scanning is the other way into the To field (§8.4). What comes back is
+    either a bare address or an EIP-681 payment request, and a request that
+    carried an amount and a chain and was then treated as forty nibbles would
+    be a request half-read: the user would retype what the code already said.
+  */
+  const scan = async (): Promise<void> => {
+    if (!host.scanQr) return
+    setError(null)
+    let text: string
+    try {
+      text = (await host.scanQr()).trim()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      return
+    }
+    const code = readScannedCode(text)
+    if (code.kind === 'address') {
+      setTo(code.to)
+      return
+    }
+    if (code.kind === 'unreadable') {
+      setError(t({ id: 'send.scan.unreadable', message: 'That code is not an address or a payment request.' }))
+      return
+    }
+    setTo(code.to)
+    if (code.amount !== null && !code.baseUnits) setAmount(code.amount)
+    const target = code.chainId ?? chainId
+    if (target !== chainId) setChainId(target)
+    setRequest({ chainId: target, token: code.token, amountBase: code.baseUnits ? code.amount : null })
+  }
+
+  // The parked half of a scan, applied once the target chain's list is here.
+  useEffect(() => {
+    if (!request) return
+    if (request.chainId !== chainId) return
+    const onChain = tokens.filter((x) => x.chainId === chainId)
+    if (onChain.length === 0) return
+    const wanted = request.token
+    const found = wanted === null ? (onChain.find((x) => x.address === 'native') ?? null) : (onChain.find((x) => x.address.toLowerCase() === wanted.toLowerCase()) ?? null)
+    setRequest(null)
+    if (!found) {
+      setError(t({ id: 'send.scan.token', message: 'That request is for a token this wallet does not list on {c}. The address is filled in; pick the token yourself.', values: { c: chains.find((c) => c.chainId === chainId)?.name ?? String(chainId) } }))
+      return
+    }
+    setToken(found.address)
+    if (request.amountBase !== null) {
+      try {
+        setAmount(formatUnits(BigInt(request.amountBase), found.decimals))
+      } catch {
+        // An amount we cannot read is one the user must type: never a guess.
+      }
+    }
+  }, [request, chainId, tokens, chains])
 
   const sent = requestId ? entries.find((e) => e.id === requestId) : undefined
 
@@ -183,9 +249,12 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
 
         {/* To */}
         <Plate role={latched ? 'raised' : 'recessed'} gap="$2" testID="send-to">
-          <Body tone="mute" size="caption">
-            {t({ id: 'send.to', message: 'To' })}
-          </Body>
+          <Row justifyContent="space-between" alignItems="center">
+            <Body tone="mute" size="caption">
+              {t({ id: 'send.to', message: 'To' })}
+            </Body>
+            {host.scanQr ? <Key label={t({ id: 'send.scan', message: 'Scan' })} kind="secondary" size="compact" icon={<Icon name="scan" size={16} color={paint.mute} />} onPress={() => void scan()} testID="send-scan" /> : null}
+          </Row>
           <Input value={to} onChange={setTo} placeholder={t({ id: 'send.to.ph', message: 'Address or name.etn' })} error={to.trim() ? toProblem : null} autoFocus={!initialTo} testID="send-to-input" />
           {latched && quote?.to ? (
             <Row gap="$2" alignItems="center">

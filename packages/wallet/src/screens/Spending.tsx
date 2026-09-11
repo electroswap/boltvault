@@ -90,10 +90,22 @@ export function Spending({ body }: { body: 'extension-popup' | 'extension-tab' |
         ) : null}
       </Plate>
 
+      {/*
+        What this plate promised and what the product did were two different
+        things: the first-time rule arrived as `info`, which is no pause and no
+        visible warning, and the large-send rule only greyed a button for a
+        second and a half — nothing ever asked the vault to open again. The
+        signing sheet performs both now, and this says what it performs,
+        including the condition neither can escape: the firewall has to be able
+        to read the transaction as a transfer before it can know either thing.
+      */}
       <Plate gap="$1" testID="spending-stepups">
         <Body size="title">{t({ id: 'spending.stepups', message: 'Step-ups' })}</Body>
         <Body tone="mute" size="caption">
-          {t({ id: 'spending.stepups.body', message: 'A first-time recipient pauses for a second look; a send above a tenth of a token balance asks you to unlock again. Both are always on.' })}
+          {t({ id: 'spending.stepups.body.v2', message: 'A recipient you have never sent to holds the key for ten seconds, with the whole address on screen to check. A send above a tenth of your balance of that token asks you to unlock again — your face, your fingerprint or your password — before the key opens.' })}
+        </Body>
+        <Body tone="mute" size="caption">
+          {t({ id: 'spending.stepups.limits', message: 'Both are always on for a transfer BoltVault can read. A contract call it cannot decode gets the full review sheet instead, because a pause on a transaction nobody can explain would be a comfort, not a check.' })}
         </Body>
       </Plate>
 
