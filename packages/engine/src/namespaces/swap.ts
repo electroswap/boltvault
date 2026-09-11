@@ -71,6 +71,10 @@ export interface SwapInput {
 const ZERO = '0x0000000000000000000000000000000000000000' as Hex
 /** The UR deadline for a swap the user is looking at (§8.6: stale after 8 s, but the chain needs headroom). */
 const DEADLINE_S = 20 * 60
+/** Combined slippage at which `minimumOut` reaches zero, i.e. no floor at all. */
+const BIPS_CEILING = 10_000
+/** Hard clamp, so a path that ever skips the refusal still leaves a non-zero floor. */
+const MAX_EFFECTIVE_SLIPPAGE_BPS = 9_900
 const hex = (n: bigint): Hex => `0x${n.toString(16)}`
 const isEtn = (chainId: number): chainId is 52014 | 5201420 => chainId === 52014 || chainId === 5201420
 const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
@@ -203,7 +207,17 @@ export class SwapService {
     // There is no sink contract any more: the fee goes to an address named in
     // `fees.json`, and a chain that names none has in-wallet swap switched off.
     if (bips > 0 && !sink) problems.push('In-wallet swaps are off on this network — no fee address is set for it in this build.')
-    const effectiveSlippage = slippageBips + taxBips
+    /*
+      Slippage and the token's transfer tax were summed with no ceiling. At
+      10 000 bps `minimumOut` computes to exactly zero — the swap would accept
+      any output at all, including dust — and above it the subtraction goes
+      negative and the encoder throws. A token declaring a large enough tax
+      therefore disarmed the only protection the swap has. Refuse instead: a
+      swap whose combined slippage reaches 100% has nothing left to protect.
+    */
+    const effectiveSlippage = Math.min(slippageBips + taxBips, MAX_EFFECTIVE_SLIPPAGE_BPS)
+    if (slippageBips + taxBips >= BIPS_CEILING)
+      problems.push('This token’s transfer tax plus your slippage would leave no minimum received. BoltVault will not sign a swap with no floor.')
     const receive = netAfterFee(amountOut, bips)
     const minOut = minimumOut(amountOut, bips, effectiveSlippage)
     const spot = probe ? rateOf(probeIn, probe.best.amountOut, inView.decimals, outView.decimals) : null

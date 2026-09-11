@@ -27,6 +27,16 @@ describe('fee math (§8.6, §8.18)', () => {
   it('minOut = quoted × (1 − bips) × (1 − slippage)', () => {
     expect(feeAmount(10_000n, 50)).toBe(50n)
     expect(minimumOut(10_000n, 50, 50)).toBe(9_901n) // 9950 − 0.5 % of 9950 (floored)
+    /*
+      Why the engine caps combined slippage (`packages/engine/src/namespaces/swap.ts`).
+      Slippage and a token's transfer tax were summed with no ceiling, and
+      `taxSlippageBips` reads both fees straight off the token, so a hostile
+      token could push the total to 10 000 bps. At that point the floor is
+      exactly zero — the swap accepts any output at all, including dust — which
+      is the one thing a minimum-received number exists to prevent.
+    */
+    expect(minimumOut(10_000n, 0, 10_000)).toBe(0n)
+    expect(minimumOut(10_000n, 0, 9_900)).toBeGreaterThan(0n)
   })
 })
 
