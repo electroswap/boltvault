@@ -12,6 +12,7 @@
  * cold start and should show it, but a remount inside one session should not.
  */
 import { Body, Column, EsWordmark, SPLASH_BEAT, SplashArt, TamaguiProvider, tamaguiConfig, useWindowDimensions } from '@boltvault/ui'
+import { memo } from 'react'
 import { t } from '../i18n'
 
 /** How long the ceremony runs; a body holds the splash for exactly this. */
@@ -31,7 +32,24 @@ export function rearmSplash(): void {
   spent = false
 }
 
-export function Splash({ reducedMotion = false }: { reducedMotion?: boolean }) {
+/**
+ * Memoised, and that is load-bearing.
+ *
+ * Every animation in `SplashArt` is a Reanimated CSS keyframe written inline —
+ * a fresh object on every render — and a fresh object restarts the animation.
+ * So any re-render of whatever is holding the splash restarts ALL of them from
+ * their first keyframe at once: `Rise` back to opacity 0, `Wake` back to
+ * opacity 0, the mark back to the start of its recoil. The owner saw exactly
+ * that: "the bolt and the word mark in the splash flicker immediately before
+ * fading" — six frames, a hundred milliseconds, of everything but the circuit
+ * gone, caught frame by frame when the exit's `leaving` flip re-rendered the
+ * host. The engine resolving mid-ceremony would have done the same.
+ *
+ * The splash takes no props that change while it is on screen, so memo is the
+ * whole fix: the host re-renders, this does not, and the keyframes keep the
+ * identity they started with.
+ */
+export const Splash = memo(function Splash({ reducedMotion = false }: { reducedMotion?: boolean }) {
   const { width, height } = useWindowDimensions()
   return (
     <SplashArt
@@ -51,7 +69,7 @@ export function Splash({ reducedMotion = false }: { reducedMotion?: boolean }) {
       }
     />
   )
-}
+})
 
 /**
  * The splash with a theme of its own, for a body that renders it before the app.
@@ -70,10 +88,10 @@ export function Splash({ reducedMotion = false }: { reducedMotion?: boolean }) {
  * So: `Splash` inside the app (the screen registry, the harness, tests),
  * `SplashRoot` outside it.
  */
-export function SplashRoot({ reducedMotion = false }: { reducedMotion?: boolean }) {
+export const SplashRoot = memo(function SplashRoot({ reducedMotion = false }: { reducedMotion?: boolean }) {
   return (
     <TamaguiProvider config={tamaguiConfig} defaultTheme="dark">
       <Splash reducedMotion={reducedMotion} />
     </TamaguiProvider>
   )
-}
+})

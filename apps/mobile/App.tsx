@@ -216,10 +216,24 @@ export default function App() {
               StyleSheet.absoluteFill,
               {
                 backgroundColor: VOID,
+                /*
+                  Transparent in the static style AND `backwards` in the fill
+                  mode, which are two answers to the same one-frame question.
+
+                  A view mounts with its own style before its keyframes engage,
+                  and this one's own style is an opaque sheet of void — so for
+                  exactly one frame the whole screen went navy, then the
+                  animation took over from `from` and faded it in properly. The
+                  owner caught it: "it's literally a single frame of navy toward
+                  the very end of the splash." `forwards` was the wrong fill
+                  mode to reach for: it holds the LAST keyframe after the
+                  animation, and says nothing about before it.
+                */
+                opacity: 0,
                 animationName: { from: { opacity: 0 }, to: { opacity: 1 } },
                 animationDuration: `${LEAVE}ms`,
                 animationTimingFunction: cubicBezier(0.4, 0, 0.2, 1),
-                animationFillMode: 'forwards',
+                animationFillMode: 'both',
               },
             ]}
           />
