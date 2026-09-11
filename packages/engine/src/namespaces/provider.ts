@@ -89,6 +89,19 @@ export interface ProviderDeps {
   readonly tokenInfo?: (
     chainId: number,
   ) => Promise<Record<string, { symbol: string; decimals: number; name?: string }>>
+  /**
+   * Primary names for the addresses a sheet is about to name, so a statement
+   * reads "to bob.etn" instead of "to 0x2222…2222". Sanitised and bounded by
+   * the names service, because `ctx.labels` is printed by `who()` in
+   * explain.ts and by `label()` in rules.ts, and only one of those two wraps
+   * what it is given. A thunk because the names service is built after this
+   * one — it raises its own registration approvals through it — and because it
+   * must only run while a sheet is being assessed.
+   */
+  readonly counterpartyNames?: (
+    chainId: number,
+    addresses: readonly string[],
+  ) => Promise<ReadonlyArray<{ address: string; name: string | null }>>
   /** Put a new request in front of the user (the extension opens sign.html). Internal origins never call this. */
   readonly openApproval?: (request: ApprovalRequest) => void
   readonly clientVersion: string
@@ -146,6 +159,8 @@ const CONTRACT_FACTS_TTL_MS = 6 * 60 * 60 * 1000
 const FLOOR_TTL_MS = 5 * 60 * 1000
 /** Hard ceiling on the explorer detour: a signature never waits on it. */
 const EXPLORER_TIMEOUT_MS = 1_500
+/** Same ceiling for the name detour, for the same reason: the short address is a fine answer. */
+const NAME_BUDGET_MS = 1_500
 
 /**
  * What an explorer or the API told us about a contract, in a form that does not
@@ -875,6 +890,7 @@ export class ProviderService {
       : {}
     const labels: Record<string, string> = {}
     for (const [addr, info] of Object.entries(tokens)) labels[addr] = info.symbol
+    await this.nameCounterparties(chainId, request, contracts, labels)
     const context: AssessmentContext = emptyContext({
       sentTo,
       inboundOnly,
@@ -951,6 +967,55 @@ export class ProviderService {
       }
     }
     return { limit, spent }
+  }
+
+  /**
+   * A name where the sheet would otherwise print six nibbles and four.
+   *
+   * `who()` reads `ctx.labels` before anything else, so one entry here names a
+   * counterparty in every statement the sheet makes — while the address block
+   * below the statements still shows all forty characters to check against,
+   * which is the §3.6 safeguard this must not weaken.
+   *
+   * Only the addresses this request actually names are asked about: the `to`
+   * of a plain send, and the recipient inside an ERC-20 transfer, which sits in
+   * the calldata rather than in `to`. Asking about the history instead would be
+   * one resolver round trip per row, for a sheet that prints none of them.
+   *
+   * Contracts are left out — §8.1 is explicit that a name is never shown for
+   * one, and the code read a few lines above already says which addresses those
+   * are, so the caller that "knows what it is labelling" is this one. A spender
+   * is a contract by definition and is not asked about at all.
+   *
+   * Budgeted like the price read in `portfolio.snapshot`: a signature must
+   * never wait on somebody else's resolver, so a slow answer is simply no
+   * answer and the short address stands.
+   */
+  private async nameCounterparties(
+    chainId: number,
+    request: SignRequest,
+    contracts: Record<string, ContractInfo>,
+    labels: Record<string, string>,
+  ): Promise<void> {
+    const ask = this.deps.counterpartyNames
+    if (!ask) return
+    const wanted = new Set<string>()
+    if (request.kind === 'transaction' && request.tx.to && contracts[request.tx.to.toLowerCase()]?.hasCode !== true) wanted.add(request.tx.to.toLowerCase())
+    /*
+      transfer(address,uint256): the recipient is the low 20 bytes of the first
+      word. Read off the calldata rather than decoded, because `to` here is the
+      token contract and the person being paid is never in `probe` — the
+      commonest send in the wallet would otherwise be the one case with no name.
+    */
+    if (request.kind === 'transaction' && request.tx.data.startsWith('0xa9059cbb') && request.tx.data.length >= 74) wanted.add(`0x${request.tx.data.slice(34, 74)}`.toLowerCase())
+    const addresses = [...wanted].filter((a) => labels[a] === undefined)
+    if (addresses.length === 0) return
+    const none: ReadonlyArray<{ address: string; name: string | null }> = []
+    const named = await Promise.race([
+      ask(chainId, addresses).catch(() => none),
+      new Promise<ReadonlyArray<{ address: string; name: string | null }>>((resolve) => setTimeout(() => resolve(none), NAME_BUDGET_MS)),
+    ])
+    for (const { address, name } of named) if (name !== null) labels[address.toLowerCase()] ??= name
   }
 
   /** The §3.6 clipboard record, typed for the firewall. */

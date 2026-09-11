@@ -93,11 +93,26 @@ export type PlateProps = Omit<ComponentProps<typeof PlateFrame>, 'role'> & {
   readonly children?: ReactNode
 }
 
+/**
+ * What the two pressable roles look like at rest.
+ *
+ * `card` and `tile` carry a `pressStyle`, and Tamagui compiles that to an
+ * `:active` rule with `!important` — which the browser fires on any element
+ * under the mouse, handler or not. So the eight static plates on these roles
+ * dimmed when pressed and told the reader something had happened. Restating the
+ * resting values wins over the base rule, the same way the disabled key does it.
+ */
+const RESTING_PRESS: Partial<Record<PlateRole, object>> = { card: { opacity: 1 }, tile: { backgroundColor: '$glassRaised' } }
+
 const RIM_BY_ROLE: Record<PlateRole, number> = { recessed: 0, raised: 0.45, console: 0.7, card: 0.3, tile: 0.45, well: 0 }
 const RADIUS_BY_ROLE: Record<PlateRole, number> = { recessed: radius.recessed, raised: radius.raised, console: radius.console, card: radius.recessed, tile: radius.raised, well: radius.well }
 
 export function Plate({ role = 'recessed', rim, children, ...rest }: PlateProps) {
   const lit = rim ?? RIM_BY_ROLE[role]
+  // A plate nobody can press must not react to being pressed. Spread before
+  // `rest`, so a caller that wants its own press treatment still gets it.
+  const pressable = rest.onPress !== undefined || rest.onPressIn !== undefined || rest.onLongPress !== undefined
+  const resting = pressable ? undefined : RESTING_PRESS[role]
   /*
     The gradient goes UNDER the children and over the frame's flat colour, which
     stays as the fallback for the frame it is painted on before layout lands.
@@ -105,7 +120,7 @@ export function Plate({ role = 'recessed', rim, children, ...rest }: PlateProps)
     flourish.
   */
   return (
-    <PlateFrame role={role} {...rest}>
+    <PlateFrame role={role} {...(resting ? { pressStyle: resting } : {})} {...rest}>
       <PlateFill role={role} radius={RADIUS_BY_ROLE[role]} />
       {children}
       {lit > 0 ? <Rim radius={RADIUS_BY_ROLE[role]} opacity={lit} /> : null}
@@ -204,7 +219,17 @@ export const KeyFrame = styled(TView, {
       compact: { height: 44, paddingHorizontal: '$4', borderRadius: 12 },
     },
     disabled: {
-      true: { opacity: 0.45, cursor: 'default' },
+      /*
+        The press treatment has to be cancelled here, not merely unhandled.
+
+        `pressStyle` below compiles to an `:active` rule with `!important`, and
+        `:active` does not ask whether anything is listening — so a disabled key
+        brightened from 0.45 to 0.88 and shrank under the mouse while doing
+        nothing at all. Owner, on the signing sheet with no Ledger attached:
+        pressing Sign looked like it had worked. Restating both properties at
+        their resting values is what beats the base rule.
+      */
+      true: { opacity: 0.45, cursor: 'default', pressStyle: { opacity: 0.45, scale: 1 } },
     },
   } as const,
   defaultVariants: { kind: 'primary', size: 'regular' },

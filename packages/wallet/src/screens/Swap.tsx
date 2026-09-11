@@ -21,6 +21,7 @@ import { useEngine } from '../engine/EngineProvider'
 import { useActivity } from '../hooks/useActivity'
 import { useCached } from '../hooks/useCached'
 import { useChainHead } from '../hooks/useChainHead'
+import { useName } from '../hooks/useNames'
 import { usePortfolio } from '../hooks/usePortfolio'
 import { usePrefs } from '../hooks/usePrefs'
 import { formatAmountFiat, formatFloor, formatPct, formatQuantity, formatRate, formatRaw } from '../format'
@@ -72,6 +73,17 @@ export interface SwapProps {
 export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMotion = false }: SwapProps) {
   const engine = useEngine()
   const { active } = useWalletState()
+  /*
+    Which account is spending, the way every other money screen says it.
+
+    The craft pass put the account under the title on Send, Swap and Bridge
+    (the milestone log); Swap stated its chain and never its account, so the
+    one screen that spends from a wallet you may hold four of did not say which
+    one it was spending from. Same descriptor, same caption scale as
+    `ScreenHeader`'s subtitle — the name stands in for the short address when
+    one resolves (§8.1).
+  */
+  const accountName = useName(active?.address)
   const { width, height } = useWindowDimensions()
   const portfolio = usePortfolio(active?.id ?? null)
   const { entries, loaded: activityLoaded } = useActivity(active?.id ?? null)
@@ -447,8 +459,13 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
               />
             </Column>
           ) : (
-            <Column alignItems="flex-start">
+            <Column alignItems="flex-start" flexShrink={1} minWidth={0}>
               <Body size="title">{t({ id: 'swap.title', message: 'Swap' })}</Body>
+              {active ? (
+                <Body tone="mute" size="caption" numberOfLines={1} testID="swap-account">
+                  {t({ id: 'from.account', message: 'from {a}', values: { a: `${active.label} · ${accountName ?? shortAddress(active.address)}` } })}
+                </Body>
+              ) : null}
               <ChainCaption chainId={ETN} name="Electroneum" testID="swap-chain" />
             </Column>
           )}

@@ -20,6 +20,7 @@ import { TokenPickerSheet } from '../components/TokenPickerSheet'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { useActivity } from '../hooks/useActivity'
+import { useName } from '../hooks/useNames'
 import { usePortfolio } from '../hooks/usePortfolio'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
@@ -39,6 +40,8 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
   const { pending } = useApprovals()
   const [chainId, setChainId] = useState(initialChainId ?? ETN)
   const portfolio = usePortfolio(active?.id ?? null, 5_000, [chainId])
+  // The account's own name where its address would be (§8.1); null leaves the short form.
+  const accountName = useName(active?.address)
   const balances = useChainBalances(active?.id ?? null)
   const [chains, setChains] = useState<ChainView[]>([])
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -242,7 +245,7 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
   return (
     <Column flex={1}>
       <ScrollView contentContainerStyle={{ padding: inset, gap: 12 }} testID="send">
-        <PageHeader title={t({ id: 'send.title', message: 'Send' })} subtitle={active ? t({ id: 'from.account', message: 'from {a}', values: { a: `${active.label} · ${shortAddress(active.address)}` } }) : undefined} />
+        <PageHeader title={t({ id: 'send.title', message: 'Send' })} subtitle={active ? t({ id: 'from.account', message: 'from {a}', values: { a: `${active.label} · ${accountName ?? shortAddress(active.address)}` } }) : undefined} />
         <Row>
           <ChainSelectPill chainId={chainId} label={chainName(chainId)} onPress={() => setChainOpen(true)} testID="send-chain" />
         </Row>

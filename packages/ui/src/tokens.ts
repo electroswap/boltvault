@@ -121,6 +121,21 @@ export const metrics = {
   /** Compact keys, icon buttons, headers: a hit-target frame with a smaller visual inside — it tracks `hit`. */
   keyCompact: native ? 48 : 44,
   header: native ? 48 : 44,
+  /**
+   * The glass disc inside an `IconButton`, and the signature in the account
+   * seat. One number, because the two circles meet.
+   *
+   * They were set independently — 34 in `IconButton`, 40 in `Seat` — and they
+   * occupy the same place on the same line: Home's header opens with the
+   * account circle, a pushed screen's header opens with the round Back, and
+   * navigating swapped one for a visibly smaller other. Owner: the back/home
+   * control and the account circle should be identical. Two literals could not
+   * hold that, so neither of them is a literal any more.
+   *
+   * It stays below `hit` on purpose: the pressable frame around the disc is
+   * still 44 (48 on the phone), so matching the seat never shrinks a target.
+   */
+  disc: 40,
   tabBar: native ? 56 : 52,
   /** Home's action cells. A popup is tight; a phone has the height to spare. */
   actionCell: native ? 94 : 72,

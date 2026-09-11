@@ -43,7 +43,8 @@ export function Seat({ address, label, name, onPress, onCopy, copied = false, te
   return (
     <Row gap="$3" alignItems="center" flexShrink={1} minWidth={0}>
       <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`Account ${title}`} testID={testID} style={{ minHeight: metrics.hit, minWidth: metrics.hit, alignItems: 'center', justifyContent: 'center', marginHorizontal: -2, flexShrink: 0 }}>
-        <Signature address={address} size={40} />
+        {/* `metrics.disc`, not 40: the same circle the header's IconButtons draw. */}
+        <Signature address={address} size={metrics.disc} />
       </Pressable>
       {/*
         Owner: "clicking even on the lower half of the wallet name triggers the

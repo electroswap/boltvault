@@ -64,6 +64,32 @@ export async function createFixtureEngine(scenario: FixtureScenario, options: Fi
   const platform = createMemoryPlatform({ now: FIXED_NOW })
   const engine = createEngine({ platform, heads })
   await engine.ready
+  /*
+    Reverse names, answered from a table instead of from a UniversalResolver.
+
+    Every scenario, not just the funded one: the seat, the accounts rail and the
+    activity sheet all ask for names now, and the harness promises no network —
+    an unoverridden `names.lookup` would be a live `getEnsName` per address on
+    every screen, which is both a fetch and a different answer run to run.
+
+    `0x2222…2222` is the SEND counterparty in the activity fixture below, and it
+    is the one address given a name: naming the wallet's own accounts would
+    rewrite the seat in every committed baseline for the sake of the fixture
+    rather than for the sake of a product change. One named counterparty is
+    enough to see the substitution, and the short address is the other half of
+    the behaviour worth seeing.
+  */
+  const FIXTURE_NAMES: Record<string, string> = { '0x2222222222222222222222222222222222222222': 'shop.etn' }
+  engine.host.override('names', {
+    lookup: {
+      input: z.object({ addresses: z.array(z.string()) }).passthrough(),
+      handler: async (arg) =>
+        (arg as { addresses: string[] }).addresses.map((a) => {
+          const name = FIXTURE_NAMES[a.toLowerCase()] ?? null
+          return { address: a, name, verified: name !== null }
+        }),
+    },
+  })
   if (scenario !== 'fresh') {
     const { seedId, accounts } = await engine.engine.vault.import({ mnemonic: MNEMONIC, password: PASSWORD })
     const account = accounts[0]
@@ -99,7 +125,7 @@ export async function createFixtureEngine(scenario: FixtureScenario, options: Fi
             severity: 'danger',
             rules: [
               { code: 'APPROVE_UNKNOWN_SPENDER', severity: 'danger', title: 'Allowance for an unknown contract', detail: 'This lets 0x2222…2222 spend an unlimited amount of 0x1111…1111. BoltVault does not recognise the spender.' },
-              { code: 'SIM_INCOMPLETE', severity: 'warn', title: 'Preview shows no balance changes', detail: 'This network cannot preview what moves. Only the revert check ran.' },
+              { code: 'SIM_INCOMPLETE', severity: 'warn', title: 'Balance changes could not be simulated', detail: 'This network could not preview the result, so only the revert check ran. What is listed above is read from the transaction itself.' },
             ],
             statements: [{ text: 'Allow 0x2222…2222 to move an unlimited amount of 0x1111…1111', tone: 'warn' }],
             changes: [],
@@ -152,7 +178,6 @@ export async function createFixtureEngine(scenario: FixtureScenario, options: Fi
       cached: { input: AccountArg, handler: async () => ({ rows: allowances, at: FIXED_NOW - 30_000 }) },
       scan: { input: AccountArg, handler: async () => allowances },
     })
-    engine.host.override('names', { lookup: { input: z.object({ addresses: z.array(z.string()) }).passthrough(), handler: async (arg) => (arg as { addresses: string[] }).addresses.map((a) => ({ address: a, name: null, verified: false })) } })
     engine.host.override('send', {
       quote: {
         input: z.object({ to: z.string(), amount: z.string(), token: z.string() }).passthrough(),

@@ -36,6 +36,11 @@ export function Key({ label, onPress, kind = 'primary', size = 'regular', disabl
       size={size}
       disabled={disabled}
       onPress={disabled ? undefined : onPress}
+      // A disabled key does nothing, so it must also look like it did nothing:
+      // no charge sweeping across it (the `disabled` term here) and no press
+      // tint or scale either — that half lives in `KeyFrame`'s disabled
+      // variant, because `pressStyle` is CSS `:active` and fires with no
+      // handler attached at all.
       onPressIn={disabled || reduced || kind !== 'primary' ? undefined : () => setCharge((c) => c + 1)}
       onLayout={(e: LayoutChangeEvent) => setWidth(Math.round(e.nativeEvent.layout.width))}
       testID={testID}

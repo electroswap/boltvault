@@ -193,13 +193,18 @@ export const permit2Rules: Rule = ({ request, typed, chainId, context }) => {
         detail: `This lets ${label(context, chainId, d.spender)} spend your tokens through Permit2. BoltVault does not recognise it.`,
       }
     }
+    /*
+      The statement above already says the amount is unlimited, in the same
+      sheet, a few lines up. Repeating it here made the card look like a second
+      finding rather than advice about the first, which is how a reader learns
+      to skip cards. What the statement cannot say is what to do about it.
+    */
     if (unlimited)
       return {
         code: 'PERMIT2_UNLIMITED',
         severity: 'warn',
         title: 'Unlimited allowance',
-        detail:
-          'The amount is unlimited. ElectroSwap only needs the amount of one swap; you can set exact approvals in Settings › Spending.',
+        detail: 'ElectroSwap only needs the amount of one swap. You can make approvals exact in Settings › Spending.',
       }
   }
   return null
@@ -932,11 +937,20 @@ export const simulationRules: Rule = ({ request, simulation, decoded }) => {
         title: 'Preview could not be produced',
         detail: `${simulation.note} Review the details below carefully.`,
       }
+    /*
+      Said as a fact about the preview, not about the transaction.
+
+      "Preview shows no balance changes" sat directly under statements listing
+      what the transaction moves, and read as a flat contradiction of them — as
+      though the wallet had looked and found nothing. It had not looked: the
+      statements are read out of the calldata, and the simulation that would have
+      confirmed them independently is the part that did not run.
+    */
     return {
       code: 'SIM_INCOMPLETE',
       severity: 'warn',
-      title: 'Preview shows no balance changes',
-      detail: 'This network cannot preview what moves. Only the revert check ran.',
+      title: 'Balance changes could not be simulated',
+      detail: 'This network could not preview the result, so only the revert check ran. What is listed above is read from the transaction itself.',
     }
   }
   return null
