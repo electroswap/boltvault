@@ -13,6 +13,9 @@ function clock(): { now: () => number; advance: (ms: number) => void } {
 
 const json = (status: number, headers: Record<string, string> = {}): Response => new Response('{}', { status, headers })
 
+/** The governor's longest refusal backoff; mirrored here so the test states the intent. */
+const REFUSED_MAX_MS = 60 * 60_000
+
 describe('the request governor', () => {
   it('spends a burst, then waits for the next slot, and refills over time', async () => {
     const c = clock()
@@ -105,5 +108,76 @@ describe('the request governor', () => {
     await fetchImpl('https://api.geckoterminal.com/x')
     expect(gov.available('api.geckoterminal.com')).toBe(false)
     expect(gov.snapshot().find((h) => h.host === 'api.geckoterminal.com')?.coolingMs).toBe(30_000)
+  })
+
+  /*
+    A ban used to reach the success branch, which cleared strikes and cooldowns.
+    A refused client therefore kept its full budget and kept hammering, and the
+    only evidence anywhere was that every request failed.
+  */
+  it('treats a 401 or a 403 as a refusal, not as a good answer', async () => {
+    for (const status of [401, 403]) {
+      const c = clock()
+      const gov = new Governor(c.now, async (ms) => c.advance(ms))
+      const host = 'electroswap.io'
+      // Earn a cooldown first, so we can see whether the ban clears it.
+      gov.observe(host, 429, '30')
+      expect(gov.available(host)).toBe(false)
+      c.advance(30_000)
+      expect(gov.available(host)).toBe(true)
+
+      gov.observe(host, status)
+      expect(gov.available(host)).toBe(false)
+      const snap = gov.snapshot().find((h) => h.host === host)
+      expect(snap?.refused).toBe(true)
+      // Long enough that a rejected key is not retried every few seconds.
+      expect(snap?.coolingMs).toBeGreaterThanOrEqual(15 * 60_000)
+    }
+  })
+
+  it('lifts the refusal only when a request actually gets through', () => {
+    const c = clock()
+    const gov = new Governor(c.now, async (ms) => c.advance(ms))
+    const host = 'electroswap.io'
+    gov.observe(host, 403)
+    expect(gov.snapshot().find((h) => h.host === host)?.refused).toBe(true)
+
+    // A second refusal backs off further rather than resetting.
+    const firstCool = gov.snapshot().find((h) => h.host === host)?.coolingMs ?? 0
+    gov.observe(host, 403)
+    expect(gov.snapshot().find((h) => h.host === host)?.coolingMs ?? 0).toBeGreaterThan(firstCool)
+
+    // A call that got through proves the credentials are good again, so the flag
+    // clears. The cooldown itself is left to run out: the host asked us to wait,
+    // and a reply to a request already in flight is not permission to ignore that.
+    gov.observe(host, 200)
+    expect(gov.snapshot().find((h) => h.host === host)?.refused).toBe(false)
+    c.advance(REFUSED_MAX_MS)
+    expect(gov.available(host)).toBe(true)
+  })
+
+  it('still treats a 404 as an ordinary answer', () => {
+    const c = clock()
+    const gov = new Governor(c.now, async (ms) => c.advance(ms))
+    const host = 'static.electroswap.io'
+    gov.observe(host, 404)
+    expect(gov.available(host)).toBe(true)
+    expect(gov.snapshot().find((h) => h.host === host)?.refused).toBe(false)
+  })
+
+  it('a banned host throws at once through the wrapper instead of spending the budget', async () => {
+    const c = clock()
+    const gov = new Governor(c.now, async (ms) => c.advance(ms))
+    let calls = 0
+    const fetchImpl = governedFetch(async () => {
+      calls += 1
+      return json(401)
+    }, gov)
+    await fetchImpl('https://electroswap.io/graphql')
+    expect(calls).toBe(1)
+    for (let i = 0; i < 5; i += 1) {
+      await expect(fetchImpl('https://electroswap.io/graphql')).rejects.toBeInstanceOf(RateLimited)
+    }
+    expect(calls).toBe(1)
   })
 })

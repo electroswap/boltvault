@@ -109,6 +109,15 @@ const COOLDOWN_BASE_MS = 5_000
 const COOLDOWN_MAX_MS = 5 * 60_000
 /** Consecutive transport failures before a host is treated as down. */
 const STRIKES = 3
+/**
+ * First cooldown after the host refused our credentials; doubles per consecutive
+ * refusal. Far longer than the 429 backoff on purpose: a rejected key or a
+ * clock-skewed request signature will still be rejected a second later, so
+ * retrying quickly only burns the budget and, on a host that bans by behaviour,
+ * digs the hole deeper.
+ */
+const REFUSED_COOLDOWN_MS = 15 * 60_000
+const REFUSED_COOLDOWN_MAX_MS = 60 * 60_000
 
 /** Thrown when a host is cooling or the budget could not be met in time. */
 export class RateLimited extends Error {
@@ -128,6 +137,8 @@ interface HostState {
   strikes: number
   /** Consecutive cooldowns, for the doubling. */
   cooldowns: number
+  /** The host rejected our credentials and has not accepted them since. */
+  refused: boolean
 }
 
 export interface GovernorSnapshot {
@@ -136,6 +147,13 @@ export interface GovernorSnapshot {
   readonly coolingMs: number
   readonly tokens: number
   readonly perMinute: number
+  /**
+   * The host answered 401 or 403 and has not accepted a request since. This is a
+   * configuration problem the user can act on — a key the API no longer honours,
+   * or a device clock far enough out that the request signature is rejected — so
+   * it is surfaced rather than retried in silence.
+   */
+  readonly refused: boolean
 }
 
 export class Governor {
@@ -153,7 +171,7 @@ export class Governor {
   private state(host: string): HostState {
     let s = this.hosts.get(host)
     if (!s) {
-      s = { tokens: this.budget(host).burst, lastRefill: this.now(), coolUntil: 0, strikes: 0, cooldowns: 0 }
+      s = { tokens: this.budget(host).burst, lastRefill: this.now(), coolUntil: 0, strikes: 0, cooldowns: 0, refused: false }
       this.hosts.set(host, s)
     }
     return s
@@ -204,6 +222,15 @@ export class Governor {
     s.strikes = 0
   }
 
+  /** A refusal of our credentials: cool for a long time and say so. */
+  private refuse(host: string): void {
+    const s = this.state(host)
+    s.cooldowns += 1
+    s.coolUntil = this.now() + Math.min(REFUSED_COOLDOWN_MAX_MS, REFUSED_COOLDOWN_MS * 2 ** (s.cooldowns - 1))
+    s.strikes = 0
+    s.refused = true
+  }
+
   /** What the host answered. */
   observe(host: string, status: number, retryAfter?: string | null): void {
     const s = this.state(host)
@@ -211,14 +238,26 @@ export class Governor {
       this.cool(host, parseRetryAfter(retryAfter, this.now()))
       return
     }
+    /*
+      A ban is not a transient failure. 401 and 403 used to fall through to the
+      success branch below, which cleared both strikes and cooldowns — so a
+      client the API had just refused kept its full budget, kept hammering, and
+      nothing anywhere said why every request was failing.
+    */
+    if (status === 401 || status === 403) {
+      this.refuse(host)
+      return
+    }
     if (status >= 500) {
       s.strikes += 1
       if (s.strikes >= STRIKES) this.cool(host, null)
       return
     }
-    // A good answer is the only thing that clears the record.
+    // The host answered us. That clears the refusal too: a call that got through
+    // is proof the credentials are good again.
     s.strikes = 0
     s.cooldowns = 0
+    s.refused = false
   }
 
   /** The request never got an answer: a timeout, a DNS failure, a dropped socket. */
@@ -237,6 +276,7 @@ export class Governor {
       coolingMs: Math.max(0, s.coolUntil - now),
       tokens: Math.floor(s.tokens),
       perMinute: this.budget(host).perMinute,
+      refused: s.refused,
     }))
   }
 }
