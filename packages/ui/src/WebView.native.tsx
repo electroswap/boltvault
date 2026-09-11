@@ -30,7 +30,14 @@ export function WebView({ url, injectedScriptBeforeLoad, onMessage, onNavigate, 
       ref={(r) => attach(r as Instance | null)}
       source={{ uri: url }}
       injectedJavaScriptBeforeContentLoaded={injectedScriptBeforeLoad}
-      injectedJavaScriptBeforeContentLoadedForMainFrameOnly={false}
+      /*
+        Main frame only. The injected script carries the channel nonce that
+        authenticates a page to the host, and `onMessage` cannot tell which
+        frame spoke — the host attributes every message to the top-level
+        committed URL. Injecting into sub-frames therefore hands a third-party
+        iframe the wallet of the page that embeds it.
+      */
+      injectedJavaScriptBeforeContentLoadedForMainFrameOnly={true}
       onMessage={(e: WebViewMessageEvent) => onMessage(e.nativeEvent.data)}
       onNavigationStateChange={report}
       onLoadStart={(e) => report(e.nativeEvent as unknown as WebViewNavigation)}
