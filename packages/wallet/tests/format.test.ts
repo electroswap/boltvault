@@ -5,7 +5,7 @@
  * decimal can tip a figure into the unit above, and 999,999 is 1M, not 1000K.
  */
 import { describe, expect, it } from 'vitest'
-import { formatCompact } from '../src/format'
+import { formatAmount, formatCompact, formatQuantity } from '../src/format'
 
 describe('formatCompact', () => {
   it('leaves anything under a thousand alone, decimals and all', () => {
@@ -41,5 +41,26 @@ describe('formatCompact', () => {
 
   it('stops at the top of the ladder rather than inventing a unit', () => {
     expect(formatCompact(5e15)).toBe('>999T')
+  })
+})
+
+/**
+ * The Approvals screen used to pass a raw `uint256` allowance to
+ * `formatQuantity`, which treats its argument as a human quantity. A bounded
+ * 1,000 USDC approval therefore read "1.00B", indistinguishable from an
+ * unlimited one on the single screen whose job is deciding what to revoke.
+ * The row now carries `decimals` and the screen scales by it.
+ */
+describe('allowance amounts are scaled by the token, not shown raw', () => {
+  it('renders a bounded allowance at its real size', () => {
+    expect(formatAmount('1000000000', 6)).toBe('1,000')
+    expect(formatAmount('1248000000', 6)).toBe('1,248')
+    expect(formatAmount('500000000000000000', 18)).toBe('0.5')
+  })
+
+  it('is the fix for what the raw string used to render as', () => {
+    // What the screen did before: the same 1,000 USDC allowance, unscaled.
+    expect(formatQuantity('1000000000')).toBe('1.00B')
+    expect(formatAmount('1000000000', 6)).not.toBe(formatQuantity('1000000000'))
   })
 })

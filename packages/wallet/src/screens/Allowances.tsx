@@ -11,7 +11,7 @@ import { useEngine } from '../engine/EngineProvider'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { useWalletState } from '../state/useWalletState'
-import { formatQuantity } from '../format'
+import { formatAmount } from '../format'
 
 const ETN = 52014
 
@@ -120,7 +120,14 @@ export function Allowances({ body }: { body: 'extension-popup' | 'extension-tab'
                   </Body>
                 </Column>
                 <Body tone={r.amount === 'unlimited' || r.amount === 'all' ? 'burn' : 'ink'} size="caption" testID={`allow-amount-${r.spender}`}>
-                  {r.amount === 'unlimited' ? t({ id: 'allow.unlimited', message: 'Unlimited' }) : r.amount === 'all' ? t({ id: 'allow.all', message: 'Every item' }) : formatQuantity(r.amount)}
+                  {/* `amount` is a raw uint256. Scale it, or say plainly that we cannot. */}
+                  {r.amount === 'unlimited'
+                    ? t({ id: 'allow.unlimited', message: 'Unlimited' })
+                    : r.amount === 'all'
+                      ? t({ id: 'allow.all', message: 'Every item' })
+                      : r.decimals === null
+                        ? t({ id: 'allow.raw', message: '{n} base units', values: { n: r.amount } })
+                        : formatAmount(r.amount, r.decimals)}
                 </Body>
                 <Key label={t({ id: 'allow.revoke', message: 'Revoke' })} kind="danger" size="compact" onPress={() => revoke(r)} testID={`allow-revoke-${r.spender}`} />
               </Row>

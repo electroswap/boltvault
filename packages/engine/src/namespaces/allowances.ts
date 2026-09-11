@@ -13,8 +13,7 @@ import { EngineError } from '../errors'
 import type { SealedMap } from '../sealed'
 import type { EventBus, NamespaceSpec } from '../host'
 import { readMany } from '../multicall'
-import { AccountIdSchema, AllowanceViewSchema, type AllowanceView } from '../schema'
-import { readDoc, writeDoc, type DocSpec } from '../storage'
+import { AccountIdSchema, type AllowanceView } from '../schema'
 import type { ChainsService } from './chains'
 import type { ProviderService } from './provider'
 import type { TokensService } from './tokens'
@@ -57,6 +56,8 @@ export class AllowancesService {
     const owner = account.address as Hex
     const universe = (await d.tokens.universe(chainId)).filter((t) => t.address !== 'native')
     const symbols = new Map(universe.map((t) => [t.address.toLowerCase(), t.symbol]))
+    // `amount` is a raw uint256; without the scale the UI cannot render it.
+    const decimalsOf = new Map(universe.map((t) => [t.address.toLowerCase(), t.decimals]))
     const spenders = knownSpenders(chainId)
     const rows: AllowanceView[] = []
 
@@ -74,7 +75,7 @@ export class AllowancesService {
       const r = results[i]
       if (!r?.ok || typeof r.value !== 'bigint' || r.value === 0n) return
       const known = knownContract(chainId, g.spender)
-      rows.push({ chainId, token: g.token, tokenSymbol: symbols.get(g.token.toLowerCase()) ?? null, spender: g.spender, spenderName: known?.name ?? null, known: known !== null, standard: 'erc20', amount: r.value >= UNLIMITED ? 'unlimited' : r.value.toString(), expiration: null })
+      rows.push({ chainId, token: g.token, tokenSymbol: symbols.get(g.token.toLowerCase()) ?? null, decimals: decimalsOf.get(g.token.toLowerCase()) ?? null, spender: g.spender, spenderName: known?.name ?? null, known: known !== null, standard: 'erc20', amount: r.value >= UNLIMITED ? 'unlimited' : r.value.toString(), expiration: null })
     })
 
     // Permit2: token × the routers that spend through it.
@@ -91,7 +92,7 @@ export class AllowancesService {
         if (amount === 0n) return
         if (expiration !== 0 && expiration * 1000 < d.platform.now()) return
         const known = knownContract(chainId, c.spender)
-        rows.push({ chainId, token: c.token, tokenSymbol: symbols.get(c.token.toLowerCase()) ?? null, spender: c.spender, spenderName: known?.name ?? null, known: known !== null, standard: 'permit2', amount: amount >= UNLIMITED_160 ? 'unlimited' : amount.toString(), expiration: expiration === 0 ? null : expiration })
+        rows.push({ chainId, token: c.token, tokenSymbol: symbols.get(c.token.toLowerCase()) ?? null, decimals: decimalsOf.get(c.token.toLowerCase()) ?? null, spender: c.spender, spenderName: known?.name ?? null, known: known !== null, standard: 'permit2', amount: amount >= UNLIMITED_160 ? 'unlimited' : amount.toString(), expiration: expiration === 0 ? null : expiration })
       })
     }
 
@@ -104,7 +105,7 @@ export class AllowancesService {
     nftCalls.forEach((c, i) => {
       const r = nftRes[i]
       if (!r?.ok || r.value !== true) return
-      rows.push({ chainId, token: c.token, tokenSymbol: knownContract(chainId, c.token)?.name ?? null, spender: c.operator, spenderName: knownContract(chainId, c.operator)?.name ?? null, known: true, standard: 'erc721', amount: 'all', expiration: null })
+      rows.push({ chainId, token: c.token, tokenSymbol: knownContract(chainId, c.token)?.name ?? null, decimals: 0, spender: c.operator, spenderName: knownContract(chainId, c.operator)?.name ?? null, known: true, standard: 'erc721', amount: 'all', expiration: null })
     })
 
     rows.sort((a, b) => rank(b) - rank(a))

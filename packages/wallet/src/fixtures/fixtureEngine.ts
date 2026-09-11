@@ -117,9 +117,9 @@ export async function createFixtureEngine(scenario: FixtureScenario, options: Fi
       { id: 'fx-3', hash: `0x${'c3'.repeat(32)}`, chainId: 52014, accountId, to: '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1', value: '0', nonce: 4, submittedAt: FIXED_NOW - 600_000, origin: 'https://app.electroswap.io', category: 'APPROVE', statements: ['Allow Permit2 to move up to 5,000 BOLT'], riskCodes: [], status: 'pending', blockNumber: null, token: '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1' },
     ]
     const allowances: AllowanceView[] = [
-      { chainId: 52014, token: '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1', tokenSymbol: 'BOLT', spender: '0x012ff228Aa9Fec4dBEE6Cd704072749AF077b617', spenderName: 'Permit2', known: true, standard: 'erc20', amount: 'unlimited', expiration: null },
-      { chainId: 52014, token: '0x3187deAd7A2Bd6770F5Fe81495D1B715926AAe6e', tokenSymbol: 'USDC', spender: '0x2c12c8F15637b7A182DEc202816148A5E767DCEC', spenderName: 'ElectroSwap Universal Router', known: true, standard: 'permit2', amount: '1248000000', expiration: Math.floor(FIXED_NOW / 1000) + 1_800 },
-      { chainId: 52014, token: '0x3187deAd7A2Bd6770F5Fe81495D1B715926AAe6e', tokenSymbol: 'USDC', spender: '0x9999999999999999999999999999999999999999', spenderName: null, known: false, standard: 'erc20', amount: 'unlimited', expiration: null },
+      { chainId: 52014, token: '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1', tokenSymbol: 'BOLT', decimals: 18, spender: '0x012ff228Aa9Fec4dBEE6Cd704072749AF077b617', spenderName: 'Permit2', known: true, standard: 'erc20', amount: 'unlimited', expiration: null },
+      { chainId: 52014, token: '0x3187deAd7A2Bd6770F5Fe81495D1B715926AAe6e', tokenSymbol: 'USDC', decimals: 6, spender: '0x2c12c8F15637b7A182DEc202816148A5E767DCEC', spenderName: 'ElectroSwap Universal Router', known: true, standard: 'permit2', amount: '1248000000', expiration: Math.floor(FIXED_NOW / 1000) + 1_800 },
+      { chainId: 52014, token: '0x3187deAd7A2Bd6770F5Fe81495D1B715926AAe6e', tokenSymbol: 'USDC', decimals: 6, spender: '0x9999999999999999999999999999999999999999', spenderName: null, known: false, standard: 'erc20', amount: 'unlimited', expiration: null },
     ]
     const AccountArg = z.object({ accountId: z.string() }).passthrough()
     engine.host.override('portfolio', {

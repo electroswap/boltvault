@@ -313,6 +313,13 @@ export const AllowanceViewSchema = z.object({
   chainId: z.number().int().positive(),
   token: z.string(),
   tokenSymbol: z.string().nullable(),
+  /**
+   * Decimals for `amount`, which is a raw base-unit integer. Null when the
+   * token is not in the universe and its scale is therefore unknown — the UI
+   * must then say so rather than render the integer as a quantity.
+   * Defaulted so blobs cached before this field existed still parse.
+   */
+  decimals: z.number().int().nonnegative().nullable().default(null),
   spender: z.string(),
   spenderName: z.string().nullable(),
   known: z.boolean(),
