@@ -443,6 +443,14 @@ export const SwapQuoteSchema = z.object({
   slippageBips: z.number().int().nonnegative(),
   /** Extra slippage folded in for fee-on-transfer tokens. */
   taxBips: z.number().int().nonnegative(),
+  /**
+   * The fee-on-transfer probe could not answer for one of these tokens, so
+   * `taxBips` is what is known rather than what is true. Not a refusal: the
+   * detector reverts for any token without a V2 pair against the base, and the
+   * minimum received is enforced on chain regardless. Defaulted so quotes
+   * cached before this field still parse.
+   */
+  taxUnknown: z.boolean().default(false),
   fee: z.object({
     bips: z.number().int().nonnegative(),
     tier: z.number().int().nonnegative(),

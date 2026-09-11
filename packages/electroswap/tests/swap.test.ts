@@ -1,7 +1,10 @@
 import { ELECTRONEUM_ADDRESSES } from '@boltvault/chains'
+import FOT_ARTIFACT from '../abis/FeeOnTransferDetector.json'
 import { decodeCalldata, decodeUniversalRouter } from '@boltvault/security'
 import type { Hex } from 'viem'
 import { describe, expect, it } from 'vitest'
+import { FOT_DETECTOR_ABI } from '../src/swap/abis'
+import { detectTax } from '../src/swap/fot'
 import { bestRoute, candidates, deliveredMinimumOut, encodeSwap, feeAmount, minimumOut, permitCovers, permitSingleTypedData, tierFor, DYNO_WEIGHT_ONE, FALLBACK_SCHEDULE, MAX_CANDIDATES, taxSlippageBips, encodeSubmitOrder, encodeCloseOrder, COMMAND, ROUTER_AS_RECIPIENT, type QuoteAddresses, type ReadResult } from '../src/swap'
 
 const A = ELECTRONEUM_ADDRESSES[52014]
@@ -167,9 +170,59 @@ describe('permit2', () => {
   })
 })
 
+/*
+  The hand-written ABI must match the contract ElectroSwap actually deployed.
+
+  `FOT_DETECTOR_ABI` declared five return fields — the shape of a later Uniswap
+  FeeOnTransferDetector — while the deployed contract returns
+  `TokenFees{buyFeeBps, sellFeeBps}` and nothing more. Every decode of a
+  two-word return against a five-field tuple failed, so the probe never once
+  succeeded: `detectTax` returned null, the wallet read that as "no tax", and
+  the three phantom fields were permanently `undefined`. The synced artifact
+  had it right the whole time, so pin the two together.
+*/
+describe('the fee-on-transfer probe reports what it knows', () => {
+  const DETECTOR = '0x34dc8af1FFe9F71aB8B37F9Ea79c567ab64140b3' as Hex
+
+  it('measures a tax when the detector answers', async () => {
+    const read = async () => [{ ok: true as const, value: { buyFeeBps: 300n, sellFeeBps: 100n } }]
+    expect(await detectTax(DETECTOR, BOLT, WETN, read)).toEqual({ buyFeeBps: 300, sellFeeBps: 100 })
+  })
+
+  it('says "unavailable" when the call fails, and "null" when there is no detector', async () => {
+    const failed = async () => [{ ok: false as const }]
+    expect(await detectTax(DETECTOR, BOLT, WETN, failed)).toBe('unavailable')
+    // No detector on this chain is a different fact, and not one to report.
+    expect(await detectTax(null, BOLT, WETN, failed)).toBeNull()
+  })
+
+  /*
+    An unmeasurable probe is not evidence of a tax. It briefly refused the swap
+    outright, which broke ETN→BOLT for everyone: the detector reverts
+    `PairLookupFailed` for any token with no V2 pair against the base, and the
+    minimum received is enforced on chain whether or not the probe answered.
+  */
+  it('contributes no slippage when it could not answer', async () => {
+    expect(taxSlippageBips('unavailable', 'unavailable')).toBe(0)
+    expect(taxSlippageBips('unavailable', { buyFeeBps: 250, sellFeeBps: 0 })).toBe(250)
+  })
+})
+
+describe('the fee-on-transfer ABI matches the deployed detector', () => {
+  it('declares exactly the outputs the synced artifact does', () => {
+    const synced = (FOT_ARTIFACT as { abi?: unknown[] }).abi ?? (FOT_ARTIFACT as unknown as unknown[])
+    const fromArtifact = (synced as Array<{ name?: string; outputs?: Array<{ components?: Array<{ name: string; type: string }> }> }>).find((e) => e.name === 'validate')
+    const expected = (fromArtifact?.outputs?.[0]?.components ?? []).map((c) => `${c.type} ${c.name}`)
+    const ours = FOT_DETECTOR_ABI.find((e) => e.type === 'function' && e.name === 'validate')
+    const mine = ((ours as { outputs?: ReadonlyArray<{ components?: ReadonlyArray<{ name?: string; type: string }> }> } | undefined)?.outputs?.[0]?.components ?? []).map((c) => `${c.type} ${c.name ?? ''}`)
+    expect(expected.length).toBeGreaterThan(0)
+    expect(mine).toEqual(expected)
+  })
+})
+
 describe('taxes and limit orders', () => {
   it('folds both sides of a tax into slippage', () => {
-    expect(taxSlippageBips({ buyFeeBps: 100, sellFeeBps: 200, feeTakenOnTransfer: true, sellReverted: false }, { buyFeeBps: 300, sellFeeBps: 0, feeTakenOnTransfer: true, sellReverted: false })).toBe(500)
+    expect(taxSlippageBips({ buyFeeBps: 100, sellFeeBps: 200 }, { buyFeeBps: 300, sellFeeBps: 0 })).toBe(500)
   })
   it('encodes submit and close for the limit-order manager', () => {
     const data = encodeSubmitOrder({ tokenIn: BOLT, tokenOut: USDC, unwrapOutput: false, amountInExact: 10n, amountOutMin: 9n, recipient: ME, durationSeconds: 86_400n })

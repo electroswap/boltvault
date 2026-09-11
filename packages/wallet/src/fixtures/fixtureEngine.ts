@@ -200,6 +200,7 @@ export async function createFixtureEngine(scenario: FixtureScenario, options: Fi
         priceImpactPct: 0.12,
         slippageBips: Number(slippage),
         taxBips: 0,
+        taxUnknown: false,
         fee: { bips: 40, tier: 1, name: 'Charge', amountRaw: fee.toString(), sink: SINK, source: 'config', nextTierAt: '136000000000000000000000', nextTierBips: 30 },
         route: { label: 'V3 0.3%', hops: [{ kind: 'v3', tokenIn: '0x138DAFbDA0CCB3d8E39C19edb0510Fc31b7C1c77', tokenOut: USDC, fee: 3000 }] },
         gasEstimate: '210000',
