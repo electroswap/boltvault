@@ -51,7 +51,12 @@ describe('sync pairing and non-secret sync', () => {
     expect((await b.engine.settings.get()).displayCurrency).toBe('ETN')
     expect((await b.engine.sites.get({ origin: 'https://app.electroswap.io' }))?.chainId).toBe(8453)
     const synced = (await b.engine.accounts.list()).find((x) => x.kind === 'watch')
-    expect(synced?.label).toBe('Cold · from Laptop')
+    /*
+      The label arrives as the author wrote it. It used to arrive as
+      "Cold · from Laptop", which the next push sent back as the account's real
+      name — provenance ate the label in one round trip.
+    */
+    expect(synced?.label).toBe('Cold')
     // idempotent: pulling again applies nothing new
     expect((await b.engine.sync.pull()).applied).toBe(0)
     // seeds never travel: B still has only its own seed
@@ -71,8 +76,6 @@ describe('sync pairing and non-secret sync', () => {
     await a.engine.sync.confirm()
     await b.engine.sync.confirm()
     // Mallory pairs with A under a *different* pairing, then tries to poison B's pairing id.
-    const pairingId = (await relay.list('', 0), (await a.sync.status()).devices[0]?.deviceId)
-    void pairingId
     await mallory.engine.settings.set({ displayCurrency: 'ETN' })
     const { offer: o2 } = await mallory.engine.sync.createOffer({ relayUrl: RELAY })
     const { answer: an2 } = await a.engine.sync.acceptOffer({ offer: o2 })

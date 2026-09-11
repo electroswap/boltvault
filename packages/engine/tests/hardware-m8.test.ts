@@ -198,7 +198,9 @@ describe('remote sign: the phone asks the laptop', () => {
     await laptop.engine.sync.push()
     await phone.engine.sync.pull()
     const synced = (await phone.engine.accounts.list()).find((a) => a.kind === 'trezor')
-    expect(synced?.label).toBe('Trezor · from Laptop')
+    // The label arrives as the author wrote it; provenance is shown beside the
+    // record rather than written into its name, so a relabel round trips.
+    expect(synced?.label).toBe('Trezor')
     expect(synced?.hardware?.path).toBe(path)
     expect((await phone.engine.hardware.trezorStatus()).available).toBe(false)
   })

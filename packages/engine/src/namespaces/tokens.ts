@@ -218,6 +218,32 @@ export class TokensService {
     return view
   }
 
+  /** The user-added tokens themselves. Sync reads these as the §6 "custom tokens" family. */
+  async customList(): Promise<CustomToken[]> {
+    return this.custom()
+  }
+
+  /**
+   * A custom token a paired device sent.
+   *
+   * Unlike `addCustom` it does not ask the chain: the record may arrive while
+   * the device is offline or on a chain it has no RPC for, and the peer's word
+   * is all there is either way. §6 does not trust a paired device for token
+   * identity, so sync records the arrival as unconfirmed and keeps it out of
+   * the firewall's "known token" map until the user confirms it here.
+   */
+  async addSynced(input: { chainId: number; address: string; name: string; symbol: string; decimals: number }): Promise<void> {
+    if (!isAddress(input.address)) throw new EngineError('invalid_argument', 'not an address')
+    const address = getAddress(input.address)
+    const custom = await this.custom()
+    const k = key(input.chainId, address)
+    const next = custom.filter((c) => key(c.chainId, c.address) !== k)
+    next.push({ chainId: input.chainId, address, name: label(input.name, 48) || address.slice(0, 10), symbol: label(input.symbol, 12) || '???', decimals: input.decimals, source: 'user' })
+    await this.customTokens.set(CUSTOM_ID, next)
+    this.lists.delete(input.chainId)
+    this.bus.emit({ type: 'tokens.changed', chainId: input.chainId })
+  }
+
   async removeCustom(chainId: number, address: string): Promise<void> {
     const custom = await this.custom()
     const k = key(chainId, address)
