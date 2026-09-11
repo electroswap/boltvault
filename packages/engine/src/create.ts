@@ -6,7 +6,7 @@
 import { fromHex, type Argon2idParams } from '@boltvault/core'
 import type { HidProvider, LedgerTransportProvider, TrezorConnectLike } from '@boltvault/hardware'
 import type { WalletKitLike } from '@boltvault/connect'
-import { ElectroSwapClient } from '@boltvault/electroswap'
+import { ElectroSwapClient, fetchContractFacts } from '@boltvault/electroswap'
 import { isElectroneumChainId } from '@boltvault/chains'
 import type { Platform } from '@boltvault/platform'
 import type { ApprovalIntent } from '@boltvault/protocol'
@@ -320,6 +320,23 @@ export function createEngine(deps: EngineDeps): Engine {
     settings,
     activity,
     addressBook: () => contacts.referenceAddresses(),
+    /*
+      The API first for `NEW_CONTRACT`'s two facts (§3.4). It answers from a
+      cache shared by every caller, so the same router is not looked up once per
+      wallet, and it is the same answer the web interface gets.
+
+      Only for the chains it serves: the `Chain` enum has Electroneum and its
+      testnet and nothing else, so asking about Ethereum would be a validation
+      error rather than an answer. Null here means "not asked" or "did not
+      know", and the provider falls through to the explorer — which is also
+      what happens for a build with no API at all. `electroswap` is built
+      further down; the arrow only runs once a sheet is being assessed.
+    */
+    contractFacts: async (chainId, address) => {
+      if (!electroswap || !isElectroneumChainId(chainId)) return null
+      const facts = await fetchContractFacts(electroswap, chainId, address, deps.platform.now())
+      return facts ? { deployedAt: facts.deployedAt, verified: facts.verified } : null
+    },
     tokenMetadata: (chainId, address) => tokens.metadata(chainId, address),
     watchAsset: (i) =>
       tokens.addCustom({

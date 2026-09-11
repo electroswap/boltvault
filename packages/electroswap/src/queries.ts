@@ -32,6 +32,16 @@ export const PRICE_HISTORY = `query PriceHistory($address: String, $chain: Chain
  */
 export const WALLET_ACTIVITY = `query WalletActivity($owner: String!, $chains: [Chain!], $page: Int, $pageSize: Int) { portfolios(ownerAddresses: [$owner]) { assetActivities(chains: $chains, page: $page, pageSize: $pageSize) { id timestamp type chain addresses transaction { blockNumber hash from to status } details { __typename ... on TransactionDetails { type hash transactionStatus assetChanges { __typename ... on TokenTransfer { tokenStandard sender recipient quantity direction asset { address symbol decimals standard } } ... on NftTransfer { nftStandard sender recipient direction asset { tokenId name collection { nftContracts { address } } } } } } } } } }`
 
+/**
+ * Verification and deployment facts for any address (§3.4's `NEW_CONTRACT`).
+ *
+ * `deployedAt` is an absolute instant in Unix SECONDS, deliberately — an age
+ * would be wrong for as long as it was cached, and wrong at exactly the
+ * boundary the rule asks about. Each fact is nullable and null means "nobody
+ * could tell us", never "no".
+ */
+export const CONTRACT_FACTS = `query ContractFacts($chain: Chain!, $address: String!) { contractFacts(chain: $chain, address: $address) { address hasCode verified deployedAt } }`
+
 export const TOKEN_DETAIL = `query TokenDetail($address: String, $chain: Chain) { token(address: $address, chain: $chain) { id address symbol name decimals standard ${MARKET} sparkline: market(currency: USD) { priceHistory(duration: DAY) { timestamp value } } project { description homepageUrl twitterUrl telegramUrl safetyLevel isSpam logoUrl } } }`
 
 const COLLECTION = `id collectionId name description isVerified numAssets image { url } bannerImage { url } nftContracts { address standard name symbol totalSupply } listingFees { payoutAddress basisPoints } markets(currencies: [ETN]) { floorPrice { value } totalVolume { value } volume(duration: DAY) { value } owners listings { value } percentListed { value } }`
