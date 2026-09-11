@@ -4,7 +4,7 @@
  * the MAIN-world provider, relays page ⇄ service-worker traffic over a Port
  * that is opened only when the page first talks to the wallet.
  */
-import { CONFIG_EVENT, mintNonce, PROVIDER_PORT_NAME, startBridge, type BridgePort, type BridgeWindow } from '@boltvault/protocol'
+import { CONFIG_EVENT, hasOpaqueOrigin, mintNonce, PROVIDER_PORT_NAME, startBridge, type BridgePort, type BridgeWindow } from '@boltvault/protocol'
 import { defineContentScript } from '#imports'
 
 export default defineContentScript({
@@ -13,6 +13,9 @@ export default defineContentScript({
   allFrames: true,
   matchAboutBlank: false,
   main() {
+    // Sandboxed iframes, about:blank and PDFs have an opaque origin. §3.6 denies
+    // them: the Port sender URL would key the session to the embedding page.
+    if (hasOpaqueOrigin(window)) return
     const connect = (): BridgePort => {
       const port = browser.runtime.connect({ name: PROVIDER_PORT_NAME })
       return {

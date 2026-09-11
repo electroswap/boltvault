@@ -68,6 +68,9 @@ export class ProviderRpcError extends Error {
   }
 }
 
+/** Every method a dApp may pull off the provider; bound in the constructor (§3.5). */
+const BOUND_METHODS = ['request', 'send', 'sendAsync', 'enable', 'isConnected', 'on', 'once', 'removeListener', 'off', 'removeAllListeners', 'listenerCount', 'applyConfig', 'prime', 'primeOnce'] as const
+
 type Listener = (...args: unknown[]) => void
 
 class Emitter {
@@ -192,6 +195,27 @@ export class BoltVaultProvider extends Emitter {
       pending: new Map(),
     }
     this.#transport.onMessage((m) => this.receive(m))
+    this.#bindPublicMethods()
+  }
+
+  /**
+   * §3.5 asks for the methods to be bound. `Object.freeze` does not do that, and
+   * dApps really do write `const { request } = window.ethereum` — which, with
+   * #private state, throws rather than merely misbehaving. Own, non-configurable
+   * properties shadow the prototype and survive the freeze.
+   */
+  #bindPublicMethods(): void {
+    const self = this as unknown as Record<string, unknown>
+    for (const name of BOUND_METHODS) {
+      const fn = self[name]
+      if (typeof fn !== 'function') continue
+      Object.defineProperty(this, name, {
+        value: (fn as (...a: unknown[]) => unknown).bind(this),
+        writable: false,
+        enumerable: false,
+        configurable: false,
+      })
+    }
   }
 
   /** Settings › "Pretend to be MetaMask" — only legacy sniffers care (§4.5). */
@@ -356,12 +380,15 @@ export class BoltVaultProvider extends Emitter {
       }
       case 'connect': {
         const payload = m.payload as { chainId?: string }
-        if (payload?.chainId) {
-          this.#state.chainId = payload.chainId
-          this.#state.networkVersion = String(parseInt(payload.chainId, 16))
-        }
+        const chainId = typeof payload?.chainId === 'string' && payload.chainId.length > 0 ? payload.chainId : this.#state.chainId
+        // EIP-1193 says `connect` carries a chain id, and wagmi and viem both call
+        // parseInt on it. Emitting null breaks their handlers, so stay quiet until
+        // we actually know the chain (§4.3).
+        if (chainId === null) break
+        this.#state.chainId = chainId
+        this.#state.networkVersion = String(parseInt(chainId, 16))
         this.#state.connected = true
-        this.emit('connect', { chainId: this.#state.chainId })
+        this.emit('connect', { chainId })
         break
       }
       case 'disconnect': {
@@ -501,10 +528,11 @@ export function installProvider(config: ProviderConfig): InstallResult {
 /** A `window.postMessage` transport bound to the per-load channel nonce. */
 export function windowTransport(win: { postMessage(message: unknown, targetOrigin: string): void; addEventListener(type: string, listener: (ev: { source: unknown; origin: string; data: unknown }) => void): void; location: { origin: string } }, channel: string): PageTransport {
   return {
-    post: (message) => win.postMessage(message, win.location.origin === 'null' ? '*' : win.location.origin),
+    post: (message) => win.postMessage(message, win.location.origin),
     onMessage: (listener) => {
       win.addEventListener('message', (ev) => {
         if (ev.source !== win) return
+        if (ev.origin !== win.location.origin) return
         const d = ev.data as { target?: unknown } | null
         if (!d || d.target !== CONTENT_TARGET) return
         if (isInpageMessage(ev.data, channel)) listener(ev.data)

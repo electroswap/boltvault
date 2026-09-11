@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { startBridge, type BridgePort } from '../src/bridge'
+import { hasOpaqueOrigin, startBridge, type BridgePort } from '../src/bridge'
 import { installProvider, windowTransport, type WindowLike } from '../src/page-provider'
 import { CONTENT_TARGET, INPAGE_TARGET, type InpageMessage, type ProviderPortMessage } from '../src/wire'
 
@@ -295,5 +295,95 @@ describe('a page that never touches the wallet costs nothing', () => {
     expect(w.ports).toHaveLength(0)
     await provider.request({ method: 'eth_chainId' })
     expect(w.ports).toHaveLength(1)
+  })
+})
+
+const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0))
+
+describe('the EIP-1193 contract a dApp actually relies on', () => {
+  it('binds its methods, so destructuring request off window.ethereum works', async () => {
+    const w = wire((m) => (m.method === 'eth_chainId' ? ok(m.id, '0xcb2e') : ok(m.id, [])))
+    w.startIsolated()
+    await w.installMain()
+    const eth = w.win.ethereum as { request: (a: { method: string }) => Promise<unknown>; isConnected: () => boolean; on: (e: string, f: () => void) => unknown }
+    // `const { request } = window.ethereum` is real dApp code. With #private state
+    // an unbound method throws rather than merely losing `this`.
+    const { request, isConnected, on } = eth
+    expect(await request({ method: 'eth_chainId' })).toBe('0xcb2e')
+    expect(typeof isConnected()).toBe('boolean')
+    expect(() => on('accountsChanged', () => undefined)).not.toThrow()
+  })
+
+  it('never emits connect with a null chain id, and does emit it with a real one', async () => {
+    const w = wire((m) => ok(m.id, []))
+    w.startIsolated()
+    const { provider } = await w.installMain()
+    await provider.request({ method: 'eth_accounts' })
+    const seen: Array<{ chainId: unknown }> = []
+    provider.on('connect', (c) => seen.push(c as { chainId: unknown }))
+    await tick()
+    // A payload with no chain id must not become `{ chainId: null }` — wagmi and
+    // viem both parseInt it.
+    w.ports[0]?.emit({ kind: 'event', event: 'connect', payload: {} })
+    await tick()
+    expect(seen.every((e) => typeof e.chainId === 'string')).toBe(true)
+    w.ports[0]?.emit({ kind: 'event', event: 'connect', payload: { chainId: '0x1' } })
+    await tick()
+    expect(seen.at(-1)).toEqual({ chainId: '0x1' })
+    expect(provider.isConnected()).toBe(true)
+  })
+
+  it('turns a disconnect event into isConnected() false and a ProviderRpcError', async () => {
+    const w = wire((m) => ok(m.id, []))
+    w.startIsolated()
+    const { provider } = await w.installMain()
+    await provider.request({ method: 'eth_accounts' })
+    await tick()
+    w.ports[0]?.emit({ kind: 'event', event: 'connect', payload: { chainId: '0xcb2e' } })
+    await tick()
+    expect(provider.isConnected()).toBe(true)
+    const errors: Array<{ code: number }> = []
+    provider.on('disconnect', (e) => errors.push(e as { code: number }))
+    w.ports[0]?.emit({ kind: 'event', event: 'disconnect', payload: { code: 4900, message: 'BoltVault disconnected this site.' } })
+    await tick()
+    expect(provider.isConnected()).toBe(false)
+    expect(errors.at(-1)).toMatchObject({ code: 4900, name: 'ProviderRpcError' })
+  })
+})
+
+/*
+  A sandboxed iframe has an opaque origin. Its Port sender URL is the embedding
+  document's, so serving it hands the frame the parent page's wallet session
+  (§3.6). Neither world may run there.
+*/
+describe('sandboxed frames get no provider', () => {
+  it('recognises every shape an opaque origin serialises to', () => {
+    expect(hasOpaqueOrigin({ location: { origin: 'null' } })).toBe(true)
+    expect(hasOpaqueOrigin({ location: { origin: '' } })).toBe(true)
+    expect(hasOpaqueOrigin({ location: { origin: 'https://dapp.example' } })).toBe(false)
+  })
+
+  it('announces no channel and opens no Port in an opaque origin', async () => {
+    const win = fakeWindow('null')
+    let connects = 0
+    const bridge = startBridge({
+      win: win as never,
+      nonce: 'abc123',
+      connect: () => {
+        connects += 1
+        return fakePort(() => null)
+      },
+      reconnectDelayMs: 0,
+    })
+    let announced = 0
+    win.addEventListener('bv:channel', () => {
+      announced += 1
+    })
+    win.dispatchEvent(new win.CustomEvent('bv:channel-request'))
+    await tick()
+    expect(announced).toBe(0)
+    expect(connects).toBe(0)
+    expect(win.ethereum).toBeUndefined()
+    bridge.stop()
   })
 })

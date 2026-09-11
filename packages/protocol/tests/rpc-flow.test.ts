@@ -182,12 +182,23 @@ describe('chains', () => {
     await req(h, A, 'eth_requestAccounts')
     expect(h.intents[0]).toMatchObject({ kind: 'connect', chainId: 1 })
   })
-  it('revoking permissions disconnects and emits an empty accountsChanged', async () => {
+  it('revoking permissions empties the accounts and emits a real disconnect', async () => {
     const h = harness()
     await req(h, A, 'eth_requestAccounts')
     await req(h, A, 'wallet_revokePermissions', [{ eth_accounts: {} }])
     expect(await req(h, A, 'eth_accounts')).toEqual([])
-    expect(h.events.at(-1)).toMatchObject({ origin: A, event: { event: 'accountsChanged', payload: [] } })
+    const last2 = h.events.slice(-2)
+    expect(last2[0]).toMatchObject({ origin: A, event: { event: 'accountsChanged', payload: [] } })
+    expect(last2[1]).toMatchObject({ origin: A, event: { event: 'disconnect', payload: { code: 4900 } } })
+  })
+
+  it('disconnecting a site emits accountsChanged and disconnect, in that order', async () => {
+    const h = harness()
+    await req(h, A, 'eth_requestAccounts')
+    h.events.length = 0
+    await h.flow.disconnected(A)
+    expect(h.events.map((e) => e.event.event)).toEqual(['accountsChanged', 'disconnect'])
+    expect(h.events[1]?.event).toMatchObject({ event: 'disconnect', payload: { code: 4900 } })
   })
 })
 

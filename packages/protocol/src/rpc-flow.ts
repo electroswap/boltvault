@@ -295,7 +295,10 @@ export class RpcFlow {
     if (method === 'wallet_revokePermissions') {
       const was = await this.ctx.session(origin)
       await this.ctx.sites.disconnect(origin)
-      if (was) this.ctx.emit(origin, { event: 'accountsChanged', payload: [] })
+      if (was) {
+        this.ctx.emit(origin, { event: 'accountsChanged', payload: [] })
+        this.ctx.emit(origin, { event: 'disconnect', payload: { code: RPC.DISCONNECTED, message: 'This site revoked its own permissions.' } })
+      }
       return null
     }
     const p = param(params, 0)
@@ -449,6 +452,9 @@ export class RpcFlow {
   /** Called by the engine when the user disconnects a site from Settings. */
   async disconnected(origin: string): Promise<void> {
     this.ctx.emit(origin, { event: 'accountsChanged', payload: [] })
+    // An empty accounts array alone leaves `isConnected()` true and every dApp that
+    // listens for `disconnect` hears nothing (§4.3). Emit the EIP-1193 event too.
+    this.ctx.emit(origin, { event: 'disconnect', payload: { code: RPC.DISCONNECTED, message: 'BoltVault disconnected this site.' } })
   }
 
   /** Called by the engine when the user changes a site's chain from Settings. */

@@ -4,7 +4,7 @@
  * CustomEvent (either ordering) and installs `window.ethereum` + EIP-6963
  * before any page script runs.
  */
-import { CHANNEL_EVENT, CHANNEL_REQUEST_EVENT, installProvider, windowTransport, type WindowLike } from '@boltvault/protocol'
+import { CHANNEL_EVENT, CHANNEL_REQUEST_EVENT, hasOpaqueOrigin, installProvider, windowTransport, type WindowLike } from '@boltvault/protocol'
 import { defineContentScript } from '#imports'
 import { BOLTVAULT_ICON, BOLTVAULT_NAME, BOLTVAULT_PROVIDER_UUID, BOLTVAULT_RDNS } from '../src/identity'
 
@@ -15,6 +15,9 @@ export default defineContentScript({
   matchAboutBlank: false,
   world: 'MAIN',
   main() {
+    // No provider in an opaque origin (§3.6) — the isolated script refuses too,
+    // but the MAIN world must not depend on that to stay safe.
+    if (hasOpaqueOrigin(window)) return
     let installed = false
     const install = (nonce: string): void => {
       if (installed || !nonce) return

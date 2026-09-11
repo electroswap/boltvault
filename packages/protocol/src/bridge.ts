@@ -40,9 +40,22 @@ export interface Bridge {
   stop(): void
 }
 
+/**
+ * A sandboxed iframe, `about:blank` or a PDF viewer has an opaque origin, which
+ * serialises as the string 'null'. §3.6 denies those outright: we cannot key a
+ * session to them, and the frame's Port sender URL would key it to the embedding
+ * page instead — handing a sandboxed frame the parent page's wallet session.
+ */
+export function hasOpaqueOrigin(win: { location: { origin: string } }): boolean {
+  return win.location.origin === 'null' || win.location.origin === ''
+}
+
 export function startBridge(deps: BridgeDeps): Bridge {
   const { win, nonce } = deps
-  const targetOrigin = win.location.origin === 'null' ? '*' : win.location.origin
+  // Never speak to an opaque origin (§3.6). No nonce is announced, so the
+  // MAIN-world script never installs a provider in this frame.
+  if (hasOpaqueOrigin(win)) return { nonce, stop: () => undefined }
+  const targetOrigin = win.location.origin
   const pending = new Map<number, ProviderPortMessage & { kind: 'request' }>()
   let port: BridgePort | null = null
   let stopped = false
@@ -89,7 +102,7 @@ export function startBridge(deps: BridgeDeps): Bridge {
   win.addEventListener('message', (ev) => {
     if (stopped) return
     if (ev.source !== win) return
-    if (ev.origin !== win.location.origin && win.location.origin !== 'null') return
+    if (ev.origin !== win.location.origin) return
     if (!isInpageRequest(ev.data, nonce)) return
     const req: ProviderPortMessage & { kind: 'request' } = { kind: 'request', id: ev.data.id, method: ev.data.method, session: nonce, ...(ev.data.params === undefined ? {} : { params: ev.data.params }) }
     pending.set(req.id, req)

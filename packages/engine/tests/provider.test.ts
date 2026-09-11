@@ -263,10 +263,13 @@ describe('provider service', () => {
     expect(s1).toBe(s2)
   })
 
-  it('disconnecting from Settings tells the site', async () => {
+  it('disconnecting from Settings tells the site, with a real disconnect event', async () => {
     const a = dapp(engine, ORIGIN_A)
     await engine.engine.sites.disconnect({ origin: ORIGIN_A })
-    expect(a.events.at(-1)).toEqual({ event: 'accountsChanged', payload: [] })
+    const last2 = a.events.slice(-2)
+    expect(last2[0]).toEqual({ event: 'accountsChanged', payload: [] })
+    // An empty accounts array alone leaves isConnected() true for every dApp (§4.3).
+    expect(last2[1]).toMatchObject({ event: 'disconnect', payload: { code: 4900 } })
     expect(await a.request('eth_accounts')).toEqual([])
   })
 
