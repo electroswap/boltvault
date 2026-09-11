@@ -105,7 +105,18 @@ export class HardwareService {
   private async app(preferred?: string): Promise<{ app: LedgerEthApp; deviceId: string; model: string }> {
     if (!this.ledger) throw new EngineError('not_implemented', 'Ledger is not available in this body.')
     const devices = await this.ledger.list()
-    const device = (preferred ? devices.find((d) => d.id === preferred) : undefined) ?? devices[0]
+    /*
+      A named device is the only acceptable answer to a request for that
+      device. This used to fall through to `devices[0]`, so "the Ledger this
+      account came from is not connected" quietly became "sign on whichever
+      Ledger is plugged in" — and since the device id is only
+      vendor:product:name, two units of the same model are indistinguishable
+      anyway. A second device at the same derivation path returns a perfectly
+      valid signature from a different seed.
+    */
+    const device = preferred ? devices.find((d) => d.id === preferred) : devices[0]
+    if (!device && preferred)
+      throw new EngineError('not_found', 'That Ledger is not connected. Connect the device this account was added from.')
     if (!device) throw new EngineError('not_found', this.ledger.kind === 'ble' ? 'No Ledger is in range. Turn it on, unlock it and open the Ethereum app.' : 'No Ledger is connected. Plug it in, unlock it and open the Ethereum app.')
     const transport = await this.ledger.open(device.id)
     return { app: new LedgerEthApp(transport), deviceId: device.id, model: transport.model }
@@ -331,6 +342,18 @@ export class HardwareService {
       */
       const readiness = await app.ready()
       if (readiness.state !== 'ready') throw new EngineError('invalid_argument', readiness.message)
+      /*
+        Ask the device which address it holds at this path, before asking it to
+        sign. The same check already existed as "verify on device" on the
+        Receive screen, where it needs a button press; without `verify` it is
+        one APDU, shows nothing, and needs no one to be looking. A device
+        holding a different seed is caught here rather than after it has
+        produced a signature for an account the user never chose.
+      */
+      const onDevice = await app.getAddress(account.hardware.path).catch(() => null)
+      if (!onDevice) throw new EngineError('internal', 'The device did not say which account it holds.')
+      if (onDevice.address.toLowerCase() !== account.address.toLowerCase())
+        throw new EngineError('internal', 'This Ledger holds a different account at that path. Connect the device this account was added from.')
       return ledgerAccount({ address: account.address as `0x${string}`, path: account.hardware.path, app })
     }
     if (account.kind === 'trezor') {

@@ -106,7 +106,7 @@ describe('a Ledger account through the engine', () => {
   it('refuses to broadcast a signature that recovers to a different account', async () => {
     const before = rpc.state.transactions.size
     const impostor = '0x00000000000000000000000000000000000000ff'
-    const view = await engine.engine.accounts.addHardware({ kind: 'ledger', address: impostor, path: pathFor('ledgerLive', 9), deviceId: 'fake', label: 'Wrong device' })
+    const view = await engine.engine.accounts.addHardware({ kind: 'ledger', address: impostor, path: pathFor('live', 9), deviceId: 'fake', label: 'Wrong device' })
     rpc.state.balances.set(impostor.toLowerCase(), 5n * 10n ** 18n)
     const { requestId } = await engine.engine.send.submit({ accountId: view.id, chainId: TESTNET, token: 'native', to: FRIEND, amount: '1' })
     await approvalById(engine, requestId)
