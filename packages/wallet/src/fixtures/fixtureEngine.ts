@@ -8,7 +8,13 @@ import { createEngine, type ActivityEntry, type AllowanceView, type Engine, type
 import { createMemoryPlatform } from '@boltvault/platform/memory'
 import { z } from 'zod'
 
-export type FixtureScenario = 'fresh' | 'locked' | 'unlocked' | 'funded' | 'connect' | 'sign' | 'keystone'
+/**
+ * `empty` is a wallet that exists and holds nothing — which is what every wallet
+ * is for the first few minutes of its life, and had no fixture at all. It is
+ * `funded` with the balances taken out, so the difference between the two shots
+ * is exactly the money.
+ */
+export type FixtureScenario = 'fresh' | 'locked' | 'unlocked' | 'funded' | 'empty' | 'connect' | 'sign' | 'keystone'
 
 const FIXED_NOW = 1_757_000_000_000
 const PASSWORD = 'fixture password'
@@ -61,7 +67,7 @@ export async function createFixtureEngine(scenario: FixtureScenario, options: Fi
   if (scenario !== 'fresh') {
     const { seedId, accounts } = await engine.engine.vault.import({ mnemonic: MNEMONIC, password: PASSWORD })
     const account = accounts[0]
-    if (scenario === 'funded' || scenario === 'connect' || scenario === 'sign' || scenario === 'keystone') {
+    if (scenario === 'funded' || scenario === 'empty' || scenario === 'connect' || scenario === 'sign' || scenario === 'keystone') {
       // A mature account: the backup quiz has been passed, so no gate plate on Home.
       const words = MNEMONIC.split(' ')
       const quiz = await engine.engine.vault.backupQuiz({ seedId })
@@ -106,10 +112,15 @@ export async function createFixtureEngine(scenario: FixtureScenario, options: Fi
     }
     if (scenario === 'locked') await engine.engine.vault.lock()
   }
-  if (scenario === 'funded' || scenario === 'keystone') {
+  if (scenario === 'funded' || scenario === 'empty' || scenario === 'keystone') {
     const accountId = (await engine.engine.accounts.list())[0]?.id ?? 'fixture'
     const address = (await engine.engine.accounts.list())[0]?.address ?? '0x0000000000000000000000000000000000000000'
-    const snap = fixtureSnapshot(accountId)
+    const full = fixtureSnapshot(accountId)
+    // Same wallet, same tokens, no balances: raw zero, nothing priced, no day.
+    const snap =
+      scenario === 'empty'
+        ? { ...full, total: 0, change24h: null, unpricedCount: 0, rows: full.rows.map((r) => ({ ...r, raw: '0', quantity: '0', fiat: null, change24h: null })) }
+        : full
     const tokens: TokenView[] = snap.rows.map((r) => ({ chainId: r.chainId, address: r.address, symbol: r.symbol, name: r.name, decimals: r.decimals, logoUri: r.logoUri, source: r.address === 'native' ? 'native' : 'list', pinned: r.pinned, hidden: false, tags: [] }))
     const activity: ActivityEntry[] = [
       { id: 'fx-1', hash: `0x${'a1'.repeat(32)}`, chainId: 52014, accountId, to: '0x2222222222222222222222222222222222222222', value: '1000000000000000000000', nonce: 3, submittedAt: FIXED_NOW - 3_600_000, origin: 'internal:send', category: 'SEND', statements: ['Send 1,000 ETN to 0x2222…2222'], riskCodes: ['RECIPIENT_FIRST_TIME'], status: 'confirmed', blockNumber: 15_212_100, token: 'native' },
@@ -366,7 +377,7 @@ export async function createFixtureEngine(scenario: FixtureScenario, options: Fi
   return engine
 }
 
-export const FIXTURE_SCENARIOS: readonly FixtureScenario[] = ['fresh', 'locked', 'unlocked', 'funded', 'connect', 'sign', 'keystone']
+export const FIXTURE_SCENARIOS: readonly FixtureScenario[] = ['fresh', 'locked', 'unlocked', 'funded', 'empty', 'connect', 'sign', 'keystone']
 
 /** A deterministic BOLT price series for the chart baselines: a gentle climb with two dips, ending at $0.19. */
 function fixturePrices(duration: '1D' | '1W' | '1M' | '1Y'): { chainId: number; address: string; duration: '1D' | '1W' | '1M' | '1Y'; points: Array<{ t: number; v: number }>; high: number | null; low: number | null } {

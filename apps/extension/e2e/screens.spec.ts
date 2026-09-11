@@ -26,6 +26,9 @@ const CASES: Array<{ screen: string; scenario: string; sizes: Array<keyof typeof
   { screen: 'home', scenario: 'fresh', sizes: ['popup', 'mobile'] },
   { screen: 'home', scenario: 'locked', sizes: ['popup'] },
   { screen: 'home', scenario: 'funded', sizes: ['popup', 'tab', 'mobile'] },
+  // A wallet that exists and holds nothing — the state every wallet is in for
+  // its first few minutes, and the only one that shows the funding notice.
+  { screen: 'home', scenario: 'empty', sizes: ['popup', 'mobile'] },
   { screen: 'swap', scenario: 'funded', sizes: ['popup', 'mobile'] },
   // The first-swap coach overlay: an account that has not swapped and has not dismissed it.
   { screen: 'swap', scenario: 'unlocked', sizes: ['popup'] },

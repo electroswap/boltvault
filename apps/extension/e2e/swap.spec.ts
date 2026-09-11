@@ -68,11 +68,24 @@ test('quote with the fee stack, then approve → permit → swap through the she
     if (fee !== 3000) throw new Error('no pool')
     return encodeAbiParameters(parseAbiParameters('uint256, uint160, uint32, uint256'), [amountIn / 2n, 0n, 0, 90_000n])
   })
-  for (const a of [MIXED, V2_ROUTER, FOT]) {
+  for (const a of [MIXED, V2_ROUTER]) {
     rpc.state.calls.set(a.toLowerCase(), () => {
       throw new Error('no')
     })
   }
+  /*
+    The fee-on-transfer detector answers, and answers "clean".
+
+    It used to be in the list above that throws, from when a probe that could
+    not answer read as "no tax". `ae85886` made that distinction real — a
+    detector that cannot answer now blocks the swap, which is the right call for
+    a token whose trick is charging on transfer — so a throwing detector stopped
+    testing a clean swap and started testing the refusal. FIX is a plain ERC-20
+    here; it says so.
+  */
+  rpc.state.calls.set(FOT.toLowerCase(), () =>
+    encodeAbiParameters(parseAbiParameters('(uint256,uint256,bool,bool,bool)'), [[0n, 0n, false, false, false]]),
+  )
   try {
     const { address, tab } = await createVault(ext)
     rpc.state.balances.set(address.toLowerCase(), 25n * 10n ** 18n)

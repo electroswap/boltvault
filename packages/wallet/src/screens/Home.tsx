@@ -227,8 +227,40 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     )
   }
 
+  /*
+    Nothing in it at all.
+
+    Every row the snapshot carries is a balance, so "unfunded" is simply no row
+    with anything in it — which is different from a zero TOTAL, because a wallet
+    holding an unpriced token totals nothing and is not empty. It waits for a
+    real snapshot: `null` is "we have not looked yet", and telling somebody
+    their wallet is empty before reading the chain is a lie with a 50% chance.
+    A watch-only account is excluded — you cannot fund an address you do not
+    hold the key to from here. And an EMPTY row list is not an empty wallet:
+    the snapshot always carries the native coin, so no rows at all means the
+    read failed, and a failed read must not be reported as "you have nothing".
+  */
+  const unfunded = !!portfolio.snapshot && active?.kind !== 'watch' && portfolio.snapshot.rows.length > 0 && portfolio.snapshot.rows.every((r) => BigInt(r.raw || '0') === 0n)
+
   const rotor: RotorItem[] = []
   if (notice) rotor.push({ id: 'notice', icon: 'warn', tone: paint.ember, text: notice, testID: 'home-notice' })
+  /*
+    First in the rotor, because with an empty wallet there is nothing else it
+    could be showing that matters more — and because this is the advice the
+    onboarding's last page used to give on its way out: ETN from an exchange
+    that supports the smart chain, not from the old app.
+  */
+  if (unfunded) {
+    rotor.push({
+      id: 'fund',
+      icon: 'receive',
+      tone: paint.arc,
+      text: t({ id: 'home.acc.fund', message: 'Add funds to get started' }),
+      sub: t({ id: 'home.acc.fund.sub', message: 'ETN from an exchange, or bridge USDC in' }),
+      onPress: () => router.navigate('receive'),
+      testID: 'accessory-fund',
+    })
+  }
   if (bridgeInFlight) rotor.push({ id: 'bridge', icon: 'bridge', tone: paint.arc, text: t({ id: 'home.acc.bridge', message: '{s} arriving on {c} in about {m} min', values: { s: bridgeInFlight.symbol, c: scope.chains.find((c) => c.chainId === bridgeInFlight.toChainId)?.name ?? `chain ${bridgeInFlight.toChainId}`, m: bridgeInFlight.toChainId === 1 || bridgeInFlight.fromChainId === 1 ? 20 : 5 } }), onPress: () => router.navigate('bridge'), testID: 'accessory-bridge' })
   if (pendingTx > 0) rotor.push({ id: 'pending', icon: 'clock', tone: paint.arc, text: t({ id: 'home.acc.pending', message: '{n} transaction pending', values: { n: pendingTx } }), onPress: () => router.setTab('activity'), testID: 'accessory-pending' })
   /*

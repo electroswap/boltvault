@@ -10,7 +10,7 @@
 import { t } from '../../i18n'
 
 export type OnboardingPath = 'create' | 'import' | 'watch'
-export type Step = 'intro' | 'blocked' | 'welcome' | 'words' | 'quiz' | 'password' | 'import' | 'preview' | 'watch' | 'passkey' | 'done'
+export type Step = 'intro' | 'blocked' | 'welcome' | 'words' | 'quiz' | 'password' | 'import' | 'preview' | 'watch' | 'passkey'
 
 export const MIN_PASSWORD = 12
 /**
@@ -104,13 +104,15 @@ export function clampEntryStep(step: string | undefined): Step | null {
  * Where this step sits in its path, for the progress indicator.
  *
  * Path-aware because the paths are different lengths, and a progress bar that
- * lies is worse than none: creating is four steps, importing three, watching
- * two. The intro is not counted — it is not part of the work.
+ * lies is worse than none: creating is three steps, importing three, watching
+ * two. The intro is not counted — it is not part of the work, and neither was
+ * the "this is Electroneum" page that used to close every path: the bar filled
+ * on a screen whose only control dismissed it.
  */
 const PATH_STEPS: Record<OnboardingPath, Step[]> = {
-  create: ['words', 'quiz', 'password', 'done'],
-  import: ['import', 'preview', 'password', 'done'],
-  watch: ['watch', 'password', 'done'],
+  create: ['words', 'quiz', 'password'],
+  import: ['import', 'preview', 'password'],
+  watch: ['watch', 'password'],
 }
 
 export function progressFor(path: OnboardingPath, step: Step): { now: number; max: number } | null {

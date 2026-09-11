@@ -81,7 +81,8 @@ export function FeeScheduleSheet({ open, onClose, accountId, chainId, onGetBolt,
                 <Body tone="ember" size="caption" testID="fee-next">
                   {t({ id: 'fee.next.v2', message: '{n} more BOLT-eq and every swap costs {p} instead of {c}.', values: { n: formatBolt((BigInt(tier.nextTierAt) - BigInt(tier.score)).toString()), p: formatPct(tier.nextTierBips), c: formatPct(tier.bips) } })}
                 </Body>
-                {onGetBolt ? <Key label={t({ id: 'fee.getBolt', message: 'Get BOLT' })} kind="secondary" size="compact" onPress={onGetBolt} testID="fee-get-bolt" /> : null}
+                {/* Primary: it is the one thing this sheet is asking you to do. */}
+                {onGetBolt ? <Key label={t({ id: 'fee.getBolt', message: 'Get BOLT' })} size="compact" onPress={onGetBolt} testID="fee-get-bolt" /> : null}
               </Column>
             ) : (
               // At the top the bar is full and the right-hand label is the news;

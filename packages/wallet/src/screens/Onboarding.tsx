@@ -19,7 +19,7 @@
  * (`useSecretGuard`), which is the promise `packages/platform` had been making
  * on the product's behalf without anything implementing it.
  */
-import { Backdrop, Body, Column, EsWordmark, Icon, IconButton, Input, Key, Plate, Row, ScrollView, WordGrid, metrics, paint, useWindowDimensions } from '@boltvault/ui'
+import { Backdrop, Body, Column, EsWordmark, Icon, Input, Key, Plate, Row, ScrollView, WordGrid, metrics, paint, useWindowDimensions } from '@boltvault/ui'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
@@ -68,7 +68,6 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
   const [preview, setPreview] = useState<{ bip44: string[]; ledgerLive: string[] } | null>(null)
   const [watchAddress, setWatchAddress] = useState('')
   const [watchResolved, setWatchResolved] = useState<string | null>(null)
-  const [account, setAccount] = useState<string | null>(null)
   const [passkeysSupported, setPasskeysSupported] = useState(false)
   const [biometricsSupported, setBiometricsSupported] = useState(false)
 
@@ -167,7 +166,25 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
   /** The quiz is checked here because the seed does not exist yet; the engine checks it again at the end. */
   const quizOk = positions.length > 0 && positions.every((p) => (answers[p] ?? '').trim().toLowerCase() === mnemonic[p - 1])
 
-  const finish = (): Step => (passkeysSupported || biometricsSupported ? 'passkey' : 'done')
+  /**
+   * The end of onboarding: the passkey offer if this device has a factor, and
+   * otherwise the wallet itself.
+   *
+   * There used to be one more screen — "This is Electroneum Smart Chain
+   * (52014)", the address, and a key that said "Open my wallet" — which is a
+   * page whose entire job is to be dismissed. Owner: "remove the ... page at
+   * the end of onboarding, go straight to the home screen." Nothing on it is
+   * lost: the address is on Home under the account name and on Receive, and
+   * the "send ETN here, not from the old app" advice is the funding notice
+   * Home's rotor now carries while the wallet is empty.
+   */
+  const finish = (): void => {
+    if (passkeysSupported || biometricsSupported) {
+      go('passkey')
+      return
+    }
+    router.reset()
+  }
 
   const sealCreate = (): Promise<void> =>
     run(async () => {
@@ -177,16 +194,14 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
       if (!ok.ok) throw new Error(t({ id: 'quiz.wrong', message: 'Those words do not match your phrase. Check the numbers and try again.' }))
       setMnemonic([])
       setAnswers({})
-      setAccount(r.accounts[0]?.address ?? null)
-      go(finish())
+      finish()
     })
 
   const sealImport = (): Promise<void> =>
     run(async () => {
-      const r = await engine.vault.import({ mnemonic: phrase, password, ...(passphrase ? { passphrase } : {}) })
+      await engine.vault.import({ mnemonic: phrase, password, ...(passphrase ? { passphrase } : {}) })
       setPhrase('')
-      setAccount(r.accounts[0]?.address ?? null)
-      go(finish())
+      finish()
     })
 
   const sealWatch = (): Promise<void> =>
@@ -200,8 +215,7 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
       const address = watchResolved ?? watchAddress.trim()
       await engine.vault.createEmpty({ password })
       await engine.accounts.addWatch({ address, label: t({ id: 'watch.label', message: 'Watch address' }) })
-      setAccount(address)
-      go(finish())
+      finish()
     })
 
   /** A 0x address, or a name this chain can resolve. */
@@ -225,7 +239,7 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
       const keyHex = await host.deviceKey.ensure()
       // The password was set moments ago in this same flow and is still in hand.
       await engine.vault.enrolDevice({ keyId: host.deviceKey.id, keyHex, password })
-      go('done')
+      router.reset()
     })
 
   const enrolPasskey = (): Promise<void> =>
@@ -233,7 +247,7 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
       if (!host.passkeys) return
       const res = await host.passkeys.create({ userName: 'BoltVault', userIdHex: PASSKEY_USER_ID, rpName: 'BoltVault' })
       await engine.vault.enrolPasskey({ credentialId: res.credentialId, prfSecretHex: res.prfSecretHex, password })
-      go('done')
+      router.reset()
     })
 
   const inset = metrics.insetWide
@@ -429,26 +443,10 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
             {error ? <Body tone="burn" testID="ob-error">{error}</Body> : null}
             {passkeysSupported ? <Key label={t({ id: 'ob.passkey.yes', message: 'Add passkey' })} onPress={enrolPasskey} disabled={busy} testID="ob-passkey-add" /> : null}
             {biometricsSupported ? <Key label={t({ id: 'ob.biometric.yes', message: 'Turn on biometric unlock' })} onPress={enrolBiometrics} disabled={busy} testID="ob-biometric-add" /> : null}
-            <Key label={t({ id: 'ob.passkey.skip', message: 'Not now' })} kind="secondary" onPress={() => go('done')} testID="ob-passkey-skip" />
+            <Key label={t({ id: 'ob.passkey.skip', message: 'Not now' })} kind="secondary" onPress={() => router.reset()} testID="ob-passkey-skip" />
           </Column>
         ) : null}
 
-        {step === 'done' ? (
-          <Column gap="$4" testID="ob-done">
-            <Body size="title">{t({ id: 'ob.done.title', message: 'This is Electroneum Smart Chain (52014)' })}</Body>
-            <Body tone="mute">{t({ id: 'ob.done.body', message: 'Send ETN here from an exchange that supports the smart chain, or bridge USDC from Ethereum — you will need a little ETN for fees. Do not send from the old Electroneum app.' })}</Body>
-            {account ? (
-              <Plate gap="$2" testID="ob-done-address">
-                <Body tone="mute" size="caption">{t({ id: 'ob.done.your', message: 'Your first address' })}</Body>
-                <Row gap="$2" alignItems="center">
-                  <Body size="caption" flex={1} minWidth={0} numberOfLines={1}>{account}</Body>
-                  {host.copy ? <IconButton icon="copy" label={t({ id: 'copy', message: 'Copy' })} onPress={() => void host.copy?.(account)} testID="ob-done-copy" /> : null}
-                </Row>
-              </Plate>
-            ) : null}
-            <Key label={t({ id: 'ob.done.key', message: 'Open my wallet' })} onPress={() => router.reset()} testID="ob-open" />
-          </Column>
-        ) : null}
       </ScrollView>
       {/*
         Whose wallet this is, on every step but the intro — the same lock-up as

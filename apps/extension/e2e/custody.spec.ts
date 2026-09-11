@@ -38,7 +38,7 @@ test('create in the tab, lock and unlock from the popup, session survives a reop
     // The phrase this screen showed is a real BIP-39 phrase, not placeholder text.
     expect(words).toHaveLength(12)
     expect(words.every((w) => /^[a-z]+$/.test(w))).toBe(true)
-    await tab.getByTestId('ob-open').click()
+    // Onboarding lands on Home itself; there is no page in between to dismiss.
     await expect(tab.getByTestId('home')).toBeVisible()
     await expect(tab.getByTestId('backup-gate')).toHaveCount(0)
 

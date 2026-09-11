@@ -80,11 +80,14 @@ describe('clampEntryStep', () => {
 
 describe('progressFor', () => {
   it('counts each path by its own length', () => {
-    expect(progressFor('create', 'words')).toEqual({ now: 1, max: 4 })
-    expect(progressFor('create', 'password')).toEqual({ now: 3, max: 4 })
-    expect(progressFor('import', 'import')).toEqual({ now: 1, max: 4 })
-    expect(progressFor('watch', 'watch')).toEqual({ now: 1, max: 3 })
-    expect(progressFor('watch', 'done')).toEqual({ now: 3, max: 3 })
+    expect(progressFor('create', 'words')).toEqual({ now: 1, max: 3 })
+    expect(progressFor('create', 'password')).toEqual({ now: 3, max: 3 })
+    expect(progressFor('import', 'import')).toEqual({ now: 1, max: 3 })
+    expect(progressFor('watch', 'watch')).toEqual({ now: 1, max: 2 })
+    // The path ends on `password`: the "this is Electroneum" page that used to
+    // close every one of them is gone, and a bar that filled on a screen whose
+    // only control dismissed it was counting a step nobody takes.
+    expect(progressFor('watch', 'password')).toEqual({ now: 2, max: 2 })
   })
 
   it('does not count the intro or the passkey offer', () => {

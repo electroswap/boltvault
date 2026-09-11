@@ -40,7 +40,7 @@ async function appears(locator: ReturnType<Page['getByTestId']>, ms = 1_000): Pr
  * flag day across the suite.
  *
  * Bounded rather than `while (true)`: a flow that stops progressing should fail
- * as a timeout on `ob-done`, naming the step it got stuck on, not spin.
+ * as a timeout naming the step it got stuck on, not spin.
  */
 /**
  * Walk onboarding on an already-open tab, whatever order the steps come in, and
@@ -64,7 +64,9 @@ export async function walkOnboarding(tab: Page, password = E2E_PASSWORD): Promis
   const words: string[] = []
   let seen = ''
   for (let i = 0; i < 16; i++) {
-    if (await appears(tab.getByTestId('ob-done'), 500)) break
+    // Onboarding ends ON Home now — the "this is Electroneum" page it used to
+    // finish with, and the key that dismissed it, are gone.
+    if (await appears(tab.getByTestId('home'), 500)) break
 
     if (await appears(tab.getByTestId('ob-words'), 500)) {
       // Argon2id runs on the way in under the password-first order; be patient.
@@ -93,15 +95,15 @@ export async function walkOnboarding(tab: Page, password = E2E_PASSWORD): Promis
       await tab.getByTestId('ob-password-continue').click()
       /*
         Argon2id runs here under either order, so this is the long wait — but
-        wait for whatever comes NEXT, not for `ob-done`. Password-first lands on
-        `words`, and watching only for `ob-done` there burned the full timeout on
+        wait for whatever comes NEXT, not for the end. Password-first lands on
+        `words`, and watching only for the end there burned the full timeout on
         every run before continuing anyway.
       */
       await tab
         .getByTestId('ob-words')
         .or(tab.getByTestId('ob-quiz'))
         .or(tab.getByTestId('ob-passkey'))
-        .or(tab.getByTestId('ob-done'))
+        .or(tab.getByTestId('home'))
         .first()
         .waitFor({ state: 'visible', timeout: 30_000 })
         .catch(() => undefined)
@@ -115,7 +117,7 @@ export async function walkOnboarding(tab: Page, password = E2E_PASSWORD): Promis
     }
   }
 
-  await expect(tab.getByTestId('ob-done'), `onboarding stalled after "${seen || 'welcome'}"`).toBeVisible({ timeout: 30_000 })
+  await expect(tab.getByTestId('home'), `onboarding stalled after "${seen || 'welcome'}"`).toBeVisible({ timeout: 30_000 })
   return words
 }
 
@@ -124,7 +126,6 @@ export async function createVault(ext: LoadedExtension): Promise<{ address: stri
   await tab.goto(ext.url('tab.html?screen=onboarding'))
   await expect(tab.getByTestId('onboarding')).toBeVisible({ timeout: 15_000 })
   await walkOnboarding(tab)
-  await tab.getByTestId('ob-open').click()
   await expect(tab.getByTestId('home')).toBeVisible()
   const accounts = (await engineCall(tab, 'accounts', 'list')) as Array<{ address: string }>
   const address = accounts[0]?.address
