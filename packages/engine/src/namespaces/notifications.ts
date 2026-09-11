@@ -9,8 +9,7 @@ import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
 import type { SealedMap } from '../sealed'
 import type { EventBus, NamespaceSpec } from '../host'
-import { NotificationViewSchema, type NotificationView } from '../schema'
-import { readDoc, writeDoc, type DocSpec } from '../storage'
+import { type NotificationView } from '../schema'
 
 /** One sealed entry; inbox rows name tokens, campaigns and amounts. */
 const INBOX_ID = 'all'

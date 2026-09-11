@@ -13,7 +13,6 @@ import { z } from 'zod'
 import { EngineError } from '../errors'
 import type { NamespaceSpec } from '../host'
 import { readMany, type ReadCall } from '../multicall'
-import { readDoc, writeDoc, type DocSpec } from '../storage'
 import type { SealedMap } from '../sealed'
 import type { ChainsService } from './chains'
 

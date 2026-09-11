@@ -27,6 +27,25 @@ function u(v: bigint): Hex {
   return encodeAbiParameters(parseAbiParameters('uint256'), [v])
 }
 
+/**
+ * Poll until the activity row for `requestId` carries a broadcast hash.
+ *
+ * This used to be a flat `setTimeout(r, 50)`. Deciding an approval kicks off
+ * sign → eth_sendRawTransaction → activity.update, which takes longer than
+ * that whenever the machine is busy, so both assertions below passed alone and
+ * failed under the full `pnpm -r test` run — leaving the only end-to-end check
+ * that broadcast calldata matches the sheet silently absent in CI.
+ */
+async function settled(engine: Engine, accountId: string, requestId: string, ms = 10_000): Promise<{ hash: string; category: string }> {
+  const deadline = Date.now() + ms
+  for (;;) {
+    const entry = (await engine.engine.activity.list({ accountId })).find((e) => e.id === requestId)
+    if (entry && typeof entry.hash === 'string') return { hash: entry.hash, category: entry.category }
+    if (Date.now() > deadline) throw new Error(`no broadcast hash for ${requestId} within ${ms}ms (status ${entry?.status ?? 'absent'})`)
+    await new Promise((r) => setTimeout(r, 25))
+  }
+}
+
 async function approvalById(engine: Engine, id: string): Promise<ApprovalRequest> {
   const existing = engine.approvals.get(id)
   if (existing) return existing
@@ -125,11 +144,10 @@ describe('money on the testnet mock', () => {
     expect(payload.assessment.statements[0]?.text).toMatch(/^Send 2.5 FIX to/)
     expect(payload.assessment.rules.map((r) => r.code)).toContain('RECIPIENT_FIRST_TIME')
     await engine.engine.approvals.decide({ id: requestId, approve: true })
-    await new Promise((r) => setTimeout(r, 50))
-    const entry = (await engine.engine.activity.list({ accountId })).find((e) => e.id === requestId)
-    expect(entry?.hash).toMatch(/^0x/)
-    expect(entry?.category).toBe('SEND')
-    const raw = rpc.state.transactions.get(entry?.hash ?? '')?.raw
+    const entry = await settled(engine, accountId, requestId)
+    expect(entry.hash).toMatch(/^0x/)
+    expect(entry.category).toBe('SEND')
+    const raw = rpc.state.transactions.get(entry.hash)?.raw
     const tx = parseTransaction(raw as Hex)
     expect(tx.to?.toLowerCase()).toBe(TOKEN.toLowerCase())
     const decoded = decodeFunctionData({ abi: ERC20, data: tx.data as Hex })
@@ -148,10 +166,9 @@ describe('money on the testnet mock', () => {
     const payload = parseApprovalPayload(req.payload)
     expect(payload?.kind === 'send_transaction' && payload.assessment.statements[0]?.text).toMatch(/^Revoke Permit2/)
     await engine.engine.approvals.decide({ id: requestId, approve: true })
-    await new Promise((r) => setTimeout(r, 50))
-    const entry = (await engine.engine.activity.list({ accountId })).find((e) => e.id === requestId)
-    expect(entry?.category).toBe('REVOKE')
-    const tx = parseTransaction(rpc.state.transactions.get(entry?.hash ?? '')?.raw as Hex)
+    const entry = await settled(engine, accountId, requestId)
+    expect(entry.category).toBe('REVOKE')
+    const tx = parseTransaction(rpc.state.transactions.get(entry.hash)?.raw as Hex)
     const decoded = decodeFunctionData({ abi: ERC20, data: tx.data as Hex })
     expect(decoded.args).toEqual([PERMIT2, 0n])
   })

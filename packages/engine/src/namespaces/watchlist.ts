@@ -11,8 +11,7 @@ import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
 import type { SealedMap } from '../sealed'
 import type { EventBus, NamespaceSpec } from '../host'
-import { WatchItemSchema, type WatchItem } from '../schema'
-import { readDoc, writeDoc, type DocSpec } from '../storage'
+import { type WatchItem } from '../schema'
 import type { VaultManager } from './vault'
 
 /** What the checks read — handed in by `createEngine` as adapters, so this service depends on no other. */
@@ -29,13 +28,6 @@ export interface WatchlistDeps {
   readonly vault: VaultManager
   /** Watch items and nudge state, sealed under the DEK (one entry, id `all`). */
   readonly watchlist: SealedMap<{ items: WatchItem[]; nudgedAt: Record<string, number> }>
-}
-
-const DOC: DocSpec<{ items: WatchItem[]; nudgedAt: Record<string, number> }> = {
-  key: 'watchlist',
-  version: 1,
-  schema: z.object({ items: z.array(WatchItemSchema), nudgedAt: z.record(z.string(), z.number()) }),
-  defaultValue: () => ({ items: [], nudgedAt: {} }),
 }
 
 export const WATCH_ALARM = 'bv.watchlist'

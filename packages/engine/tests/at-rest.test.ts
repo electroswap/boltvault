@@ -38,7 +38,8 @@ async function connectDapp(eng: Engine, origin: string, accountId: string): Prom
     a.onMessage((raw) => {
       const m = raw as ProviderPortMessage
       if (m.kind !== 'response' || m.id !== 1) return
-      m.error ? reject(m.error) : resolve()
+      if (m.error) reject(m.error)
+      else resolve()
     })
   })
   a.post({ kind: 'request', id: 1, method: 'eth_requestAccounts', params: undefined, session: 'sess' })

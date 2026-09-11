@@ -33,7 +33,6 @@ import { EngineError } from '../errors'
 import type { EventBus, NamespaceSpec } from '../host'
 import type { PairedDevice, Settings, SyncStatus } from '../schema'
 import type { SettingsStore } from '../settingsStore'
-import { readDoc, writeDoc, type DocSpec } from '../storage'
 import type { SitesService } from './sites'
 import type { VaultManager } from './vault'
 
