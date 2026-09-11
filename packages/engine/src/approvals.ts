@@ -41,6 +41,12 @@ const PENDING_DOC: DocSpec<ApprovalRequest[]> = {
 }
 
 export const APPROVAL_TTL_MS = 5 * 60_000
+/**
+ * How many requests may wait for a human at once, across every origin. Eight
+ * is more than any honest flow needs and far fewer than a page can use to
+ * bury the sheet the user meant to read.
+ */
+export const MAX_PENDING = 8
 
 /**
  * The kinds that end in a signature, and therefore the only kinds where
@@ -127,6 +133,14 @@ export class ApprovalStore {
 
   async create(input: CreateApprovalInput): Promise<ApprovalRequest> {
     await this.hydrate()
+    /*
+      A queue of pending decisions is a queue of windows and notifications, and
+      a page that can add to it without limit can bury the one the user
+      actually meant to read. The wallet's own flows are exempt: a hostile page
+      must not be able to stop someone sending their own funds.
+    */
+    if (!input.origin.startsWith('internal:') && this.list().length >= MAX_PENDING)
+      throw new EngineError('limit_exceeded', 'Too many requests are already waiting for you. Answer or dismiss one first.')
     const now = this.platform.now()
     const req: ApprovalRequest = {
       id: toHex(this.platform.random(16)),

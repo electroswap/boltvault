@@ -131,6 +131,17 @@ export class RpcFlow {
   /** One human-facing request per origin; a re-sent request (same client id) joins it instead of failing. */
   private readonly inFlight = new Map<string, { clientRequestId: string; promise: Promise<unknown> }>()
   private readonly limiter: RateLimiter
+  /*
+    An unconnected origin's chain preference, in memory only.
+
+    A site may switch chain before it connects, and the connect sheet should
+    open on the chain it asked for — that is a real and tested behaviour. What
+    it must not do is create a persisted row: the CHAIN class runs before any
+    connection check, so any page could plant one for itself, unbounded, and
+    each write re-encrypts the whole sealed blob. Holding it here gives the
+    preference the lifetime it deserves — this session, and no disk.
+  */
+  private readonly pendingChain = new Map<string, number>()
   private readonly subscriptions = new Map<string, () => void>()
   private subCounter = 0
 
@@ -146,7 +157,7 @@ export class RpcFlow {
   async request(origin: string, method: string, rawParams: unknown, clientRequestId: string): Promise<unknown> {
     const params: readonly unknown[] = Array.isArray(rawParams) ? rawParams : rawParams === undefined || rawParams === null ? [] : [rawParams]
     const cls = classify(method)
-    const chainId = this.ctx.sites.chainIdFor(origin)
+    const chainId = this.pendingChain.get(origin) ?? this.ctx.sites.chainIdFor(origin)
 
     switch (cls) {
       case 'unknown':
@@ -247,12 +258,25 @@ export class RpcFlow {
     }
     return this.exclusive(origin, clientRequestId, async () => {
       const result = (await this.ctx.approve({ kind: 'connect', origin, chainId, clientRequestId })) as ConnectResult
+      // The preference is spent the moment it becomes a real row.
+      this.pendingChain.delete(origin)
       await this.ctx.sites.connect(origin, { accountId: result.accountId, chainId: result.chainId, accounts: [...result.addresses], now: this.ctx.now() })
       this.ctx.emit(origin, { event: 'accountsChanged', payload: result.addresses })
       this.ctx.emit(origin, { event: 'connect', payload: { chainId: hexChainId(result.chainId) } })
       if (result.chainId !== chainId) this.ctx.emit(origin, { event: 'chainChanged', payload: hexChainId(result.chainId) })
       return method === 'wallet_requestPermissions' ? permissions(origin, result.addresses, this.ctx.now()) : [...result.addresses]
     })
+  }
+
+  /** Bounded: oldest entry evicted, so the map cannot be grown without limit either. */
+  private rememberPendingChain(origin: string, chainId: number): void {
+    this.pendingChain.delete(origin)
+    this.pendingChain.set(origin, chainId)
+    while (this.pendingChain.size > 64) {
+      const oldest = this.pendingChain.keys().next().value
+      if (oldest === undefined) break
+      this.pendingChain.delete(oldest)
+    }
   }
 
   private async chain(origin: string, chainId: number, method: string, params: readonly unknown[], clientRequestId: string): Promise<unknown> {
@@ -274,7 +298,20 @@ export class RpcFlow {
       // Known chain: the add is a switch, with a prompt because the site is changing the session.
       await this.exclusive(origin, clientRequestId, () => this.ctx.approve({ kind: 'add_chain', origin, chainId: requested, clientRequestId }))
     }
-    await this.ctx.sites.setChain(origin, requested)
+    /*
+      Only a site the wallet already has a row for gets that row written to.
+
+      The CHAIN class runs before any connection check, so an origin that had
+      never connected — and never prompted anyone — could call
+      `wallet_switchEthereumChain` and cause a row to be created and persisted
+      for itself. Nothing bounded the number of origins, and each write
+      re-encrypts the whole sealed blob, so the cost of one call grew with the
+      number of rows already planted. An unconnected page still gets its
+      `chainChanged` event, and the preference simply is not remembered across
+      a reload — which is the correct amount of memory to give a stranger.
+    */
+    if (this.ctx.sites.get(origin) ?? session) await this.ctx.sites.setChain(origin, requested)
+    else this.rememberPendingChain(origin, requested)
     this.ctx.emit(origin, { event: 'chainChanged', payload: hexChainId(requested) })
     return null
   }
@@ -285,7 +322,13 @@ export class RpcFlow {
       throw new RpcError(RPC.UNSUPPORTED_METHOD, 'eth_sign is disabled. It can be enabled in BoltVault › Settings › Security.')
     }
     const session = await this.ctx.session(origin)
-    if (method !== 'wallet_watchAsset' && !session) throw new RpcError(RPC.UNAUTHORIZED, 'Not connected. Call eth_requestAccounts first.')
+    /*
+      `wallet_watchAsset` used to be exempt from needing a session, so a page
+      the user had never connected could put a focused approval window in front
+      of them — repeatedly, from any number of origins. Suggesting a token is
+      not a thing an unconnected site needs to do.
+    */
+    if (!session) throw new RpcError(RPC.UNAUTHORIZED, 'Not connected. Call eth_requestAccounts first.')
     const intent = this.intent(origin, chainId, method, params, session, clientRequestId)
     return this.exclusive(origin, clientRequestId, async () => {
       const result = await this.ctx.approve(intent)

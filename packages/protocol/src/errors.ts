@@ -47,6 +47,12 @@ export class RpcError extends Error {
       const e = err as { code: number; message?: string; data?: unknown }
       return new RpcError(e.code, e.message ?? 'error', e.data)
     }
+    // The engine's own codes are strings. Only the ones with an exact JSON-RPC
+    // counterpart are translated, so a dApp sees a standard code rather than a
+    // generic internal error it cannot act on.
+    if (err && typeof err === 'object' && (err as { code?: unknown }).code === 'limit_exceeded') {
+      return new RpcError(RPC.LIMIT_EXCEEDED, err instanceof Error ? err.message : 'Too many requests.')
+    }
     return new RpcError(RPC.INTERNAL, err instanceof Error ? err.message : String(err))
   }
 }

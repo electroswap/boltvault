@@ -102,7 +102,7 @@ export function Networks({ body }: { body: 'extension-popup' | 'extension-tab' |
                 <Column gap="$2">
                   <Input value={url} onChange={setUrl} placeholder="https://" error={problem} autoFocus testID={`network-${c.chainId}-rpc-input`} />
                   <Row gap="$2">
-                    <Key label={t({ id: 'networks.rpc.save', message: 'Use this RPC' })} disabled={busy || !/^https?:\/\//.test(url.trim())} onPress={() => void saveRpc(c.chainId, url.trim())} testID={`network-${c.chainId}-rpc-save`} />
+                    <Key label={t({ id: 'networks.rpc.save', message: 'Use this RPC' })} disabled={busy || !/^https:\/\//i.test(url.trim())} onPress={() => void saveRpc(c.chainId, url.trim())} testID={`network-${c.chainId}-rpc-save`} />
                     {custom ? <Key label={t({ id: 'networks.rpc.clear', message: 'Back to default' })} kind="secondary" disabled={busy} onPress={() => void saveRpc(c.chainId, null)} testID={`network-${c.chainId}-rpc-clear`} /> : null}
                     <Key label={t({ id: 'cancel', message: 'Cancel' })} kind="secondary" onPress={() => (setEditing(null), setProblem(null))} />
                   </Row>

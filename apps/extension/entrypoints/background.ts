@@ -25,6 +25,9 @@ export default defineBackground(() => {
   const signWindows = new Map<string, number>()
 
   const openApproval = (request: ApprovalRequest): void => {
+    // A cap on windows, not on requests: further approvals still queue and are
+    // rendered by the popup's pending list, but nothing else steals focus.
+    if (signWindows.size >= 3) return
     void (async () => {
       let left: number | undefined
       let top: number | undefined

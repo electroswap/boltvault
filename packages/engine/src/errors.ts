@@ -20,6 +20,8 @@ export type EngineErrorCode =
   | 'rejected'
   | 'disconnected'
   | 'timeout'
+  /** Too many requests already waiting for a human (§3.5: a page must not be able to bury the sheet). */
+  | 'limit_exceeded'
   | 'internal'
 
 export class EngineError extends Error {

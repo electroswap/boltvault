@@ -41,6 +41,22 @@ export function toChainView(c: ChainDef): ChainView {
   }
 }
 
+/** Loopback, where there is no network for anyone to sit on. */
+const LOOPBACK = /^(localhost|127(?:\.\d+){3}|\[::1\])$/i
+
+/** A custom endpoint must be HTTPS, or loopback. */
+export function assertUsableRpcUrl(url: string): void {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    throw new EngineError('invalid_argument', 'That is not a valid URL.')
+  }
+  if (parsed.protocol === 'https:') return
+  if (parsed.protocol === 'http:' && LOOPBACK.test(parsed.hostname)) return
+  throw new EngineError('invalid_argument', 'A custom RPC must use https:// — over plain http anyone on the network can change the balances and fees this wallet shows you.')
+}
+
 export class ChainsService implements HeadSource {
   private readonly cache = new Map<number, ChainHead>()
   private readonly inFlight = new Map<number, Promise<ChainHead>>()
@@ -173,6 +189,18 @@ export class ChainsService implements HeadSource {
     if (url === null) {
       delete this.overrides[String(chainId)]
     } else {
+      /*
+        An RPC endpoint decides the balances, the gas price, the nonce and the
+        simulation the sheet is built from, and it sees every address the
+        wallet asks about. Over cleartext, anyone on the path chooses all of
+        that. The check belongs here rather than only on the Networks screen,
+        because the screen is not the only caller.
+
+        A loopback address is exempt: running a node on the same machine is
+        how this gets tested, and there is no network to sit on.
+      */
+      assertUsableRpcUrl(url)
+      if (trace) assertUsableRpcUrl(trace)
       const probe = createPublicClient({ transport: http(url, { timeout: 8_000, ...(this.fetchImpl ? { fetchFn: this.fetchImpl } : {}) }) })
       const answered = await probe.getChainId().catch(() => null)
       if (answered !== chainId) throw new EngineError('invalid_argument', `${url} answers chain ${answered ?? 'nothing'}, not ${chainId}`)
