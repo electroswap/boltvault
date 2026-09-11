@@ -74,8 +74,40 @@ function Shell({ engine }: { engine: Engine['engine'] }) {
   return <WalletApp engine={engine} body="mobile" host={host} insets={insets} />
 }
 
-/** The splash leaving: the camera pushes through the mark rather than cutting. */
-const LEAVE = 320
+/**
+ * A beat longer on the mark, then out through the ground.
+ *
+ * `SPLASH_BEAT` is how long the ceremony itself runs — the strike, the
+ * shockwaves, the name and the lock-up all land by then. The hold is time spent
+ * on the finished picture afterwards, which is the part worth having and the
+ * part the owner asked for more of: "I want the splash screen to persist for
+ * 750ms longer than it currently does."
+ */
+const SPLASH_HOLD = 750
+
+/**
+ * The splash leaving: it dissolves into the ground, and the wallet comes up out
+ * of it.
+ *
+ * The wallet is not rendered at all until then. It used to be mounted
+ * underneath from the first frame with the splash laid over it, which is a
+ * cover, not a transition — owner: "the splash is being overlaid over the
+ * unlock/home screen, instead of delaying the display of either ... screen fade
+ * to the navy background color before transitioning to the unlock screen."
+ *
+ * So: for `LEAVE` the splash fades out and there is nothing behind it but this
+ * component's own `paint.void`, which IS the navy the owner means. Only when it
+ * has gone does the shell mount, and it rises over `REVEAL`. Never two
+ * compositions on screen at once.
+ *
+ * The cost is that the shell builds after the splash rather than behind it —
+ * a frame or two, under a fade, against an engine that is already made.
+ */
+const LEAVE = 420
+const REVEAL = 300
+
+/** `paint.void`; the same value `styles.root` carries. */
+const VOID = '#070A1F'
 
 export default function App() {
   const [engine, setEngine] = useState<Engine | null>(null)
@@ -86,18 +118,17 @@ export default function App() {
     and resuming from another app does not come through this path at all,
     because `engine` is already set and this component never unmounted.
 
-    Two states rather than one: `beat` is "the animation has finished", `gone`
-    is "it has left the tree". Between them the splash fades and scales up over
-    Home, which is already mounted underneath — the old code swapped the two in
-    a single frame, and a hard cut is the one transition the style bible has no
-    word for.
+    Two states: `beat` is "the ceremony has finished and been looked at", `gone`
+    is "the splash has left the tree" — and `gone` is also the gate on the shell
+    ever being rendered, which is what makes this a transition rather than a
+    cover.
   */
   const [cold] = useState(takeSplash)
   const [beat, setBeat] = useState(!cold)
   const [gone, setGone] = useState(!cold)
   useEffect(() => {
     if (beat) return
-    const t = setTimeout(() => setBeat(true), SPLASH_BEAT)
+    const t = setTimeout(() => setBeat(true), SPLASH_BEAT + SPLASH_HOLD)
     return () => clearTimeout(t)
   }, [beat])
   const leaving = beat && engine !== null
@@ -128,7 +159,28 @@ export default function App() {
     <SafeAreaProvider>
       <View style={styles.root}>
         <StatusBar style="light" />
-        {engine ? <Shell engine={engine.engine} /> : null}
+        {/*
+          The wallet, once the splash has gone and not a frame before. It mounts
+          into the ground and rises out of it — the fade is on the mount, which
+          is the one moment a declarative animation is certain to run.
+        */}
+        {engine && gone ? (
+          <Animated.View
+            style={[
+              styles.root,
+              cold
+                ? {
+                    animationName: { from: { opacity: 0 }, to: { opacity: 1 } },
+                    animationDuration: `${REVEAL}ms`,
+                    animationTimingFunction: cubicBezier(0.2, 0, 0.2, 1),
+                    animationFillMode: 'both',
+                  }
+                : null,
+            ]}
+          >
+            <Shell engine={engine.engine} />
+          </Animated.View>
+        ) : null}
         {/* `SplashRoot`, not `Splash`: out here there is no TamaguiProvider yet — WalletApp owns it. */}
         {gone ? null : (
           <Animated.View
@@ -148,6 +200,30 @@ export default function App() {
             <SplashRoot />
           </Animated.View>
         )}
+        {/*
+          The ground, coming up over the mark.
+
+          A newly mounted layer, because a mount is the one moment a declarative
+          animation is certain to run — a keyframe added to a view that is
+          already on screen is at the mercy of how the style diff is applied.
+          The splash pushes through underneath it; if that animation does not
+          take, this one still carries the whole transition on its own.
+        */}
+        {leaving && !gone ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                backgroundColor: VOID,
+                animationName: { from: { opacity: 0 }, to: { opacity: 1 } },
+                animationDuration: `${LEAVE}ms`,
+                animationTimingFunction: cubicBezier(0.4, 0, 0.2, 1),
+                animationFillMode: 'forwards',
+              },
+            ]}
+          />
+        ) : null}
         <ScanHost />
       </View>
     </SafeAreaProvider>
