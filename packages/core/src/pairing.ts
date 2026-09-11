@@ -92,10 +92,52 @@ export interface SyncRecord {
   readonly key: string
   /** JSON value; null is a tombstone. */
   readonly value: unknown
+  /**
+   * The author's own sequence number at the moment it wrote this record
+   * (master plan §6: "last-writer-wins per key using per-device sequence
+   * numbers (no vector clocks)"). Raised past anything the device has seen, so
+   * two devices' counters stay comparable without a shared clock.
+   */
   readonly seq: number
   readonly authorDeviceId: string
   readonly authorLabel: string
+  /**
+   * The author's wall clock, for provenance only — "from Pixel 8, 3 May". It
+   * must never decide a conflict: phone clocks disagree, NTP steps backwards,
+   * and a device with a fast clock would otherwise win every merge forever.
+   */
   readonly at: number
+}
+
+/** Everything needed to order one record against another. */
+export interface RecordStamp {
+  readonly seq: number
+  readonly authorDeviceId: string
+}
+
+/**
+ * A Lamport step: whatever this device has seen, its next write is later than.
+ * Without this the two counters drift apart and the comparison below stops
+ * meaning anything.
+ */
+export function nextSeq(ownSeq: number, highestSeen: number): number {
+  return Math.max(ownSeq, highestSeen) + 1
+}
+
+/**
+ * Last-writer-wins for one key. The device id breaks a tie so that both sides
+ * of a concurrent edit pick the same winner and the two devices converge —
+ * an arbitrary rule, but an agreed one.
+ */
+export function recordWins(incoming: RecordStamp, current: RecordStamp | null): boolean {
+  if (!current) return true
+  if (incoming.seq !== current.seq) return incoming.seq > current.seq
+  return incoming.authorDeviceId > current.authorDeviceId
+}
+
+/** A delete travels as a null value, so the other device can tell "gone" from "never had it". */
+export function isTombstone(record: SyncRecord): boolean {
+  return record.value === null
 }
 
 export interface SealedRecord {
