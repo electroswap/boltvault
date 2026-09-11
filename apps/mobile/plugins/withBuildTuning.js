@@ -27,9 +27,29 @@ const { withAppBuildGradle, withDangerousMod, withGradleProperties } = require('
 const fs = require('node:fs')
 const path = require('node:path')
 
+/*
+  `BOLTVAULT_ABIS` builds for something else — an emulator, in practice.
+
+  A release ships the two ARM slices and nothing more, but every Android
+  emulator worth debugging on is x86_64, and an arm64 APK will not install on
+  one. Rather than editing this list by hand and forgetting to put it back
+  (which is how a build ships for the wrong architecture), the abis are an
+  environment variable with the release list as the default:
+
+      BOLTVAULT_ABIS=x86_64 pnpm exec expo prebuild --platform android
+      cd android && ./gradlew assembleRelease -PreactNativeArchitectures=x86_64
+
+  It has to be set for the PREBUILD as well as the build: this plugin is what
+  writes the list into app/build.gradle.
+*/
+const ABIS = (process.env.BOLTVAULT_ABIS ?? 'armeabi-v7a,arm64-v8a')
+  .split(',')
+  .map((a) => a.trim())
+  .filter(Boolean)
+
 const PROPERTIES = {
-  // Physical devices only.
-  reactNativeArchitectures: 'armeabi-v7a,arm64-v8a',
+  // The release pair, or whatever BOLTVAULT_ABIS asked for.
+  reactNativeArchitectures: ABIS.join(','),
   // R8 over the dex, and drop resources nothing references.
   'android.enableMinifyInReleaseBuilds': 'true',
   'android.enableShrinkResourcesInReleaseBuilds': 'true',
@@ -92,7 +112,7 @@ const SPLITS_BLOCK = `
         abi {
             enable true
             reset()
-            include 'armeabi-v7a', 'arm64-v8a'
+            include ${ABIS.map((a) => `'${a}'`).join(', ')}
             universalApk false
         }
     }

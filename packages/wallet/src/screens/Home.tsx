@@ -75,6 +75,12 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   /** No vault yet: Home is a title screen, not a list with one card on it. */
   const firstRun = !loading && !vault?.exists
+  /*
+    A phone has room; the popup does not. Ten pixels between plates is right in
+    a 400x600 window and reads as cramped on a 6.7-inch screen, which is half of
+    what "top heavy" was.
+  */
+  const gap = body === 'mobile' ? 14 : 10
   // The tab lays tiles out as rows and centres the column; the popup and the phone stack them (plan B3).
   const wide = body === 'extension-tab'
 
@@ -282,9 +288,20 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
 
   return (
     <Column flex={1} testID="home">
-      {/* `flexGrow` only on a first run: it lets the title screen centre in
-          whatever is left, and on every other state the content sizes itself. */}
-      <ScrollView contentContainerStyle={{ paddingHorizontal: inset, paddingTop: 12, paddingBottom: 12, gap: 10, ...(firstRun ? { flexGrow: 1 } : {}) }}>
+      {/*
+        `flexGrow: 1` always, so the column can use the room a phone has.
+
+        Home was laid out as a list that happened to start at the top: on a
+        tall screen everything bunched into the first two thirds and the last
+        third was bare circuit, with the ETN price stranded in the middle of it.
+        Owner: "the home feels a bit top heavy with space available toward the
+        bottom ... move the ETN price above the dock." With a growing container
+        the strip can be pushed to the foot by one flexible spacer, and the
+        sections above it can breathe. On a short body (the 600 px popup) the
+        content is taller than the box, `flexGrow` does nothing, and nothing
+        moves.
+      */}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: inset, paddingTop: 12, paddingBottom: 12, gap, flexGrow: 1 }}>
         <Ignition active={ignite} reducedMotion={reducedMotion} order={0}>
           <Row justifyContent="space-between" alignItems="center" minHeight={metrics.header} gap="$2">
             {active ? (
@@ -416,9 +433,24 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
               </Ignition>
             ) : null}
 
+            {/*
+              A capped share of the slack above the grid, so the loosening is
+              not all at the bottom. Flexible but bounded: on a screen with room
+              it reads as air between the balance and the verbs, and on one
+              without it collapses to nothing rather than pushing the grid off.
+            */}
+            <Column flex={1} maxHeight={22} />
+
             <Ignition active={ignite} reducedMotion={reducedMotion} order={3}>
               <ActionGrid items={tiles} layout={wide ? 'row' : 'stacked'} testID="keys" />
             </Ignition>
+
+            {/*
+              The give. Everything above it keeps its natural height and this
+              takes what is left, which puts the strip on the dock's shoulder
+              instead of leaving a third of the screen bare under it.
+            */}
+            <Column flex={1} minHeight={8} />
 
             {/* The status strip: the site under the popup, and ETN's price. */}
             <Ignition active={ignite} reducedMotion={reducedMotion} order={4}>

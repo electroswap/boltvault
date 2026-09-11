@@ -1,5 +1,5 @@
 /** Backup quiz for a seed that was created but not confirmed (the gate, §8.1). */
-import { Body, Column, EsWordmark, Field, Icon, Input, Key, Plate, Row, ScrollView, WordGrid, metrics, paint, useWindowDimensions } from '@boltvault/ui'
+import { Backdrop, Body, Column, EsWordmark, Icon, Input, Key, Plate, Row, ScrollView, WordGrid, metrics, paint, useWindowDimensions } from '@boltvault/ui'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
@@ -48,7 +48,7 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
   const id = seedId ?? pending[0]?.id ?? null
   return (
     <Column flex={1} backgroundColor="$void" testID="backup">
-      <Field scene={scene} address="0x0000000000000000000000000000000000000e7n" quiet width={width} height={height} reducedMotion={reducedMotion} />
+      <Backdrop scene={scene} width={width} height={height} reducedMotion={reducedMotion} />
       <ScrollView style={{ zIndex: 1 }} contentContainerStyle={{ padding: metrics.insetWide, gap: 16 }}>
         <Row gap="$2">
           <Icon name="lock" size={18} color={paint.mute} />

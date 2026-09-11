@@ -19,7 +19,7 @@
  * (`useSecretGuard`), which is the promise `packages/platform` had been making
  * on the product's behalf without anything implementing it.
  */
-import { Body, Column, EsWordmark, Field, Icon, IconButton, Input, Key, Plate, Row, ScrollView, WordGrid, metrics, paint, useWindowDimensions } from '@boltvault/ui'
+import { Backdrop, Body, Column, EsWordmark, Icon, IconButton, Input, Key, Plate, Row, ScrollView, WordGrid, metrics, paint, useWindowDimensions } from '@boltvault/ui'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
@@ -244,7 +244,7 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
 
   return (
     <Column flex={1} backgroundColor="$void" testID="onboarding">
-      <Field scene={scene} address="0x0000000000000000000000000000000000000e7n" quiet width={width} height={height} reducedMotion={reducedMotion} />
+      <Backdrop scene={scene} width={width} height={height} reducedMotion={reducedMotion} />
       <ScrollView style={{ zIndex: 1 }} contentContainerStyle={{ padding: inset, gap: 20, flexGrow: 1, justifyContent: 'center' }}>
         {/* Where you are, and only where the flow really is a sequence (§7.2.4). */}
         {progress ? (

@@ -2,7 +2,7 @@
  * Unlock — password, or a passkey when one is enrolled and available here.
  * Quiet custody mode; the Field ignites on success (Ignition on Home).
  */
-import { Body, Column, EsWordmark, Field, Icon, Input, Key, Plate, Row, metrics, paint, useWindowDimensions } from '@boltvault/ui'
+import { Backdrop, Body, Column, EsWordmark, Icon, Input, Key, Plate, Row, metrics, paint, useWindowDimensions } from '@boltvault/ui'
 import { useEffect, useRef, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
@@ -111,7 +111,7 @@ export function Unlock({ body, reducedMotion = false }: { body: 'extension-popup
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   return (
     <Column flex={1} backgroundColor="$void" testID="unlock">
-      <Field scene={scene} address="0x0000000000000000000000000000000000000e7n" quiet width={width} height={height} reducedMotion={reducedMotion} />
+      <Backdrop scene={scene} width={width} height={height} reducedMotion={reducedMotion} />
       <Column flex={1} padding={inset} gap="$5" justifyContent="center" zIndex={1} position="relative" maxWidth={480} width="100%" alignSelf="center">
         <Row gap="$2">
           <Icon name="lock" size={18} color={paint.mute} />

@@ -81,6 +81,8 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   const [limitQuote, setLimitQuote] = useState<LimitQuote | null>(null)
   const [orders, setOrders] = useState<LimitOrderView[]>([])
   const [feeSheet, setFeeSheet] = useState(false)
+  /** The details card starts open: what a swap costs is not a disclosure. */
+  const [details, setDetails] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
@@ -290,25 +292,25 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
       : t({ id: 'swap.locks.unknown', message: 'No lock data' })
   const lockTone: 'surge' | 'ember' | 'mute' = liquidity.value ? (liquidity.value.lockedPct >= 50 ? 'surge' : liquidity.value.lockedPct > 0 ? 'ember' : 'mute') : 'mute'
   /*
-    The lock treatment, borrowed from the interface (owner: "I like the lock UI
-    treatment that the UI applies").
+    The lock treatment, taken from the interface as closely as it goes.
 
-    There, a pair with locked liquidity turns both terminals' borders
-    `theme.success` and puts a second, filled button on the seam beside the flip
-    arrow carrying a padlock — `SwapSection locked={...}` and
-    `MidButtonWrapper success` in `pages/Swap/index.tsx`. It is the one piece of
-    reassurance the swap form gives you without being asked for.
+    `pages/Swap/index.tsx` there: `SwapSection locked` swaps both terminals'
+    borders to `theme.success`, and a second seam control appears beside the
+    flip arrow — `MidButtonWrapper success`, a 40 px circle filled with that
+    same green, ringed 4 px in the panel's own colour, holding a dark padlock.
+    Owner, on the first attempt: "the locked liquidity treatment is different, I
+    want as close as possible." It was a pill reading "100%"; it is the circle
+    now, on the left of the flip exactly as it sits there.
 
-    Two things are ours rather than copied. The colour follows `lockTone`, so
-    the rim agrees with the "Liquidity locked" row below instead of calling 12%
-    and 90% the same thing. And the badge is a badge, not a button: the
-    interface's opens a tooltip carrying the lock's end date, which our
-    `LiquidityView` does not have — the percentage and the count are already on
-    the fee plate, so a press would only scroll the eye eight rows down.
+    `theme.success` in the interface is #3EE6A5 — the same value as `paint.surge`
+    here, so the green is literally the same green. The one thing still ours is
+    that the colour follows `lockTone`: at 12% locked the rim is ember, so it
+    agrees with the "Liquidity locked" row instead of calling 12% and 90% the
+    same reassurance.
   */
   const lockedPct = mode === 'swap' && liquidity.value ? liquidity.value.lockedPct : 0
   const lockPaint = lockedPct > 0 ? (lockTone === 'surge' ? paint.surge : paint.ember) : null
-  const lockRim = lockPaint ? (`${lockPaint}59` as const) : null
+  const lockRim = lockPaint ? (`${lockPaint}8c` as const) : null
   const problem = mode === 'swap' ? (quote?.problems[0] ?? null) : (limitQuote?.problems[0] ?? null)
   const canSwap = mode === 'swap' ? !!quote?.ok && fresh && !busy : !!limitQuote?.ok && !busy
   const receiveText = quote && quote.amountOutRaw !== '0' ? formatRaw(quote.receiveRaw, quote.decimalsOut) : '—'
@@ -360,21 +362,38 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
             balanceTestID="swap-balance-in"
           />
 
-          <Row justifyContent="center" alignItems="center" gap="$2" marginVertical={-20} zIndex={2}>
-            <Pressable onPress={flip} accessibilityRole="button" accessibilityLabel={t({ id: 'swap.flip', message: 'Swap direction' })} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }} testID="swap-flip">
-              <Chip width={36} height={36} borderRadius={18} padding={0} justifyContent="center" alignItems="center" backgroundColor="$glassRaisedSolid" borderWidth={0} overflow="hidden">
-                <Icon name="swap" color={paint.arc} size={18} />
-                <Rim radius={18} opacity={0.85} />
-              </Chip>
-            </Pressable>
+          {/*
+            The seam controls, as the interface arranges them: the lock on the
+            left and the flip on the right, both 36 px circles ringed 4 px in the
+            console's own colour so they read as punched through the seam rather
+            than laid on top of it (`MidButtonWrapper`: `border: 4px solid
+            theme.surface1`).
+          */}
+          <Row justifyContent="center" alignItems="center" gap={6} marginVertical={-20} zIndex={2}>
             {lockPaint ? (
-              <Row height={36} borderRadius={18} paddingHorizontal={10} gap={4} alignItems="center" backgroundColor="$glassRaisedSolid" borderWidth={1} borderColor={`${lockPaint}59` as const} accessibilityLabel={t({ id: 'swap.locked.a11y', message: 'Liquidity locked: {v}', values: { v: lockText } })} testID="swap-lock-badge">
-                <Icon name="lock" size={13} color={lockPaint} />
-                <Body tone={lockTone === 'surge' ? 'surge' : 'ember'} size="caption" fontWeight="600" fontVariant={['tabular-nums']}>
-                  {`${Math.round(lockedPct)}%`}
-                </Body>
-              </Row>
+              <Column
+                width={44}
+                height={44}
+                alignItems="center"
+                justifyContent="center"
+                accessibilityLabel={t({ id: 'swap.locked.a11y', message: 'Liquidity locked: {v}', values: { v: lockText } })}
+                testID="swap-lock-badge"
+              >
+                <Column width={40} height={40} borderRadius={20} alignItems="center" justifyContent="center" backgroundColor="$glassRaisedSolid">
+                  <Column width={32} height={32} borderRadius={16} alignItems="center" justifyContent="center" backgroundColor={lockPaint}>
+                    <Icon name="lock" size={15} color={paint.void} />
+                  </Column>
+                </Column>
+              </Column>
             ) : null}
+            <Pressable onPress={flip} accessibilityRole="button" accessibilityLabel={t({ id: 'swap.flip', message: 'Swap direction' })} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }} testID="swap-flip">
+              <Column width={40} height={40} borderRadius={20} alignItems="center" justifyContent="center" backgroundColor="$glassRaisedSolid">
+                <Chip width={32} height={32} borderRadius={16} padding={0} justifyContent="center" alignItems="center" backgroundColor="$glassRaisedSolid" borderWidth={0} overflow="hidden">
+                  <Icon name="swap" color={paint.arc} size={16} />
+                  <Rim radius={16} opacity={0.85} />
+                </Chip>
+              </Column>
+            </Pressable>
           </Row>
 
           {mode === 'swap' ? (
@@ -405,26 +424,6 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
           )}
         </Plate>
 
-        {/* Rate and route */}
-        {mode === 'swap' && quote && quote.amountOutRaw !== '0' ? (
-          <Plate role="recessed" paddingVertical={6} paddingHorizontal="$3" minHeight={36} flexDirection="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap="$2">
-            <Body tone={fresh ? 'ink' : 'mute'} size="caption" testID="swap-rate">
-              {formatRate(quote.rate, quote.symbolIn, quote.symbolOut) ?? ''}
-            </Body>
-            <Row gap="$1" alignItems="center" testID="swap-route">
-              {quote.route.hops.map((h, i) => (
-                <Row key={`${h.tokenIn}-${i}`} gap="$1" alignItems="center">
-                  {i > 0 ? <Icon name="chevronRight" size={12} color={paint.mute} /> : null}
-                  <Chip paddingVertical={2}>
-                    <Body tone="mute" size="caption">
-                      {h.kind === 'v3' ? `V3 ${((h.fee ?? 0) / 10_000).toFixed(2).replace(/0$/, '')}%` : 'V2'}
-                    </Body>
-                  </Chip>
-                </Row>
-              ))}
-            </Row>
-          </Plate>
-        ) : null}
         {mode === 'limit' && limitQuote ? (
           <Plate gap="$1" testID="limit-distance">
             <Body tone="mute" size="caption">
@@ -443,11 +442,60 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
           </Plate>
         ) : null}
 
-        {/* The fee plate: four lines, always (§8.6; plan B4). */}
+        {/*
+          The details card, in the interface's shape: the rate is the row you
+          always see, with the route beside it and a chevron at the end, and the
+          rest of the figures live under it.
+
+          It used to be two plates — a rate strip and a four-row fee stack, both
+          always open — which is most of why the two screens did not look alike
+          however closely the console matched. `SwapDetailsDropdown` there is one
+          card: "1 BOLT = 2.31282 ETN" and a chevron, then price impact, max
+          slippage, network cost, order routing.
+        */}
         {mode === 'swap' ? (
-          <Plate role="recessed" gap={2} paddingVertical="$2" paddingHorizontal="$3" testID="fee-stack">
+          <Plate role="recessed" gap={2} paddingVertical={2} paddingHorizontal="$3" testID="fee-stack">
+            <Pressable
+              onPress={() => setDetails((d) => !d)}
+              accessibilityRole="button"
+              accessibilityLabel={t({ id: 'swap.details.a11y', message: 'Swap details' })}
+              style={{ minHeight: 44, justifyContent: 'center' }}
+              testID="swap-details-toggle"
+            >
+              <Row justifyContent="space-between" alignItems="center" gap="$2" minHeight={40}>
+                <Body tone={fresh ? 'ink' : 'mute'} size="caption" flexShrink={1} numberOfLines={1} testID="swap-rate">
+                  {quote && quote.amountOutRaw !== '0' ? (formatRate(quote.rate, quote.symbolIn, quote.symbolOut) ?? '') : t({ id: 'swap.details', message: 'Details' })}
+                </Body>
+                <Row gap="$1" alignItems="center" flexShrink={0}>
+                  <Row gap="$1" alignItems="center" testID="swap-route">
+                    {(quote?.route.hops ?? []).map((h, i) => (
+                      <Row key={`${h.tokenIn}-${i}`} gap="$1" alignItems="center">
+                        {i > 0 ? <Icon name="chevronRight" size={12} color={paint.mute} /> : null}
+                        <Chip paddingVertical={2}>
+                          <Body tone="mute" size="caption">
+                            {h.kind === 'v3' ? `V3 ${((h.fee ?? 0) / 10_000).toFixed(2).replace(/0$/, '')}%` : 'V2'}
+                          </Body>
+                        </Chip>
+                      </Row>
+                    ))}
+                  </Row>
+                  <Icon name={details ? 'chevronUp' : 'chevronDown'} size={16} color={paint.mute} />
+                </Row>
+              </Row>
+            </Pressable>
+            {details ? <Column height={1} backgroundColor="$edge" marginVertical={4} /> : null}
+            {details ? (
+            <>
             <FeeRow label={t({ id: 'swap.impact', message: 'Price impact' })} value={quote?.priceImpactPct !== null && quote?.priceImpactPct !== undefined ? `${quote.priceImpactPct.toFixed(2)}%` : '—'} tone={impactTone} testID="swap-impact" />
-            <Pressable onPress={() => setFeeSheet(true)} accessibilityRole="button" accessibilityLabel={t({ id: 'swap.fee.a11y', message: 'Wallet fee schedule' })} style={{ minHeight: 44, justifyContent: 'center', marginVertical: -8 }} testID="swap-fee-line">
+            {/*
+              No negative margin. It was `marginVertical: -8` to keep a 44 px
+              target from spacing the rows out, and the price it paid was that
+              the fee's second and third lines rendered OUTSIDE the row's box —
+              the owner photographed "0.006179 BOLT to 0xD6Cf…69d0" lying across
+              "Minimum received". A tap target may overlap its neighbours; text
+              may not.
+            */}
+            <Pressable onPress={() => setFeeSheet(true)} accessibilityRole="button" accessibilityLabel={t({ id: 'swap.fee.a11y', message: 'Wallet fee schedule' })} style={{ minHeight: 44, justifyContent: 'center' }} testID="swap-fee-line">
               <Row justifyContent="space-between" alignItems="flex-start" gap="$2">
                 <Row gap={4} alignItems="center">
                   <Body tone="mute" size="caption">
@@ -475,6 +523,8 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
             <FeeRow label={t({ id: 'swap.min', message: 'Minimum received' })} value={quote && quote.amountOutRaw !== '0' ? `${formatRaw(quote.minimumOutRaw, quote.decimalsOut)} ${quote.symbolOut}` : '—'} tone="mute" testID="swap-min" />
             <FeeRow label={t({ id: 'swap.locked', message: 'Liquidity locked' })} value={lockText} tone={lockTone} testID="swap-locks" />
             {quote && quote.taxBips > 0 ? <FeeRow label={t({ id: 'swap.tax.label', message: 'Token tax' })} value={t({ id: 'swap.tax', message: '+{p} token tax', values: { p: formatPct(quote.taxBips) } })} tone="ember" testID="swap-tax" /> : null}
+            </>
+            ) : null}
           </Plate>
         ) : (
           <Body tone="mute" size="caption">
