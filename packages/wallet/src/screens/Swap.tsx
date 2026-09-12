@@ -920,7 +920,16 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
             */}
             <FeeRow
               label={t({ id: 'swap.priced', message: 'Priced by' })}
-              value={quote?.route.source === 'api' ? t({ id: 'swap.priced.api', message: 'ElectroSwap routing' }) : t({ id: 'swap.priced.chain', message: 'On chain' })}
+              /*
+                The flow's quote wins once there is one (ES-BV-003, gap 2).
+
+                `execute()` prices the served route on chain before it encodes
+                anything and writes the result back to the flow. Reading only
+                the keystroke quote here meant the row kept saying "ElectroSwap
+                routing" for a swap the wallet had in fact re-priced itself,
+                which is the one case the row exists to report.
+              */
+              value={(flow?.quote ?? quote)?.route.source === 'api' ? t({ id: 'swap.priced.api', message: 'ElectroSwap routing' }) : t({ id: 'swap.priced.chain', message: 'On chain' })}
               tone="mute"
               testID="swap-priced-by"
             />

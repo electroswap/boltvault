@@ -332,13 +332,28 @@ export function explainCall(
         parts.push(
           `and ${amount(ctx, ctx.boltToken ?? 'native', decoded.amountBolt, chainId)} as boost`,
         )
-      return [
-        { text: parts.join(' '), tone: 'out' },
-        {
-          text: 'Unused amounts come back; a second deposit re-weights your duration multiplier.',
-          tone: 'neutral',
-        },
-      ]
+      const out: Statement[] = [{ text: parts.join(' '), tone: 'out' }]
+      /*
+        Both sides of the pair move, and the sheet used to say nothing about
+        them (ES-BV-030).
+
+        `amount0` and `amount1` were decoded and dropped, so a deposit that
+        spends two token balances read as a deposit of the native value alone.
+        The call does not name the two tokens — only the farm id does, and
+        resolving that needs the farm's own registry — so this says that they
+        move and points at the approvals, rather than printing base units for
+        a token whose decimals are unknown.
+      */
+      if (decoded.amount0 > 0n || decoded.amount1 > 0n)
+        out.push({
+          text: 'Both sides of the pair are deposited; the two token approvals are what set those amounts.',
+          tone: 'out',
+        })
+      out.push({
+        text: 'Unused amounts come back; a second deposit re-weights your duration multiplier.',
+        tone: 'neutral',
+      })
+      return out
     }
     case 'farm_withdraw':
       return decoded.liquidity === 0n

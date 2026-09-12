@@ -11,7 +11,8 @@
  * decision. This is the one `eth_call` that happens after the user says yes.
  */
 import { describe, expect, it } from 'vitest'
-import { rebuiltFromChain, type SwapQuoteView } from '../src/namespaces/swap'
+import { feeAmount, routerMinimumOut } from '@boltvault/electroswap'
+import { rebuiltFromChain, rebuiltInputFromChain, type SwapQuoteView } from '../src/namespaces/swap'
 
 const served = (amountOut: bigint, over: Partial<SwapQuoteView> = {}): SwapQuoteView =>
   ({
@@ -85,5 +86,70 @@ describe('what gets encoded after the chain has been asked', () => {
   it('says nothing about a quote with no output to compare', () => {
     const quote = served(0n)
     expect(rebuiltFromChain(quote, ONE)).toBe(quote)
+  })
+
+  /*
+    ES-BV-060. The first version priced the floor as though the fee were always
+    taken on the output. When it is taken on the input — chosen when the
+    output token's custody is unsafe — the router only ever swaps the input
+    net of the fee, so that floor was higher than the router could deliver by
+    the fee fraction and the transaction reverted on chain.
+  */
+  it('scales the floor by the fee when the fee came off the input', () => {
+    const bips = 30
+    const quote = served((ONE * 90n) / 100n, { fee: { bips, tier: 1, name: 'standard', amountRaw: '0', sink: '0x9999999999999999999999999999999999999999', source: 'config', nextTierAt: null, nextTierBips: null, onInput: true } })
+    const out = rebuiltFromChain(quote, ONE)
+    // Exactly the keystroke path's formula, not the output-side one.
+    expect(out.minimumOutRaw).toBe(routerMinimumOut(ONE - feeAmount(ONE, bips), 50).toString())
+    expect(BigInt(out.minimumOutRaw)).toBeLessThan(BigInt(rebuiltFromChain(served((ONE * 90n) / 100n), ONE).minimumOutRaw))
+  })
+
+  it('recomputes every figure the screen reads, not only the two it encodes', () => {
+    const quote = served((ONE * 90n) / 100n, { priceImpactPct: 1 })
+    const out = rebuiltFromChain(quote, ONE)
+    // Left at their served values, these described a trade that no longer
+    // existed: a receive amount and a rate from the low figure beside an
+    // output from the high one.
+    expect(out.receiveRaw).not.toBe(quote.receiveRaw)
+    expect(BigInt(out.receiveRaw)).toBeGreaterThan(BigInt(quote.receiveRaw))
+    expect(out.rate).not.toBe(quote.rate)
+    // A better output against the same reference is a smaller impact.
+    expect(out.priceImpactPct ?? 0).toBeLessThan(quote.priceImpactPct ?? 0)
+  })
+
+  it('leaves an input-side fee amount alone, because its base did not move', () => {
+    const fee = { bips: 30, tier: 1, name: 'standard', amountRaw: '12345', sink: '0x9999999999999999999999999999999999999999', source: 'config' as const, nextTierAt: null, nextTierBips: null, onInput: true }
+    const out = rebuiltFromChain(served((ONE * 90n) / 100n, { fee }), ONE)
+    expect(out.fee.amountRaw).toBe('12345')
+  })
+})
+
+describe('the same question asked of an exact-output swap', () => {
+  const wanted = (amountIn: bigint) =>
+    served(ONE, { tradeType: 'exactOut', amountInRaw: amountIn.toString(), maximumInRaw: ((amountIn * 10_050n) / 10_000n).toString() })
+
+  it('brings the ceiling down when the served input buys more than was asked for', () => {
+    // The service claimed 2 tokens in for 1 out; the chain says that input
+    // buys 1.2, so only about 1.667 was ever needed.
+    const quote = wanted(ONE * 2n)
+    const out = rebuiltInputFromChain(quote, (ONE * 120n) / 100n)
+    expect(BigInt(out.amountInRaw)).toBeLessThan(ONE * 2n)
+    expect(BigInt(out.maximumInRaw)).toBeLessThan(BigInt(quote.maximumInRaw))
+    expect(out.route.source).toBe('onchain')
+    // The user's own slippage still sits on top of the new figure.
+    expect(BigInt(out.maximumInRaw)).toBeGreaterThan(BigInt(out.amountInRaw))
+  })
+
+  it('never raises a ceiling the user has already seen', () => {
+    const quote = wanted(ONE * 2n)
+    // The chain says that input buys less than asked: the served input was, if
+    // anything, too small. Not this function's business.
+    expect(rebuiltInputFromChain(quote, (ONE * 80n) / 100n)).toBe(quote)
+    expect(rebuiltInputFromChain(quote, ONE)).toBe(quote)
+  })
+
+  it('leaves ordinary drift alone here too', () => {
+    const quote = wanted(ONE * 2n)
+    expect(rebuiltInputFromChain(quote, (ONE * 10_050n) / 10_000n)).toBe(quote)
   })
 })

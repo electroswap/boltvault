@@ -238,17 +238,43 @@ const MAX_EFFECTIVE_SLIPPAGE_BPS = 9_900
 const CONFIRM_DIVERGENCE_BIPS = 100n
 
 /**
+ * The spot rate the served quote was measured against, recovered from its own
+ * impact figure.
+ *
+ * `priceImpactPct` is `(1 - executed / spot) × 100`, so given the impact and
+ * the executed price the reference follows. It means a rebuilt quote can
+ * report an impact against the same reference the served one used, without a
+ * second call and without quietly leaving the old percentage in place.
+ */
+function impliedSpot(quote: SwapQuoteView): number | null {
+  const impact = quote.priceImpactPct
+  if (impact === null || impact >= 100) return null
+  const executed = rateOf(BigInt(quote.amountInRaw), BigInt(quote.amountOutRaw), quote.decimalsIn, quote.decimalsOut)
+  if (executed === null || executed <= 0) return null
+  const spot = executed / (1 - impact / 100)
+  return Number.isFinite(spot) && spot > 0 ? spot : null
+}
+
+/**
  * The quote to encode, given what the chain said about the very same route
- * (ES-BV-003).
+ * (ES-BV-003, ES-BV-060).
  *
  * The served figure stands when the chain agrees, when the chain is worse (the
  * service is the better router and is trusted for route *selection*), and when
  * the difference is inside `CONFIRM_DIVERGENCE_BIPS` — ordinary drift between
  * a router's model and a simulated swap a moment later. Beyond that the
  * service is stale or wrong about its own route, and the floor in the calldata
- * should not be the low number: the quote is rebuilt from the chain's figure,
- * with the minimum recomputed from it and nothing else about the trade
- * touched.
+ * should not be the low number.
+ *
+ * What comes back is a whole quote, not the served one with two numbers
+ * swapped. The first version recomputed `minimumOutRaw` and `amountOutRaw` and
+ * left `receiveRaw`, `fee.amountRaw`, `rate` and `priceImpactPct` at their
+ * served values — and, worse, priced the floor as though the fee were always
+ * taken on the output. For a fee-on-input swap (chosen when the output token's
+ * custody is unsafe) the router only ever swaps the input net of the fee, so
+ * that floor was higher than the router could deliver by the fee fraction and
+ * the transaction reverted on chain. Every derived field is recomputed here
+ * exactly as the keystroke path computes it.
  */
 export function rebuiltFromChain(quote: SwapQuoteView, onChainOut: bigint): SwapQuoteView {
   const served = BigInt(quote.amountOutRaw)
@@ -256,11 +282,77 @@ export function rebuiltFromChain(quote: SwapQuoteView, onChainOut: bigint): Swap
   const betterBips = ((onChainOut - served) * 10_000n) / served
   if (betterBips <= CONFIRM_DIVERGENCE_BIPS) return quote
   const effective = Math.min(quote.slippageBips + quote.taxBips, MAX_EFFECTIVE_SLIPPAGE_BPS)
-  const minimumOutRaw = deliveredMinimumOut(onChainOut, quote.fee.onInput ? 0 : quote.fee.bips, effective)
+  const bips = quote.fee.bips
+  const onInput = quote.fee.onInput
+  const amountIn = BigInt(quote.amountInRaw)
+  /*
+    The same two lines as the keystroke path, and for the same reason: with the
+    fee on the input there is no portion for the router to take out of what it
+    holds, but there is also less input going into the pools, so the floor is
+    the scaled quote less slippage rather than the quote less fee less
+    slippage.
+  */
+  const scaledOut = onInput ? onChainOut - feeAmount(onChainOut, bips) : onChainOut
+  const minimumOutRaw = onInput
+    ? routerMinimumOut(scaledOut, effective)
+    : deliveredMinimumOut(onChainOut, bips, effective)
+  const receive =
+    ((onInput ? onChainOut : netAfterFee(onChainOut, bips)) * BigInt(10_000 - Math.min(quote.taxBips, 9_999))) / 10_000n
   return {
     ...quote,
     amountOutRaw: onChainOut.toString(),
+    receiveRaw: receive.toString(),
     minimumOutRaw: minimumOutRaw.toString(),
+    rate: rateOf(amountIn, onChainOut, quote.decimalsIn, quote.decimalsOut),
+    priceImpactPct: priceImpactPct(amountIn, onChainOut, impliedSpot(quote), quote.decimalsIn, quote.decimalsOut),
+    fee: {
+      ...quote.fee,
+      // Taken on the input, the fee is a fraction of a number that did not move.
+      amountRaw: onInput ? quote.fee.amountRaw : feeAmount(onChainOut, bips).toString(),
+    },
+    route: { ...quote.route, source: 'onchain' },
+  }
+}
+
+/**
+ * The same confirmation in the exact-output direction (ES-BV-003, gap 3).
+ *
+ * Here the output is what the user typed and the *input* is the service's
+ * claim, so the number that can be wrong is `amountInMaximum` — the ceiling
+ * the user commits to. Asking the chain what the served input actually buys on
+ * the served route answers it: if that input buys materially more than was
+ * asked for, the service inflated it and the ceiling comes down in proportion.
+ *
+ * It only ever lowers. A chain figure below the target means the served input
+ * was, if anything, too small, and raising a ceiling the user has already seen
+ * is not this function's business.
+ */
+export function rebuiltInputFromChain(quote: SwapQuoteView, onChainOutForServedInput: bigint): SwapQuoteView {
+  const wantOut = BigInt(quote.amountOutRaw)
+  const servedIn = BigInt(quote.amountInRaw)
+  if (wantOut <= 0n || servedIn <= 0n) return quote
+  if (onChainOutForServedInput <= wantOut) return quote
+  const betterBips = ((onChainOutForServedInput - wantOut) * 10_000n) / wantOut
+  if (betterBips <= CONFIRM_DIVERGENCE_BIPS) return quote
+  /*
+    Proportional, and rounded up. An AMM curve is not linear, so scaling the
+    input by the output ratio is an estimate — which is why the user's own
+    slippage still sits on top of it as `maximumIn`, exactly as it does for a
+    served figure.
+  */
+  const neededIn = (servedIn * wantOut + onChainOutForServedInput - 1n) / onChainOutForServedInput
+  if (neededIn >= servedIn) return quote
+  const effective = Math.min(quote.slippageBips + quote.taxBips, MAX_EFFECTIVE_SLIPPAGE_BPS)
+  return {
+    ...quote,
+    amountInRaw: neededIn.toString(),
+    maximumInRaw: maximumInFor(neededIn, effective).toString(),
+    rate: rateOf(neededIn, wantOut, quote.decimalsIn, quote.decimalsOut),
+    priceImpactPct: priceImpactPct(neededIn, wantOut, impliedSpot(quote), quote.decimalsIn, quote.decimalsOut),
+    fee: {
+      ...quote.fee,
+      amountRaw: quote.fee.onInput ? feeAmount(neededIn, quote.fee.bips).toString() : quote.fee.amountRaw,
+    },
     route: { ...quote.route, source: 'onchain' },
   }
 }
@@ -511,9 +603,20 @@ export class SwapService {
         : hops.every((h) => h.kind === 'v3')
           ? 'v3'
           : 'mixed'
-      const onChain = await quoteOne({ route: { hops }, kind, label: quote.route.label }, amountIn, addresses, read)
+      /*
+        Both directions ask the chain the same question: what does this input
+        buy on this route? For an exact-in swap that answer is the output the
+        floor is built from. For an exact-out swap the input is the service's
+        claim, so the answer says whether that claim was inflated — and the
+        ceiling the user commits to comes down if it was (ES-BV-003, gap 3).
+      */
+      const probeIn = quote.tradeType === 'exactOut' ? BigInt(quote.amountInRaw) : amountIn
+      if (probeIn <= 0n) return quote
+      const onChain = await quoteOne({ route: { hops }, kind, label: quote.route.label }, probeIn, addresses, read)
       if (!onChain) return quote
-      return rebuiltFromChain(quote, onChain.amountOut)
+      return quote.tradeType === 'exactOut'
+        ? rebuiltInputFromChain(quote, onChain.amountOut)
+        : rebuiltFromChain(quote, onChain.amountOut)
     } catch {
       // A chain that cannot answer is not a reason to refuse a swap the user
       // has already agreed to; the served figure and its provenance stand.
@@ -1438,8 +1541,13 @@ export class SwapService {
           figure before anything is encoded. If the chain cannot answer, the
           served figure stands and the sheet's provenance already says where it
           came from.
+
+          The exact-output direction is confirmed too. There the output is what
+          the user typed and the input is the claim, so an inflated served
+          input sets `amountInMaximum` above what the trade needs — the same
+          finding, pointing the other way.
         */
-        if (quote.route.source === 'api' && !exactOut) {
+        if (quote.route.source === 'api') {
           const confirmed = await this.confirmServedQuote(quote, chainId, amountIn)
           if (confirmed && confirmed !== quote) {
             quote = confirmed
@@ -1493,7 +1601,18 @@ export class SwapService {
               ...shared,
               amountIn,
               quotedOut: BigInt(quote.amountOutRaw),
-              slippageBips: quote.slippageBips + quote.taxBips,
+              /*
+                The clamped sum, the same one the screen's minimum was built
+                from (ES-BV-030).
+
+                The sheet shows `minimumOutRaw`, computed with
+                `MAX_EFFECTIVE_SLIPPAGE_BPS` applied; the encoder was handed
+                the raw sum. For a tax-plus-slippage total between 9 900 and
+                10 000 basis points those are different numbers, and the one in
+                the calldata was the lower of the two — a floor beneath the
+                floor the user was shown.
+              */
+              slippageBips: Math.min(quote.slippageBips + quote.taxBips, MAX_EFFECTIVE_SLIPPAGE_BPS),
             })
         /*
           The bytes as handed over, kept so a failure can be replayed on a fork.
