@@ -26,6 +26,8 @@ export interface AmountWellProps {
   readonly balanceIcon?: IconName
   readonly onMax?: () => void
   readonly error?: string | null
+  /** The token's decimal places, so the field cannot take digits it must round away. */
+  readonly decimals?: number
   /**
    * An override for the well's hairline, two pixels wide.
    *
@@ -65,7 +67,7 @@ export interface AmountWellProps {
   readonly balanceTestID?: string
 }
 
-export function AmountWell({ label, value, onChange, readOnly = false, tokenPill, right, fiat, balance, balanceIcon = 'wallet', onMax, error, accent, louder = false, autoFocus, testID, inputTestID, maxTestID, balanceTestID }: AmountWellProps) {
+export function AmountWell({ label, value, onChange, readOnly = false, tokenPill, right, fiat, balance, balanceIcon = 'wallet', onMax, error, decimals, accent, louder = false, autoFocus, testID, inputTestID, maxTestID, balanceTestID }: AmountWellProps) {
   const empty = !value || value === '0' || value === '—'
   return (
     <Plate role="well" gap={2} paddingVertical={louder ? 10 : 8} paddingHorizontal={12} {...(accent ? { borderColor: accent } : {})} testID={testID}>
@@ -82,7 +84,7 @@ export function AmountWell({ label, value, onChange, readOnly = false, tokenPill
               {value || '0'}
             </Body>
           ) : (
-            <Input value={value} onChange={onChange} placeholder="0" bare big {...(louder ? { louder: true } : {})} numeric autoFocus={autoFocus} testID={inputTestID} />
+            <Input value={value} onChange={onChange} placeholder="0" bare big {...(louder ? { louder: true } : {})} numeric {...(decimals !== undefined ? { maxDecimals: decimals } : {})} autoFocus={autoFocus} testID={inputTestID} />
           )}
         </Column>
         {tokenPill ?? null}

@@ -84,13 +84,18 @@ describe('a broadcast whose answer never arrives', () => {
   it('keeps the row pending with the local hash, and refuses a second send at the same number', async () => {
     swallowSends = 1
     const id = await send()
-    await expect.poll(async () => (await engine.engine.activity.list({})).find((e) => e.id === id)?.hash, { timeout: 5_000 }).toBeTruthy()
+    // The hash names the very transaction the node took, so the chain can be
+    // asked about it — which is the whole point of computing it locally.
+    await expect
+      .poll(async () => {
+        const hash = (await engine.engine.activity.list({})).find((e) => e.id === id)?.hash
+        return typeof hash === 'string' && rpc.state.transactions.has(hash)
+      }, { timeout: 5_000 })
+      .toBe(true)
     const row = (await engine.engine.activity.list({})).find((e) => e.id === id)
     // The hash is the wallet's own, not the node's, and the row is not written off.
     expect(row?.status).toBe('pending')
     expect(row?.hash).toMatch(/^0x[0-9a-f]{64}$/)
-    // And it names the very transaction the node took, so the chain can be asked about it.
-    expect(rpc.state.transactions.has(row?.hash as string)).toBe(true)
     if (seenRaw[0]) expect(row?.hash).toBe(keccak256(seenRaw[0]))
     /*
       And the number stays held. Before this the error released the nonce
@@ -113,7 +118,12 @@ describe('a broadcast whose answer never arrives', () => {
     const before = rpc.state.transactions.size
     swallowSends = 0
     const id = await send()
-    await expect.poll(async () => (await engine.engine.activity.list({})).find((e) => e.id === id)?.hash, { timeout: 5_000 }).toBeTruthy()
+    await expect
+      .poll(async () => {
+        const hash = (await engine.engine.activity.list({})).find((e) => e.id === id)?.hash
+        return typeof hash === 'string' && rpc.state.transactions.has(hash)
+      }, { timeout: 5_000 })
+      .toBe(true)
     expect(rpc.state.transactions.size).toBe(before + 1)
   })
 })

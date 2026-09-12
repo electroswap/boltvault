@@ -623,6 +623,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
             label={t({ id: 'swap.pay', message: 'You pay' })}
             value={amount}
             onChange={setAmount}
+            {...(inView ? { decimals: inView.decimals } : {})}
             louder
             tokenPill={<TokenPill token={inView} onPress={() => setPicker('in')} testID="swap-token-in" />}
             fiat={formatAmountFiat(amount, rowIn, currency)}

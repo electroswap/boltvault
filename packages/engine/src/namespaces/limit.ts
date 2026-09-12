@@ -10,6 +10,7 @@ import { ERC20_ABI, LIMIT_PLATFORM_FEE_BIPS, PERMIT2_ABI, PERMIT_EXPIRY_S, bestR
 import type { Platform } from '@boltvault/platform'
 import { encodeFunctionData, maxUint256, parseAbi, parseUnits, type Hex } from 'viem'
 import { z } from 'zod'
+import { amountOrProblem } from '../amount'
 import { EngineError } from '../errors'
 import type { EventBus, NamespaceSpec } from '../host'
 import { readMany } from '../multicall'
@@ -138,14 +139,8 @@ export class LimitService {
     const tokenIn = nativeIn ? wetn : (inView.address as Hex)
     const tokenOut = outView.address === 'native' ? wetn : (outView.address as Hex)
     const problems: string[] = []
-    let amountIn = 0n
-    let minOut = 0n
-    try {
-      amountIn = parseUnits(input.amountIn.trim() || '0', inView.decimals)
-      minOut = parseUnits(input.minOut.trim() || '0', outView.decimals)
-    } catch {
-      problems.push('That amount is not a number.')
-    }
+    const amountIn = amountOrProblem(input.amountIn, inView.decimals, problems)
+    const minOut = amountOrProblem(input.minOut, outView.decimals, problems)
     if (same(tokenIn, tokenOut)) problems.push('Pick two different tokens.')
     if (amountIn <= 0n) problems.push('Enter an amount above zero.')
     if (minOut <= 0n) problems.push('Enter the least you will accept.')

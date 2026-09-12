@@ -11,6 +11,7 @@
 import { Body, Cable, ChainMark, Chip, Column, Icon, Input, Key, Pill, Plate, Pressable, Rim, Row, ScrollView, Sheet, TokenAvatar, metrics, paint, shortAddress } from '@boltvault/ui'
 import type { BridgeQuote, BridgeRoute, BridgeStatus, ChainView } from '@boltvault/engine'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { formatUnits } from 'viem'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
 import { AmountWell } from '../components/AmountWell'
 import { ChainSelectPill } from '../components/ChainSelect'
@@ -233,10 +234,15 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
             right={<ChainSelect chainId={fromChain} label={chainName(fromChain)} onPress={() => setSheet('from')} testID="bridge-from-select" />}
             value={amount}
             onChange={setAmount}
+            {...(quote ? { decimals: quote.decimals } : {})}
             tokenPill={route ? <Pill strong label={route.symbol} icon={<TokenAvatar chainId={fromChain} address={route.token} symbol={route.symbol} size={18} />} chevron={symbols.length > 1} tone="ink" size="md" onPress={symbols.length > 1 ? () => setSheet('asset') : undefined} testID="bridge-asset-select" /> : undefined}
             fiat={amount.trim() && Number(amount) > 0 ? formatFiat(Number(amount), 'USD') : null}
             balance={quote ? `${formatRaw(quote.balanceRaw, quote.decimals)} ${quote.symbol}` : null}
-            onMax={quote ? () => setAmount(formatRaw(quote.balanceRaw, quote.decimals).replace(/,/g, '')) : undefined}
+            // MAX means the whole balance, not a rounded picture of it:
+            // `formatRaw` gives two decimal places and compacts above ten
+            // million, so MAX left dust behind and, on a large balance, typed
+            // something that does not parse at all (ES-BV-030).
+            onMax={quote ? () => setAmount(formatUnits(BigInt(quote.balanceRaw), quote.decimals)) : undefined}
             testID="bridge-from"
             inputTestID="bridge-amount-input"
             maxTestID="bridge-max"

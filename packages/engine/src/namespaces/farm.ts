@@ -30,6 +30,7 @@ import {
 import type { Platform } from '@boltvault/platform'
 import { encodeFunctionData, maxUint256, parseAbi, parseUnits, type Hex } from 'viem'
 import { z } from 'zod'
+import { amountOrThrow } from '../amount'
 import { EngineError } from '../errors'
 import { cacheKey, type Cached, type DocCache } from '../cache'
 import type { NamespaceSpec } from '../host'
@@ -468,8 +469,9 @@ export class FarmService {
     let amount0 = 0n
     let amount1 = 0n
     try {
-      if (input.amount0?.trim()) amount0 = parseUnits(input.amount0.trim(), view.decimals0)
-      if (input.amount1?.trim()) amount1 = parseUnits(input.amount1.trim(), view.decimals1)
+      // Never more than was typed, whatever the pool's decimals are (ES-BV-048).
+      if (input.amount0?.trim()) amount0 = amountOrThrow(input.amount0, view.decimals0)
+      if (input.amount1?.trim()) amount1 = amountOrThrow(input.amount1, view.decimals1)
     } catch {
       problems.push('That amount is not a number.')
     }
@@ -517,7 +519,7 @@ export class FarmService {
       problems.push('Both sides need an amount; the pool sets the ratio.')
     let bolt = 0n
     try {
-      if (input.bolt?.trim()) bolt = parseUnits(input.bolt.trim(), 18)
+      if (input.bolt?.trim()) bolt = amountOrThrow(input.bolt, 18)
     } catch {
       problems.push('That BOLT amount is not a number.')
     }

@@ -198,7 +198,8 @@ describe('the Hyperlane bridge on two mock chains', () => {
     const req = await approvalById(engine, r.requestId ?? '')
     const payload = payloadOf(req)
     if (!('assessment' in payload)) throw new Error('not a signing request')
-    expect(payload.assessment.statements.map((s) => s.text)).toEqual([`Bridge 100 USDC to Base for ${address.slice(0, 6)}…${address.slice(-4)}`, 'Pays 0.001 ETN of interchain gas to Hyperlane'])
+    // Sending to yourself says so; a stranger's address is printed in full (ES-BV-027).
+    expect(payload.assessment.statements.map((s) => s.text)).toEqual(['Bridge 100 USDC to Base for yourself', 'Pays 0.001 ETN of interchain gas to Hyperlane'])
     // No trace RPC on the mock chain: the no-simulation floor is `warn` (§3.4), never a block for an EOA recipient.
     expect(['info', 'warn']).toContain(payload.assessment.severity)
     expect(payload.assessment.rules.map((r) => r.code)).not.toContain('RECIPIENT_NO_CODE_ON_DEST')

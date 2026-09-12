@@ -428,6 +428,7 @@ export function Send({
           label={t({ id: 'send.amount', message: 'Amount' })}
           value={amount}
           onChange={setAmount}
+          {...(selected ? { decimals: selected.decimals } : {})}
           tokenPill={
             <Pill
               strong

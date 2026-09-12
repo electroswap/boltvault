@@ -26,8 +26,9 @@ import {
   type Corridor,
 } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
-import { maxUint256, parseUnits, type Hex } from 'viem'
+import { getAddress, isAddress, maxUint256, parseUnits, type Hex } from 'viem'
 import { z } from 'zod'
+import { amountOrProblem } from '../amount'
 import { EngineError } from '../errors'
 import type { SealedMap } from '../sealed'
 import type { EventBus, NamespaceSpec } from '../host'
@@ -176,7 +177,17 @@ export class BridgeService {
     const d = this.deps
     const c = corridor(input.fromChainId, input.toChainId, input.token)
     const account = await this.account(input.accountId)
-    const recipient = (input.recipient?.trim() || account.address) as Hex
+    /*
+      Checksum, not shape (ES-BV-027).
+
+      The hex test accepts any forty hex characters, so a mixed-case address
+      with one character mistyped passed straight through to the calldata —
+      while Send has used viem's `isAddress`, which verifies EIP-55 casing,
+      since it was written. The one transfer that cannot be undone was the one
+      with the weaker check.
+    */
+    const typed = input.recipient?.trim() ?? ''
+    const recipient = (typed || account.address) as Hex
     const problems: string[] = []
     const base: BridgeQuote = {
       fromChainId: input.fromChainId,
@@ -198,20 +209,25 @@ export class BridgeService {
     }
     if (!c)
       return { ...base, problems: ['No Hyperlane corridor for this token between these chains.'] }
-    if (!/^0x[0-9a-fA-F]{40}$/.test(recipient))
+    if (!isAddress(recipient, { strict: false }))
       return { ...base, problems: ['Enter a full destination address.'] }
+    if (typed && /[A-F]/.test(typed) && /[a-f]/.test(typed) && !isAddress(typed, { strict: true }))
+      return {
+        ...base,
+        problems: [
+          'That address does not pass its own checksum, so at least one character is wrong. Paste it again.',
+        ],
+      }
+    // From here on the sheet, the calldata and the stored quote all name the
+    // one canonical spelling.
+    const checksummed = getAddress(recipient)
     const v = await this.verify(c)
     if (!v.ok) problems.push(`This corridor is switched off: ${v.reason ?? 'verification failed'}.`)
     if (this.deps.statics?.corridorDisabled(c.origin.chainId, c.destination.chainId, c.symbol))
       problems.push('This corridor is switched off right now by a signed flag from ElectroSwap.')
     if (account.kind === 'watch')
       problems.push('Watch-only — import a key or pair a device to bridge.')
-    let amount = 0n
-    try {
-      amount = parseUnits(input.amount.trim() || '0', c.origin.decimals)
-    } catch {
-      problems.push('That amount is not a number.')
-    }
+    const amount = amountOrProblem(input.amount, c.origin.decimals, problems)
     if (amount <= 0n) problems.push('Enter an amount above zero.')
     const owner = account.address
     const dest = hyperlaneChain(c.destination.chainId)
@@ -285,7 +301,7 @@ export class BridgeService {
       decimals: c.origin.decimals,
       amountRaw: amount.toString(),
       balanceRaw: balanceRaw.toString(),
-      recipient,
+      recipient: checksummed,
       gasQuoteWei: (gasQuoteWei ?? 0n).toString(),
       txFeeWei: txFeeWei.toString(),
       steps,

@@ -28,19 +28,29 @@ function u(v: bigint): Hex {
 }
 
 /**
- * Poll until the activity row for `requestId` carries a broadcast hash.
+ * Poll until the node actually has the transaction for `requestId`.
  *
  * This used to be a flat `setTimeout(r, 50)`. Deciding an approval kicks off
  * sign → eth_sendRawTransaction → activity.update, which takes longer than
  * that whenever the machine is busy, so both assertions below passed alone and
  * failed under the full `pnpm -r test` run — leaving the only end-to-end check
  * that broadcast calldata matches the sheet silently absent in CI.
+ *
+ * And waiting on the row's hash is no longer enough.
+
+  The write-ahead row carries its hash from before the send now (ES-BV-002):
+  the hash is `keccak256` of the wallet's own signed bytes, so it exists the
+  moment the transaction is signed and every later error is about delivery.
+  A helper that returned on "the row has a hash" therefore returned while the
+  request was still in flight, and the assertions that follow read the mock's
+  transaction map a beat too early.
  */
-async function settled(engine: Engine, accountId: string, requestId: string, ms = 10_000): Promise<{ hash: string; category: string }> {
+async function settled(engine: Engine, accountId: string, requestId: string, node?: MockRpc, ms = 10_000): Promise<{ hash: string; category: string }> {
   const deadline = Date.now() + ms
   for (;;) {
     const entry = (await engine.engine.activity.list({ accountId })).find((e) => e.id === requestId)
-    if (entry && typeof entry.hash === 'string') return { hash: entry.hash, category: entry.category }
+    if (entry && typeof entry.hash === 'string' && (!node || node.state.transactions.has(entry.hash)))
+      return { hash: entry.hash, category: entry.category }
     if (Date.now() > deadline) throw new Error(`no broadcast hash for ${requestId} within ${ms}ms (status ${entry?.status ?? 'absent'})`)
     await new Promise((r) => setTimeout(r, 25))
   }
@@ -144,7 +154,7 @@ describe('money on the testnet mock', () => {
     expect(payload.assessment.statements[0]?.text).toMatch(/^Send 2.5 FIX to/)
     expect(payload.assessment.rules.map((r) => r.code)).toContain('RECIPIENT_FIRST_TIME')
     await engine.engine.approvals.decide({ id: requestId, approve: true })
-    const entry = await settled(engine, accountId, requestId)
+    const entry = await settled(engine, accountId, requestId, rpc)
     expect(entry.hash).toMatch(/^0x/)
     expect(entry.category).toBe('SEND')
     const raw = rpc.state.transactions.get(entry.hash)?.raw
@@ -184,7 +194,7 @@ describe('money on the testnet mock', () => {
     const payload = parseApprovalPayload(req.payload)
     expect(payload?.kind === 'send_transaction' && payload.assessment.statements[0]?.text).toMatch(/^Revoke Permit2/)
     await engine.engine.approvals.decide({ id: requestId, approve: true })
-    const entry = await settled(engine, accountId, requestId)
+    const entry = await settled(engine, accountId, requestId, rpc)
     expect(entry.category).toBe('REVOKE')
     const tx = parseTransaction(rpc.state.transactions.get(entry.hash)?.raw as Hex)
     const decoded = decodeFunctionData({ abi: ERC20, data: tx.data as Hex })

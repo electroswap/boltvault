@@ -55,6 +55,7 @@ import type {
   FailureStage,
   FailureTaxProbe,
 } from '../clientFailureApi'
+import { amountOrProblem } from '../amount'
 import { EngineError } from '../errors'
 import type { NamespaceSpec } from '../host'
 import { multicallAddress, readMany } from '../multicall'
@@ -558,12 +559,8 @@ export class SwapService {
     */
     let amountIn = 0n
     let wantOut = 0n
-    try {
-      if (exactOut) wantOut = parseUnits((input.amountOut ?? '').trim() || '0', outView.decimals)
-      else amountIn = parseUnits((input.amountIn ?? '').trim() || '0', inView.decimals)
-    } catch {
-      problems.push('That amount is not a number.')
-    }
+    if (exactOut) wantOut = amountOrProblem(input.amountOut ?? '', outView.decimals, problems)
+    else amountIn = amountOrProblem(input.amountIn ?? '', inView.decimals, problems)
     const typed = exactOut ? wantOut : amountIn
     if (same(wrappedIn, wrappedOut)) problems.push('Pick two different tokens.')
     if (typed <= 0n) problems.push('Enter an amount above zero.')

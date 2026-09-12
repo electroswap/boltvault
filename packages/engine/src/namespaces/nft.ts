@@ -41,6 +41,7 @@ import {
 import type { Platform } from '@boltvault/platform'
 import { encodeFunctionData, parseAbi, parseUnits, type Hex } from 'viem'
 import { z } from 'zod'
+import { amountOrThrow } from '../amount'
 import { EngineError } from '../errors'
 import { cacheKey, type Cached, type DocCache } from '../cache'
 import type { NamespaceSpec } from '../host'
@@ -540,7 +541,7 @@ export class NftService {
         'invalid_argument',
         'Watch-only — import a key or pair a device to list.',
       )
-    const price = parseUnits(input.priceEtn.trim() || '0', 18)
+    const price = amountOrThrow(input.priceEtn, 18)
     if (price <= 0n) throw new EngineError('invalid_argument', 'Enter a price above zero.')
     if (!Number.isFinite(input.days) || input.days < 1 || input.days > 180)
       throw new EngineError('invalid_argument', 'Choose between 1 and 180 days.')
@@ -655,7 +656,7 @@ export class NftService {
         'invalid_argument',
         'Watch-only — import a key or pair a device to make offers.',
       )
-    const price = parseUnits(input.priceEtn.trim() || '0', 18)
+    const price = amountOrThrow(input.priceEtn, 18)
     if (price <= 0n) throw new EngineError('invalid_argument', 'Enter an offer above zero.')
     if (!Number.isFinite(input.days) || input.days < 1 || input.days > 180)
       throw new EngineError('invalid_argument', 'Choose between 1 and 180 days.')

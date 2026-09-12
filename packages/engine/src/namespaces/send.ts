@@ -16,6 +16,7 @@ import {
 } from 'viem'
 import { z } from 'zod'
 import { getChain } from '@boltvault/chains'
+import { amountOrProblem } from '../amount'
 import { EngineError } from '../errors'
 import type { NamespaceSpec } from '../host'
 import { readMany } from '../multicall'
@@ -82,12 +83,9 @@ export class SendService {
     const problems: string[] = []
     const rcpt = await this.recipient(input.chainId, input.to)
     if (rcpt.problem) problems.push(rcpt.problem)
-    let amountRaw = 0n
-    try {
-      amountRaw = parseUnits(input.amount.trim() || '0', token.decimals)
-    } catch {
-      problems.push('That amount is not a number.')
-    }
+    // Exactly what was typed, or a reason why the token cannot hold it
+    // (ES-BV-048); never a rounded figure the form did not show.
+    const amountRaw = amountOrProblem(input.amount, token.decimals, problems)
     if (amountRaw <= 0n) problems.push('Enter an amount above zero.')
     const owner = account.address as Hex
     // What this chain charges its fees in. It was the literal string 'ETN' on

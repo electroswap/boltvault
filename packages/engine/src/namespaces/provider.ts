@@ -383,8 +383,14 @@ function possiblySent(err: unknown): boolean {
  * "unknown — check the explorer" is a more honest row than "pending".
  */
 const WATCH_BUDGET_MS = 20 * 60 * 1000
-/** Blocks between the first receipt and the row settling, so a reorg is caught. */
+/** Blocks past the receipt before the watcher re-reads it, so a reorg is caught. */
 const CONFIRM_DEPTH = 2
+/**
+ * How long that second look is worth waiting for. Two minutes covers
+ * `CONFIRM_DEPTH` blocks on every chain the wallet speaks to; past that the
+ * head is not moving and there is nothing further to learn.
+ */
+const REORG_WINDOW_MS = 2 * 60 * 1000
 /** A node may not report its own new transaction immediately; wait before calling it dropped. */
 const DROP_GRACE_MS = 30_000
 
@@ -652,6 +658,8 @@ export class ProviderService {
     this.flow.dispose()
     for (const p of this.headPolls.values()) clearInterval(p.timer)
     this.headPolls.clear()
+    for (const timer of this.watching.values()) if (timer) clearTimeout(timer)
+    this.watching.clear()
   }
 
   // ---- RpcContext -----------------------------------------------------------------
@@ -1783,8 +1791,13 @@ export class ProviderService {
   // ---- transactions ---------------------------------------------------------------
 
   /** (chain:account) → the nonces this wallet has handed out but not yet seen on chain. */
-  /** Activity rows with a live receipt watcher, so nothing is followed twice. */
-  private readonly watching = new Set<string>()
+  /**
+   * Activity rows with a live receipt watcher, and the timer each is waiting
+   * on. A map rather than a set so `dispose()` can end them: a watcher that
+   * outlives its engine keeps a poll running against a chain nobody is
+   * listening to any more.
+   */
+  private readonly watching = new Map<string, ReturnType<typeof setTimeout> | null>()
   private readonly reservedNonces = new Map<string, Array<{ nonce: number; at: number }>>()
 
   /**
@@ -2390,16 +2403,31 @@ export class ProviderService {
     const d = this.deps
     // One watcher per row: a retry, a resume and a re-broadcast all land here.
     if (this.watching.has(id)) return
-    this.watching.add(id)
     /*
       A receipt is worth asking for about once a block, and never faster than
       the wallet polls anything else — `blockTimeMs` alone had this asking
       Arbitrum every 250 ms, a hundred and twenty times, for one transaction.
     */
     const every = d.receiptPollMs ?? pollMs(chainId, 'foreground')
-    const deadline = d.platform.now() + WATCH_BUDGET_MS
-    const settle = async (patch: Partial<ActivityEntry>): Promise<void> => {
+    const started = d.platform.now()
+    // Every timer this watcher owns, so `dispose()` can end it and a settled
+    // row leaves nothing running behind it.
+    const arm = (fn: () => void, ms: number): void => {
+      if (!this.watching.has(id)) return
+      const timer = setTimeout(() => {
+        this.watching.set(id, null)
+        fn()
+      }, ms)
+      this.watching.set(id, timer)
+    }
+    const stop = (): void => {
+      const timer = this.watching.get(id)
+      if (timer) clearTimeout(timer)
       this.watching.delete(id)
+    }
+    this.watching.set(id, null)
+    const settle = async (patch: Partial<ActivityEntry>): Promise<void> => {
+      stop()
       await d.activity.update(id, patch).catch(() => undefined)
     }
     const receiptOf = async (): Promise<{ status?: string; blockNumber?: string } | null> =>
@@ -2413,18 +2441,20 @@ export class ProviderService {
       The row settles on the first one, because making people stare at
       "pending" for two more blocks to guard against something that almost
       never happens is the wrong trade. But the watcher does not stop there:
-      once the head has moved `CONFIRM_DEPTH` blocks past it, it asks again,
-      and a receipt that has vanished puts the row back to `pending` and
-      resumes the search. That is the half a single read could not do.
+      for a short window after, once the head has moved `CONFIRM_DEPTH` blocks
+      past the receipt, it asks again — and a receipt that has vanished puts
+      the row back to `pending` and resumes the search. That is the half a
+      single read could not do. The window is bounded: a chain whose head does
+      not move is not one this can learn anything more from.
     */
-    const recheckAtDepth = async (block: number): Promise<void> => {
-      if (d.platform.now() >= deadline) {
-        this.watching.delete(id)
+    const recheckAtDepth = async (block: number, since: number): Promise<void> => {
+      if (d.platform.now() - since >= REORG_WINDOW_MS) {
+        stop()
         return
       }
       const head = await d.chains.head(chainId).catch(() => null)
       if (!head || Number(head.blockNumber) < block + CONFIRM_DEPTH) {
-        setTimeout(() => void recheckAtDepth(block), every)
+        arm(() => void recheckAtDepth(block, since), every)
         return
       }
       const again = await receiptOf()
@@ -2437,7 +2467,7 @@ export class ProviderService {
       }
       // It was there and now it is not: the branch it sat on is gone.
       await d.activity.update(id, { status: 'pending', blockNumber: null }).catch(() => undefined)
-      setTimeout(() => void tick(), every)
+      arm(() => void tick(), every)
     }
     const tick = async (): Promise<void> => {
       const receipt = await receiptOf()
@@ -2449,7 +2479,7 @@ export class ProviderService {
             blockNumber: block,
           })
           .catch(() => undefined)
-        void recheckAtDepth(block)
+        arm(() => void recheckAtDepth(block, d.platform.now()), every)
         return
       }
       /*
@@ -2459,20 +2489,21 @@ export class ProviderService {
         replaced by a speed-up at the same nonce — and the row should say so
         rather than sit on "pending" until the user gives up on it.
       */
+      const waited = d.platform.now() - started
       const known = await d.chains
         .rpc(chainId, 'eth_getTransactionByHash', [hash])
         .catch(() => undefined)
-      if (known === null && d.platform.now() > deadline - WATCH_BUDGET_MS + DROP_GRACE_MS) {
+      if (known === null && waited > DROP_GRACE_MS) {
         await settle({ status: 'dropped' })
         return
       }
-      if (d.platform.now() >= deadline) {
+      if (waited >= WATCH_BUDGET_MS) {
         await settle({ status: 'unknown' })
         return
       }
-      setTimeout(() => void tick(), every)
+      arm(() => void tick(), every)
     }
-    setTimeout(() => void tick(), every)
+    arm(() => void tick(), every)
   }
 }
 

@@ -40,8 +40,27 @@ describe('bridge decoding', () => {
 
   it('states the bridge in plain words with the interchain gas', () => {
     const a = run(1, tx(1, ETH_USDC_ROUTER, data(52014, ME, 100_000_000n), 10n ** 15n))
-    expect(a.statements.map((s) => s.text)).toEqual(['Bridge 100 USDC to Electroneum for 0x3333…3333', 'Pays 0.001 native of interchain gas to Hyperlane'])
+    // The signer's own address reads as "yourself" rather than as hex.
+    expect(a.statements.map((s) => s.text)).toEqual(['Bridge 100 USDC to Electroneum for yourself', 'Pays 0.001 native of interchain gas to Hyperlane'])
     expect(a.severity).toBe('info')
+  })
+
+  /*
+    ES-BV-027. A bridged transfer lands on another chain and cannot be
+    recalled, and it was the one transfer the wallet showed as `0x1234…abcd` —
+    the exact shape address poisoning is built to satisfy — while `recipientOf`
+    returned null for it, so no recipient rule could see it at all.
+  */
+  it('prints a stranger destination in full and runs the recipient rules on it', () => {
+    const LOOKALIKE = '0x3333444444444444444444444444444444443333' as Hex
+    const a = run(1, tx(1, ETH_USDC_ROUTER, data(52014, LOOKALIKE, 100_000_000n), 10n ** 15n))
+    expect(a.statements[0]?.text).toContain(LOOKALIKE)
+    // And the reference set applies: an address built to look like one the
+    // user has sent to is caught, which it could not be while `recipientOf`
+    // answered null for every bridge.
+    const poisoned = run(1, tx(1, ETH_USDC_ROUTER, data(52014, LOOKALIKE, 100_000_000n), 10n ** 15n), { sentTo: [ME], inboundOnly: [LOOKALIKE] })
+    expect(poisoned.rules.map((r) => r.code)).toContain('RECIPIENT_LOOKALIKE')
+    expect(poisoned.severity).toBe('block')
   })
 
   it('blocks a recipient that is a contract here and nothing on the destination', () => {

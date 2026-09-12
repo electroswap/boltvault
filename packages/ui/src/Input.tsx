@@ -62,9 +62,18 @@ export interface InputProps {
    * try to store or reuse.
    */
   readonly sensitive?: boolean | 'code'
+  /**
+   * With `numeric`, the most decimal places the value can carry (ES-BV-048).
+   *
+   * A token holds a fixed number of places, and typing past them used to be
+   * accepted and then rounded — half up, so the amount signed could be larger
+   * than the amount typed. The field simply stops accepting digits it cannot
+   * represent, which is the same thing every exchange's amount box does.
+   */
+  readonly maxDecimals?: number
 }
 
-export const Input = forwardRef<TextInput, InputProps>(function Input({ value, onChange, label, placeholder, secure, multiline, bare, big, louder, numeric, error, hint, autoFocus, onSubmit, testID, autoCapitalize = 'none', disabled, sensitive }, ref) {
+export const Input = forwardRef<TextInput, InputProps>(function Input({ value, onChange, label, placeholder, secure, multiline, bare, big, louder, numeric, error, hint, autoFocus, onSubmit, testID, autoCapitalize = 'none', disabled, sensitive, maxDecimals }, ref) {
   const [focused, setFocused] = useState(false)
   const handleChange = (next: string): void => {
     if (!numeric) {
@@ -74,7 +83,14 @@ export const Input = forwardRef<TextInput, InputProps>(function Input({ value, o
     // Digits and at most one separator; a leading dot becomes "0.".
     const cleaned = next.replace(/[^0-9.,]/g, '').replace(/,/g, '.')
     const [head = '', ...rest] = cleaned.split('.')
-    const joined = rest.length > 0 ? `${head}.${rest.join('')}` : head
+    const tail = rest.join('')
+    // A token with no decimal places takes no separator at all.
+    if (maxDecimals === 0) {
+      onChange(head)
+      return
+    }
+    const capped = maxDecimals === undefined ? tail : tail.slice(0, maxDecimals)
+    const joined = rest.length > 0 ? `${head}.${capped}` : head
     onChange(joined === '.' ? '0.' : joined)
   }
   return (

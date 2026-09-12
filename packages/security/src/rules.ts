@@ -129,6 +129,36 @@ export const originUnverified: Rule = ({ origin, context }) => {
   }
 }
 
+/**
+ * A page served in the clear (ES-BV-022).
+ *
+ * `http://` gives no identity at all: anyone between the user and the site can
+ * serve the page, so a sheet raised from `http://dapp.example` is
+ * indistinguishable from one raised by the real site — same origin string,
+ * same favicon, same everything the user reads. The wallet already refuses
+ * cleartext for its own RPC and for the first-party fee policy; nothing said
+ * it about the pages it signs for.
+ *
+ * A read is worth a note; a signature is worth a stronger one, because a
+ * signature is what the attacker in the middle is there to collect.
+ */
+export const originCleartext: Rule = ({ origin, request }) => {
+  if (!origin.startsWith('http://')) return null
+  const signing =
+    request.kind === 'message' ||
+    request.kind === 'typed_data' ||
+    request.kind === 'transaction' ||
+    request.kind === 'eth_sign'
+  return {
+    code: 'ORIGIN_CLEARTEXT',
+    severity: signing ? 'danger' : 'warn',
+    title: 'This site is not encrypted',
+    detail: signing
+      ? `${origin} is served over plain http, so anyone on the network between you and it can change what it asks you to sign, and can read what you send back. Nothing here proves you are talking to the real site.`
+      : `${origin} is served over plain http. Anyone on the network can see and change this page.`,
+  }
+}
+
 export const originFirstTime: Rule = ({ origin, context, request }) => {
   if (isInternal(origin) || !context.firstTimeOrigin) return null
   if (
@@ -465,6 +495,18 @@ export const authorizationList: Rule = ({ request }) => {
 export const approveRules: Rule = ({ request, decoded, chainId, context }) => {
   if (request.kind !== 'transaction' || !decoded) return null
   if (decoded.kind === 'erc20_approve' || decoded.kind === 'permit2_approve') {
+    /*
+      A revoke is not a grant (ES-BV-029).
+
+      `approve(spender, 0)` takes an allowance *away*, and the Allowances
+      screen's own Revoke button sends exactly that — to a spender the wallet
+      does not recognise, which is usually why the user is revoking it. The
+      sheet said "Allowance for an unknown contract" at `danger` and asked them
+      to type the site's name to continue, for the safest transaction in the
+      wallet. Teaching people to type the danger word to do the right thing is
+      how the danger word stops working.
+    */
+    if (decoded.amount === 0n && !decoded.unlimited) return null
     const known = isKnownSpender(chainId, decoded.spender)
     if (!known)
       return {
@@ -838,6 +880,18 @@ function recipientOf(decoded: DecodedCall | null): Hex | null {
     case 'erc1155_transfer':
     case 'ambiguous_transfer_from':
       return decoded.to
+    /*
+      A bridge destination is a recipient (ES-BV-027).
+
+      Returning null here took the bridge out of every recipient rule at once:
+      the lookalike check, the address-poisoning source check, the clipboard
+      comparison, the first-time plate and the send allow-list. A bridged send
+      is the least reversible transfer the wallet makes — the money lands on
+      another chain, at an address that may not exist there — so it is the last
+      thing that should be exempt from them.
+    */
+    case 'bridge':
+      return decoded.recipient
     default:
       return null
   }
@@ -1414,6 +1468,7 @@ export const ALL_RULES: readonly Rule[] = [
   originUnverified,
   originVerifyMismatch,
   originFirstTime,
+  originCleartext,
   ethSignBlocked,
   personalSignLooksLikeTx,
   typedDataDomainMismatch,

@@ -180,7 +180,13 @@ export default defineBackground(() => {
         port.disconnect()
         return
       }
-      engine.provider.serve(portChannel(port), origin, { ...(port.sender?.tab?.id !== undefined ? { tabId: port.sender.tab.id } : {}), ...(port.sender?.frameId !== undefined ? { frameId: port.sender.frameId } : {}) })
+      /*
+        A cleartext page cannot vouch for itself (ES-BV-022). `http://` proves
+        nothing about who served it, so the transport has nothing to attest and
+        must not let the sheet call the origin verified.
+      */
+      const verified = origin.startsWith('https://')
+      engine.provider.serve(portChannel(port), origin, { verified, ...(port.sender?.tab?.id !== undefined ? { tabId: port.sender.tab.id } : {}), ...(port.sender?.frameId !== undefined ? { frameId: port.sender.frameId } : {}) })
       return
     }
     // Anything else is not ours: refuse the Port.

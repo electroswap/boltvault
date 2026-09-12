@@ -470,9 +470,19 @@ export function explainCall(
       const known = knownContract(chainId, decoded.router)
       const symbol = known?.name.includes('USDT') ? 'USDT' : 'USDC'
       const dest = DOMAIN_NAMES[decoded.destinationDomain] ?? `chain ${decoded.destinationDomain}`
+      /*
+        The destination in full (ES-BV-027).
+
+        A bridged transfer lands on another chain and cannot be recalled, and
+        the sheet showed the address as `0x1234…abcd` — four characters at each
+        end, which is exactly the shape an address-poisoning match is built to
+        satisfy. The one transfer with no way back gets the whole string.
+      */
+      const self = signer !== null && decoded.recipient.toLowerCase() === signer.toLowerCase()
+      const named = ctx.labels[decoded.recipient.toLowerCase()]
       return [
         {
-          text: `Bridge ${trim(formatUnits(decoded.amount, 6))} ${symbol} to ${dest} for ${who(ctx, chainId, decoded.recipient)}`,
+          text: `Bridge ${trim(formatUnits(decoded.amount, 6))} ${symbol} to ${dest} for ${self ? 'yourself' : (named ? `${untrusted(named)} ` : '') + decoded.recipient}`,
           tone: 'out',
         },
         {

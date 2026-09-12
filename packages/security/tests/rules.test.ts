@@ -41,11 +41,50 @@ describe('approvals', () => {
     expect(codes(unlimited)).toEqual(['APPROVE_UNLIMITED'])
     expect(unlimited.presentation.delayMs).toBe(1500)
   })
+  /*
+    ES-BV-029. `approve(spender, 0)` takes an allowance away, and the
+    Allowances screen's Revoke sends exactly that — usually to a spender the
+    wallet does not recognise, which is why the user is revoking it. The sheet
+    called the safest transaction in the wallet "dangerous" and asked them to
+    type the site's name to continue; typing the danger word to do the right
+    thing is how the danger word stops working.
+  */
+  it('revoking an allowance is not a grant, whoever the spender is', () => {
+    const revoke = run(tx(TOKEN, encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [UNKNOWN, 0n] })))
+    expect(codes(revoke)).not.toContain('APPROVE_UNKNOWN_SPENDER')
+    expect(revoke.presentation.typedConfirmation).toBe(null)
+    expect(revoke.severity).toBe('info')
+    // Turning a collection approval off is the same shape.
+    const off = run(tx(TOKEN, encodeFunctionData({ abi: ERC721_ABI, functionName: 'setApprovalForAll', args: [UNKNOWN, false] })))
+    expect(codes(off)).not.toContain('APPROVAL_FOR_ALL')
+    // And a real grant to the same spender is still danger.
+    expect(codes(run(tx(TOKEN, encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [UNKNOWN, 1n] }))))).toContain('APPROVE_UNKNOWN_SPENDER')
+  })
+
   it('setApprovalForAll to an unknown operator is danger; to the marketplace conduit a warning', () => {
     const bad = run(tx(TOKEN, encodeFunctionData({ abi: ERC721_ABI, functionName: 'setApprovalForAll', args: [UNKNOWN, true] })))
     expect(bad.severity).toBe('danger')
     const ok = run(tx(TOKEN, encodeFunctionData({ abi: ERC721_ABI, functionName: 'setApprovalForAll', args: ['0x2941Cba4DD14B2C67b0802107f23144c70ED680F', true] })))
     expect(ok.severity).toBe('warn')
+  })
+})
+
+/*
+  ES-BV-022. `http://` proves nothing about who served the page, so a sheet
+  raised from a cleartext origin is indistinguishable from one raised by the
+  real site — and the content port passed no `verified` flag, so the firewall
+  called it verified.
+*/
+describe('cleartext origins', () => {
+  it('says so, and says it louder for a signature', () => {
+    const read = run({ kind: 'message', from: ME, message: '0x68690a' }, {}, 'http://dapp.test')
+    expect(codes(read)).toContain('ORIGIN_CLEARTEXT')
+    const signed = run(tx(TOKEN, encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [A.permit2 as Hex, 1000n] })), {}, 'http://dapp.test')
+    expect(signed.rules.find((r) => r.code === 'ORIGIN_CLEARTEXT')?.severity).toBe('danger')
+  })
+  it('says nothing about https, or about the wallet\'s own surfaces', () => {
+    expect(codes(run(tx(TOKEN, encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [A.permit2 as Hex, 1000n] }))))).not.toContain('ORIGIN_CLEARTEXT')
+    expect(codes(run(tx(TOKEN, encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [A.permit2 as Hex, 1000n] })), {}, 'internal:send'))).not.toContain('ORIGIN_CLEARTEXT')
   })
 })
 

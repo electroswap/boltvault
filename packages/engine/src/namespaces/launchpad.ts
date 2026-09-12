@@ -29,6 +29,7 @@ import type { Platform } from '@boltvault/platform'
 import { encodeFunctionData, parseUnits, type Hex } from 'viem'
 import { z } from 'zod'
 import type { SealedMap } from '../sealed'
+import { amountOrThrow } from '../amount'
 import { EngineError } from '../errors'
 import { cacheKey, type Cached, type DocCache } from '../cache'
 import type { NamespaceSpec } from '../host'
@@ -377,7 +378,7 @@ export class LaunchpadService {
       )
     let amount = 0n
     try {
-      amount = parseUnits(input.amountEtn.trim() || '0', 18)
+      amount = amountOrThrow(input.amountEtn, 18)
     } catch {
       throw new EngineError('invalid_argument', 'That amount is not a number.')
     }
