@@ -1,6 +1,6 @@
 # Native targets (master plan §7.13, §5)
 
-These sources ship with the app but are compiled only by a native build (EAS `pnpm --filter @boltvault/mobile exec eas build`); they cannot be built or run in the JS toolchain and are a manual gate on a device.
+These sources ship with the app but are compiled only by a native build (EAS: `pnpm --filter @boltvault/mobile build:ios`, or `build:ios:sideload` for the unsigned one — see the release checklist); they cannot be built or run in the JS toolchain and are a manual gate on a device.
 
 | Target | Source | Wiring |
 |---|---|---|

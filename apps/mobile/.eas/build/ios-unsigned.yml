@@ -1,0 +1,77 @@
+# An .ipa that nobody signed.
+#
+# The App Store path needs an Apple Developer Program membership: a
+# distribution certificate, a provisioning profile, a Team ID. Until that
+# enrolment lands there is still one iOS artefact worth having — an archive
+# built with signing switched off, which AltStore, SideStore or Sideloadly
+# re-sign on the spot with a free Apple ID and install on one handset for
+# seven days. It is a way to see the app on an iPhone, not a way to ship: a
+# free provisioning profile grants none of the entitlements this app declares
+# (App Group, associated domains, push, Live Activities), and the re-signer
+# strips them, so the widget, universal links and notifications are dark in a
+# sideload. Everything that lives inside the app — vault, accounts, swap,
+# camera, Face ID, BLE — is real.
+#
+# `withoutCredentials: true` on the `sideload` profile in eas.json is what
+# keeps EAS from asking for an Apple account this build will never use.
+build:
+  name: Unsigned iOS .ipa (sideload)
+  steps:
+    - eas/checkout
+    - eas/install_node_modules
+    # The repo installs with lifecycle scripts off (pnpm-workspace.yaml
+    # `allowBuilds`), so the two packages that fetch their own native artefacts
+    # arrive empty and the pod build fails late with missing frameworks. Same
+    # two lines as the local Android build in the release checklist; on Apple
+    # platforms it is Skia's xcframeworks and libsodium's `libsodium-apple`.
+    - run:
+        name: Fetch the native prebuilts the install skipped
+        command: |
+          set -euo pipefail
+          node node_modules/@shopify/react-native-skia/scripts/install-libs.js
+          tar -xzf node_modules/react-native-libsodium/libsodium/build.tgz -C node_modules/react-native-libsodium/libsodium/
+    - eas/prebuild:
+        inputs:
+          clean: true
+    - run:
+        name: Install pods
+        working_directory: ios
+        command: pod install
+    - run:
+        name: Archive with signing switched off
+        working_directory: ios
+        command: |
+          set -euo pipefail
+          WORKSPACE=$(ls -d *.xcworkspace | head -1)
+          SCHEME=${WORKSPACE%.xcworkspace}
+          xcodebuild \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$PWD/build/$SCHEME.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            archive
+    # An .ipa is a zip with the .app under Payload/ and nothing else required.
+    # xcodebuild's own -exportArchive refuses to produce one without a signing
+    # identity, so the archive is repackaged by hand.
+    - run:
+        name: Package Payload/ as an .ipa
+        working_directory: ios
+        command: |
+          set -euo pipefail
+          ARCHIVE=$(ls -d build/*.xcarchive | head -1)
+          rm -rf build/Payload build/BoltVault-unsigned.ipa
+          mkdir -p build/Payload
+          cp -R "$ARCHIVE"/Products/Applications/*.app build/Payload/
+          cd build && zip -qry BoltVault-unsigned.ipa Payload
+          shasum -a 256 BoltVault-unsigned.ipa
+    - eas/upload_artifact:
+        inputs:
+          type: application-archive
+          path: ios/build/BoltVault-unsigned.ipa

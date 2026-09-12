@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "bundle": "expo export --platform android --output-dir .expo-export",
+    "build:ios": "pnpm dlx eas-cli@24 build --platform ios --profile internal",
+    "build:ios:sideload": "pnpm dlx eas-cli@24 build --platform ios --profile sideload",
     "smoke:device": "bash scripts/device-smoke.sh",
     "verify:apk": "node ../../tools/verify-apk-signer.mjs"
   },

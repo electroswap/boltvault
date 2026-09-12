@@ -29,6 +29,7 @@ pnpm check                   # typecheck · lint · no-any · depcruise · unit 
 pnpm --filter @boltvault/extension build && pnpm --filter @boltvault/extension e2e   # Playwright popup smoke
 pnpm --filter @boltvault/mobile bundle                                                # Metro export (Android)
 pnpm --filter @boltvault/mobile start                                                 # Expo dev server
+pnpm --filter @boltvault/mobile build:ios                                             # EAS builds the iOS .ipa (no Mac here)
 pnpm registry:verify         # every RPC answers eth_chainId; multicall3 has code
 pnpm abi:sync                # copy ABIs from ../../apps/interface/src/abis with a hashed manifest
 ```

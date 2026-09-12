@@ -3,6 +3,10 @@ apps/extension/screenshots/
 apps/mobile/android/
 apps/mobile/ios/
 build/
+# …except the EAS custom build configs, which only exist as source and which
+# EAS reads out of the uploaded git archive: ignored, they are simply not there
+# on the builder and the job fails looking for them.
+!apps/mobile/.eas/build/
 coverage/
 dist/
 .DS_Store

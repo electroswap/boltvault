@@ -6,6 +6,13 @@
       "distribution": "internal",
       "env": { "EXPO_PUBLIC_BOLTVAULT_API": "https://electroswap.io" }
     },
+    "sideload": {
+      "distribution": "internal",
+      "channel": "internal",
+      "ios": { "config": "ios-unsigned.yml", "withoutCredentials": true, "simulator": false },
+      "android": { "buildType": "apk" },
+      "env": { "EXPO_PUBLIC_BOLTVAULT_API": "https://electroswap.io" }
+    },
     "internal": {
       "distribution": "internal",
       "channel": "internal",
