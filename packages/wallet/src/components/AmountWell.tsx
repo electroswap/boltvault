@@ -35,10 +35,16 @@ export interface AmountWellProps {
    * lock UI treatment that the UI applies." This is that seam — the caller says
    * which colour, the well stays generic, and Send and Bridge are untouched.
    *
-   * It draws at 2 px rather than the well's usual 1: a hairline in a colour
-   * nothing else on the screen uses is a detail, and this is meant to be the
-   * first thing you notice about the pair ("make the green border ... another
-   * pixel thicker when there's locked liquidity").
+   * It draws at the well's usual 1 px.
+   *
+   * It was 2 — "make the green border another pixel thicker when there's
+   * locked liquidity" — back when the colour was the surge green at 55% alpha
+   * and needed the extra weight to register at all. Now that it is the flat
+   * colour the interface uses, the same two pixels read as heavy: owner, "with
+   * the brighter green border now the border around the input/output is too
+   * thick, reduce by 1px." One pixel also puts the terminals on exactly the
+   * border the details card carries, which is why the three stopped looking
+   * like the same box.
    */
   readonly accent?: `#${string}` | `rgba(${string})` | null
   /**
@@ -62,7 +68,7 @@ export interface AmountWellProps {
 export function AmountWell({ label, value, onChange, readOnly = false, tokenPill, right, fiat, balance, balanceIcon = 'wallet', onMax, error, accent, louder = false, autoFocus, testID, inputTestID, maxTestID, balanceTestID }: AmountWellProps) {
   const empty = !value || value === '0' || value === '—'
   return (
-    <Plate role="well" gap={2} paddingVertical={louder ? 10 : 8} paddingHorizontal={12} {...(accent ? { borderColor: accent, borderWidth: 2 } : {})} testID={testID}>
+    <Plate role="well" gap={2} paddingVertical={louder ? 10 : 8} paddingHorizontal={12} {...(accent ? { borderColor: accent } : {})} testID={testID}>
       <Row justifyContent="space-between" alignItems="center" minHeight={right ? 32 : 18}>
         <Body tone="mute" size="caption">
           {label}

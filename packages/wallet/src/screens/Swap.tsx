@@ -10,7 +10,7 @@
  * Confirming runs a flow of sheets (approve → permit → swap) and the
  * Discharge lands the result here.
  */
-import { Body, ChainMark, Chip, Column, Discharge, Icon, IconButton, Key, Pill, Plate, Pressable, Rim, Row, ScrollView, Segmented, TokenAvatar, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
+import { Body, ChainMark, Chip, Column, Discharge, Icon, IconButton, Key, Pill, Plate, Pressable, Rim, Row, ScrollView, Segmented, TokenAvatar, metrics, paint, radius, shortAddress, useWindowDimensions } from '@boltvault/ui'
 import { cacheKey, type ExploreToken, type LimitOrderView, type LimitQuote, type LiquidityView, type SwapArgs, type SwapQuote, type TokenView } from '@boltvault/engine'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { SlippageSheet } from '../components/SlippageSheet'
@@ -464,6 +464,8 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   */
   const isEtnSide = (address: string, view: TokenView | null): boolean => address === 'native' || view?.symbol?.toUpperCase() === 'WETN'
   const detailsToken = !isEtnSide(tokenOut, outView) ? tokenOut : !isEtnSide(tokenIn, inView) ? tokenIn : null
+  /** Is there anything to say above the key? If not, the box that would say it is not rendered at all. */
+  const notices = Boolean(blockedSide || warnedSide || (problem && (amount.trim() || minOut.trim())) || error || (mode === 'swap' && quote?.ok && !fresh))
   const keyLabel = mode === 'swap' ? (quote && quote.priceImpactPct !== null && quote.priceImpactPct > 15 ? t({ id: 'swap.key.anyway', message: 'Swap anyway' }) : t({ id: 'swap.key', message: 'Swap' })) : t({ id: 'swap.limit.key', message: 'Place order' })
 
   return (
@@ -697,8 +699,19 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
             child of `SwapWrapper`, not a plate floating below it, which is why
             it sits inside the console here now.
           */}
+          {/*
+            `radius.well`, not the recessed role's 14.
+
+            The console is 20 and pads its children by 8, so a child of it nests
+            at `innerRadius(20, 8)` = 12 — which is what both terminals use and
+            what the interface computes for its own `SwapSection`. This card is
+            their sibling and the same width to the pixel, but its corners were
+            two pixels rounder, which is enough to read as a different box.
+            Owner: "the rate container should be the same width as the
+            input/output containers."
+          */}
           {mode === 'swap' ? (
-          <Plate role="recessed" rim={0.7} gap={0} paddingVertical={2} paddingHorizontal="$3" testID="fee-stack">
+          <Plate role="recessed" rim={0.7} gap={0} borderRadius={radius.well} paddingVertical={2} paddingHorizontal="$3" testID="fee-stack">
             <Pressable
               onPress={() => setDetails((d) => !d)}
               accessibilityRole="button"
@@ -792,12 +805,21 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
           {/*
             Whatever has to be read before the key is pressed.
 
-            Its own child of the console now, rather than a box wrapping the key
-            as well: the key has to be exactly as wide as the terminals above it
+            Its own child of the console, rather than a box wrapping the key as
+            well: the key has to be exactly as wide as the terminals above it
             (owner: "the button should be the same width as the input/output
             containers"), and it cannot be while it sits inside something with
             side padding of its own. Text keeps the padding; the key does not.
+
+            Rendered only when it has something to say. An empty `Column` is
+            still a child, and a child in a `gap` column still takes a gap on
+            each side — so with nothing to warn about, the details card and the
+            key sat 12 px apart while every other pair sat 6. Measured, not
+            guessed: `fee-stack` bottom 476, `swap-act` 482→482, `swap-key` top
+            488. Owner: "the gap between the rate and the swap button is
+            inconsistent with the other gaps."
           */}
+          {notices ? (
           <Column gap="$2" paddingHorizontal={4} testID="swap-act">
             {blockedSide ? (
               <Body tone="burn" size="caption" testID="swap-blocked">
@@ -829,6 +851,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
               </Body>
             ) : null}
           </Column>
+          ) : null}
 
           {/*
             The verb, flush with the terminals and reading like one.

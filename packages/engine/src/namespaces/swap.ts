@@ -242,6 +242,31 @@ export function rateOf(
  * network, and guessing is the one thing that must not happen on the path to
  * calldata the user signs. Refuse and let the caller re-quote instead.
  */
+/**
+ * The transfer-tax probes for a pair — one per side, WETN excepted.
+ *
+ * They were built inline where the route was awaited. The route now starts a
+ * wave earlier and carries these with it, so the pair is named once here and
+ * used from both the exact-in and exact-out paths rather than written twice.
+ */
+function taxProbes(
+  A: (typeof ELECTRONEUM_ADDRESSES)[52014],
+  wrappedIn: Hex,
+  wrappedOut: Hex,
+  wetn: Hex,
+  read: EsReader,
+): readonly [Promise<TaxProbe>, Promise<TaxProbe>] {
+  const detector = A.feeOnTransferDetector as Hex | null
+  return [
+    same(wrappedIn, wetn)
+      ? Promise.resolve<TaxProbe>(null)
+      : detectTax(detector, wrappedIn, wetn, read),
+    same(wrappedOut, wetn)
+      ? Promise.resolve<TaxProbe>(null)
+      : detectTax(detector, wrappedOut, wetn, read),
+  ] as const
+}
+
 function encodableHop(h: SwapHop): Hop {
   if (h.kind === 'v2') return { kind: 'v2', tokenIn: h.tokenIn as Hex, tokenOut: h.tokenOut as Hex }
   if (h.fee === undefined)
@@ -327,19 +352,17 @@ export class SwapService {
    * The routing service first, the on-chain mini-router when it cannot answer.
    *
    * "Cannot answer" is deliberately wide: unreachable, slow, rate limited, no
-   * route, a route the encoder cannot express, or a price materially worse than
-   * the wallet can prove for itself. All of those land in the same place, which
-   * is the behaviour that shipped before the service was asked at all — so the
-   * worst it can do to a quote is cost it one bounded round trip before the
-   * wallet falls back to quoting for itself. It is never the reason a swap is
-   * refused.
+   * route, or a response the wallet cannot read — `parseQuote` refuses a bad
+   * amount echo, a split route, a broken path or the wrong tokens at either
+   * end. All of those land in the same place, which is the behaviour that
+   * shipped before the service was asked at all — so the worst it can do to a
+   * quote is cost it one bounded round trip before the wallet falls back to
+   * quoting for itself. It is never the reason a swap is refused.
+   *
+   * What is NOT a reason to fall back is the served price itself: an answer
+   * the wallet can read is used as given, without a confirming call to the
+   * chain (owner's decision — see the note where the route is returned).
    */
-  /**
-   * How far below the wallet's own on-chain route a served quote may sit
-   * before the wallet uses its own instead (§8.6, docs/security.md).
-   */
-  private static readonly divergencePercent = 1
-
   private async route(
     input: QuoterInput,
     addresses: QuoteAddresses,
@@ -358,49 +381,37 @@ export class SwapService {
       const served = await quoter.route(input)
       if (served.kind === 'route') {
         /*
-          §8.6 and docs/security.md both promise that a served quote more than
-          one percent below what the chain says is not used — "on-chain wins".
-          Nothing implemented it: the served `amountOut` went straight into
-          `deliveredMinimumOut`, so a routing service that was compromised, or
-          simply stale, moved the floor of every swap down with it, bounded
-          only by the 5 %/15 % price-impact plates.
+          The served quote is used as served. No second opinion from the chain.
 
-          What is checked is the service's OWN route, quoted on chain at full
-          size — one `eth_call`, not the mini-router's sixteen. The comment
-          below still holds: re-running the whole candidate search to second-
-          guess a better router buys a comparison rather than a price. But a
-          service that names a route and then misstates what that route pays is
-          not a better router, it is a wrong number, and the wallet can tell
-          the difference for the cost of one call.
+          §8.6 and docs/security.md used to promise "on-chain wins": a served
+          quote more than a percent below the chain's figure for the same route
+          was to be replaced by the chain's. That was implemented, and it cost
+          one `eth_call` on *every* quote — on the happy path, in front of the
+          number the user is waiting for, on every keystroke.
 
-          Over-quoting is not corrected — the service walks the whole pool
-          graph and may legitimately have found what this one call cannot.
-          Under-quoting by more than the bound takes the chain's own figure for
-          the same route, which is what "on-chain wins" was always supposed to
-          mean. A chain that cannot answer leaves the served quote alone.
+          The owner has overridden it: "use the quoter's rate as-is without
+          calling the on-chain quoter unless the quoter-api's response is
+          invalid/errors." The docs that asked for the check have been changed
+          to say this instead, so the next reader does not put it back.
+
+          What is given up is real and worth stating: a compromised or stale
+          routing service can now move `deliveredMinimumOut` down, bounded only
+          by the user's slippage and the 5 %/15 % price-impact plates. What is
+          NOT given up is everything the chain enforces — `amountOutMinimum`
+          still rides in the calldata, the firewall still checks the shape, and
+          a served route the encoder cannot express is still refused. The
+          validation in `parseQuote` (amount echo, single split, joined-up path,
+          right tokens at both ends) is what "invalid" means here, and that
+          still falls through to the mini-router below.
         */
-        const onTheChain = await quoteOne(
-          served.quote.candidate,
-          input.amountIn,
-          addresses,
-          read,
-        ).catch(() => null)
-        const actually = onTheChain?.amountOut ?? 0n
-        const short =
-          actually > 0n &&
-          served.quote.amountOut * BigInt(100 + SwapService.divergencePercent) < actually * 100n
-        const quote = short && onTheChain ? onTheChain : served.quote
-        const off = short
-          ? `served quote ${((Number(actually - served.quote.amountOut) / Number(actually)) * 100).toFixed(2)}% below its own route on chain`
-          : null
         return {
-          quote,
+          quote: served.quote,
           source: 'api',
           provenance: {
             id: served.id,
             cached: served.cached,
             blockNumber: served.blockNumber,
-            fallbackReason: off,
+            fallbackReason: null,
           },
         }
       }
@@ -441,7 +452,35 @@ export class SwapService {
         'Swaps happen on Electroneum. Bridge first, then swap.',
       ])
     if (!inView || !outView) return this.skeleton(input, inView, outView, ['Pick two tokens.'])
-    const account = (await d.vault.accounts()).find((a) => a.id === input.accountId)
+    /*
+      Everything the quote needs before it can ask for a price, asked for at
+      once.
+
+      These were nine `await`s in a column: accounts, settings, status, the two
+      safety lookups, the balance, the gas price, the holder tier, the allowance
+      multicall — and only then the router. None of them depends on any other,
+      so on a phone they were nine round trips end to end in front of the one
+      call that produces the number the user is waiting for. Owner: "updating an
+      input number seems like it's a lot slower to get a quote back than on the
+      web interface … we want to get the quoted output showing as quickly as
+      possible."
+
+      They are two waves now: this one, and then the router beside the balance
+      reads. The gate between them is unchanged — a swap with a problem still
+      returns before anything is routed — because every problem is decided by
+      this wave and by parsing the amount, both of which happen here.
+    */
+    const [accountList, settings, status, blockedIn, blockedOut, gasPriceRaw, tier] =
+      await Promise.all([
+        d.vault.accounts(),
+        d.settings.get(),
+        d.vault.status(),
+        this.isBlocked(chainId, inView.address),
+        this.isBlocked(chainId, outView.address),
+        d.chains.rpc(chainId, 'eth_gasPrice', []).catch(() => '0x3b9aca00'),
+        d.holder.tier(input.accountId, chainId),
+      ])
+    const account = accountList.find((a) => a.id === input.accountId)
     if (!account) throw new EngineError('not_found', 'no such account')
     const owner = account.address as Hex
     const A = ELECTRONEUM_ADDRESSES[chainId]
@@ -450,7 +489,6 @@ export class SwapService {
     const nativeOut = outView.address === 'native'
     const wrappedIn = nativeIn ? wetn : (inView.address as Hex)
     const wrappedOut = nativeOut ? wetn : (outView.address as Hex)
-    const settings = await d.settings.get()
     const slippageBips = input.slippageBips ?? settings.slippageBips
     const exactOut = input.tradeType === 'exactOut'
     /*
@@ -474,7 +512,6 @@ export class SwapService {
     if (typed <= 0n) problems.push('Enter an amount above zero.')
     if (account.kind === 'watch')
       problems.push('Watch-only — import a key or pair a device to swap.')
-    const status = await d.vault.status()
     if (!status.backupComplete && status.seeds.length > 0 && account.kind === 'hd')
       problems.push('Back up your recovery phrase before you swap.')
     /*
@@ -485,25 +522,14 @@ export class SwapService {
       Only BLOCKED refuses: an unknown token is not a blocked one, and a silent
       API must not turn every token into a refusal.
     */
-    for (const side of [inView, outView]) {
-      if (await this.isBlocked(chainId, side.address))
-        problems.push(`${side.symbol} is marked unsafe by ElectroSwap. BoltVault will not swap it.`)
-    }
+    if (blockedIn)
+      problems.push(`${inView.symbol} is marked unsafe by ElectroSwap. BoltVault will not swap it.`)
+    if (blockedOut)
+      problems.push(`${outView.symbol} is marked unsafe by ElectroSwap. BoltVault will not swap it.`)
 
     // Balances and the network fee reserve.
     const read = readerFor(d.chains, chainId)
-    const nativeBalance = BigInt(
-      String(
-        (await d.chains.rpc(chainId, 'eth_getBalance', [owner, 'latest']).catch(() => '0x0')) ??
-          '0x0',
-      ),
-    )
-    const gasPrice = BigInt(
-      String(
-        (await d.chains.rpc(chainId, 'eth_gasPrice', []).catch(() => '0x3b9aca00')) ?? '0x3b9aca00',
-      ),
-    )
-    const tier = await d.holder.tier(input.accountId, chainId)
+    const gasPrice = BigInt(String(gasPriceRaw ?? '0x3b9aca00'))
     const stateCalls: EsReadCall[] = nativeIn
       ? []
       : [
@@ -521,7 +547,37 @@ export class SwapService {
             args: [owner, wrappedIn, A.universalRouter as Hex],
           },
         ]
-    const state = stateCalls.length ? await read(stateCalls) : []
+    const addresses = quoteAddresses(chainId)
+    /*
+      The router starts here, beside the balances, not behind them.
+
+      It needs the pair and the amount and nothing else — no balance, no
+      allowance, no fee tier — so queueing it behind the owner's state cost a
+      whole round trip on the one answer the screen is waiting for. Every
+      problem that would refuse the swap is already known above, so starting it
+      here is not a request a refusal would have avoided.
+
+      Exact-out is left out on purpose: its amount has to be grossed up by the
+      wallet fee first, and the fee tier is not applied until past the gate.
+    */
+    const wantsRoute = !exactOut && problems.length === 0 && typed > 0n
+    const routeEarly = wantsRoute
+      ? (Promise.all([
+          this.route(
+            { chainId, tokenIn: wrappedIn, tokenOut: wrappedOut, amountIn, recipient: owner },
+            addresses,
+            read,
+          ),
+          ...taxProbes(A, wrappedIn, wrappedOut, wetn, read),
+        ] as const) as Promise<readonly [Awaited<ReturnType<SwapService['route']>>, TaxProbe, TaxProbe]>)
+      : null
+
+    // The owner's own state, in one wave beside the router rather than in front of it.
+    const [nativeBalanceRaw, state] = await Promise.all([
+      d.chains.rpc(chainId, 'eth_getBalance', [owner, 'latest']).catch(() => '0x0'),
+      stateCalls.length ? read(stateCalls) : Promise.resolve([]),
+    ])
+    const nativeBalance = BigInt(String(nativeBalanceRaw ?? '0x0'))
     const balanceIn = nativeIn
       ? nativeBalance
       : state[0]?.ok && typeof state[0].value === 'bigint'
@@ -554,7 +610,6 @@ export class SwapService {
     }
     if (problems.length > 0 || typed <= 0n) return withState
 
-    const addresses = quoteAddresses(chainId)
     const sink = tier.sink
     /*
       There is no sink contract any more: the fee goes to an address named in
@@ -583,15 +638,6 @@ export class SwapService {
       it — the fee is paid in extra input, and the screen says so.
     */
     const grossWanted = exactOut ? grossOutForExactOut(wantOut, bips) : 0n
-    const taxes = [
-      same(wrappedIn, wetn)
-        ? Promise.resolve<TaxProbe>(null)
-        : detectTax(A.feeOnTransferDetector as Hex | null, wrappedIn, wetn, read),
-      same(wrappedOut, wetn)
-        ? Promise.resolve<TaxProbe>(null)
-        : detectTax(A.feeOnTransferDetector as Hex | null, wrappedOut, wetn, read),
-    ] as const
-
     let candidate: Candidate | null = null
     let source: 'api' | 'onchain' = 'onchain'
     let gasEstimate = 0n
@@ -622,7 +668,7 @@ export class SwapService {
       */
       const [outRoute, tIn, tOut] = await Promise.all([
         bestRouteExactOut(wrappedIn, wrappedOut, grossWanted, addresses, read),
-        ...taxes,
+        ...taxProbes(A, wrappedIn, wrappedOut, wetn, read),
       ])
       taxIn = tIn
       taxOut = tOut
@@ -635,14 +681,21 @@ export class SwapService {
       // The probe divides into the input, and here the input is the answer — so it follows the quote rather than riding with it.
       probeIn = amountIn / 1000n
     } else {
-      const [routed, tIn, tOut] = await Promise.all([
-        this.route(
-          { chainId, tokenIn: wrappedIn, tokenOut: wrappedOut, amountIn, recipient: owner },
-          addresses,
-          read,
-        ),
-        ...taxes,
-      ])
+      /*
+        Already in flight since before the balance reads — `routeEarly`. It is
+        only ever null when something above decided not to quote at all, and
+        that path has returned by now, so the fallback is for the type system
+        rather than for a case that happens.
+      */
+      const [routed, tIn, tOut] = await (routeEarly ??
+        Promise.all([
+          this.route(
+            { chainId, tokenIn: wrappedIn, tokenOut: wrappedOut, amountIn, recipient: owner },
+            addresses,
+            read,
+          ),
+          ...taxProbes(A, wrappedIn, wrappedOut, wetn, read),
+        ]))
       probeIn = amountIn / 1000n
       taxIn = tIn
       taxOut = tOut
