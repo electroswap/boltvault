@@ -71,7 +71,12 @@ build:
           cp -R "$ARCHIVE"/Products/Applications/*.app build/Payload/
           cd build && zip -qry BoltVault-unsigned.ipa Payload
           shasum -a 256 BoltVault-unsigned.ipa
+    # Every `run` step above works from the project directory (EAS changes into
+    # apps/mobile right after checkout), but upload_artifact resolves its path
+    # against the job workspace — the repo root — and the first run of this
+    # config died here, on a built .ipa it could not see. The glob matches from
+    # either base and survives whichever one EAS hands it.
     - eas/upload_artifact:
         inputs:
           type: application-archive
-          path: ios/build/BoltVault-unsigned.ipa
+          path: '**/BoltVault-unsigned.ipa'
