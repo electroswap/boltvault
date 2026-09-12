@@ -9,6 +9,7 @@ import { DEFAULT_SETTINGS } from '@boltvault/core'
 import { z } from 'zod'
 import { createEngine } from '../src/create'
 import { writeDoc, type DocSpec } from '../src/storage'
+import { AUTOLOCK_ALARM } from '../src/namespaces/vault'
 
 const heads = { blockNumber: async () => 15_100_000n }
 const FAST = { m: 1024, t: 1, p: 1 }
@@ -38,6 +39,24 @@ describe('auto-lock', () => {
     expect((await engine.vault.status()).lockAt).toBe(platform.now() + 300_000)
     await platform.clock.advance(301_000)
     expect((await engine.vault.status()).unlocked).toBe(false)
+  })
+
+  it('status() locks when the deadline has passed even if the alarm never fired', async () => {
+    const { engine, platform, ready } = boot()
+    await ready
+    await engine.vault.import({ mnemonic: PHRASE, password: 'correct horse' })
+    await platform.alarms.cancel(AUTOLOCK_ALARM)
+    await platform.clock.set(platform.now() + 901_000)
+    expect((await engine.vault.status()).unlocked).toBe(false)
+  })
+
+  it('applyAutoLock locks an overdue session instead of pushing the deadline out', async () => {
+    const { vault, platform, ready } = boot()
+    await ready
+    await vault.import({ mnemonic: PHRASE, password: 'correct horse' })
+    await platform.alarms.cancel(AUTOLOCK_ALARM)
+    await platform.clock.set(platform.now() + 901_000)
+    expect((await vault.applyAutoLock()).unlocked).toBe(false)
   })
 
   it('migrates a v1 settings document: autoLock one notch up, the old chain default collapses, reducedMotion is re-derived', async () => {

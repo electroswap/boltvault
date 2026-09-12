@@ -633,6 +633,12 @@ export const SwapQuoteSchema = z.object({
   quotedAt: z.number().int().nonnegative(),
   ok: z.boolean(),
   problems: z.array(z.string()),
+  /**
+   * What MAX should fill. For native ETN this is the balance less 120% of the
+   * quoted network fee, matching Send; for an ERC-20 it is the token balance.
+   * Defaulted so quotes cached before this field still parse.
+   */
+  maxSpendableRaw: z.string().default('0'),
 })
 export type SwapQuote = z.infer<typeof SwapQuoteSchema>
 

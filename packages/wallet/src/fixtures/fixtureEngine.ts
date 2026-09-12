@@ -236,6 +236,7 @@ export async function createFixtureEngine(scenario: FixtureScenario, options: Fi
         quotedAt: Date.now(),
         ok,
         problems: ok ? [] : [amountIn > 0n ? `Not enough ${inRow?.symbol ?? 'ETN'}.` : 'Enter an amount above zero.'],
+        maxSpendableRaw: inRow?.raw ?? '0',
       }
     }
     engine.host.override('holder', {

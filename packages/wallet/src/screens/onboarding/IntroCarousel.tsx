@@ -20,7 +20,7 @@
  * non-deterministic.
  */
 import { Body, Column, CurrentFill, IconButton, IntroArt, Key, Plate, Row, ScrollView, Signature, useWindowDimensions } from '@boltvault/ui'
-import { useRef, useState } from 'react'
+import { useRef, useState, type ComponentRef } from 'react'
 import { t } from '../../i18n'
 
 /*
@@ -88,7 +88,7 @@ export function IntroCarousel({ onDone, onSkip, reducedMotion = false }: { onDon
   const { width: screenWidth } = useWindowDimensions()
   const [width, setWidth] = useState(0)
   const [index, setIndex] = useState(0)
-  const scroller = useRef<ScrollView | null>(null)
+  const scroller = useRef<ComponentRef<typeof ScrollView> | null>(null)
 
   const slides: Slide[] = [
     { id: 'keys', title: t({ id: 'ob.slide1.title', message: 'Your keys stay here' }), body: t({ id: 'ob.slide1.body', message: 'Your recovery phrase is sealed with your password on this device. Nothing leaves it unless you export it.' }) },

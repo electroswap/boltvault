@@ -46,17 +46,28 @@ let snapshot: { vault: VaultStatus | null; accounts: readonly AccountView[]; act
  * The engine was locked the whole time and would have refused to sign, but the
  * wallet showed an unlocked wallet, which is exactly what a lock screen exists
  * to prevent. Events are the newer truth; a reply older than the last event is
- * discarded rather than trusted.
+ * discarded rather than trusted. A newer `refresh()` also invalidates an older
+ * one (`begin` advances the token), so two overlapping asks cannot both apply.
  */
 export function createGeneration(): { begin(): number; bump(): void; stillCurrent(token: number): boolean } {
   let n = 0
   return {
-    begin: () => n,
+    begin: () => {
+      n += 1
+      return n
+    },
     bump: () => {
       n += 1
     },
     stillCurrent: (token) => token === n,
   }
+}
+
+/** True when the shell must show Unlock: no session, or the idle deadline has already passed. */
+export function vaultRequiresUnlock(vault: VaultStatus | null, now: number): boolean {
+  if (!vault?.exists) return false
+  if (!vault.unlocked) return true
+  return vault.lockAt != null && vault.lockAt <= now
 }
 
 const generation = createGeneration()
@@ -85,6 +96,19 @@ export function useWalletState(): WalletState {
           setLoading(false)
           return
         }
+        // A reply taken while the idle deadline had already passed must not
+        // paint Home. The engine now locks inside `status()`, but a racing
+        // snapshot can still carry `unlocked: true` with a past `lockAt`.
+        if (v.unlocked && v.lockAt != null && v.lockAt <= Date.now()) {
+          const lockedStatus = { ...v, unlocked: false, unlockedAt: null, lockAt: null, seeds: [] }
+          snapshot = { vault: lockedStatus, accounts: [], activeId: null, loaded: true }
+          setVault(lockedStatus)
+          setAccounts([])
+          setActiveId(null)
+          setLoading(false)
+          void engine.vault.lock()
+          return
+        }
         snapshot = { vault: v, accounts: list, activeId: active?.id ?? null, loaded: true }
         setVault(v)
         setAccounts(list)
@@ -100,6 +124,13 @@ export function useWalletState(): WalletState {
     return engine.events.subscribe((e) => {
       if (e.type === 'vault.status' || e.type === 'accounts.changed') generation.bump()
       if (e.type === 'vault.status') {
+        if (e.status.unlocked && e.status.lockAt != null && e.status.lockAt <= Date.now()) {
+          const lockedStatus = { ...e.status, unlocked: false, unlockedAt: null, lockAt: null, seeds: [] }
+          snapshot = { ...snapshot, vault: lockedStatus, loaded: true }
+          setVault(lockedStatus)
+          void engine.vault.lock()
+          return
+        }
         snapshot = { ...snapshot, vault: e.status, loaded: true }
         setVault(e.status)
       }

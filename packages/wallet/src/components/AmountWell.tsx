@@ -7,7 +7,7 @@
  * so the eye learns the shape once.
  */
 import { Body, Column, Icon, Input, MaxKey, Plate, Row, paint, type IconName } from '@boltvault/ui'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { t } from '../i18n'
 
 export interface AmountWellProps {
@@ -54,8 +54,9 @@ export interface AmountWellProps {
    * the owner reads the two on the same phone — and the interface sets its
    * amount at 36 px, stepping to 28 only below its `sm` breakpoint. Measured
    * off the owner's two screenshots our 28 px readout came out a tenth shorter
-   * than the page's, which is the difference they were pointing at. Send and
-   * Bridge have nothing to be measured against and stay exactly as they were.
+   * than the page's, which is the difference they were pointing at. Extra
+   * vertical air on this size keeps the token picker in the middle of the
+   * well and MAX on the bottom row. Send and Bridge stay exactly as they were.
    */
   readonly louder?: boolean
   readonly autoFocus?: boolean
@@ -67,22 +68,29 @@ export interface AmountWellProps {
 
 export function AmountWell({ label, value, onChange, readOnly = false, tokenPill, right, fiat, balance, balanceIcon = 'wallet', onMax, error, accent, louder = false, autoFocus, testID, inputTestID, maxTestID, balanceTestID }: AmountWellProps) {
   const empty = !value || value === '0' || value === '—'
+  const [pinStart, setPinStart] = useState(0)
+  const fillMax = onMax
+    ? () => {
+        setPinStart((n) => n + 1)
+        onMax()
+      }
+    : undefined
   return (
-    <Plate role="well" gap={2} paddingVertical={louder ? 10 : 8} paddingHorizontal={12} {...(accent ? { borderColor: accent } : {})} testID={testID}>
+    <Plate role="well" gap={louder ? 4 : 2} paddingVertical={louder ? 16 : 8} paddingHorizontal={12} {...(accent ? { borderColor: accent } : {})} testID={testID}>
       <Row justifyContent="space-between" alignItems="center" minHeight={right ? 32 : 18}>
         <Body tone="mute" size="caption">
           {label}
         </Body>
         {right ?? null}
       </Row>
-      <Row gap="$2" alignItems="center" minHeight={louder ? 44 : 40}>
+      <Row gap="$2" alignItems="center" minHeight={louder ? 52 : 40} flex={louder ? 1 : undefined}>
         <Column flex={1} minWidth={0}>
           {readOnly || !onChange ? (
             <Body fontFamily="$readout" fontSize={louder ? 32 : 28} lineHeight={louder ? 38 : 34} fontWeight="600" letterSpacing={louder ? -1.0 : -0.85} numberOfLines={1} color={empty ? '$mute' : '$ink'} testID={inputTestID}>
               {value || '0'}
             </Body>
           ) : (
-            <Input value={value} onChange={onChange} placeholder="0" bare big {...(louder ? { louder: true } : {})} numeric autoFocus={autoFocus} testID={inputTestID} />
+            <Input value={value} onChange={onChange} placeholder="0" bare big {...(louder ? { louder: true } : {})} numeric autoFocus={autoFocus} pinStart={pinStart} testID={inputTestID} />
           )}
         </Column>
         {tokenPill ?? null}
@@ -100,7 +108,7 @@ export function AmountWell({ label, value, onChange, readOnly = false, tokenPill
               </Body>
             </Row>
           ) : null}
-          {onMax ? <MaxKey label={t({ id: 'max.caps', message: 'MAX' })} onPress={onMax} testID={maxTestID} /> : null}
+          {fillMax ? <MaxKey label={t({ id: 'max.caps', message: 'MAX' })} onPress={fillMax} testID={maxTestID} /> : null}
         </Row>
       </Row>
       {error ? (

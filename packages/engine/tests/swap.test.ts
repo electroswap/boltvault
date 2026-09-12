@@ -14,7 +14,7 @@
 import { createMemoryPlatform } from '@boltvault/platform/memory'
 import { decodeUniversalRouter, UR_COMMAND } from '@boltvault/security'
 import { startMockRpc, type MockRpc } from '@boltvault/testing'
-import { encodeAbiParameters, maxUint256, parseAbiParameters, parseTransaction, recoverTypedDataAddress, type Hex } from 'viem'
+import { encodeAbiParameters, formatUnits, maxUint256, parseAbiParameters, parseTransaction, recoverTypedDataAddress, type Hex } from 'viem'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createEngine, parseApprovalPayload, resetMulticallCache, CANONICAL_MULTICALL3, type ApprovalRequest, type Engine, type SwapFlow } from '../src'
 
@@ -302,6 +302,37 @@ describe('swap on the testnet mock', () => {
     // ETN in needs only the swap.
     const native = await engine.engine.swap.quote({ accountId, chainId: TESTNET, tokenIn: 'native', tokenOut: TOKEN, amountIn: '0.5' })
     expect(native.steps).toEqual(['swap'])
+  })
+
+  it('reserves 20% over the network fee so a native MAX still quotes', async () => {
+    const native = await engine.engine.swap.quote({
+      accountId,
+      chainId: TESTNET,
+      tokenIn: 'native',
+      tokenOut: TOKEN,
+      amountIn: '0.5',
+    })
+    const balance = 5n * 10n ** 18n
+    const feeWei = BigInt(native.gasEstimate) * rpc.state.gasPrice
+    expect(BigInt(native.maxSpendableRaw)).toBe(balance - (feeWei * 120n) / 100n)
+    const full = await engine.engine.swap.quote({
+      accountId,
+      chainId: TESTNET,
+      tokenIn: 'native',
+      tokenOut: TOKEN,
+      amountIn: '5',
+    })
+    expect(full.ok).toBe(false)
+    expect(full.problems).toContain('Not enough ETN for the network fee.')
+    expect(full.maxSpendableRaw).toBe(native.maxSpendableRaw)
+    const atMax = await engine.engine.swap.quote({
+      accountId,
+      chainId: TESTNET,
+      tokenIn: 'native',
+      tokenOut: TOKEN,
+      amountIn: formatUnits(BigInt(full.maxSpendableRaw), 18),
+    })
+    expect(atMax.ok, atMax.problems.join(' ')).toBe(true)
   })
 
   it('runs approve → permit → swap through three sheets and pays the sink at the tier bips', async () => {
@@ -625,6 +656,11 @@ describe('swap on the testnet mock', () => {
       the more honest comparison: price impact means "what did going this big
       through THIS path cost", not "what might some other path have charged for a
       dust trade".
+
+      The rate of that one call is reused for a few seconds on the same path,
+      so a later quote in this file may not issue it again — the receive
+      amount does not depend on it. What must not come back is the candidate
+      set at probe size.
     */
     it('probes the winning route for the impact figure, not the candidate set again', async () => {
       forgetQuotes()
@@ -635,8 +671,8 @@ describe('swap on the testnet mock', () => {
       // through each of the two bases the testnet addresses leave available.
       expect(atFullSize()).toHaveLength(15)
       expect(atFullSize().some((c) => c.kind === 'v3-path')).toBe(true)
-      // And exactly one call at the probe size, for the path that won.
-      expect(atProbeSize()).toEqual([{ kind: 'v3-single', amountIn: ONE_FIX / 1000n, fee: 3000 }])
+      expect(atProbeSize().every((c) => c.kind === 'v3-single' && c.fee === 3000)).toBe(true)
+      expect(atProbeSize().length).toBeLessThanOrEqual(1)
       expect(q.priceImpactPct).not.toBeNull()
     })
 

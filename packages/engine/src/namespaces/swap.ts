@@ -215,6 +215,18 @@ const BIPS_CEILING = 10_000
 /** Hard clamp, so a path that ever skips the refusal still leaves a non-zero floor. */
 /** How long a gas price stays good enough for a fee reserve. */
 const GAS_PRICE_CACHE_MS = 15_000
+/**
+ * Transfer tax is a property of the token, not the amount. Re-probing it on
+ * every keystroke was a round trip in front of a number the routing service
+ * had already returned.
+ */
+const TAX_CACHE_MS = 60_000
+/**
+ * Spot rate for a named route, used only for the impact figure. The receive
+ * amount does not depend on it; caching it means a second quote of the same
+ * path does not wait on another `eth_call` after the routing service answers.
+ */
+const SPOT_CACHE_MS = 15_000
 const MAX_EFFECTIVE_SLIPPAGE_BPS = 9_900
 const hex = (n: bigint): Hex => `0x${n.toString(16)}`
 const isEtn = (chainId: number): chainId is 52014 | 5201420 =>
@@ -268,22 +280,31 @@ export function rateOf(
  * wave earlier and carries these with it, so the pair is named once here and
  * used from both the exact-in and exact-out paths rather than written twice.
  */
-function taxProbes(
-  A: (typeof ELECTRONEUM_ADDRESSES)[52014],
-  wrappedIn: Hex,
-  wrappedOut: Hex,
-  wetn: Hex,
-  read: EsReader,
-): readonly [Promise<TaxProbe>, Promise<TaxProbe>] {
-  const detector = A.feeOnTransferDetector as Hex | null
-  return [
-    same(wrappedIn, wetn)
-      ? Promise.resolve<TaxProbe>(null)
-      : detectTax(detector, wrappedIn, wetn, read),
-    same(wrappedOut, wetn)
-      ? Promise.resolve<TaxProbe>(null)
-      : detectTax(detector, wrappedOut, wetn, read),
-  ] as const
+/**
+ * MAX leaves room for the fee to move.
+ *
+ * Subtracting the measured fee exactly is the fee at the gas price of the
+ * moment the quote asked — so a MAX swap that sat on screen while the price
+ * ticked up could fail for being one wei short of its own gas. A fifth over is
+ * the same margin Send uses. Owner: "clicking MAX should account for the
+ * network fee of ETN plus a 20% buffer."
+ */
+function maxSpendableAfterFee(balance: bigint, feeWei: bigint): bigint {
+  const feeReserve = (feeWei * 120n) / 100n
+  return balance > feeReserve ? balance - feeReserve : 0n
+}
+
+function taxKey(chainId: number, epoch: number, token: Hex): string {
+  return `${String(chainId)}:${String(epoch)}:${token.toLowerCase()}`
+}
+
+function spotKey(chainId: number, epoch: number, candidate: Candidate): string {
+  const hops = candidate.route.hops
+    .map((h) =>
+      h.kind === 'v3' ? `v3:${h.tokenIn}:${h.tokenOut}:${String(h.fee)}` : `v2:${h.tokenIn}:${h.tokenOut}`,
+    )
+    .join('>')
+  return `${String(chainId)}:${String(epoch)}:${hops}`
 }
 
 function encodableHop(h: SwapHop): Hop {
@@ -313,6 +334,91 @@ export class SwapService {
    * read through an RPC the user has just replaced is the old endpoint's answer.
    */
   private readonly gasPriceCache = new Map<string, { at: number; value: bigint }>()
+  private readonly taxCache = new Map<string, { at: number; value: Promise<TaxProbe> }>()
+  private readonly spotCache = new Map<string, { at: number; rate: number }>()
+
+  private cachedTax(chainId: number, token: Hex, wetn: Hex, detector: Hex | null, read: EsReader): Promise<TaxProbe> {
+    if (same(token, wetn)) return Promise.resolve<TaxProbe>(null)
+    const key = taxKey(chainId, this.deps.chains.rpcEpoch(chainId), token)
+    const now = this.deps.platform.now()
+    const hit = this.taxCache.get(key)
+    if (hit && now - hit.at < TAX_CACHE_MS) return hit.value
+    const value = detectTax(detector, token, wetn, read)
+    this.taxCache.set(key, { at: now, value })
+    void value.then((v) => {
+      if (v && 'unavailable' in v && v.reason === 'not-answered') this.taxCache.delete(key)
+    })
+    return value
+  }
+
+  private taxPair(
+    chainId: number,
+    A: (typeof ELECTRONEUM_ADDRESSES)[52014],
+    wrappedIn: Hex,
+    wrappedOut: Hex,
+    wetn: Hex,
+    read: EsReader,
+  ): readonly [Promise<TaxProbe>, Promise<TaxProbe>] {
+    const detector = A.feeOnTransferDetector as Hex | null
+    return [
+      this.cachedTax(chainId, wrappedIn, wetn, detector, read),
+      this.cachedTax(chainId, wrappedOut, wetn, detector, read),
+    ] as const
+  }
+
+  /**
+   * Spot rate of a named route, for price impact only.
+   *
+   * The first quote of a path still asks the chain once, at a thousandth of
+   * the size. The next few seconds reuse that rate: the receive amount comes
+   * from the routing service, and waiting on this call was what made a 100 ms
+   * quote look like three seconds on the screen.
+   */
+  private async spotRate(
+    chainId: number,
+    candidate: Candidate,
+    probeIn: bigint,
+    addresses: QuoteAddresses,
+    read: EsReader,
+    decimalsIn: number,
+    decimalsOut: number,
+  ): Promise<number | null> {
+    if (probeIn <= 0n) return null
+    const key = spotKey(chainId, this.deps.chains.rpcEpoch(chainId), candidate)
+    const now = this.deps.platform.now()
+    const hit = this.spotCache.get(key)
+    if (hit && now - hit.at < SPOT_CACHE_MS) return hit.rate
+    const probe = await quoteOne(candidate, probeIn, addresses, read)
+    if (!probe) return null
+    const rate = rateOf(probeIn, probe.amountOut, decimalsIn, decimalsOut)
+    if (rate !== null) this.spotCache.set(key, { at: now, rate })
+    return rate
+  }
+
+  private async routeAndSpot(
+    input: QuoterInput,
+    addresses: QuoteAddresses,
+    read: EsReader,
+    decimalsIn: number,
+    decimalsOut: number,
+  ): Promise<{
+    routed: { quote: RouteQuote; source: 'api' | 'onchain'; provenance: QuoteProvenance } | null | 'superseded'
+    spot: number | null
+  }> {
+    const routed = await this.route(input, addresses, read)
+    if (!routed || routed === 'superseded') return { routed, spot: null }
+    const probeIn = input.amountIn / 1000n
+    const spot = await this.spotRate(
+      input.chainId,
+      routed.quote.candidate,
+      probeIn,
+      addresses,
+      read,
+      decimalsIn,
+      decimalsOut,
+    )
+    return { routed, spot }
+  }
 
   private async gasPriceFor(chainId: number): Promise<bigint> {
     const key = `${String(chainId)}:${String(this.deps.chains.rpcEpoch(chainId))}`
@@ -392,6 +498,7 @@ export class SwapService {
       quotedAt: this.deps.platform.now(),
       ok: false,
       problems,
+      maxSpendableRaw: '0',
     }
   }
 
@@ -497,6 +604,17 @@ export class SwapService {
   async quote(input: SwapInput): Promise<SwapQuoteView> {
     const d = this.deps
     const { chainId } = input
+    /*
+      Start the lookups that do not need the pair, in the same tick as the
+      pair itself. They used to sit behind `await pair()`, which is a cache
+      hit on a warm screen and a round trip on a cold one — either way it was
+      idle time in front of the routing service.
+    */
+    const accountsP = d.vault.accounts()
+    const settingsP = d.settings.get()
+    const statusP = d.vault.status()
+    const gasP = this.gasPriceFor(chainId)
+    const tierP = d.holder.tier(input.accountId, chainId)
     const { inView, outView } = await this.pair(chainId, input.tokenIn, input.tokenOut)
     const problems: string[] = []
     // The kill-switch (§3.7) comes before every other answer, even for a pair the wallet does not know.
@@ -509,44 +627,8 @@ export class SwapService {
         'Swaps happen on Electroneum. Bridge first, then swap.',
       ])
     if (!inView || !outView) return this.skeleton(input, inView, outView, ['Pick two tokens.'])
-    /*
-      Everything the quote needs before it can ask for a price, asked for at
-      once.
-
-      These were nine `await`s in a column: accounts, settings, status, the two
-      safety lookups, the balance, the gas price, the holder tier, the allowance
-      multicall — and only then the router. None of them depends on any other,
-      so on a phone they were nine round trips end to end in front of the one
-      call that produces the number the user is waiting for. Owner: "updating an
-      input number seems like it's a lot slower to get a quote back than on the
-      web interface … we want to get the quoted output showing as quickly as
-      possible."
-
-      They are two waves now: this one, and then the router beside the balance
-      reads. The gate between them is unchanged — a swap with a problem still
-      returns before anything is routed — because every problem is decided by
-      this wave and by parsing the amount, both of which happen here.
-    */
-    const [accountList, settings, status, blockedIn, blockedOut, gasPriceRaw, tier] =
-      await Promise.all([
-        d.vault.accounts(),
-        d.settings.get(),
-        d.vault.status(),
-        this.isBlocked(chainId, inView.address),
-        this.isBlocked(chainId, outView.address),
-        this.gasPriceFor(chainId),
-        d.holder.tier(input.accountId, chainId),
-      ])
-    const account = accountList.find((a) => a.id === input.accountId)
-    if (!account) throw new EngineError('not_found', 'no such account')
-    const owner = account.address as Hex
-    const A = ELECTRONEUM_ADDRESSES[chainId]
-    const wetn = A.wetn as Hex
-    const nativeIn = inView.address === 'native'
-    const nativeOut = outView.address === 'native'
-    const wrappedIn = nativeIn ? wetn : (inView.address as Hex)
-    const wrappedOut = nativeOut ? wetn : (outView.address as Hex)
-    const slippageBips = input.slippageBips ?? settings.slippageBips
+    const blockedInP = this.isBlocked(chainId, inView.address)
+    const blockedOutP = this.isBlocked(chainId, outView.address)
     const exactOut = input.tradeType === 'exactOut'
     /*
       Only the side the user typed is parsed here; the other is the answer.
@@ -565,8 +647,68 @@ export class SwapService {
       problems.push('That amount is not a number.')
     }
     const typed = exactOut ? wantOut : amountIn
+    const A = ELECTRONEUM_ADDRESSES[chainId]
+    const wetn = A.wetn as Hex
+    const nativeIn = inView.address === 'native'
+    const nativeOut = outView.address === 'native'
+    const wrappedIn = nativeIn ? wetn : (inView.address as Hex)
+    const wrappedOut = nativeOut ? wetn : (outView.address as Hex)
     if (same(wrappedIn, wrappedOut)) problems.push('Pick two different tokens.')
     if (typed <= 0n) problems.push('Enter an amount above zero.')
+    /*
+      The routing service needs the pair, the amount and the recipient — not
+      the fee tier, not the block-list, not the gas price. Starting it after
+      those had resolved put a whole phone round-trip in front of a 100 ms
+      quote. Owner: the quoted output was taking ~3 s to appear while the
+      routing service itself answered in ~100 ms.
+
+      A blocked token still gets a request it will discard; that is cheaper
+      than making every good quote wait to find out it is good.
+    */
+    const accountList = await accountsP
+    const account = accountList.find((a) => a.id === input.accountId)
+    if (!account) throw new EngineError('not_found', 'no such account')
+    const owner = account.address as Hex
+    const read = readerFor(d.chains, chainId)
+    const addresses = quoteAddresses(chainId)
+    const canPrice = typed > 0n && !same(wrappedIn, wrappedOut)
+    const routeEarly = !exactOut && canPrice
+      ? this.routeAndSpot(
+          { chainId, tokenIn: wrappedIn, tokenOut: wrappedOut, amountIn, recipient: owner },
+          addresses,
+          read,
+          inView.decimals,
+          outView.decimals,
+        )
+      : null
+    const taxEarly = canPrice ? this.taxPair(chainId, A, wrappedIn, wrappedOut, wetn, read) : null
+    /*
+      Everything else the quote needs, asked for at once.
+
+      These were nine `await`s in a column: accounts, settings, status, the two
+      safety lookups, the balance, the gas price, the holder tier, the allowance
+      multicall — and only then the router. None of them depends on any other,
+      so on a phone they were nine round trips end to end in front of the one
+      call that produces the number the user is waiting for. Owner: "updating an
+      input number seems like it's a lot slower to get a quote back than on the
+      web interface … we want to get the quoted output showing as quickly as
+      possible."
+
+      They are two waves now: this one rides *beside* the router, and then the
+      balance reads. The gate between them is unchanged — a swap with a problem
+      still returns before anything is *used* — because every problem is
+      decided by this wave and by parsing the amount, both of which happen here.
+    */
+    const [settings, status, blockedIn, blockedOut, gasPriceRaw, tier] =
+      await Promise.all([
+        settingsP,
+        statusP,
+        blockedInP,
+        blockedOutP,
+        gasP,
+        tierP,
+      ])
+    const slippageBips = input.slippageBips ?? settings.slippageBips
     if (account.kind === 'watch')
       problems.push('Watch-only — import a key or pair a device to swap.')
     if (!status.backupComplete && status.seeds.length > 0 && account.kind === 'hd')
@@ -585,7 +727,6 @@ export class SwapService {
       problems.push(`${outView.symbol} is marked unsafe by ElectroSwap. BoltVault will not swap it.`)
 
     // Balances and the network fee reserve.
-    const read = readerFor(d.chains, chainId)
     const gasPrice = gasPriceRaw
     const stateCalls: EsReadCall[] = nativeIn
       ? []
@@ -604,31 +745,6 @@ export class SwapService {
             args: [owner, wrappedIn, A.universalRouter as Hex],
           },
         ]
-    const addresses = quoteAddresses(chainId)
-    /*
-      The router starts here, beside the balances, not behind them.
-
-      It needs the pair and the amount and nothing else — no balance, no
-      allowance, no fee tier — so queueing it behind the owner's state cost a
-      whole round trip on the one answer the screen is waiting for. Every
-      problem that would refuse the swap is already known above, so starting it
-      here is not a request a refusal would have avoided.
-
-      Exact-out is left out on purpose: its amount has to be grossed up by the
-      wallet fee first, and the fee tier is not applied until past the gate.
-    */
-    const wantsRoute = !exactOut && problems.length === 0 && typed > 0n
-    const routeEarly = wantsRoute
-      ? (Promise.all([
-          this.route(
-            { chainId, tokenIn: wrappedIn, tokenOut: wrappedOut, amountIn, recipient: owner },
-            addresses,
-            read,
-          ),
-          ...taxProbes(A, wrappedIn, wrappedOut, wetn, read),
-        ] as const) as Promise<readonly [Awaited<ReturnType<SwapService['route']>>, TaxProbe, TaxProbe]>)
-      : null
-
     /*
       The native balance rides in the aggregate instead of being its own call.
 
@@ -696,6 +812,8 @@ export class SwapService {
       ...base,
       amountInRaw: amountIn.toString(),
       balanceInRaw: balanceIn.toString(),
+      // Native MAX waits for the measured fee below; an ERC-20 can spend its whole balance.
+      maxSpendableRaw: nativeIn ? '0' : balanceIn.toString(),
       slippageBips,
       fee: {
         ...base.fee,
@@ -742,10 +860,9 @@ export class SwapService {
     let source: 'api' | 'onchain' = 'onchain'
     let gasEstimate = 0n
     let amountOut = 0n
-    let probeIn = 0n
-    let probe: RouteQuote | null = null
     let taxIn: TaxProbe = null
     let taxOut: TaxProbe = null
+    let spot: number | null = null
     /*
       The routing service is exact-in only, so an exact-output trade never asks
       it at all — which is a fallback reason like any other, and the one a
@@ -768,7 +885,7 @@ export class SwapService {
       */
       const [outRoute, tIn, tOut] = await Promise.all([
         bestRouteExactOut(wrappedIn, wrappedOut, grossWanted, addresses, read),
-        ...taxProbes(A, wrappedIn, wrappedOut, wetn, read),
+        ...(taxEarly ?? this.taxPair(chainId, A, wrappedIn, wrappedOut, wetn, read)),
       ])
       taxIn = tIn
       taxOut = tOut
@@ -778,58 +895,51 @@ export class SwapService {
         amountIn = outRoute.best.amountIn
         amountOut = grossWanted
       }
-      // The probe divides into the input, and here the input is the answer — so it follows the quote rather than riding with it.
-      probeIn = amountIn / 1000n
+      const probeIn = amountIn / 1000n
+      spot = candidate
+        ? await this.spotRate(chainId, candidate, probeIn, addresses, read, inView.decimals, outView.decimals)
+        : null
     } else {
       /*
-        Already in flight since before the balance reads — `routeEarly`. It is
-        only ever null when something above decided not to quote at all, and
-        that path has returned by now, so the fallback is for the type system
-        rather than for a case that happens.
+        Already in flight since before the rest of the quote — `routeEarly`.
+        It is only ever null when something above decided not to quote at all,
+        and that path has returned by now, so the fallback is for the type
+        system rather than for a case that happens.
       */
-      const [routed, tIn, tOut] = await (routeEarly ??
-        Promise.all([
-          this.route(
+      const [packed, tIn, tOut] = await Promise.all([
+        routeEarly ??
+          this.routeAndSpot(
             { chainId, tokenIn: wrappedIn, tokenOut: wrappedOut, amountIn, recipient: owner },
             addresses,
             read,
+            inView.decimals,
+            outView.decimals,
           ),
-          ...taxProbes(A, wrappedIn, wrappedOut, wetn, read),
-        ]))
+        taxEarly?.[0] ?? this.cachedTax(chainId, wrappedIn, wetn, A.feeOnTransferDetector as Hex | null, read),
+        taxEarly?.[1] ?? this.cachedTax(chainId, wrappedOut, wetn, A.feeOnTransferDetector as Hex | null, read),
+      ])
       /*
         Abandoned mid-flight because the amount changed. Return the neutral
         skeleton: the caller has already thrown this answer away, and every
         step after this one — the price-impact probe, the encode, the fee
         arithmetic — would be work done for nobody.
       */
-      if (routed === 'superseded') return withState
-      probeIn = amountIn / 1000n
+      if (packed.routed === 'superseded') return withState
+      if (packed.routed) {
+        candidate = packed.routed.quote.candidate
+        gasEstimate = packed.routed.quote.gasEstimate
+        amountOut = packed.routed.quote.amountOut
+        source = packed.routed.source
+        provenance = packed.routed.provenance
+      }
       taxIn = tIn
       taxOut = tOut
-      if (routed) {
-        candidate = routed.quote.candidate
-        gasEstimate = routed.quote.gasEstimate
-        amountOut = routed.quote.amountOut
-        source = routed.source
-        provenance = routed.provenance
-      }
+      spot = packed.spot
     }
     if (!candidate) {
       problems.push('No route on ElectroSwap for this pair.')
       return { ...withState, problems }
     }
-    /*
-      The spot reference is the chosen route at a thousandth of the size.
-
-      It used to be a second `bestRoute` — sixteen simulated swaps in their own
-      `eth_call`, run on every keystroke, to produce one number to divide into
-      another. Quoting the route that actually won is a single simulated swap,
-      and it is the more honest comparison besides: price impact means "what did
-      going this big through *this* path cost", not "what might some other path
-      have charged for a dust trade". When the routing service answered, this is
-      now the only quoting call the chain is asked for at all.
-    */
-    probe = probeIn > 0n ? await quoteOne(candidate, probeIn, addresses, read) : null
     /*
       A probe that could not answer is not a probe that said "no tax" — and it
       is not a reason to refuse the swap either.
@@ -956,7 +1066,6 @@ export class SwapService {
         ? routerMinimumOut(scaledOut, effectiveSlippage)
         : deliveredMinimumOut(amountOut, bips, effectiveSlippage)
     const maxIn = exactOut ? maximumInFor(amountIn, effectiveSlippage) : 0n
-    const spot = probe ? rateOf(probeIn, probe.amountOut, inView.decimals, outView.decimals) : null
     const impact = priceImpactPct(amountIn, amountOut, spot, inView.decimals, outView.decimals)
 
     /*
@@ -1003,11 +1112,15 @@ export class SwapService {
     if (spendCeiling > balanceIn) problems.push(`Not enough ${inView.symbol}.`)
     if ((nativeIn ? spendCeiling : 0n) + feeWei > nativeBalance)
       problems.push('Not enough ETN for the network fee.')
+    const maxSpendableRaw = nativeIn
+      ? maxSpendableAfterFee(nativeBalance, feeWei).toString()
+      : balanceIn.toString()
 
     return {
       ...withState,
       amountInRaw: amountIn.toString(),
       maximumInRaw: maxIn.toString(),
+      maxSpendableRaw,
       amountOutRaw: amountOut.toString(),
       receiveRaw: receive.toString(),
       minimumOutRaw: minOut.toString(),

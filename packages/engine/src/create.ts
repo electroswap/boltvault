@@ -64,7 +64,7 @@ import { PrefsService, prefsNamespace } from './namespaces/prefs'
 import { SitesService, sitesNamespace } from './namespaces/sites'
 import { createSyncStateStore, HttpRelay, MemoryRelay, SyncService, syncNamespace, type Relay } from './namespaces/sync'
 import { TokensService, tokensNamespace } from './namespaces/tokens'
-import { accountsNamespace, KEY_DEK, VaultManager, vaultNamespace } from './namespaces/vault'
+import { accountsNamespace, KEY_DEK, KEY_LOCK_AT, VaultManager, vaultNamespace } from './namespaces/vault'
 import {
   AccountIdSchema,
   ApprovalDecisionSchema,
@@ -210,6 +210,14 @@ export function createEngine(deps: EngineDeps): Engine {
   const dek = async (): Promise<Uint8Array> => {
     const hex = await deps.platform.storage.session.get(KEY_DEK)
     if (hex === null) throw new EngineError('locked', 'the vault is locked')
+    // Same deadline as VaultManager: a backgrounded phone can still have the
+    // DEK in process memory after lockAt. Sealed stores go through this
+    // accessor, not `vault.dek()`, so they must refuse too.
+    const lockAt = Number((await deps.platform.storage.session.get(KEY_LOCK_AT)) ?? 0)
+    if (lockAt > 0 && lockAt <= deps.platform.now()) {
+      await vault.lock()
+      throw new EngineError('locked', 'the vault is locked')
+    }
     return fromHex(hex)
   }
   const cacheShards = new CacheShards(deps.platform, dek)

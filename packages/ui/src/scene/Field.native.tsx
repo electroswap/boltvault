@@ -12,7 +12,7 @@
  */
 import { Canvas, Fill, Shader, Skia } from '@shopify/react-native-skia'
 import { useEffect, useMemo } from 'react'
-import { View } from 'react-native'
+import { AppState, View } from 'react-native'
 import { useDerivedValue, useSharedValue, withTiming } from 'react-native-reanimated'
 import { fieldSeed } from '../hash'
 import { paint } from '../tokens'
@@ -32,11 +32,31 @@ export function Field({ address, pulse = 0, warmth = 0, intensity = 1, quiet = f
   useEffect(() => {
     if (reducedMotion || scene === 'off') return
     // A slow, cheap clock: 30 fps is enough for a field that breathes.
+    // Stop it when the app is not on screen — backgrounded shader work is waste.
     const started = Date.now()
+    let pauseAccum = 0
+    let pausedAt = 0
+    let onScreen = AppState.currentState === 'active'
+    if (!onScreen) pausedAt = started
     const id = setInterval(() => {
-      time.value = (Date.now() - started) / 1000
+      if (!onScreen) return
+      time.value = (Date.now() - started - pauseAccum) / 1000
     }, 1000 / 30)
-    return () => clearInterval(id)
+    const sub = AppState.addEventListener('change', (state) => {
+      const now = Date.now()
+      if (state === 'active') {
+        if (pausedAt) pauseAccum += now - pausedAt
+        pausedAt = 0
+        onScreen = true
+      } else {
+        onScreen = false
+        pausedAt = now
+      }
+    })
+    return () => {
+      clearInterval(id)
+      sub.remove()
+    }
   }, [reducedMotion, scene, time])
 
   useEffect(() => {
@@ -57,7 +77,7 @@ export function Field({ address, pulse = 0, warmth = 0, intensity = 1, quiet = f
 
   // Off is a real choice, not a hidden shader: nothing compiles, nothing ticks.
   const effect = scene === 'circuit' ? circuit : grid
-  if (scene === 'off' || !effect) return <View style={{ position: 'absolute', width, height, backgroundColor: paint.void }} testID={testID} />
+  if (scene === 'off' || !effect || width < 1 || height < 1) return <View style={{ position: 'absolute', width, height, backgroundColor: paint.void }} testID={testID} />
   const opacity = (quiet ? 0.15 : 1) * intensity
   return (
     <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width, height, opacity }} testID={testID}>

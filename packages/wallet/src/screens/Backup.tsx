@@ -1,6 +1,5 @@
 /** Backup quiz for a seed that was created but not confirmed (the gate, §8.1). */
 import {
-  Backdrop,
   Body,
   Column,
   EsWordmark,
@@ -14,7 +13,6 @@ import {
   WordGrid,
   metrics,
   paint,
-  useWindowDimensions,
 } from '@boltvault/ui'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
@@ -23,15 +21,12 @@ import { t } from '../i18n'
 import { useSecretGuard } from './onboarding/useSecretGuard'
 import { useRouter } from '../navigation/router'
 import { useWalletState } from '../state/useWalletState'
-import { useScene } from '../state/useScene'
 
 export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
   const engine = useEngine()
   const host = useHost()
   const router = useRouter()
   const { vault, refresh } = useWalletState()
-  const { width, height } = useWindowDimensions()
-  const scene = useScene()
   const pending = (vault?.seeds ?? []).filter((s) => !s.backedUp)
   const [seedId, setSeedId] = useState<string | null>(pending[0]?.id ?? null)
   const [password, setPassword] = useState('')
@@ -163,8 +158,7 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
   }
 
   return (
-    <Column flex={1} backgroundColor="$void" testID="backup">
-      <Backdrop scene={scene} width={width} height={height} reducedMotion={reducedMotion} />
+    <Column flex={1} testID="backup">
       <ScrollView
         style={{ zIndex: 1 }}
         contentContainerStyle={{ padding: metrics.insetWide, gap: 16 }}

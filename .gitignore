@@ -14,8 +14,8 @@ node_modules/
 .out/
 pnpm-lock.yaml.lock
 .turbo/
-# Audit working directory: dumps of real wallet storage, recovered plaintext
-# and crack output land here. Never commit it.
+
+rebuild-*.sh
 
 # Local build configuration: the API origin and the wallet API key a developer
 # builds against. `.env.example` is the committed template; `.env` is yours and

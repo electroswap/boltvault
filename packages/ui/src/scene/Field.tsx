@@ -1,7 +1,8 @@
 /**
  * The Field — web renderer: one WebGL2 quad, one fragment shader, ≤ 15 KB,
- * 30 fps cap, paused when the document is hidden, half resolution on high
- * DPR (master plan §2.7 S12). Metro picks Field.native.tsx instead.
+ * 30 fps cap, paused when the document is hidden or the canvas is off-screen,
+ * half resolution on high DPR (master plan §2.7 S12). Metro picks
+ * Field.native.tsx instead.
  *
  * The GL context is created once per mount and never lost on prop changes:
  * props flow through refs into the frame loop, and only a size change touches
@@ -117,9 +118,11 @@ export function Field({ address, pulse = 0, warmth = 0, intensity = 1, quiet = f
     let raf = 0
     let last = 0
     let stopped = false
+    let inView = true
     const draw = (now: number): void => {
-      if (stopped) return
+      if (stopped || !inView) return
       raf = requestAnimationFrame(draw)
+      if (canvas.width < 2 || canvas.height < 2) return
       const s = live.current
       if (now - last < 1000 / s.fps) return
       // A still frame renders once (and again whenever a prop changed).
@@ -136,7 +139,12 @@ export function Field({ address, pulse = 0, warmth = 0, intensity = 1, quiet = f
       gl.uniform1f(u.warmth, s.warmth)
       gl.drawArrays(gl.TRIANGLES, 0, 3)
     }
-    raf = requestAnimationFrame(draw)
+    const arm = (): void => {
+      if (stopped || !inView) return
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(draw)
+    }
+    arm()
 
     const onVisibility = (): void => {
       if (document.hidden) {
@@ -145,9 +153,24 @@ export function Field({ address, pulse = 0, warmth = 0, intensity = 1, quiet = f
       } else if (stopped) {
         stopped = false
         dirty.current = true
-        raf = requestAnimationFrame(draw)
+        arm()
       }
     }
+    const io = typeof IntersectionObserver === 'function'
+      ? new IntersectionObserver(
+          (entries) => {
+            inView = entries.some((e) => e.isIntersecting && e.intersectionRatio > 0)
+            if (inView) {
+              dirty.current = true
+              arm()
+            } else {
+              cancelAnimationFrame(raf)
+            }
+          },
+          { threshold: 0 },
+        )
+      : null
+    io?.observe(canvas)
     const host = canvas.parentElement
     const onMove = (e: PointerEvent): void => {
       const r = canvas.getBoundingClientRect()
@@ -165,6 +188,7 @@ export function Field({ address, pulse = 0, warmth = 0, intensity = 1, quiet = f
       stopped = true
       cancelAnimationFrame(raf)
       document.removeEventListener('visibilitychange', onVisibility)
+      io?.disconnect()
       host?.removeEventListener('pointermove', onMove)
       host?.removeEventListener('pointerleave', onLeave)
       ctxRef.current = null

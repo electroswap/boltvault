@@ -3,7 +3,6 @@
  * Quiet custody mode; the Field ignites on success (Ignition on Home).
  */
 import {
-  Backdrop,
   Body,
   Column,
   EsWordmark,
@@ -14,7 +13,6 @@ import {
   Row,
   metrics,
   paint,
-  useWindowDimensions,
 } from '@boltvault/ui'
 import { useEffect, useRef, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
@@ -22,7 +20,6 @@ import { useHost } from '../host'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { useWalletState } from '../state/useWalletState'
-import { useScene } from '../state/useScene'
 
 export function Unlock({
   body,
@@ -35,8 +32,6 @@ export function Unlock({
   const host = useHost()
   const router = useRouter()
   const { vault } = useWalletState()
-  const { width, height } = useWindowDimensions()
-  const scene = useScene()
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -152,8 +147,7 @@ export function Unlock({
 
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   return (
-    <Column flex={1} backgroundColor="$void" testID="unlock">
-      <Backdrop scene={scene} width={width} height={height} reducedMotion={reducedMotion} />
+    <Column flex={1} testID="unlock">
       <Column
         flex={1}
         padding={inset}

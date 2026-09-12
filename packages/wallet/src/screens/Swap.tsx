@@ -10,9 +10,10 @@
  * Confirming runs a flow of sheets (approve → permit → swap) and the
  * Discharge lands the result here.
  */
-import { Body, ChainMark, Chip, Column, Discharge, Icon, IconButton, Key, Pill, Plate, Pressable, Rim, Row, ScrollView, Segmented, TokenAvatar, metrics, paint, radius, shortAddress, useWindowDimensions } from '@boltvault/ui'
-import { cacheKey, type ExploreToken, type LimitOrderView, type LimitQuote, type LiquidityView, type SwapArgs, type SwapQuote, type TokenView } from '@boltvault/engine'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Body, ChainMark, Chip, Column, Discharge, Icon, IconButton, Key, Pill, Plate, Pressable, Rim, Row, ScrollView, Segmented, TokenAvatar, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
+import { cacheKey, type ExploreToken, type LimitOrderView, type LimitQuote, type LiquidityView, type SwapArgs, type SwapQuoteView, type TokenView } from '@boltvault/engine'
+import { formatUnits } from 'viem'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SlippageSheet } from '../components/SlippageSheet'
 import { SwapCoachSheet } from '../components/SwapCoachSheet'
 import { TokenPickerSheet, type TokenSafety } from '../components/TokenPickerSheet'
@@ -148,12 +149,14 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   const [tokenIn, setTokenIn] = useState(initialIn ?? 'native')
   const [tokenOut, setTokenOut] = useState(initialOut ?? '')
   const [amount, setAmount] = useState('')
+  const quoteNow = useRef(false)
+  const maxGen = useRef(0)
   const [minOut, setMinOut] = useState('')
   const [duration, setDuration] = useState<string>('604800')
   const [slippage, setSlippage] = useState<number | null>(null)
   const [slippageOpen, setSlippageOpen] = useState(false)
   const [picker, setPicker] = useState<'in' | 'out' | null>(null)
-  const [quote, setQuote] = useState<SwapQuote | null>(null)
+  const [quote, setQuote] = useState<SwapQuoteView | null>(null)
   const [limitQuote, setLimitQuote] = useState<LimitQuote | null>(null)
   const [orders, setOrders] = useState<LimitOrderView[]>([])
   const [feeSheet, setFeeSheet] = useState(false)
@@ -232,12 +235,14 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
         without asking on every keypress.
       */
       let alive = true
+      const wait = quoteNow.current ? 0 : QUOTE_DEBOUNCE_MS
+      quoteNow.current = false
       const id = setTimeout(() => {
         engine.swap.quote(swapArgs()).then(
           (q) => alive && setQuote(q),
           (err: unknown) => alive && setError(err instanceof Error ? err.message : String(err)),
         )
-      }, QUOTE_DEBOUNCE_MS)
+      }, wait)
       return () => {
         alive = false
         clearTimeout(id)
@@ -314,6 +319,58 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   const fresh = quote ? now - quote.quotedAt <= QUOTE_STALE_MS : false
   const impactTone: 'mute' | 'ember' | 'burn' = quote?.priceImpactPct === null || quote?.priceImpactPct === undefined ? 'mute' : quote.priceImpactPct > 15 ? 'burn' : quote.priceImpactPct > 5 ? 'ember' : 'mute'
   const coachOpen = mode === 'swap' && prefsLoaded && activityLoaded && !hasSwapped && !prefs.swapCoachDismissed
+
+  useEffect(() => {
+    maxGen.current += 1
+  }, [tokenIn, tokenOut])
+
+  /*
+    Native MAX fills the balance less 120% of the quoted network fee. When we
+    do not have that number yet, ask once at the full balance (that quote is
+    refused, which is the point) and take `maxSpendableRaw` off it rather than
+    inventing a reserve.
+  */
+  const fillPayMax = useCallback(() => {
+    if (!rowIn) return
+    quoteNow.current = true
+    if (rowIn.address !== 'native') {
+      setAmount(rowIn.quantity)
+      return
+    }
+    const ready = spendableNative(quote)
+    if (ready) {
+      setAmount(ready)
+      return
+    }
+    const gen = ++maxGen.current
+    const quantity = rowIn.quantity
+    void engine.swap
+      .quote({
+        accountId: active?.id ?? '',
+        chainId: ETN,
+        tokenIn,
+        tokenOut,
+        slippageBips: effectiveSlippage,
+        amountIn: quantity,
+      })
+      .then(
+        (q) => {
+          if (gen !== maxGen.current) return
+          quoteNow.current = true
+          setAmount(spendableNative(q) ?? quantity)
+        },
+        () => {
+          if (gen !== maxGen.current) return
+          quoteNow.current = true
+          setAmount(quantity)
+        },
+      )
+  }, [rowIn, quote, engine, active?.id, tokenIn, tokenOut, effectiveSlippage])
+
+  const typePay = useCallback((value: string) => {
+    maxGen.current += 1
+    setAmount(value)
+  }, [])
 
   /*
     A quote is a quote OF a pair, so changing what the trade is made of drops
@@ -622,12 +679,12 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
           <AmountWell
             label={t({ id: 'swap.pay', message: 'You pay' })}
             value={amount}
-            onChange={setAmount}
+            onChange={typePay}
             louder
             tokenPill={<TokenPill token={inView} onPress={() => setPicker('in')} testID="swap-token-in" />}
             fiat={formatAmountFiat(amount, rowIn, currency)}
             balance={rowIn ? `${formatQuantity(rowIn.quantity)} ${rowIn.symbol}` : null}
-            onMax={rowIn ? () => setAmount(rowIn.quantity) : undefined}
+            onMax={rowIn ? fillPayMax : undefined}
             accent={lockRim}
             testID="terminal-in"
             inputTestID="swap-amount-in"
@@ -727,23 +784,22 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
             it sits inside the console here now.
           */}
           {/*
-            `radius.well`, not the recessed role's 14.
+            Same well as the terminals, one border — the current rim, not `$edge`.
 
-            The console is 20 and pads its children by 8, so a child of it nests
-            at `innerRadius(20, 8)` = 12 — which is what both terminals use and
-            what the interface computes for its own `SwapSection`. This card is
-            their sibling and the same width to the pixel, but its corners were
-            two pixels rounder, which is enough to read as a different box.
             Owner: "the rate container should be the same width as the
-            input/output containers."
+            input/output containers." The nested look was this plate's `$edge`
+            hairline plus a second SVG rim inset by a pixel. Turning the rim
+            off left the grey hairline, which is the wrong colour next to the
+            console. `borderWidth={0}` drops that; `rim` is the same stroke
+            the console and the flip chip use.
           */}
           {mode === 'swap' ? (
-          <Plate role="recessed" rim={0.7} gap={0} borderRadius={radius.well} paddingVertical={2} paddingHorizontal="$3" testID="fee-stack">
+          <Plate role="well" borderWidth={0} rim={0.7} gap={0} padding={0} testID="fee-stack">
             <Pressable
               onPress={() => setDetails((d) => !d)}
               accessibilityRole="button"
               accessibilityLabel={t({ id: 'swap.details.a11y', message: 'Swap details' })}
-              style={{ minHeight: 44, justifyContent: 'center' }}
+              style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 2 }}
               testID="swap-details-toggle"
             >
               <Row justifyContent="space-between" alignItems="center" gap="$2" minHeight={40}>
@@ -773,9 +829,9 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
                 </Row>
               </Row>
             </Pressable>
-            {details ? <Column height={1} backgroundColor="$edge" marginVertical={4} /> : null}
+            {details ? <Column height={1} backgroundColor="$edge" marginHorizontal={12} marginVertical={4} /> : null}
             {details ? (
-            <>
+            <Column paddingHorizontal={12} paddingBottom={2}>
             <FeeRow label={t({ id: 'swap.impact', message: 'Price impact' })} value={quote?.priceImpactPct !== null && quote?.priceImpactPct !== undefined ? `${quote.priceImpactPct.toFixed(2)}%` : '—'} tone={impactTone} testID="swap-impact" />
             {/*
               No negative margin. It was `marginVertical: -8` to keep a 44 px
@@ -820,7 +876,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
               tax the figures above do not account for.
             */}
             {quote?.taxUnknown ? <FeeRow label={t({ id: 'swap.tax.label', message: 'Token tax' })} value={t({ id: 'swap.tax.unknown', message: 'could not be checked' })} tone="ember" testID="swap-tax-unknown" /> : null}
-            </>
+            </Column>
             ) : null}
           </Plate>
           ) : (
@@ -998,4 +1054,14 @@ function FeeRow({ label, value, tone, testID }: { label: string; value: string; 
  */
 function TokenPill({ token, onPress, testID }: { token: TokenView | null; onPress: () => void; testID: string }) {
   return <Pill strong size="lg" label={token?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} icon={token ? <TokenAvatar chainId={ETN} address={token.address} symbol={token.symbol} logoUri={token.logoUri} size={24} /> : undefined} chevron tone="ink" onPress={onPress} accessibilityLabel={token?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} testID={testID} />
+}
+
+/** Native MAX: the balance less 120% of the quoted network fee. Null until a quote has measured that fee. */
+function spendableNative(quote: SwapQuoteView | null): string | null {
+  if (!quote || quote.tokenIn !== 'native' || !quote.maxSpendableRaw || quote.maxSpendableRaw === '0') return null
+  try {
+    return formatUnits(BigInt(quote.maxSpendableRaw), quote.decimalsIn)
+  } catch {
+    return null
+  }
 }

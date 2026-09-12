@@ -10,7 +10,8 @@
  * one thing a lock screen exists to prevent.
  */
 import { describe, expect, it } from 'vitest'
-import { createGeneration } from '../src/state/useWalletState'
+import { createGeneration, vaultRequiresUnlock } from '../src/state/useWalletState'
+import type { VaultStatus } from '@boltvault/engine'
 
 describe('the wallet-state generation guard', () => {
   it('accepts an answer when nothing happened while it was in flight', () => {
@@ -43,11 +44,44 @@ describe('the wallet-state generation guard', () => {
     expect(g.stillCurrent(asked)).toBe(true)
   })
 
+  it('a newer ask invalidates an older one even without an event', () => {
+    const g = createGeneration()
+    const first = g.begin()
+    const second = g.begin()
+    expect(g.stillCurrent(first)).toBe(false)
+    expect(g.stillCurrent(second)).toBe(true)
+  })
+
   it('is per-guard, so one surface cannot invalidate another’s', () => {
     const a = createGeneration()
     const b = createGeneration()
     const asked = b.begin()
     a.bump()
     expect(b.stillCurrent(asked)).toBe(true)
+  })
+})
+
+describe('vaultRequiresUnlock', () => {
+  const base = {
+    exists: true,
+    unlockedAt: 1,
+    autoLock: '15min' as const,
+    wraps: [],
+    seeds: [],
+    backupComplete: true,
+  } satisfies Omit<VaultStatus, 'unlocked' | 'lockAt'>
+
+  it('holds the lock screen while there is a vault and no session', () => {
+    expect(vaultRequiresUnlock({ ...base, unlocked: false, lockAt: null }, 1_000)).toBe(true)
+  })
+
+  it('holds the lock screen when the idle deadline is already in the past', () => {
+    expect(vaultRequiresUnlock({ ...base, unlocked: true, lockAt: 900 }, 1_000)).toBe(true)
+  })
+
+  it('lets Home through only while the session is live and the deadline is ahead', () => {
+    expect(vaultRequiresUnlock({ ...base, unlocked: true, lockAt: 2_000 }, 1_000)).toBe(false)
+    expect(vaultRequiresUnlock(null, 1_000)).toBe(false)
+    expect(vaultRequiresUnlock({ ...base, exists: false, unlocked: false, lockAt: null }, 1_000)).toBe(false)
   })
 })

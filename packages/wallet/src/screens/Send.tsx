@@ -281,7 +281,6 @@ export function Send({
     return (
       <Column
         flex={1}
-        backgroundColor="$void"
         padding={inset}
         gap="$4"
         justifyContent="center"
