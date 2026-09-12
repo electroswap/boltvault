@@ -50,6 +50,7 @@ import { useActivity } from '../hooks/useActivity'
 import { useCached } from '../hooks/useCached'
 import { usePortfolio } from '../hooks/usePortfolio'
 import { usePrefs } from '../hooks/usePrefs'
+import { useSafeOpen } from '../hooks/useSafeOpen'
 import { FreshnessLine } from '../components/FreshnessLine'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
@@ -89,6 +90,8 @@ export function Token({
   address: string
   body: 'extension-popup' | 'extension-tab' | 'mobile'
 }) {
+  // Every outward link passes the same gate (ES-BV-035).
+  const openSafely = useSafeOpen()
   const engine = useEngine()
   const host = useHost()
   const router = useRouter()
@@ -648,7 +651,7 @@ export function Token({
                     label={l.label}
                     icon={<IconGlyph name={l.icon} tone="mute" />}
                     size="sm"
-                    onPress={() => void host.openUrl?.(l.url)}
+                    onPress={() => openSafely(l.url)}
                     testID={`token-link-${l.icon}`}
                   />
                 ))}
@@ -688,7 +691,7 @@ export function Token({
                 <IconButton
                   icon="external"
                   label={t({ id: 'token.explorer', message: 'Open in explorer' })}
-                  onPress={() => void host.openUrl?.(explorer)}
+                  onPress={() => openSafely(explorer)}
                   testID="token-explorer"
                 />
               ) : null}

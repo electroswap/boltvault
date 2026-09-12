@@ -16,6 +16,7 @@ import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
 import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
 import { useLastGood } from '../hooks/useLastGood'
+import { useSafeOpen } from '../hooks/useSafeOpen'
 import { formatRaw } from '../format'
 import { useHost } from '../host'
 import { t } from '../i18n'
@@ -33,6 +34,8 @@ const LINKS: Array<{ key: 'website' | 'twitter' | 'telegram' | 'discord'; icon: 
 ]
 
 export function Campaign({ body, chainId, pool, reducedMotion = false }: { body: BodyKind; chainId: number; pool: string; reducedMotion?: boolean }) {
+  // Every outward link passes the same gate (ES-BV-035).
+  const openSafely = useSafeOpen()
   const engine = useEngine()
   const host = useHost()
   const { active } = useWalletState()
@@ -213,7 +216,7 @@ export function Campaign({ body, chainId, pool, reducedMotion = false }: { body:
             {links.length ? (
               <Row gap="$2" flexWrap="wrap" testID="campaign-links">
                 {links.map((l) => (
-                  <Pill key={l.key} label={l.label()} icon={<Icon name={l.icon} size={14} color={paint.mute} />} size="sm" onPress={() => void host.openUrl?.(c.links[l.key] ?? '')} testID={`campaign-link-${l.key}`} />
+                  <Pill key={l.key} label={l.label()} icon={<Icon name={l.icon} size={14} color={paint.mute} />} size="sm" onPress={() => openSafely(c.links[l.key])} testID={`campaign-link-${l.key}`} />
                 ))}
               </Row>
             ) : null}

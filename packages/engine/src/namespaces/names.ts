@@ -55,9 +55,15 @@ const CACHE_MS = 5 * 60_000
  * just changed rather than waiting the window out.
  */
 const REVERSE_TTL_MS = 6 * 60 * 60 * 1000
-const reverseSpec = (chainId: number, address: string): CacheSpec<{ name: string | null }> => ({
-  key: cacheKey('names', 'reverse', chainId, address.toLowerCase()),
-  schema: z.object({ name: z.string().nullable() }),
+/*
+  `reverse2`: the cached shape gained `verified` (ES-BV-036). A name is only
+  worth showing in place of an address once the forward record has been read
+  back, and a document written before that check existed cannot say whether it
+  was done — so it is not read.
+*/
+const reverseSpec = (chainId: number, address: string): CacheSpec<{ name: string | null; verified: boolean }> => ({
+  key: cacheKey('names', 'reverse2', chainId, address.toLowerCase()),
+  schema: z.object({ name: z.string().nullable(), verified: z.boolean() }),
 })
 
 /** How much of a name fits where a short address would have been; `untrusted`'s own default. */
@@ -85,8 +91,23 @@ const NAME_MAX = 32
  */
 export function displayName(chainId: number, raw: string | null): string | null {
   if (raw === null) return null
-  const clean = untrusted(raw.trim().toLowerCase(), NAME_MAX)
-  if (clean.length === 0) return null
+  /*
+    ENSIP-15 first (ES-BV-036).
+
+    Lowercasing and stripping format characters is not the same as normalising:
+    a name that does not survive `normalize()` is not a name any resolver will
+    agree about, and one whose normal form differs from what was served is a
+    name being shown in a spelling nobody else sees. Both are exactly the
+    confusables the short-address form was meant to stop inviting.
+  */
+  let normal: string
+  try {
+    normal = normalize(raw.trim())
+  } catch {
+    return null
+  }
+  const clean = untrusted(normal, NAME_MAX)
+  if (clean.length === 0 || clean !== normal) return null
   const suffix = SUFFIX[chainId]
   if (suffix !== undefined && !clean.endsWith(suffix)) return null
   if (clean.startsWith('0x')) return null
@@ -303,7 +324,7 @@ export interface NamesDeps {
 }
 
 export class NamesService {
-  private readonly reverse = new Map<string, { name: string | null; at: number }>()
+  private readonly reverse = new Map<string, { name: string | null; verified: boolean; at: number }>()
   /** Immutable on the contract (all three are `constant`/`immutable`), so one read stands for the session. */
   private readonly ages = new Map<number, Ages>()
   private records: CommitmentRecord[] | null = null
@@ -336,8 +357,15 @@ export class NamesService {
     if (!resolver) return addresses.map((address) => ({ address, name: null, verified: false }))
     const out: NameLookup[] = []
     for (const address of addresses.slice(0, 200)) {
-      const name = await this.reverseName(chainId, address, resolver)
-      out.push({ address, name, verified: name !== null })
+      /*
+        `verified` used to be `name !== null`, which says nothing: a reverse
+        record is set by whoever owns the address, so anyone can point one at
+        "electroswap.etn" and have the wallet print it beside their own
+        address. It means something only when the name resolves forward to the
+        same address (ES-BV-036).
+      */
+      const { name, verified } = await this.reverseName(chainId, address, resolver)
+      out.push({ address, name, verified })
     }
     return out
   }
@@ -355,24 +383,34 @@ export class NamesService {
    * written to disk, so an RPC outage cannot persist "this address has no
    * name" for six hours.
    */
-  private async reverseName(chainId: number, address: string, resolver: Hex): Promise<string | null> {
+  private async reverseName(chainId: number, address: string, resolver: Hex): Promise<{ name: string | null; verified: boolean }> {
     const k = `${chainId}:${address.toLowerCase()}`
     const hit = this.reverse.get(k)
-    if (hit && this.now() - hit.at < CACHE_MS) return hit.name
-    const load = async (): Promise<{ name: string | null }> => {
+    if (hit && this.now() - hit.at < CACHE_MS) return { name: hit.name, verified: hit.verified }
+    const load = async (): Promise<{ name: string | null; verified: boolean }> => {
       const client = await this.deps.chains.client(chainId)
       const raw = await client.getEnsName({ address: address as Hex, universalResolverAddress: resolver })
-      return { name: displayName(chainId, raw ?? null) }
+      const name = displayName(chainId, raw ?? null)
+      if (name === null) return { name: null, verified: false }
+      /*
+        The forward record decides. A reverse record is a claim by whoever
+        controls the address; the forward one is a claim by whoever controls
+        the name. Only when they agree does the name stand for the address.
+      */
+      const forward = await client
+        .getEnsAddress({ name, universalResolverAddress: resolver })
+        .catch(() => null)
+      return { name, verified: typeof forward === 'string' && forward.toLowerCase() === address.toLowerCase() }
     }
-    let name: string | null = null
+    let answer: { name: string | null; verified: boolean } = { name: null, verified: false }
     try {
       const cache = this.deps.cache
-      name = cache ? (await cache.through(reverseSpec(chainId, address), REVERSE_TTL_MS, load)).value.name : (await load()).name
+      answer = cache ? (await cache.through(reverseSpec(chainId, address), REVERSE_TTL_MS, load)).value : await load()
     } catch {
-      name = null
+      answer = { name: null, verified: false }
     }
-    this.reverse.set(k, { name, at: this.now() })
-    return name
+    this.reverse.set(k, { name: answer.name, verified: answer.verified, at: this.now() })
+    return answer
   }
 
   async resolve(chainId: number, name: string): Promise<string | null> {

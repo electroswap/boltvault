@@ -50,10 +50,18 @@ describe('displayName', () => {
     expect(displayName(ETN, `${'a'.repeat(28)}.etn`)).toBe(`${'a'.repeat(28)}.etn`)
   })
 
-  it('strips the characters that reorder a line, and refuses what is left if it is not a name', () => {
+  /*
+    ES-BV-036. Stripping the character and showing what is left was the wrong
+    answer: the name that reaches the screen would then be a different string
+    from the one the resolver holds and every other client shows, which is its
+    own impersonation. ENSIP-15 says such a name is not a name; it is refused,
+    and the address stands instead.
+  */
+  it('refuses a name that is not in its own normal form, rather than rewriting it', () => {
     // A right-to-left override before the suffix reverses what the reader sees.
-    expect(displayName(ETN, 'bo‮lt.etn')).toBe('bolt.etn')
+    expect(displayName(ETN, 'bo‮lt.etn')).toBeNull()
     expect(displayName(ETN, '​​')).toBeNull()
+    expect(displayName(ETN, 'BOLT.etn')).toBe('bolt.etn')
   })
 
   it('refuses a name that does not end in the suffix it resolved on', () => {
@@ -68,7 +76,13 @@ describe('displayName', () => {
   })
 })
 
-function boot(answer: string | null, now = 1_700_000_000_000) {
+/**
+ * `forward` is what the name resolves back to: `'self'` for the address that
+ * claimed it, an address for somebody else's, or null for no forward record.
+ * A reverse record is set by whoever owns the address, so it is only worth
+ * printing once the name agrees (ES-BV-036).
+ */
+function boot(answer: string | null, now = 1_700_000_000_000, forward: 'self' | string | null = 'self') {
   const platform = createMemoryPlatform({ now })
   const bus = new EventBus()
   const shards = new CacheShards(platform, async () => new Uint8Array(32).fill(7))
@@ -80,6 +94,7 @@ function boot(answer: string | null, now = 1_700_000_000_000) {
         calls.push(address)
         return answer
       },
+      getEnsAddress: async () => (forward === 'self' ? ADDRESS : forward),
     }),
   } as unknown as ChainsService
   const deps: NamesDeps = {
@@ -110,6 +125,15 @@ describe('names.lookup', () => {
     const reopened = new NamesService(deps)
     expect(await reopened.lookup(ETN, [ADDRESS])).toEqual([{ address: ADDRESS, name: 'bolt.etn', verified: true }])
     expect(calls).toHaveLength(1)
+  })
+
+  it('will not call a name verified when it resolves forward to somebody else', async () => {
+    // The attack: point your own address's reverse record at a name you do not
+    // own, and the wallet prints it in the slot the address occupies.
+    const stranger = boot('bolt.etn', 1_700_000_000_000, '0x9999999999999999999999999999999999999999')
+    expect(await new NamesService(stranger.deps).lookup(ETN, [ADDRESS])).toEqual([{ address: ADDRESS, name: 'bolt.etn', verified: false }])
+    const missing = boot('bolt.etn', 1_700_000_000_000, null)
+    expect(await new NamesService(missing.deps).lookup(ETN, [ADDRESS])).toEqual([{ address: ADDRESS, name: 'bolt.etn', verified: false }])
   })
 
   it('sanitises what the resolver says, and an unsafe name is simply no name', async () => {

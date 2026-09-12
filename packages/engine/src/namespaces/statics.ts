@@ -134,5 +134,12 @@ export function flagsNamespace(statics: StaticsService): NamespaceSpec {
   return {
     get: { handler: async () => statics.view() },
     refresh: { handler: () => statics.refresh() },
+    /*
+      The signed scam list, so the UI can check a link before opening it
+      (ES-BV-035). The firewall already consults it for origins that raise
+      sheets; the same list belongs in front of the links the Token and
+      Campaign screens offer, which come from the same remote index.
+    */
+    scamOrigins: { handler: async () => [...statics.scamOrigins()] },
   }
 }

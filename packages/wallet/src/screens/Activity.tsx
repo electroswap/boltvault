@@ -15,6 +15,7 @@ import { useActivity } from '../hooks/useActivity'
 import { useCached } from '../hooks/useCached'
 import { useName } from '../hooks/useNames'
 import { useNotifications } from '../hooks/useNotifications'
+import { useSafeOpen } from '../hooks/useSafeOpen'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { recipientOf } from '../state/safeguards'
@@ -65,6 +66,8 @@ const NOTE_ICON: Record<NotificationView['kind'], IconName> = { alert: 'bell', l
 const NOTE_FILLED: ReadonlySet<NotificationView['kind']> = new Set<NotificationView['kind']>(['dividends'])
 
 export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' | 'mobile' }) {
+  // Every outward link passes the same gate (ES-BV-035).
+  const openSafely = useSafeOpen()
   const engine = useEngine()
   const host = useHost()
   const router = useRouter()
@@ -449,7 +452,7 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
                 ) : null}
               </Plate>
             ) : null}
-            {explorerFor(open) && host.openUrl ? <Key label={t({ id: 'activity.explorer', message: 'Open in explorer' })} kind="secondary" size="compact" onPress={() => void host.openUrl?.(explorerFor(open) ?? '')} testID="activity-explorer" /> : null}
+            {explorerFor(open) && host.openUrl ? <Key label={t({ id: 'activity.explorer', message: 'Open in explorer' })} kind="secondary" size="compact" onPress={() => openSafely(explorerFor(open))} testID="activity-explorer" /> : null}
           </Column>
         ) : null}
       </Sheet>

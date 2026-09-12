@@ -157,3 +157,32 @@ describe('partitionPortfolio', () => {
     expect(p.zeroListed.length).toBeGreaterThan(0)
   })
 })
+
+/*
+  ES-BV-037. A token list is a remote file. Its names and symbols land in the
+  portfolio, the swap picker and the approval sheet at exactly the places
+  on-chain metadata does — and that path has gone through the label bound since
+  it was written, while this one did not.
+*/
+describe('what a list may say', () => {
+  const entry = (over: Record<string, unknown>) =>
+    parseTokenList({ name: 'x', tokens: [{ chainId: 52014, address: WETN, name: 'Wrapped Electroneum', symbol: 'WETN', decimals: 18, ...over }] } as RawTokenList, 52014)
+
+  it('strips the characters that reorder the row it sits in', () => {
+    const [t] = entry({ symbol: 'US\u202eDC', name: 'Circle\u200b USD' })
+    expect(t?.symbol).toBe('USDC')
+    expect(t?.name).toBe('Circle USD')
+    expect(t?.symbol).not.toMatch(/[\u202e\u200b]/u)
+  })
+
+  it('caps a name or symbol long enough to push the rest of the row off screen', () => {
+    const [t] = entry({ symbol: 'S'.repeat(64), name: 'N'.repeat(200) })
+    expect(t?.symbol).toHaveLength(12)
+    expect(t?.name).toHaveLength(48)
+  })
+
+  it('drops an entry whose name or symbol is nothing but those characters', () => {
+    expect(entry({ symbol: '\u200b\u200b' })).toHaveLength(0)
+    expect(entry({ name: '\u202e' })).toHaveLength(0)
+  })
+})

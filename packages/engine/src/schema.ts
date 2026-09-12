@@ -14,6 +14,28 @@ export const AddressSchema = z
   .regex(/^0x[0-9a-fA-F]{40}$/, 'expected a 20-byte hex address')
 export type Address = z.infer<typeof AddressSchema>
 
+/**
+ * A link the wallet may offer to open (ES-BV-035).
+ *
+ * These arrive from the index — a token's homepage, a campaign's socials — and
+ * are handed to the OS on mobile, which will launch whatever app claims the
+ * scheme. Anything that is not https becomes null here rather than being
+ * carried to a screen that might tap it; the UI gate is the second line, not
+ * the only one.
+ */
+export const HttpsUrl = z
+  .string()
+  .nullable()
+  .transform((v) => {
+    if (typeof v !== 'string' || v.trim() === '') return null
+    try {
+      const u = new URL(v.trim())
+      return u.protocol === 'https:' && u.username === '' && u.password === '' ? u.toString() : null
+    } catch {
+      return null
+    }
+  })
+
 export const AccountIdSchema = z.string().min(1).max(64)
 export type AccountId = z.infer<typeof AccountIdSchema>
 
@@ -491,6 +513,13 @@ export const TokenViewSchema = z.object({
   pinned: z.boolean(),
   hidden: z.boolean(),
   tags: z.array(z.string()),
+  /**
+   * This token borrows the symbol of one the build knows, at a different
+   * address (ES-BV-037). Not a verdict — anyone may call their token USDC —
+   * but the row has to say which one this is, and never let it sit in the
+   * picker looking like the real thing.
+   */
+  lookalike: z.boolean().optional(),
 })
 export type TokenView = z.infer<typeof TokenViewSchema>
 
@@ -778,9 +807,9 @@ export const TokenDetailViewSchema = z.object({
   spam: z.boolean(),
   logoUrl: z.string().nullable(),
   description: z.string().nullable(),
-  homepageUrl: z.string().nullable(),
-  twitterUrl: z.string().nullable(),
-  telegramUrl: z.string().nullable(),
+  homepageUrl: HttpsUrl,
+  twitterUrl: HttpsUrl,
+  telegramUrl: HttpsUrl,
   /** Day sparkline, oldest first. */
   sparkline: z.array(z.object({ t: z.number(), v: z.number() })),
 })
@@ -1106,7 +1135,7 @@ export const CampaignViewSchema = z.object({
   logoUrl: z.string().nullable(),
   bannerUrl: z.string().nullable(),
   description: z.string(),
-  links: z.object({ website: z.string().nullable(), twitter: z.string().nullable(), discord: z.string().nullable(), telegram: z.string().nullable() }),
+  links: z.object({ website: HttpsUrl, twitter: HttpsUrl, discord: HttpsUrl, telegram: HttpsUrl }),
   starts: z.number(),
   ends: z.number(),
   raisedWei: z.string(),

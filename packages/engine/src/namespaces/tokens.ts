@@ -153,12 +153,40 @@ export class TokensService {
       seen.add(k)
       out.push({ chainId, address: getAddress(c.address), symbol: c.symbol, name: c.name, decimals: c.decimals, logoUri: this.logoFor(chainId, c.address, c.logoURI), source: c.source, pinned: pinned.has(k), hidden: hidden.has(k), tags: [] })
     }
+    /*
+      A second "USDC" at another address (ES-BV-037).
+
+      The list is fetched over the network and is not signed, and the picker
+      searches by symbol — so an entry that borrows a major's symbol sits in
+      the results beside the real one with nothing to tell them apart. The
+      build knows where the majors live; anything wearing one of those symbols
+      from somewhere else is marked, and the screens show its address.
+    */
+    const majors = this.majorSymbols(chainId)
     for (const t of list) {
       const k = key(chainId, t.address)
       if (seen.has(k)) continue
       seen.add(k)
-      out.push({ chainId, address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals, logoUri: this.logoFor(chainId, t.address, t.logoURI), source: 'list', pinned: pinned.has(k), hidden: hidden.has(k), tags: [...(t.tags ?? [])] })
+      const real = majors.get(t.symbol.toLowerCase())
+      const lookalike = real !== undefined && real !== t.address.toLowerCase()
+      out.push({ chainId, address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals, logoUri: this.logoFor(chainId, t.address, t.logoURI), source: 'list', pinned: pinned.has(k), hidden: hidden.has(k), tags: [...(t.tags ?? [])], ...(lookalike ? { lookalike: true } : {}) })
     }
+    return out
+  }
+
+  /** Symbol → address for the tokens this build ships addresses for. */
+  private majorSymbols(chainId: number): Map<string, string> {
+    const out = new Map<string, string>()
+    const chain = ALL_CHAINS.find((c) => c.chainId === chainId)
+    if (chain?.nativeCurrency?.symbol) out.set(chain.nativeCurrency.symbol.toLowerCase(), 'native')
+    if (!isEtnChain(chainId)) return out
+    const a = ELECTRONEUM_ADDRESSES[chainId]
+    const pairs: Array<[string, string | null]> = [
+      ['wetn', a.wetn],
+      ['bolt', a.bolt],
+      ['usdc', a.usdc],
+    ]
+    for (const [symbol, address] of pairs) if (address) out.set(symbol, address.toLowerCase())
     return out
   }
 

@@ -102,6 +102,20 @@ export function TokenPickerSheet({ open, onClose, title, chainId = ETN, tokens, 
                         {t({ id: 'swap.pick.new', message: 'Not on the list' })}
                       </Body>
                     ) : null}
+                    {/*
+                      A second token wearing a major's symbol (ES-BV-037). The
+                      list is fetched unsigned and this sheet searches by
+                      symbol, so without this the impostor sits beside the real
+                      one with nothing to tell them apart.
+                    */}
+                    {x.lookalike ? (
+                      <Row gap={4} alignItems="center" testID={`swap-pick-lookalike-${x.address}`}>
+                        <Icon name="warn" size={12} color={paint.burn} />
+                        <Body tone="burn" size="caption">
+                          {t({ id: 'swap.pick.lookalike', message: 'Not the real {s}', values: { s: x.symbol } })}
+                        </Body>
+                      </Row>
+                    ) : null}
                     {mark ? (
                       <Row gap={4} alignItems="center" testID={`swap-pick-safety-${x.symbol}`}>
                         <Icon name="warn" size={12} color={mark.tone === 'burn' ? paint.burn : paint.ember} />
@@ -111,8 +125,10 @@ export function TokenPickerSheet({ open, onClose, title, chainId = ETN, tokens, 
                       </Row>
                     ) : null}
                   </Row>
+                  {/* A lookalike is identified by its address, not its name:
+                      the name is the thing it is copying. */}
                   <Body tone="mute" size="caption" numberOfLines={1}>
-                    {x.name}
+                    {x.lookalike ? x.address : x.name}
                   </Body>
                 </Column>
                 {r && Number(r.quantity) > 0 ? (

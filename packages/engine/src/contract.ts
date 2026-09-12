@@ -895,6 +895,8 @@ export interface FlagsNamespace {
     flags: 'updated' | 'kept' | 'refused'
     scam: 'updated' | 'kept' | 'refused'
   }>
+  /** Hosts the signed list names as scams, for the link gate (ES-BV-035). */
+  scamOrigins(): Promise<string[]>
 }
 
 /** Remote sign (§6, §8.16): what this device is waiting on, and what paired devices are asking it to sign. */

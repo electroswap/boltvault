@@ -75,6 +75,21 @@ export interface RawTokenList {
  * matches `chainId`. Rejects non-checksum garbage and structural mismatches
  * (C5: the list has NO top-level chainId for the ETN list — entries carry it).
  */
+/*
+  What a list may say, and how much of it.
+
+  The same bound the engine applies to on-chain metadata: strip the characters
+  that move text about — control, format and separator, U+202E and its
+  relatives — normalise, then cap. Duplicated here rather than imported because
+  the catalogue is the boundary the list crosses, and a boundary that has to
+  reach into another package to be safe is not one.
+*/
+const UNSAFE_LABEL = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu
+function label(raw: string, max: number): string {
+  const clean = raw.normalize('NFKC').replace(UNSAFE_LABEL, '').trim()
+  return clean.length > max ? clean.slice(0, max) : clean
+}
+
 export function parseTokenList(raw: RawTokenList, chainId: number): TokenEntry[] {
   const out: TokenEntry[] = []
   for (const t of raw.tokens ?? []) {
@@ -87,11 +102,21 @@ export function parseTokenList(raw: RawTokenList, chainId: number): TokenEntry[]
     if (t.decimals === undefined || !Number.isInteger(t.decimals) || t.decimals < 0 || t.decimals > 36)
       continue
     if (!t.name || !t.symbol) continue
+    /*
+      A list is a remote file (ES-BV-037). Its names and symbols reach the
+      portfolio, the swap picker and the approval sheet exactly where on-chain
+      metadata does — and that path has gone through `label()` since it was
+      written, while this one did not. A symbol carrying U+202E reorders the
+      row it sits in.
+    */
+    const name = label(t.name, 48)
+    const symbol = label(t.symbol, 12)
+    if (!name || !symbol) continue
     out.push({
       chainId,
       address: getAddress(addr),
-      name: t.name,
-      symbol: t.symbol,
+      name,
+      symbol,
       decimals: t.decimals,
       logoURI: t.logoURI,
       tags: t.tags,

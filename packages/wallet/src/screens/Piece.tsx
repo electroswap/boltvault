@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
 import { useEngine } from '../engine/EngineProvider'
 import { useLastGood } from '../hooks/useLastGood'
+import { useSafeOpen } from '../hooks/useSafeOpen'
 import { useHost } from '../host'
 import { formatRaw } from '../format'
 import { t } from '../i18n'
@@ -24,6 +25,8 @@ type BodyKind = 'extension-popup' | 'extension-tab' | 'mobile'
 type SheetKind = 'list' | 'offer' | 'transfer' | null
 
 export function Piece({ body, chainId, address, tokenId, reducedMotion = false }: { body: BodyKind; chainId: number; address: string; tokenId: string; reducedMotion?: boolean }) {
+  // Every outward link passes the same gate (ES-BV-035).
+  const openSafely = useSafeOpen()
   const engine = useEngine()
   const router = useRouter()
   const host = useHost()
@@ -189,7 +192,7 @@ export function Piece({ body, chainId, address, tokenId, reducedMotion = false }
               {asset.description}
             </Body>
           ) : null}
-          {!asset.custom ? <Pill label={t({ id: 'piece.web', message: 'On ElectroSwap' })} icon={<Icon name="external" size={14} color={paint.mute} />} size="sm" onPress={() => void host.openUrl?.(`https://app.electroswap.io/nfts/asset/${address}/${tokenId}`)} /> : null}
+          {!asset.custom ? <Pill label={t({ id: 'piece.web', message: 'On ElectroSwap' })} icon={<Icon name="external" size={14} color={paint.mute} />} size="sm" onPress={() => openSafely(`https://app.electroswap.io/nfts/asset/${address}/${tokenId}`)} /> : null}
         </>
       ) : null}
 
