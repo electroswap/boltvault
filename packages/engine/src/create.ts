@@ -473,7 +473,7 @@ export function createEngine(deps: EngineDeps): Engine {
     snapshots: sealed.portfolio,
     looks: sealed.looks,
   })
-  const names: NamesService = new NamesService({ platform: deps.platform, chains, vault, provider, cache })
+  const names: NamesService = new NamesService({ platform: deps.platform, chains, vault, provider, cache, commitments: sealed.nameCommitments })
   /*
     The pre-assessment reaches the firewall through the provider's own payload
     builder — the function that builds every sheet — rather than through a

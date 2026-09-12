@@ -19,6 +19,8 @@ import { bytesToHex, encodeFunctionData, isAddress, namehash, parseAbi, type Abi
 import { z } from 'zod'
 import { untrusted } from '@boltvault/security'
 import { cacheKey, type CacheSpec, type DocCache } from '../cache'
+import type { NameCommitmentSecret } from '../blobs'
+import type { SealedMap } from '../sealed'
 import { EngineError } from '../errors'
 import type { NamespaceSpec } from '../host'
 import { AccountIdSchema, type NameLookup } from '../schema'
@@ -235,6 +237,23 @@ const CommitmentRecordSchema = z.object({
 export type CommitmentRecord = z.infer<typeof CommitmentRecordSchema>
 
 /**
+ * What a pending commitment may say in the clear (ES-BV-013).
+ *
+ * The whole record used to sit here — the account id, the owner address and
+ * the name being registered — for up to three days, so any storage dump taken
+ * while a registration was pending tied this install to an address and to a
+ * name somebody had chosen but not yet claimed. The countdown that has to
+ * survive a locked vault needs the chain and the hash and nothing else; the
+ * rest lives in a sealed map keyed by the same hash.
+ */
+const PublicCommitmentSchema = z.object({
+  chainId: z.number().int().positive(),
+  commitment: z.string(),
+  createdAt: z.number(),
+})
+type PublicCommitment = z.infer<typeof PublicCommitmentSchema>
+
+/**
  * Pending commitments, in plain local storage rather than the DEK-sealed
  * blobs.
  *
@@ -247,10 +266,13 @@ export type CommitmentRecord = z.infer<typeof CommitmentRecordSchema>
  * reconstruct the same commitment for the same owner — it is not key material,
  * and the reveal is guarded by the chain, not by this file.
  */
-const COMMITMENTS_DOC: DocSpec<CommitmentRecord[]> = {
-  key: 'names.commitments',
+const COMMITMENTS_DOC: DocSpec<PublicCommitment[]> = {
+  // `names.commitments2`: the old key held whole records, including the name
+  // and the owner. It is not read; a pending registration from before this
+  // change simply has to be re-committed, which costs one transaction.
+  key: 'names.commitments2',
   version: 1,
-  schema: z.array(CommitmentRecordSchema).max(32),
+  schema: z.array(PublicCommitmentSchema).max(32),
   defaultValue: () => [],
 }
 
@@ -321,13 +343,21 @@ export interface NamesDeps {
   readonly provider: ProviderService
   /** Absent in a test harness: `lookup` then answers live every five minutes instead of from disk. */
   readonly cache?: DocCache
+  /**
+   * The sealed half of a pending registration, keyed by commitment hash
+   * (ES-BV-013). Absent in a harness with no vault, in which case a
+   * registration cannot be revealed — which is the honest outcome, since the
+   * secret it needs was never stored.
+   */
+  readonly commitments?: SealedMap<NameCommitmentSecret>
 }
 
 export class NamesService {
   private readonly reverse = new Map<string, { name: string | null; verified: boolean; at: number }>()
   /** Immutable on the contract (all three are `constant`/`immutable`), so one read stands for the session. */
   private readonly ages = new Map<number, Ages>()
-  private records: CommitmentRecord[] | null = null
+  /** The half that survives a locked vault: chain, hash, and when (ES-BV-013). */
+  private publicHalf: PublicCommitment[] | null = null
 
   constructor(private readonly deps: NamesDeps) {}
 
@@ -613,7 +643,10 @@ export class NamesService {
   /** Forget a commitment this device is holding. The chain keeps its own until it expires. */
   async cancel(id: string): Promise<PendingRegistration[]> {
     const all = await this.loadRecords()
-    await this.saveRecords(all.filter((r) => r.id !== id))
+    const gone = all.filter((r) => r.id === id)
+    // Both halves, or the secret outlives the thing it was the secret for.
+    for (const r of gone) await this.deps.commitments?.delete(r.commitment).catch(() => undefined)
+    await this.savePublic((this.publicHalf ?? []).filter((p) => !gone.some((r) => r.commitment === p.commitment)))
     return this.pending()
   }
 
@@ -730,25 +763,58 @@ export class NamesService {
     return result as T
   }
 
+  /**
+   * Both halves, rejoined (ES-BV-013).
+   *
+   * While the vault is locked the sealed half cannot be read, so a record
+   * comes back without it — which is the state the Identity plate's countdown
+   * is written for, and the only thing it needs is the chain and the hash.
+   */
   private async loadRecords(): Promise<CommitmentRecord[]> {
-    if (!this.records) {
+    if (!this.publicHalf) {
       const { value } = await readDoc(this.deps.platform.storage.local, COMMITMENTS_DOC, () => this.now())
-      this.records = value
+      this.publicHalf = value
     }
-    const fresh = this.records.filter((r) => this.now() - r.createdAt < RECORD_TTL_MS)
-    if (fresh.length !== this.records.length) await this.saveRecords(fresh)
-    return this.records
+    const fresh = this.publicHalf.filter((r) => this.now() - r.createdAt < RECORD_TTL_MS)
+    if (fresh.length !== this.publicHalf.length) await this.savePublic(fresh)
+    const out: CommitmentRecord[] = []
+    for (const pub of this.publicHalf) {
+      const secret = await this.deps.commitments?.get(pub.commitment).catch(() => null)
+      out.push(
+        secret
+          ? { ...secret, chainId: pub.chainId, commitment: pub.commitment, createdAt: pub.createdAt }
+          : {
+              id: pub.commitment,
+              chainId: pub.chainId,
+              accountId: '',
+              owner: '',
+              label: '',
+              name: '',
+              durationSeconds: DEFAULT_DURATION_SECONDS,
+              secret: '',
+              resolver: '',
+              reverseRecord: REVERSE_NONE,
+              referrer: '',
+              commitment: pub.commitment,
+              createdAt: pub.createdAt,
+              commitRequestId: '',
+            },
+      )
+    }
+    return out
   }
 
   private async putRecord(record: CommitmentRecord): Promise<void> {
-    const all = (await this.loadRecords()).filter((r) => r.commitment !== record.commitment)
+    const { chainId, commitment, createdAt, ...secret } = record
+    await this.deps.commitments?.set(commitment, secret)
+    const all = (this.publicHalf ?? []).filter((r) => r.commitment !== commitment)
     // Newest first, and bounded: the document schema caps the array, and a
     // write that fails validation would quarantine the whole list.
-    await this.saveRecords([record, ...all].slice(0, 32))
+    await this.savePublic([{ chainId, commitment, createdAt }, ...all].slice(0, 32))
   }
 
-  private async saveRecords(records: CommitmentRecord[]): Promise<void> {
-    this.records = records
+  private async savePublic(records: PublicCommitment[]): Promise<void> {
+    this.publicHalf = records
     await writeDoc(this.deps.platform.storage.local, COMMITMENTS_DOC, records)
   }
 }

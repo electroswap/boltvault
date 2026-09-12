@@ -21,6 +21,8 @@ const BlobSchema = z.object({ v: z.literal(1), entries: z.array(ActivityEntrySch
 
 export class ActivityStore {
   private cache: ActivityEntry[] | null = null
+  /** The stored blob would not open under this key; refuse to write over it. */
+  private poisoned = false
 
   constructor(
     private readonly platform: Platform,
@@ -72,13 +74,50 @@ export class ActivityStore {
       const blob = BlobSchema.safeParse(JSON.parse(new TextDecoder().decode(pt)))
       this.cache = blob.success ? blob.data.entries : []
     } catch {
-      // wrong key (a different vault) or tamper → treat as empty, never overwrite silently
+      /*
+        A blob that will not open is not an empty blob (ES-BV-012).
+
+        The comment here used to say "never overwrite silently" and the code
+        did exactly that: `cache = []`, and the next `append` persisted the
+        empty list straight over the ciphertext. One transient wrong key — an
+        interrupted migration, a vault restored from an export beside an older
+        `activity.blob` — and the write-ahead history the design leans on was
+        gone, with nothing said. `SealedMap` was taught this; these two stores
+        were not. The bytes are copied aside under their own key and the store
+        refuses to write until somebody decides what to do about it.
+      */
+      await this.quarantine(raw)
       this.cache = []
+      this.poisoned = true
     }
     return this.cache
   }
 
+  /**
+   * Keep the bytes. `<key>.sealed-quarantine.<ts>` is ciphertext nobody can
+   * read without the old DEK, and it is there so a support conversation can
+   * begin with "your history is still on the disk" rather than with a shrug.
+   */
+  private async quarantine(raw: string): Promise<void> {
+    try {
+      await this.platform.storage.local.set(`${KEY_BLOB}.sealed-quarantine.${this.platform.now()}`, raw)
+    } catch {
+      // Storage that will not take a copy will not take the overwrite either;
+      // `poisoned` is what actually protects the bytes.
+    }
+  }
+
   private async persist(entries: ActivityEntry[]): Promise<void> {
+    /*
+      Nothing is written over a blob this store could not read. A DEK change —
+      a password rotation, a different vault unlocking — clears the flag on the
+      next load, because that load is a fresh attempt with a fresh key.
+    */
+    if (this.poisoned)
+      throw new EngineError(
+        'internal',
+        'The activity history could not be decrypted and has been set aside; it will not be overwritten.',
+      )
     const key = await this.key()
     const nonce = this.platform.random(24)
     const ct = xchacha20poly1305(key, nonce, AAD).encrypt(new TextEncoder().encode(JSON.stringify({ v: 1, entries })))
@@ -113,5 +152,8 @@ export class ActivityStore {
   /** Forget the decrypted cache on lock. */
   forget(): void {
     this.cache = null
+    // The next load is a fresh attempt with whatever key is current, so the
+    // refusal is re-decided rather than inherited (ES-BV-012).
+    this.poisoned = false
   }
 }

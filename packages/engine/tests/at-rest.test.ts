@@ -75,6 +75,9 @@ async function connectDapp(eng: Engine, origin: string, accountId: string): Prom
  *                    small, well-known space, so hashing them buys little);
  *                    the accountId and the addresses live in `sites.blob`.
  */
+/** The label a registration in flight is for, so the dump can be searched for it. */
+const REGISTERING = 'attestiumcheck'
+
 const ALLOWED_PLAINTEXT = [
   /^settings$/,
   /^vault\.kdf$/,
@@ -83,6 +86,14 @@ const ALLOWED_PLAINTEXT = [
   /^tokens\.list\.\d+$/,
   /^sites\.chains$/,
   /^ui\.prefs$/,
+  /*
+    A pending name registration keeps a countdown the locked screen can still
+    show: the chain, the commitment hash and when it was made (ES-BV-013).
+    Everything that names anybody — the account, the owner address, the name —
+    is in `name-commitments.blob`.
+  */
+  /^names\.commitments2$/,
+  /^vault\.throttle$/,
 ]
 
 /** Everything else on disk must be one of these sealed blobs. */
@@ -112,6 +123,14 @@ async function useTheWallet(): Promise<{ dump: Record<string, string>; accountId
   await eng.engine.tokens.setPrefs({ chainId: 52014, address: '0xfeedfacefeedfacefeedfacefeedfacefeedface', pinned: true })
   await eng.engine.launchpad.rememberFromLink({ url: 'boltvault://launchpad/0x2222222222222222222222222222222222222222?ref=0x1111111111111111111111111111111111111111' })
   await eng.watchlist.star({ kind: 'token', chainId: 52014, address: '0xfeedfacefeedfacefeedfacefeedfacefeedface', label: 'WATCHED' })
+  /*
+    A registration in flight (ES-BV-013). The audit's profile had never started
+    one, so the commitment family — which held the account id, the owner
+    address and the name in the clear for three days — was never looked at.
+  */
+  await eng.engine.names
+    .register({ accountId, chainId: 52014, name: `${REGISTERING}.etn`, durationSeconds: 31_536_000 })
+    .catch(() => undefined)
 
   // Connected sites (F3): actually connect, so the address really is handed to
   // a dApp and really is persisted. `setChain` alone throws `not_found` on an
@@ -152,6 +171,19 @@ describe('at rest, with the vault locked', () => {
     for (const blob of ['portfolio.blob', 'sites.blob', 'watchlist.blob', 'tokens.prefs.blob', 'launchpad.ref.blob', 'cache.explore.tokens.blob', 'cache.nft.inventory.blob']) {
       expect(Object.keys(dump)).toContain(blob)
     }
+  })
+
+  /*
+    ES-BV-013: what a pending registration is allowed to say while the vault is
+    locked. The hash is not an identifier of anybody — it is a commitment to a
+    name and an owner that only the holder of the secret can reconstruct.
+  */
+  it('keeps the name, the owner and the account out of the public commitment half', async () => {
+    const { dump, accountId } = await useTheWallet()
+    const half = dump['names.commitments2'] ?? ''
+    expect(half).not.toContain(REGISTERING)
+    expect(half).not.toContain(ADDRESS)
+    expect(half).not.toContain(accountId)
   })
 
   it('keeps the connected address and account out of the public sites half', async () => {

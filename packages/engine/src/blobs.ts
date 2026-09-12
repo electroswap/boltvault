@@ -56,6 +56,39 @@ const LastLookSchema = z.object({
   total: z.number().nullable(),
 }) as unknown as z.ZodType<LastLook>
 
+/**
+ * Everything about a pending registration that names somebody (ES-BV-013).
+ * Keyed by the commitment hash, which the public half also carries, so the two
+ * halves find each other without either naming the other's contents.
+ */
+export interface NameCommitmentSecret {
+  readonly id: string
+  readonly accountId: string
+  readonly owner: string
+  readonly label: string
+  readonly name: string
+  readonly durationSeconds: number
+  readonly secret: string
+  readonly resolver: string
+  readonly reverseRecord: number
+  readonly referrer: string
+  readonly commitRequestId: string
+}
+
+const NameCommitmentSecretSchema = z.object({
+  id: z.string(),
+  accountId: z.string(),
+  owner: z.string(),
+  label: z.string(),
+  name: z.string(),
+  durationSeconds: z.number().int().positive(),
+  secret: z.string(),
+  resolver: z.string(),
+  reverseRecord: z.number().int().min(0).max(3),
+  referrer: z.string(),
+  commitRequestId: z.string(),
+}) as unknown as z.ZodType<NameCommitmentSecret>
+
 export interface SealedStores {
   /** Last-good portfolio snapshot, by `<accountId>:<sorted chain ids>`. */
   readonly portfolio: SealedMap<PortfolioSnapshot>
@@ -115,6 +148,19 @@ export interface SealedStores {
    */
   readonly wcSessions: SealedMap<{ origin: string; verified: boolean }>
   /**
+   * The secret half of a pending name registration, by commitment hash
+   * (ES-BV-013).
+   *
+   * A commitment record used to sit whole in plain local storage: the account
+   * id, the owner address and the name being registered, for up to three days.
+   * Any storage dump taken while a registration was pending therefore tied
+   * this install to an address and to a name the user had chosen but not yet
+   * claimed. What has to stay readable while the vault is locked is the
+   * countdown, which needs only the chain and the hash — so that is all that
+   * stays in the clear, and everything that identifies anybody is here.
+   */
+  readonly nameCommitments: SealedMap<NameCommitmentSecret>
+  /**
    * Drop every entry belonging to one account. Removing an account used to
    * leave its portfolio, positions, allowances, scan cursors and site rows
    * behind forever — orphaned, unreachable from the UI, and still on disk.
@@ -155,6 +201,14 @@ export function createSealedStores(
     schema: WcSessionSchema,
     // A person does not hold dozens of live WalletConnect sessions; the cap is
     // there so a peer that re-pairs in a loop cannot grow the blob.
+    cap: 32,
+  })
+  const nameCommitments = new SealedMap<NameCommitmentSecret>(platform, dek, {
+    key: 'name-commitments.blob',
+    info: 'bv/name-commitments',
+    aad: 'boltvault.name-commitments.v1',
+    schema: NameCommitmentSecretSchema,
+    // The public half caps at 32; this one matches it.
     cap: 32,
   })
   const portfolio = new SealedMap<PortfolioSnapshot>(platform, dek, {
@@ -339,6 +393,7 @@ export function createSealedStores(
     syncDevices,
     syncMeta,
     wcSessions,
+    nameCommitments,
   ]
   return {
     portfolio,
@@ -362,6 +417,7 @@ export function createSealedStores(
     syncMeta,
     syncDevices,
     wcSessions,
+    nameCommitments,
     purgeAccount: async (accountId: string) => {
       const needle = accountId.toLowerCase()
       const names = (id: string): boolean => id.toLowerCase().includes(needle)

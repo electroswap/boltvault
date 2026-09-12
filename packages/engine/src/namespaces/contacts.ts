@@ -22,6 +22,8 @@ const BlobSchema = z.object({ v: z.literal(1), entries: z.array(ContactViewSchem
 
 export class ContactsStore {
   private cache: ContactView[] | null = null
+  /** The stored blob would not open under this key; refuse to write over it. */
+  private poisoned = false
 
   constructor(
     private readonly platform: Platform,
@@ -64,12 +66,38 @@ export class ContactsStore {
       const blob = BlobSchema.safeParse(JSON.parse(new TextDecoder().decode(pt)))
       this.cache = blob.success ? blob.data.entries : []
     } catch {
+      /*
+        A blob that will not open is not an empty address book (ES-BV-012).
+
+        `cache = []` and the next `add` wrote the empty list straight over the
+        ciphertext, so one transient wrong key took every saved name with it —
+        and the address book is what the firewall's lookalike check reads as
+        its reference set, so losing it quietly weakens the wallet as well as
+        the user's own records. The bytes are copied aside and this store
+        refuses to write until somebody decides what to do about them.
+      */
+      await this.quarantine(raw)
       this.cache = []
+      this.poisoned = true
     }
     return this.cache
   }
 
+  /** Keep the bytes under their own key; only the old DEK can read them. */
+  private async quarantine(raw: string): Promise<void> {
+    try {
+      await this.platform.storage.local.set(`${KEY_BLOB}.sealed-quarantine.${this.platform.now()}`, raw)
+    } catch {
+      // Storage that will not take a copy will not take the overwrite either.
+    }
+  }
+
   private async persist(entries: ContactView[]): Promise<void> {
+    if (this.poisoned)
+      throw new EngineError(
+        'internal',
+        'The address book could not be decrypted and has been set aside; it will not be overwritten.',
+      )
     const key = await this.key()
     const nonce = this.platform.random(24)
     const ct = xchacha20poly1305(key, nonce, AAD).encrypt(new TextEncoder().encode(JSON.stringify({ v: 1, entries })))
@@ -105,6 +133,7 @@ export class ContactsStore {
 
   forget(): void {
     this.cache = null
+    this.poisoned = false
   }
 }
 
