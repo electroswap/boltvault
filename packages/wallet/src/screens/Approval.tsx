@@ -435,13 +435,23 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
       alive = false
     }
   }, [host.passkeys, passkeyIds.length])
+  /*
+    The step-up does not take the device factor on Android (ES-BV-005).
+
+    A large-send step-up is a second factor asked for on a phone that is
+    already unlocked — so it has to be something the person holding the
+    unlocked phone does not already have. On Android the keystore wrap is
+    released by the screen-lock credential and survives a new fingerprint
+    enrolment, which is exactly what the holder of an unlocked phone has. The
+    password is the factor here.
+  */
   useEffect(() => {
     let alive = true
-    if (deviceWrapped && host.deviceKey) host.deviceKey.available().then((ok) => alive && setBiometricOk(ok), () => undefined)
+    if (deviceWrapped && host.deviceKey && !host.isAndroid) host.deviceKey.available().then((ok) => alive && setBiometricOk(ok), () => undefined)
     return () => {
       alive = false
     }
-  }, [host.deviceKey, deviceWrapped])
+  }, [host.deviceKey, host.isAndroid, deviceWrapped])
 
   const stepUp = async (fn: () => Promise<void>): Promise<void> => {
     setStepUpBusy(true)

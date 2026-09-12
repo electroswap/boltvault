@@ -766,10 +766,26 @@ export class VaultManager {
    */
   async reveal(input: { seedId: string } & RevealFactor): Promise<{ mnemonic: string; passphraseSet: boolean }> {
     const file = await this.requireV2()
-    // One KDF pass, not two: this used to verify by unwrapping, throw the
-    // result away, and then unwrap a second time — a second Argon2id run for
-    // nothing on the slowest operation the wallet performs.
-    const dek = await unwrapDek(this.crypto, file, unlockFor(input))
+    /*
+      A locked vault does not reveal anything (ES-BV-008).
+
+      This needed only `requireV2()`, so it answered while the wallet was
+      locked — and combined with the missing throttle below it was a password
+      oracle at the KDF's rate, which also distinguished a correct password
+      from a wrong seed id by `not_found` versus `wrong_password`. Revealing a
+      phrase is something you do inside an open wallet.
+    */
+    if (!(await this.isUnlockedRaw())) throw new EngineError('locked', 'the vault is locked')
+    /*
+      And it costs an attempt, like every other factor test (ES-BV-008).
+
+      `unlock`, `unlockWithPasskey`, `unlockWithDevice`, `verifyPassword` and
+      the backup quiz all go through `guarded`; this one called `unwrapDek`
+      directly, so the reveal endpoint was the one door with no lock on it.
+      One KDF pass, not two: it used to verify by unwrapping, throw the result
+      away and unwrap again.
+    */
+    const dek = await this.guarded(() => unwrapDek(this.crypto, file, unlockFor(input)))
     if (!dek) throw 'password' in input ? new EngineError('wrong_password', 'wrong password') : new EngineError('unauthorized', 'that factor does not unlock the vault')
     const pt = openVaultV2(file, dek)
     const seed = pt?.seeds.find((s) => s.id === input.seedId)

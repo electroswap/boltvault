@@ -18,6 +18,7 @@ import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
+import { throttleMessage } from '../throttle'
 import { useSecretGuard } from './onboarding/useSecretGuard'
 import { useRouter } from '../navigation/router'
 import { useWalletState } from '../state/useWalletState'
@@ -119,12 +120,14 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
       })
       setWords(r.mnemonic.split(' '))
       setPassword('')
-    } catch {
+    } catch (err: unknown) {
+      // A cooling-off refusal is not a failed passkey (ES-BV-008).
       setError(
-        t({
-          id: 'reveal.passkey.fail',
-          message: 'The passkey did not open the vault. Use your password.',
-        }),
+        throttleMessage(err) ??
+          t({
+            id: 'reveal.passkey.fail',
+            message: 'The passkey did not open the vault. Use your password.',
+          }),
       )
     } finally {
       setBusy(false)
@@ -145,12 +148,13 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
       const r = await engine.vault.reveal({ seedId: id, keyId: deviceKey.id, keyHex })
       setWords(r.mnemonic.split(' '))
       setPassword('')
-    } catch {
+    } catch (err: unknown) {
       setError(
-        t({
-          id: 'reveal.biometric.fail',
-          message: 'That did not open the vault. Use your password.',
-        }),
+        throttleMessage(err) ??
+          t({
+            id: 'reveal.biometric.fail',
+            message: 'That did not open the vault. Use your password.',
+          }),
       )
     } finally {
       setBusy(false)
@@ -251,7 +255,12 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
                 testID="backup-show-passkey"
               />
             ) : null}
-            {biometricOk ? (
+            {/*
+              Withheld on Android, not failed after the tap (ES-BV-005): the
+              engine refuses a non-password reveal there, so the button could
+              only ever produce an error message.
+            */}
+            {biometricOk && !host.isAndroid ? (
               <Key
                 label={t({ id: 'backup.show.biometric', message: 'Show with biometrics' })}
                 kind="secondary"

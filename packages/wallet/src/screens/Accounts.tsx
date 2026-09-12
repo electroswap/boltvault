@@ -383,7 +383,12 @@ function SeedRevealSheet({ open, onClose, seed, reducedMotion = false }: { open:
           <Body tone="mute">{t({ id: 'reveal.body', message: 'Enter your password. Make sure nobody can see your screen.' })}</Body>
           <Input value={password} onChange={setPassword} secure sensitive autoFocus onSubmit={() => void reveal()} testID="reveal-password" />
           {passkeyOk ? <Key label={t({ id: 'reveal.passkey', message: 'Reveal with passkey' })} kind="secondary" size="compact" disabled={busy} onPress={() => void revealWithPasskey()} testID="reveal-passkey" /> : null}
-          {biometricOk ? <Key label={t({ id: 'reveal.biometric', message: 'Reveal with biometrics' })} kind="secondary" size="compact" disabled={busy} onPress={() => void revealWithBiometric()} testID="reveal-biometric" /> : null}
+          {/*
+            Withheld, not failed after the tap (ES-BV-005). On Android the
+            engine refuses a non-password reveal, so this button could only
+            ever produce an error message.
+          */}
+          {biometricOk && !host.isAndroid ? <Key label={t({ id: 'reveal.biometric', message: 'Reveal with biometrics' })} kind="secondary" size="compact" disabled={busy} onPress={() => void revealWithBiometric()} testID="reveal-biometric" /> : null}
           {error ? <Body tone="burn">{error}</Body> : null}
         </Column>
       )}

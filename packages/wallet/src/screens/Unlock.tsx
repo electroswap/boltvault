@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
+import { throttleMessage } from '../throttle'
 import { useRouter } from '../navigation/router'
 import { useWalletState } from '../state/useWalletState'
 
@@ -90,8 +91,17 @@ export function Unlock({
       await engine.vault.unlock({ password })
       setPassword('')
       router.reset()
-    } catch {
-      setError(t({ id: 'unlock.wrong', message: 'That password does not open this vault.' }))
+    } catch (err: unknown) {
+      /*
+        Say which of the two it was (ES-BV-008).
+
+        The vault refuses to even try while it is cooling off after five wrong
+        attempts, and this reported that refusal as "that password does not
+        open this vault" — so somebody whose password was right was told it
+        was wrong, and re-typed it into a door that was not going to open for
+        another half a minute.
+      */
+      setError(throttleMessage(err) ?? t({ id: 'unlock.wrong', message: 'That password does not open this vault.' }))
     } finally {
       setBusy(false)
     }
@@ -189,9 +199,25 @@ export function Unlock({
             testID="unlock-passkey"
           />
         ) : null}
+        {/*
+          Named for what it actually is on each platform (ES-BV-005).
+
+          On Android the keystore wrap is bound to
+          `AUTH_BIOMETRIC_STRONG or AUTH_DEVICE_CREDENTIAL` with no
+          invalidation on enrolment, so the screen-lock PIN releases it and a
+          newly enrolled fingerprint opens it. Unlocking the wallet with the
+          strength of the phone's own lock is a reasonable thing to offer;
+          calling it "biometrics" when a PIN will do is not. Reveal and export
+          are password-only there, and the large-send step-up does not take
+          this factor at all.
+        */}
         {biometricOk ? (
           <Key
-            label={t({ id: 'unlock.biometric', message: 'Unlock with biometrics' })}
+            label={
+              host.isAndroid
+                ? t({ id: 'unlock.screenlock', message: 'Unlock with your screen lock' })
+                : t({ id: 'unlock.biometric', message: 'Unlock with biometrics' })
+            }
             kind="secondary"
             onPress={unlockWithBiometric}
             disabled={busy}

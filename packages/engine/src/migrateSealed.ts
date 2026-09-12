@@ -104,6 +104,36 @@ export async function migrateSealed(platform: Platform, sealed: SealedStores): P
       continue
     }
 
+    /*
+      The pre-split name commitments (ES-BV-013).
+
+      The record used to sit here in the clear with the account id, the owner
+      address, the name being registered and the commit secret, for up to three
+      days while the commitment matured. Splitting it into a sealed half and a
+      public one stopped new registrations writing it, but an install upgraded
+      mid-registration kept the old document on disk until somebody cleared
+      the application data by hand.
+
+      The secret is moved into the sealed map rather than dropped, so a
+      registration in flight can still be completed; only the plaintext goes.
+      A record that does not fit is dropped rather than kept, because a
+      half-parsed one is not something to complete a registration from.
+    */
+    if (key === 'names.commitments') {
+      const data = envelope((await take(key)) ?? '')
+      if (Array.isArray(data)) {
+        for (const row of data as Array<Record<string, unknown>>) {
+          const commitment = row?.['commitment']
+          if (typeof commitment !== 'string' || typeof row['secret'] !== 'string') continue
+          const { chainId: _chainId, commitment: _commitment, createdAt: _createdAt, ...secretHalf } = row
+          await sealed.nameCommitments.set(commitment, secretHalf as never).catch(() => undefined)
+          moved++
+        }
+      }
+      await drop(key)
+      continue
+    }
+
     if (key === 'accounts.active') {
       const data = envelope((await take(key)) ?? '')
       const id = (data as { id?: unknown } | undefined)?.id
