@@ -96,6 +96,12 @@ export interface EngineDeps {
   readonly kdf?: Argon2idParams
   /** Relay factory; defaults to HTTP for `http(s)://` URLs and one shared memory relay otherwise. */
   readonly relayFor?: (relayUrl: string) => Relay
+  /**
+   * This build's sync relay. A scanned pairing offer may name a loopback relay
+   * (development) or this one, and nothing else (ES-BV-014): every put and
+   * list afterwards carries this device's signed headers to that host.
+   */
+  readonly relayUrl?: string | null
   /** Client identifier sent to the ElectroSwap relay and API (§9.1). */
   readonly clientKey?: string
   /** Put a dApp approval in front of the user (the extension opens sign.html). */
@@ -422,6 +428,9 @@ export function createEngine(deps: EngineDeps): Engine {
     contacts,
     tokens,
     relayFor,
+    // A scanned pairing offer may not name a relay other than this one
+    // (ES-BV-014); loopback stays allowed for development.
+    defaultRelayUrl: deps.relayUrl ?? null,
     identity: sealed.syncIdentity,
     devices: sealed.syncDevices,
     meta: sealed.syncMeta,

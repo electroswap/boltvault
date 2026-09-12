@@ -39,6 +39,7 @@ import {
 } from '@boltvault/core'
 import { sha256 } from '@noble/hashes/sha256'
 import type { Platform } from '@boltvault/platform'
+import { untrusted } from '@boltvault/security'
 import { z } from 'zod'
 import { SealedMap } from '../sealed'
 import { authHeaders } from '../apiAuth'
@@ -142,9 +143,62 @@ export class HttpRelay implements Relay {
   }
 }
 
+/**
+ * A peer's name for itself, bounded and stripped (ES-BV-014).
+ *
+ * It is rendered on the signing sheet as the origin of a remote request, so an
+ * unbounded string pushes the verb off the screen and a bidi override reorders
+ * the line around it — the same reasons every other remote string in the
+ * wallet goes through `untrusted`.
+ */
+export function deviceLabel(raw: string): string {
+  return untrusted(raw, 32) || 'Device'
+}
+
+/**
+ * Where this device is willing to sync (ES-BV-014).
+ *
+ * `https` always; loopback allowed so a development build can run a relay on
+ * the machine; and otherwise the build's own relay, because a pairing QR is
+ * not a place to choose infrastructure from.
+ */
+export function assertRelayAllowed(relayUrl: string, allowed: string | null | undefined): void {
+  let url: URL
+  try {
+    url = new URL(relayUrl)
+  } catch {
+    throw new EngineError('invalid_argument', 'that pairing code names no relay this device can use')
+  }
+  /*
+    `memory:` is the in-process relay `create.ts` falls back to when no HTTP
+    URL is given — it never touches a network, so there is nothing to encrypt
+    and nothing to leak.
+  */
+  if (url.protocol === 'memory:') return
+  const loopback = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '::1'
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback))
+    throw new EngineError(
+      'invalid_argument',
+      'That pairing code points at an unencrypted relay. BoltVault will not sync over plain http.',
+    )
+  if (loopback) return
+  if (!allowed) return
+  let mine: URL
+  try {
+    mine = new URL(allowed)
+  } catch {
+    return
+  }
+  if (url.host !== mine.host)
+    throw new EngineError(
+      'invalid_argument',
+      `That pairing code points at ${url.host}, not this build's sync relay.`,
+    )
+}
+
 export const PairedDeviceRowSchema = z.object({
   deviceId: z.string(),
-  label: z.string(),
+  label: z.string().max(64),
   signingPublicKey: z.string(),
   pairingId: z.string(),
   channelKey: z.string(),
@@ -193,15 +247,24 @@ const StampSchema = z.object({ seq: z.number().int().nonnegative(), authorDevice
  * deliberately absent — including from the receiving end, which applies the
  * same list so an older peer's push cannot widen it.
  */
+/**
+ * Settings a paired device may change here, unattended (ES-BV-015).
+ *
+ * `slippageBips` and `enabledChains` are gone from this list. Slippage is the
+ * one number that decides how much of a swap a searcher may take — the schema
+ * caps it at 5000 bips, which is half — and a compromised paired device could
+ * set it silently, so the next swap the user made on this device gave away
+ * half of itself with nothing on screen that had changed. Enabled chains
+ * decide which networks the wallet will sign for at all. Neither is a display
+ * preference, and this list is for display preferences.
+ */
 export const SYNCED_SETTINGS = [
   'displayCurrency',
-  'enabledChains',
   'showTestnet',
   'haptics',
   'blockTick',
   'sound',
   'scene',
-  'slippageBips',
 ] as const
 
 function onlySyncedSettings(value: Record<string, unknown>): Record<string, unknown> {
@@ -221,6 +284,14 @@ export const SyncIncomingItemSchema = z.object({
   fromLabel: z.string(),
   /** The author's clock — provenance only ("from Pixel 8, 3 May"). */
   at: z.number().int().nonnegative(),
+  /**
+   * What kind of change is waiting (ES-BV-015). Absent means "something new
+   * arrived"; these two say a peer wants to change or take away something this
+   * device already has, which is a different sentence to put in front of
+   * somebody.
+   */
+  removal: z.boolean().optional(),
+  rename: z.boolean().optional(),
 })
 export type SyncIncomingItem = z.infer<typeof SyncIncomingItemSchema>
 export type IncomingCollection = SyncIncomingItem['collection']
@@ -271,7 +342,7 @@ const AnswerSchema = z.object({
   kind: z.literal('boltvault-pair-answer'),
   pairingId: z.string(),
   deviceId: z.string(),
-  label: z.string(),
+  label: z.string().max(256),
   x25519PublicKey: z.string(),
   signingPublicKey: z.string(),
 })
@@ -343,6 +414,8 @@ export interface SyncDeps {
   readonly contacts: ContactsStore
   readonly tokens: TokensService
   readonly relayFor: (relayUrl: string) => Relay
+  /** This build's own relay; a scanned offer may not name another host (ES-BV-014). */
+  readonly defaultRelayUrl?: string | null
   /** This device's sync identity (a private key) and its paired devices, sealed under the DEK. */
   readonly identity: SealedMap<DeviceIdentity>
   readonly devices: SealedMap<PairedDeviceRow[]>
@@ -462,6 +535,18 @@ export class SyncService {
     if (!offer) throw new EngineError('invalid_argument', 'that is not a BoltVault pairing code')
     if (offer.expiresAt < this.platform.now())
       throw new EngineError('expired', 'this pairing code has expired — make a new one')
+    /*
+      The relay comes out of the scanned QR (ES-BV-014).
+
+      Every put and list this device makes afterwards carries its client-key
+      HMAC headers to that host, so a QR naming `http://…` sends the sealed
+      records and the signed headers across the network in the clear. It is
+      also, at minimum, a way to learn which install is syncing with which.
+      Nothing about pairing needs a relay the scanner chose, so it has to be
+      https and — outside a development build, where a loopback relay is how
+      the thing is tested at all — the build's own.
+    */
+    assertRelayAllowed(offer.relayUrl, this.deps.defaultRelayUrl)
     const me = await this.identity()
     if (offer.deviceId === me.deviceId)
       throw new EngineError('invalid_argument', 'that is this device')
@@ -475,7 +560,9 @@ export class SyncService {
       relayUrl: offer.relayUrl,
       peer: {
         deviceId: offer.deviceId,
-        label: typeof offerLabel === 'string' ? offerLabel : 'Device',
+        // A peer names itself, and that name is rendered beside a signing
+        // request; 32 characters is a label, not a sentence (ES-BV-014).
+        label: typeof offerLabel === 'string' ? deviceLabel(offerLabel) : 'Device',
         signingPublicKey: offer.signingPublicKey,
       },
       channel,
@@ -838,6 +925,16 @@ export class SyncService {
     }
     const chainId = z.number().int().positive().safeParse(rec.value)
     if (!chainId.success || current.chainId === chainId.data) return false
+    /*
+      Not while the site is live here (ES-BV-015).
+
+      Moving a connected origin's chain underneath it changes which network the
+      next transaction from that page is prepared for, and the page is told so
+      by a `chainChanged` it did not ask for. A peer's idea of which chain a
+      site should be on is worth taking when nothing here is using the session,
+      and is not worth taking mid-conversation.
+    */
+    if (current.connected) return false
     await this.deps.sites.setChain(rec.key, chainId.data)
     return true
   }
@@ -864,8 +961,27 @@ export class SyncService {
         existing.kind === 'trezor' ||
         existing.kind === 'keystone'
       if (!secretless) return false
-      await this.deps.vault.remove(existing.id)
-      forget(state, 'account', key)
+      /*
+        Removing an account is a decision, not a preference (ES-BV-015).
+
+        A new account from a peer is quarantined and waits to be claimed,
+        precisely because a compromised phone must not be able to change what
+        this device holds. Taking one away is the same class of change with a
+        worse failure: a hardware or watch account that vanishes takes its
+        label and its place in the list with it, and the first the user knows
+        is that an address they were expecting is not there. It waits for a yes
+        like everything else.
+      */
+      this.waitOn(state, {
+        collection: 'account',
+        key,
+        label: existing.label,
+        detail: existing.address,
+        fromDeviceId: from.deviceId,
+        fromLabel: rec.authorLabel || from.label,
+        at: rec.at,
+        removal: true,
+      })
       return true
     }
     const parsed = AccountValueSchema.safeParse(rec.value)
@@ -875,6 +991,26 @@ export class SyncService {
       // A rename has to land. This used to bail out whenever the address was
       // already here, so a relabel could never arrive at all.
       if (existing.label === v.label) return false
+      /*
+        Except on an account whose key lives here (ES-BV-015). The label is
+        what the user reads before approving, and a peer that can rename "Cold
+        storage" to "Savings" is a peer that can make the wrong account look
+        like the right one. Watch and hardware rows are the peer's own
+        contribution and rename freely; an `hd` or `imported` name waits.
+      */
+      if (existing.kind === 'hd' || existing.kind === 'imported') {
+        this.waitOn(state, {
+          collection: 'account',
+          key,
+          label: v.label,
+          detail: existing.address,
+          fromDeviceId: from.deviceId,
+          fromLabel: rec.authorLabel || from.label,
+          at: rec.at,
+          rename: true,
+        })
+        return true
+      }
       await this.deps.vault.rename(existing.id, v.label)
       return true
     }
@@ -1069,7 +1205,14 @@ export class SyncService {
     }
     if (item.collection === 'account') {
       const a = (await this.deps.vault.accounts()).find((x) => x.address.toLowerCase() === item.key)
-      if (a) await this.deps.vault.setHidden(a.id, false)
+      /*
+        Three different yeses (ES-BV-015). A new account is revealed; a removal
+        the peer asked for is carried out here; a rename is applied. Each is a
+        change to something this device holds, and each waited for this.
+      */
+      if (a && item.removal) await this.deps.vault.remove(a.id)
+      else if (a && item.rename) await this.deps.vault.rename(a.id, item.label)
+      else if (a) await this.deps.vault.setHidden(a.id, false)
     }
     forget(state, item.collection, item.key)
     await this.deps.state.set(SYNC_STATE_ID, state)
@@ -1094,7 +1237,11 @@ export class SyncService {
       if (c) await this.deps.contacts.remove(c.id)
     } else if (item.collection === 'account') {
       const a = (await this.deps.vault.accounts()).find((x) => x.address.toLowerCase() === item.key)
-      if (a) await this.deps.vault.remove(a.id)
+      /*
+        "No" to a removal or a rename leaves the account exactly as it is; only
+        "no" to something the peer added takes it away again (ES-BV-015).
+      */
+      if (a && !item.removal && !item.rename) await this.deps.vault.remove(a.id)
     } else {
       const parts = splitTokenKey(item.key)
       if (parts) await this.deps.tokens.removeCustom(parts.chainId, parts.address)

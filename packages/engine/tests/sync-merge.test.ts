@@ -70,18 +70,25 @@ describe('last-writer-wins by sequence number, not by clock', () => {
     const b = device(1_000, relay)
     await pair(a, b, 'Laptop', 'Pixel 8')
 
-    await a.engine.engine.settings.set({ slippageBips: 30 })
+    /*
+      `displayCurrency` rather than `slippageBips`: slippage no longer travels
+      between devices at all (ES-BV-015). It is the one number that decides how
+      much of a swap a searcher may take, and a compromised paired device could
+      set it here silently. What this test is about is the counter, and a
+      display preference exercises it exactly as well.
+    */
+    await a.engine.engine.settings.set({ displayCurrency: 'ETN' })
     await a.engine.engine.sync.push()
     await b.engine.engine.sync.pull()
     // B saw A's counter and steps past it, so B's answer is the later one.
-    await b.engine.engine.settings.set({ slippageBips: 80 })
+    await b.engine.engine.settings.set({ displayCurrency: 'USD' })
     await b.engine.engine.sync.push()
     await a.engine.engine.sync.pull()
-    expect((await a.engine.engine.settings.get()).slippageBips).toBe(80)
+    expect((await a.engine.engine.settings.get()).displayCurrency).toBe('USD')
     // ...and A does not talk B back out of it on the next round trip.
     await a.engine.engine.sync.push()
     await b.engine.engine.sync.pull()
-    expect((await b.engine.engine.settings.get()).slippageBips).toBe(80)
+    expect((await b.engine.engine.settings.get()).displayCurrency).toBe('USD')
   })
 })
 

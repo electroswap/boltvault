@@ -138,7 +138,14 @@ function trim(s: string): string {
 
 function siteName(origin: string): string {
   if (origin.startsWith('internal:')) return 'BoltVault'
-  if (origin.startsWith('device:')) return `your ${origin.slice(7)} (paired device)`
+  /*
+    A paired device names itself, and that name is what lands here (ES-BV-014).
+    Rendering it bare let a device calling itself `electroswap.io` read exactly
+    like the site — so the phrase always says what it is, and the name inside
+    it is bounded and stripped like every other string a stranger wrote.
+  */
+  if (origin.startsWith('device:'))
+    return `Paired device: ${untrusted(origin.slice(7), 32) || 'unnamed'}`
   try {
     return new URL(origin).host
   } catch {

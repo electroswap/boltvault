@@ -82,6 +82,36 @@ describe('the families of §6', () => {
     expect(after.displayCurrency).toBe('ETN')
   })
 
+  /*
+    ES-BV-015. Slippage was on the synced list, and it is the one number that
+    decides how much of a swap a searcher may take — the schema caps it at 5000
+    bips, which is half. A compromised paired device could set it here
+    silently, and the next swap the user made on this device gave away half of
+    itself with nothing on screen that had changed. Enabled chains decide which
+    networks this wallet will sign for at all.
+  */
+  it('will not carry slippage or the enabled chains, in either direction', async () => {
+    const relay = new MemoryRelay()
+    const a = device(relay)
+    const b = device(relay)
+    await pair(a, b)
+
+    const before = await a.engine.settings.get()
+    await b.engine.settings.set({ slippageBips: 5000, enabledChains: [52014], displayCurrency: 'ETN' })
+    await b.engine.sync.push()
+    await a.engine.sync.pull()
+    const after = await a.engine.settings.get()
+    expect(after.slippageBips).toBe(before.slippageBips)
+    expect(after.enabledChains).toEqual(before.enabledChains)
+    expect(after.displayCurrency).toBe('ETN')
+
+    // And the same the other way: A's own slippage stays A's own.
+    await a.engine.settings.set({ slippageBips: 10 })
+    await a.engine.sync.push()
+    await b.engine.sync.pull()
+    expect((await b.engine.settings.get()).slippageBips).toBe(5000)
+  })
+
   it('lands a synced watch or hardware account hidden, waiting to be claimed here', async () => {
     const relay = new MemoryRelay()
     const a = device(relay)
@@ -166,6 +196,17 @@ describe('deletes are tombstones', () => {
     await a.engine.sync.push()
     expect((await b.engine.sync.pull()).applied).toBe(2)
     expect(await b.engine.contacts.list()).toHaveLength(0)
+    /*
+      An account going away waits for a yes here (ES-BV-015). A new account
+      from a peer is quarantined precisely because a compromised phone must not
+      change what this device holds; taking one away is the same class of
+      change with a worse failure — the address a user was expecting is simply
+      not there, with nothing said.
+    */
+    expect((await b.engine.accounts.list()).some((x) => x.kind === 'watch')).toBe(true)
+    const waiting = await b.engine.sync.incoming()
+    expect(waiting.find((i) => i.collection === 'account')?.removal).toBe(true)
+    await b.engine.sync.confirmIncoming({ collection: 'account', key: '0x000000000000000000000000000000000000dead' })
     expect((await b.engine.accounts.list()).some((x) => x.kind === 'watch')).toBe(false)
   })
 

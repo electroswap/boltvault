@@ -331,6 +331,8 @@ export class RemoteSignService {
     }
     this.incoming.set(req.id, view)
     this.emit()
+    // The label is already bounded where it is stored (ES-BV-014); the sheet
+    // renders it as "Paired device: <label>", never as a bare host-like string.
     const origin = `device:${from.label}`
     const answer = async (signature: string | null, error: string | null): Promise<void> => {
       this.incoming.delete(req.id)

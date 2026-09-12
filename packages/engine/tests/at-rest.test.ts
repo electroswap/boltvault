@@ -128,9 +128,14 @@ async function useTheWallet(): Promise<{ dump: Record<string, string>; accountId
     one, so the commitment family — which held the account id, the owner
     address and the name in the clear for three days — was never looked at.
   */
-  await eng.engine.names
-    .register({ accountId, chainId: 52014, name: `${REGISTERING}.etn`, durationSeconds: 31_536_000 })
-    .catch(() => undefined)
+  // Bounded: the registrar reads live contracts, and this harness has no
+  // registrar to answer — what matters here is the document it writes.
+  await Promise.race([
+    eng.engine.names
+      .commit({ accountId, chainId: 52014, name: `${REGISTERING}.etn`, durationSeconds: 31_536_000 })
+      .catch(() => undefined),
+    new Promise((r) => setTimeout(r, 500)),
+  ])
 
   // Connected sites (F3): actually connect, so the address really is handed to
   // a dApp and really is persisted. `setChain` alone throws `not_found` on an

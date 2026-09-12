@@ -47,9 +47,21 @@ describe('sync pairing and non-secret sync', () => {
     expect(pushed).toBeGreaterThanOrEqual(3)
 
     const { applied } = await b.engine.sync.pull()
-    expect(applied).toBeGreaterThanOrEqual(3)
+    expect(applied).toBeGreaterThanOrEqual(2)
     expect((await b.engine.settings.get()).displayCurrency).toBe('ETN')
-    expect((await b.engine.sites.get({ origin: 'https://app.electroswap.io' }))?.chainId).toBe(8453)
+    /*
+      Not while B is talking to that site (ES-BV-015). Moving a connected
+      origin's chain underneath it changes which network the page's next
+      transaction is prepared for, and tells the page so with a `chainChanged`
+      it did not ask for. A peer's idea of which chain a site belongs on is
+      worth taking when nothing here is using the session.
+    */
+    expect((await b.engine.sites.get({ origin: 'https://app.electroswap.io' }))?.chainId).not.toBe(8453)
+    await b.engine.sites.disconnect({ origin: 'https://app.electroswap.io' })
+    await a.engine.sites.setChain({ origin: 'https://app.electroswap.io', chainId: 1 })
+    await a.engine.sync.push()
+    await b.engine.sync.pull()
+    expect((await b.engine.sites.get({ origin: 'https://app.electroswap.io' }))?.chainId).toBe(1)
     const synced = (await b.engine.accounts.list()).find((x) => x.kind === 'watch')
     /*
       The label arrives as the author wrote it. It used to arrive as
