@@ -725,7 +725,23 @@ export class VaultManager {
     await this.mutate((p) => {
       const order = p.accounts.reduce((m, a) => Math.max(m, a.order), -1) + 1
       const { account, importedKey, seed } = build(p, order)
-      if (p.accounts.some((a) => a.address.toLowerCase() === account.address.toLowerCase())) throw new EngineError('invalid_argument', 'that address is already in this vault')
+      /*
+        A refusal that says which account is in the way.
+
+        "That address is already in this vault" is true and useless: the vault
+        may hold thirty addresses and the one that collided is not on screen.
+        Naming it — and, for the case that actually traps people, saying the
+        sitting account is watch-only and can be removed — turns a dead end
+        into an instruction. Owner: "My only solution is to reset the vault."
+      */
+      const clash = p.accounts.find((a) => a.address.toLowerCase() === account.address.toLowerCase())
+      if (clash)
+        throw new EngineError(
+          'invalid_argument',
+          clash.kind === 'watch'
+            ? `that address is already in this vault as the watch-only account “${clash.label}”. Remove it from Accounts first, then import it.`
+            : `that address is already in this vault as “${clash.label}”`,
+        )
       created = account
       return {
         ...p,

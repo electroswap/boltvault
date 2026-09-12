@@ -112,9 +112,23 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
    * address, only non-selected addresses." The active account is deliberately
    * lifted out of the list into its own block, and Rename lives in a row's
    * menu — so the one account you are using was the one you could not rename.
-   * Its block gets the same menu now, minus the two entries that make no sense
+   * Its block gets the same menu now, minus the one entry that makes no sense
    * for the account in use.
    */
+  /*
+    Remove stays on the menu of the account you are *using*.
+
+    It used to be filtered out alongside Hide, and that is exactly where it is
+    most needed: tapping a row is how you look at an account, tapping it makes
+    it active, and the account you just looked at is the one you have decided
+    to be rid of. Owner: "There's no way to remove an account, so if I added
+    one as a watch address, and then later try to import the account via
+    ledger/private key, it says it already exists. My only solution is to reset
+    the vault." `vault.remove` has always seated the next account when the
+    active one goes, so the only thing missing was the door — with one guard,
+    that there is another account left to seat.
+  */
+  const canRemove = (a: AccountView, isActive: boolean): boolean => a.kind !== 'hd' && (!isActive || accounts.length > 1)
   const menuFor = (a: AccountView, isActive = false): MenuItem[] => ([
     { id: 'rename', icon: 'edit', label: t({ id: 'acct.rename', message: 'Rename' }), onPress: () => setSheet({ kind: 'rename', account: a }), testID: 'menu-rename' },
     { id: 'details', icon: 'info', label: t({ id: 'acct.details', message: 'Details' }), onPress: () => setSheet({ kind: 'details', account: a }), testID: 'menu-details' },
@@ -130,8 +144,8 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
       },
       testID: 'menu-hide',
     },
-    ...(a.kind !== 'hd' ? [{ id: 'remove', icon: 'trash' as const, label: t({ id: 'acct.remove', message: 'Remove' }), tone: 'burn' as const, onPress: () => setSheet({ kind: 'confirm', account: a }), testID: 'menu-remove' }] : []),
-  ] as MenuItem[]).filter((item) => !(isActive && (item.id === 'hide' || item.id === 'remove')))
+    ...(canRemove(a, isActive) ? [{ id: 'remove', icon: 'trash' as const, label: t({ id: 'acct.remove', message: 'Remove' }), tone: 'burn' as const, onPress: () => setSheet({ kind: 'confirm', account: a }), testID: 'menu-remove' }] : []),
+  ] as MenuItem[]).filter((item) => !(isActive && item.id === 'hide'))
   const seedMenu = (s: SeedView): MenuItem[] => [
     { id: 'next', icon: 'plus', label: t({ id: 'acct.derive', message: 'Add the next address' }), onPress: () => { void run(() => engine.accounts.derive({ seedId: s.id })); setSheet(null) }, testID: 'seed-derive' },
     { id: 'rename', icon: 'edit', label: t({ id: 'acct.renameSeed', message: 'Rename this wallet' }), onPress: () => setSheet({ kind: 'renameSeed', seed: s }), testID: 'seed-rename' },
@@ -228,7 +242,14 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
         open={sheet?.kind === 'confirm'}
         onClose={() => setSheet(null)}
         title={t({ id: 'acct.remove.title', message: 'Remove {label}?', values: { label: sheet?.kind === 'confirm' ? sheet.account.label : '' } })}
-        body={sheet?.kind === 'confirm' && sheet.account.kind === 'imported' ? t({ id: 'acct.remove.key', message: 'This key is not part of a recovery phrase. Without its own backup, anything at this address is gone for good.' }) : t({ id: 'acct.remove.body', message: 'BoltVault stops showing this address. Nothing on the chain changes; you can add it again any time.' })}
+        body={
+          sheet?.kind === 'confirm' && sheet.account.kind === 'imported'
+            ? t({ id: 'acct.remove.key', message: 'This key is not part of a recovery phrase. Without its own backup, anything at this address is gone for good.' })
+            : /* The account in use says the second thing that happens: another one takes its seat. */
+              sheet?.kind === 'confirm' && sheet.account.id === active?.id
+              ? t({ id: 'acct.remove.active', message: 'BoltVault stops showing this address and switches to another account. Nothing on the chain changes; you can add it again any time.' })
+              : t({ id: 'acct.remove.body', message: 'BoltVault stops showing this address. Nothing on the chain changes; you can add it again any time.' })
+        }
         confirmLabel={t({ id: 'acct.remove', message: 'Remove' })}
         onConfirm={() => {
           if (sheet?.kind === 'confirm') void run(() => engine.accounts.remove({ id: sheet.account.id }))
