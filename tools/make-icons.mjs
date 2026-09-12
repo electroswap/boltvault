@@ -244,17 +244,18 @@ writeFileSync(join(mob, 'favicon.png'), png(48))
 writeFileSync(join(mob, 'android-icon-foreground.png'), png(432, { shape: 'none', ground: false, scale: 0.5 }))
 writeFileSync(join(mob, 'android-icon-background.png'), png(432, { shape: 'square', scale: 0.0001 }))
 writeFileSync(join(mob, 'android-icon-monochrome.png'), png(432, { shape: 'none', ground: false, fill: 'white', scale: 0.5 }))
-// The native splash mark: the bolt alone, so it sits on the splash colour.
-writeFileSync(join(mob, 'splash-icon.png'), png(512, { shape: 'none', ground: false, scale: 0.68 }))
 /*
-  The native splash's mark — the one Android paints from the moment the icon is
-  tapped until React has a frame to give it, which on a release build is over
-  two seconds. It is the same drawing as `BoltMark`, at the same proportion
-  (the bolt is 1/1.8 of the frame, because that is BoltMark's viewBox), so when
-  the JS splash finally mounts the mark does not move: it comes alive.
+  Android 12's splash icon and the windowBackground that follows it have to be
+  the same drawing at the same size, or the first beat of a cold start is a
+  jump: a small bolt in a circular mask, then a bigger one whose glow is a
+  square. Both assets below are the BoltMark proportion (bolt = 1/1.8 of the
+  frame) baked onto opaque void, so the square of the PNG is the window colour
+  and cannot read as a cropped plate of light.
 
-  `plugins/withNativeSplash.js` copies this into the Android project.
+  `plugins/withNativeSplash.js` copies splash-mark.png into the Android project
+  as both the Android 12 icon and the still behind it.
 */
-writeFileSync(join(mob, 'splash-mark.png'), png(1024, { shape: 'none', ground: false, bloom: true, scale: 1 / 1.8 }))
+writeFileSync(join(mob, 'splash-icon.png'), png(1024, { shape: 'square', ground: true, scale: 1 / 1.8 }))
+writeFileSync(join(mob, 'splash-mark.png'), png(1024, { shape: 'square', ground: true, scale: 1 / 1.8 }))
 
 console.log(`icons written to ${ext} and ${mob}`)

@@ -272,6 +272,11 @@ describe('parseQuote refuses everything else', () => {
     // Three hops, two runs: the kind is about mixing, not about length.
     const three = routed(served([[v2(FIX, MID), v3(MID, MID2, '500'), v3(MID2, WETN, '3000')]]))
     expect(three.quote.candidate.kind).toBe('mixed')
+    expect(parseQuote(served([[v3(FIX, MID, '3000'), v2(MID, WETN)]]), { ...input, tradeType: 'EXACT_OUTPUT' })).toEqual({
+      kind: 'none',
+      reason: 'mixed exact-out',
+    })
+    expect(routed(served([[v3(FIX, WETN)]]), { ...input, tradeType: 'EXACT_OUTPUT' }).quote.amountOut).toBe(OUT)
     expect(three.quote.candidate.label).toBe('V2 → V3 0.05% → V3 0.3%')
     // And a single-protocol route is labelled exactly as it was.
     expect(routed(served([[v3(FIX, MID, '500'), v3(MID, WETN, '3000')]])).quote.candidate.label).toBe('V3 0.05% → 0.3%')
@@ -374,6 +379,14 @@ describe('Quoter.route around the network', () => {
     */
     expect(sent.configs?.length).toBeGreaterThan(0)
     expect(sent.configs?.[0]?.recipient).toBe(ME)
+  })
+
+  it('asks EXACT_OUTPUT without MIXED, which the encoder cannot honour in that direction', async () => {
+    const h = harness(pool)
+    expect((await h.quoter.route({ ...input, tradeType: 'EXACT_OUTPUT' })).kind).toBe('route')
+    const sent = JSON.parse(String(h.calls[0]?.init?.body ?? '{}')) as { type?: unknown; protocols?: unknown }
+    expect(sent.type).toBe('EXACT_OUTPUT')
+    expect(sent.protocols).toEqual(['V2', 'V3'])
   })
 
   it('a refusal is an answer of none, never a throw', async () => {

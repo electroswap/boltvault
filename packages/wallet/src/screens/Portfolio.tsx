@@ -4,17 +4,19 @@
  * Positions, and "since you last looked". Reached from the Home console; the
  * dock stays underneath.
  */
-import { Body, BusBar, Column, Icon, LiveFilament, Pill, Plate, Row, RollingReadout, ScrollView, Segmented, SharedElement, metrics, paint } from '@boltvault/ui'
+import { Body, BusBar, Column, Icon, LiveFilament, Pill, Plate, Row, ScrollView, Segmented, SharedElement, metrics, paint } from '@boltvault/ui'
 import { useEffect, useState } from 'react'
 import { AddTokenSheet } from '../components/AddTokenSheet'
 import { ChainScopeSheet, ScopePill, useHomeScope } from '../components/ChainScope'
 import { DividendsCard } from '../components/DividendsCard'
 import { PageHeader } from '../components/PageHeader'
+import { PortfolioBalance } from '../components/PortfolioBalance'
 import { useEngine } from '../engine/EngineProvider'
-import { formatChange, formatFiat, formatQuantity, formatRaw } from '../format'
+import { displayFiat, formatChange, formatQuantity, formatRaw } from '../format'
 import { useChainHead } from '../hooks/useChainHead'
 import { usePortfolio } from '../hooks/usePortfolio'
 import { usePositions } from '../hooks/usePositions'
+import { usePrefs } from '../hooks/usePrefs'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { tokenSharedId } from '../navigation/transitions'
@@ -35,6 +37,7 @@ export function Portfolio({ body }: { body: BodyKind }) {
   const { vault, active } = useWalletState()
   const head = useChainHead(ETN)
   const scope = useHomeScope()
+  const { prefs, set: setPrefs } = usePrefs()
   const [scopeOpen, setScopeOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const accountId = active?.id ?? null
@@ -76,7 +79,8 @@ export function Portfolio({ body }: { body: BodyKind }) {
   const snapshot = portfolio.snapshot
   const currency = snapshot?.currency ?? 'USD'
   const total = snapshot?.total ?? null
-  const totalText = total === null ? '—' : formatFiat(total, currency)
+  const hideBalances = prefs.hideBalances
+  const totalText = displayFiat(total, currency, hideBalances)
   const change = formatChange(snapshot?.change24h ?? null)
   const rows = (snapshot?.rows ?? []).filter((r) => !r.hidden)
   const hidden = (snapshot?.rows ?? []).length - rows.length
@@ -98,28 +102,31 @@ export function Portfolio({ body }: { body: BodyKind }) {
         */}
         <PageHeader title={t({ id: 'portfolio.title', message: 'Portfolio' })} right={<ScopePill scope={scope.scope} label={scope.label} onPress={() => setScopeOpen(true)} size="sm" testID="home-scope" />} />
         <Column gap="$2">
-          <RollingReadout value={totalText} hero reducedMotion={reducedMotion} testID="total" />
-          <Row gap="$3" flexWrap="wrap">
-            {change ? (
-              <Body tone={change.startsWith('+') ? 'surge' : change.startsWith('−') ? 'burn' : 'mute'} size="caption">
-                {change} {t({ id: 'home.today', message: 'today' })}
-              </Body>
-            ) : null}
-            {snapshot ? (
-              <Body tone="mute" size="caption">
-                {rows.length === 1 ? t({ id: 'home.tokens.one', message: '1 token' }) : t({ id: 'home.tokens.many', message: '{n} tokens', values: { n: rows.length } })}
-              </Body>
-            ) : (
-              <Body tone="mute" size="caption">
-                {t({ id: 'home.scope.none', message: 'No balances yet' })}
-              </Body>
-            )}
-            {snapshot && snapshot.unpricedCount > 0 ? (
-              <Body tone="mute" size="caption">
-                {t({ id: 'home.unpriced', message: '{n} without price', values: { n: snapshot.unpricedCount } })}
-              </Body>
-            ) : null}
-          </Row>
+          <PortfolioBalance
+            value={totalText}
+            change={change}
+            hidden={hideBalances}
+            onToggle={() => setPrefs({ hideBalances: !hideBalances })}
+            reducedMotion={reducedMotion}
+            extra={
+              <>
+                {snapshot ? (
+                  <Body tone="mute" size="caption">
+                    {rows.length === 1 ? t({ id: 'home.tokens.one', message: '1 token' }) : t({ id: 'home.tokens.many', message: '{n} tokens', values: { n: rows.length } })}
+                  </Body>
+                ) : (
+                  <Body tone="mute" size="caption">
+                    {t({ id: 'home.scope.none', message: 'No balances yet' })}
+                  </Body>
+                )}
+                {snapshot && snapshot.unpricedCount > 0 ? (
+                  <Body tone="mute" size="caption">
+                    {t({ id: 'home.unpriced', message: '{n} without price', values: { n: snapshot.unpricedCount } })}
+                  </Body>
+                ) : null}
+              </>
+            }
+          />
           <LiveFilament tick={head?.blockNumber ?? null} live={head?.live ?? false} reducedMotion={reducedMotion} testID="filament" />
         </Column>
 
@@ -146,7 +153,7 @@ export function Portfolio({ body }: { body: BodyKind }) {
                     address={r.address === 'native' ? '0x0000000000000000000000000000000000000000' : r.address}
                     symbol={r.symbol}
                     amount={formatQuantity(r.quantity)}
-                    value={r.fiat === null ? null : formatFiat(r.fiat, currency)}
+                    value={r.fiat === null ? null : displayFiat(r.fiat, currency, hideBalances)}
                     change={formatChange(r.change24h)}
                     share={r.share}
                     logoUri={r.logoUri}
@@ -207,7 +214,7 @@ export function Portfolio({ body }: { body: BodyKind }) {
             </Body>
             <Body size="caption">
               {sinceLook.total !== null && total !== null
-                ? t({ id: 'home.since.change', message: '{from} → {to}', values: { from: formatFiat(sinceLook.total, currency), to: totalText } })
+                ? t({ id: 'home.since.change', message: '{from} → {to}', values: { from: displayFiat(sinceLook.total, currency, hideBalances), to: totalText } })
                 : t({ id: 'home.since.none', message: 'No priced change to report.' })}
             </Body>
           </Plate>

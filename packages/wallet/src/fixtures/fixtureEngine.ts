@@ -195,19 +195,32 @@ export async function createFixtureEngine(scenario: FixtureScenario, options: Fi
     const SINK = '0x00000000000000000000000000000000000051ab'
     const tierView: HolderTier = { chainId: 52014, bips: 40, tier: 1, name: 'Charge', nextTierName: 'Magneto', score: '18400000000000000000000', nextTierAt: '136000000000000000000000', nextTierBips: 30, source: 'config', sink: SINK, schedule: '0x00000000000000000000000000000000000005c4', breakdown: { wallet: '18400000000000000000000', farm: '0', dyno: '0' } }
     const schedule: FeeScheduleView = { chainId: 52014, baseName: 'Static', baseBips: 50, tiers: [{ name: 'Charge', minScore: '13600000000000000000000', bips: 40 }, { name: 'Magneto', minScore: '136000000000000000000000', bips: 30 }, { name: 'Turbine', minScore: '680000000000000000000000', bips: 20 }, { name: 'Reactor', minScore: '1360000000000000000000000', bips: 10 }], dynoWeight: '828590000000000000000', dynoWeightSource: 'average', countFarmBolt: true, source: 'config', sink: SINK, address: '0x00000000000000000000000000000000000005c4' }
-    const swapQuote = (arg: { tokenIn: string; tokenOut: string; amountIn: string; slippageBips?: number }): SwapQuote => {
+    const swapQuote = (arg: { tokenIn: string; tokenOut: string; amountIn?: string; amountOut?: string; tradeType?: 'exactIn' | 'exactOut'; slippageBips?: number }): SwapQuote => {
       const inRow = snap.rows.find((r) => r.address.toLowerCase() === arg.tokenIn.toLowerCase()) ?? snap.rows[0]
       const outRow = snap.rows.find((r) => r.address.toLowerCase() === arg.tokenOut.toLowerCase()) ?? snap.rows[2]
       const decIn = inRow?.decimals ?? 18
       const decOut = outRow?.decimals ?? 6
-      const amountIn = BigInt(Math.round(Number(arg.amountIn || '0') * 1e6)) * 10n ** BigInt(Math.max(0, decIn - 6))
-      // A fixed rate so the screenshot is stable: 1 in = 0.00296 out (ETN → USDC).
-      const amountOut = (amountIn * 296n * 10n ** BigInt(decOut)) / (100_000n * 10n ** BigInt(decIn))
-      const fee = (amountOut * 40n) / 10_000n
-      const receive = amountOut - fee
+      const exactOut = arg.tradeType === 'exactOut'
       const slippage = BigInt(arg.slippageBips ?? 50)
-      const minOut = receive - (receive * slippage) / 10_000n
-      const ok = amountIn > 0n && amountIn <= BigInt(inRow?.raw ?? '0')
+      // A fixed rate so the screenshot is stable: 1 in = 0.00296 out (ETN → USDC).
+      const toRaw = (human: string, decimals: number): bigint => BigInt(Math.round(Number(human || '0') * 1e6)) * 10n ** BigInt(Math.max(0, decimals - 6))
+      let amountIn: bigint
+      let amountOut: bigint
+      let receive: bigint
+      if (exactOut) {
+        receive = toRaw(arg.amountOut ?? '0', decOut)
+        const gross = (receive * 10_000n + 9_999n) / (10_000n - 40n)
+        amountOut = gross
+        amountIn = (gross * 100_000n * 10n ** BigInt(decIn)) / (296n * 10n ** BigInt(decOut))
+      } else {
+        amountIn = toRaw(arg.amountIn ?? '0', decIn)
+        amountOut = (amountIn * 296n * 10n ** BigInt(decOut)) / (100_000n * 10n ** BigInt(decIn))
+        receive = amountOut - (amountOut * 40n) / 10_000n
+      }
+      const fee = (amountOut * 40n) / 10_000n
+      const minOut = exactOut ? receive : receive - (receive * slippage) / 10_000n
+      const maxIn = exactOut ? amountIn + (amountIn * slippage) / 10_000n : 0n
+      const ok = amountIn > 0n && amountIn <= BigInt(inRow?.raw ?? '0') && (!exactOut || receive > 0n)
       return {
         chainId: 52014,
         tokenIn: arg.tokenIn,
@@ -221,9 +234,8 @@ export async function createFixtureEngine(scenario: FixtureScenario, options: Fi
         amountOutRaw: amountOut.toString(),
         receiveRaw: receive.toString(),
         minimumOutRaw: minOut.toString(),
-        // The harness quotes exact-in; exact-out has no ceiling to report.
-        tradeType: 'exactIn' as const,
-        maximumInRaw: '0',
+        tradeType: exactOut ? ('exactOut' as const) : ('exactIn' as const),
+        maximumInRaw: maxIn.toString(),
         rate: 0.00296,
         priceImpactPct: 0.12,
         slippageBips: Number(slippage),
@@ -245,7 +257,7 @@ export async function createFixtureEngine(scenario: FixtureScenario, options: Fi
       addresses: { input: z.object({}).passthrough(), handler: async () => ({ sink: SINK, schedule: schedule.address }) },
     })
     engine.host.override('swap', {
-      quote: { input: z.object({ tokenIn: z.string(), tokenOut: z.string(), amountIn: z.string(), slippageBips: z.number().optional() }).passthrough(), handler: async (arg) => swapQuote(arg as { tokenIn: string; tokenOut: string; amountIn: string; slippageBips?: number }) },
+      quote: { input: z.object({ tokenIn: z.string(), tokenOut: z.string(), amountIn: z.string().optional(), amountOut: z.string().optional(), tradeType: z.enum(['exactIn', 'exactOut']).optional(), slippageBips: z.number().optional() }).passthrough(), handler: async (arg) => swapQuote(arg as { tokenIn: string; tokenOut: string; amountIn?: string; amountOut?: string; tradeType?: 'exactIn' | 'exactOut'; slippageBips?: number }) },
       flows: { input: z.object({}).passthrough().optional(), handler: async () => [] },
     })
     engine.host.override('limit', {

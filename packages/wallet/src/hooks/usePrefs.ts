@@ -1,7 +1,7 @@
 /**
  * UI preferences (plan B2): the Home scope, the dismissed coach, the chart
- * timeframe. Defaults paint first; the engine's document replaces them and
- * every page hears a change.
+ * timeframe, hidden balances. Defaults paint first; the engine's document
+ * replaces them and every page hears a change.
  */
 import { DEFAULT_PREFS, type Prefs } from '@boltvault/engine'
 import { useCallback, useEffect, useState } from 'react'

@@ -816,6 +816,12 @@ export const PrefsSchema = z.object({
     still parses, and the inferred type stays `boolean`.
   */
   introSeen: z.boolean().default(false),
+  /*
+    Same `.default(false)` reason as `introSeen`: a required key would
+    quarantine every document written before this line and reset the Home
+    scope. Off means the totals show; on means they read as asterisks.
+  */
+  hideBalances: z.boolean().default(false),
 })
 export type Prefs = z.infer<typeof PrefsSchema>
 

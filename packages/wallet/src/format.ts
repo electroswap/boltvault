@@ -5,6 +5,22 @@ export function formatFiat(value: number, currency: 'USD' | 'ETN'): string {
   return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
+/**
+ * A stand-in for a fiat figure the user has chosen not to show.
+ *
+ * Fixed length on purpose: masking digit-by-digit would still leak how
+ * large the number is.
+ */
+export function maskedFiat(currency: 'USD' | 'ETN'): string {
+  return currency === 'USD' ? '$****.**' : '**** ETN'
+}
+
+/** `formatFiat`, or asterisks when the portfolio eye is closed. */
+export function displayFiat(value: number | null, currency: 'USD' | 'ETN', hidden: boolean): string {
+  if (value === null) return '—'
+  return hidden ? maskedFiat(currency) : formatFiat(value, currency)
+}
+
 /** What `amount` of a token is worth, from the portfolio row's price (fiat ÷ quantity); null when unpriced or empty. */
 export function formatAmountFiat(
   amount: string,

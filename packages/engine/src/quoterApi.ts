@@ -52,8 +52,18 @@ export interface QuoterInput {
   /** Wrapped, never `native`: the service prices pools, and the wallet wraps before it routes. */
   readonly tokenIn: Hex
   readonly tokenOut: Hex
+  /**
+   * The independent amount. Exact-in: what is spent. Exact-out: what must
+   * land. Named `amountIn` because that is the field the service echoes as
+   * `quote.amount` in both directions.
+   */
   readonly amountIn: bigint
   readonly recipient: Hex
+  /**
+   * Which side is fixed. Exact-out omits MIXED (the encoder cannot express a
+   * mixed exact-output path) and reads `quote.quote` as the required spend.
+   */
+  readonly tradeType?: 'EXACT_INPUT' | 'EXACT_OUTPUT'
 }
 
 export type QuoterOutcome =
@@ -184,6 +194,15 @@ export function parseQuote(body: unknown, input: QuoterInput): QuoterOutcome {
   if (!same(hops[0]?.tokenIn ?? '', input.tokenIn)) return { kind: 'none', reason: 'wrong tokenIn' }
   if (!same(hops[hops.length - 1]?.tokenOut ?? '', input.tokenOut)) return { kind: 'none', reason: 'wrong tokenOut' }
   for (let i = 1; i < hops.length; i++) if (!same(hops[i - 1]?.tokenOut ?? '', hops[i]?.tokenIn ?? '')) return { kind: 'none', reason: 'broken path' }
+  /*
+    Exact-out cannot encode a mixed path: working backwards through protocol
+    boundaries has no `CONTRACT_BALANCE` equivalent. A served mixed route is
+    a correct answer the wallet cannot sign, so it is discarded and the
+    mini-router prices a V2/V3 path instead.
+  */
+  if ((input.tradeType ?? 'EXACT_INPUT') === 'EXACT_OUTPUT' && kindOf(hops) === 'mixed') {
+    return { kind: 'none', reason: 'mixed exact-out' }
+  }
 
   const gas = bigintOf(quote['gasUseEstimate'])
   return {
@@ -231,7 +250,8 @@ export class Quoter {
     const now = this.deps.now()
     if (now < this.blockedUntil) return { kind: 'none', reason: 'rate limited' }
     const pair = `${String(input.chainId)}|${input.tokenIn.toLowerCase()}|${input.tokenOut.toLowerCase()}`
-    const key = `${pair}|${input.amountIn.toString()}`
+    const type = input.tradeType ?? 'EXACT_INPUT'
+    const key = `${pair}|${type}|${input.amountIn.toString()}`
     const hit = this.recent.get(key)
     if (hit && now - hit.at < CACHE_MS) return hit.outcome
     const running = this.inflight.get(key)
@@ -283,14 +303,22 @@ export class Quoter {
         liquidity on the table for no reason. `maxSplits` is different — a split
         route genuinely has no encoding, so the request caps it at one.
       */
+      const type = input.tradeType ?? 'EXACT_INPUT'
+      /*
+        MIXED is executable exact-in (`encodeSwap` emits one command per
+        contiguous protocol run) and a revert exact-out (`encodeSwapExactOut`
+        refuses a mixed path). Asking for it in the exact-out direction would
+        be asking for a price the wallet cannot honour.
+      */
+      const protocols = type === 'EXACT_OUTPUT' ? ['V2', 'V3'] : ['V2', 'V3', 'MIXED']
       const body = JSON.stringify({
         tokenInChainId: input.chainId,
         tokenOutChainId: input.chainId,
         tokenIn: input.tokenIn,
         tokenOut: input.tokenOut,
         amount: input.amountIn.toString(),
-        type: 'EXACT_INPUT',
-        protocols: ['V2', 'V3', 'MIXED'],
+        type,
+        protocols,
         maxSplits: 1,
         configs: [{ recipient: input.recipient }],
       })

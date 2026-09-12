@@ -112,7 +112,7 @@ export interface SwapDeps {
 /** ElectroSwap's project safety levels, as the market data reports them. */
 export type TokenSafetyLevel = 'VERIFIED' | 'MEDIUM_WARNING' | 'STRONG_WARNING' | 'BLOCKED'
 
-/** Which side of the trade the user fixed. §8.6: exact-out is a power toggle, default off. */
+/** Which side of the trade the user fixed. Typing in the receive well is exact-out. */
 export type TradeType = 'exactIn' | 'exactOut'
 
 export interface SwapInput {
@@ -591,10 +591,25 @@ export class SwapService {
       price. The service walks the whole pool graph and is the better router;
       the mini-router is what stands when it is unreachable.
     */
-    const onChain = await bestRoute(input.tokenIn, input.tokenOut, input.amountIn, addresses, read)
+    const onChain =
+      (input.tradeType ?? 'EXACT_INPUT') === 'EXACT_OUTPUT'
+        ? await bestRouteExactOut(input.tokenIn, input.tokenOut, input.amountIn, addresses, read).then((q) =>
+            q
+              ? {
+                  candidate: q.best.candidate,
+                  /*
+                    `RouteQuote.amountOut` is the service's dependent amount —
+                    exact-in: what you receive; exact-out: what you spend.
+                  */
+                  amountOut: q.best.amountIn,
+                  gasEstimate: q.best.gasEstimate,
+                }
+              : null,
+          )
+        : await bestRoute(input.tokenIn, input.tokenOut, input.amountIn, addresses, read).then((q) => q?.best ?? null)
     return onChain
       ? {
-          quote: onChain.best,
+          quote: onChain,
           source: 'onchain',
           provenance: { id: null, cached: null, blockNumber: null, fallbackReason },
         }
@@ -863,37 +878,47 @@ export class SwapService {
     let taxIn: TaxProbe = null
     let taxOut: TaxProbe = null
     let spot: number | null = null
-    /*
-      The routing service is exact-in only, so an exact-output trade never asks
-      it at all — which is a fallback reason like any other, and the one a
-      reader of "why did this not use the API price" needs first.
-    */
     let provenance: QuoteProvenance = {
       id: null,
       cached: null,
       blockNumber: null,
-      fallbackReason: exactOut ? 'exact-out is priced on chain' : null,
+      fallbackReason: null,
     }
 
     if (exactOut) {
       /*
-        The routing service is exact-in only — its request carries an input
-        amount and nothing else — so an exact-output trade is priced by the
-        mini-router alone. That is a narrower search, not a worse guarantee: the
-        number it produces is the *input*, and the input is bounded on chain by
-        `amountInMaximum`, which no router can talk the wallet past.
+        The routing service answers `EXACT_OUTPUT` the same way the web
+        interface asks it. `quote.quote` is the required spend; the encoder
+        still writes `amountInMaximum`, which no router can talk the wallet
+        past. Mixed routes are refused at parse time and the mini-router
+        prices a V2/V3 path instead.
       */
-      const [outRoute, tIn, tOut] = await Promise.all([
-        bestRouteExactOut(wrappedIn, wrappedOut, grossWanted, addresses, read),
+      const [routed, tIn, tOut] = await Promise.all([
+        this.route(
+          {
+            chainId,
+            tokenIn: wrappedIn,
+            tokenOut: wrappedOut,
+            amountIn: grossWanted,
+            recipient: owner,
+            tradeType: 'EXACT_OUTPUT',
+          },
+          addresses,
+          read,
+        ),
         ...(taxEarly ?? this.taxPair(chainId, A, wrappedIn, wrappedOut, wetn, read)),
       ])
       taxIn = tIn
       taxOut = tOut
-      if (outRoute) {
-        candidate = outRoute.best.candidate
-        gasEstimate = outRoute.best.gasEstimate
-        amountIn = outRoute.best.amountIn
+      if (routed === 'superseded') return withState
+      if (routed) {
+        candidate = routed.quote.candidate
+        gasEstimate = routed.quote.gasEstimate
+        // Dependent amount: what this exact-out costs at the quoted price.
+        amountIn = routed.quote.amountOut
         amountOut = grossWanted
+        source = routed.source
+        provenance = routed.provenance
       }
       const probeIn = amountIn / 1000n
       spot = candidate

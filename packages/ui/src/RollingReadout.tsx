@@ -14,10 +14,12 @@ export interface RollingReadoutProps {
   readonly value: string
   readonly hero?: boolean
   readonly reducedMotion?: boolean
+  /** Spoken instead of `value` when the glyphs are a stand-in (hidden balances). */
+  readonly accessibilityLabel?: string
   readonly testID?: string
 }
 
-export function RollingReadout({ value, hero = false, reducedMotion = false, testID }: RollingReadoutProps) {
+export function RollingReadout({ value, hero = false, reducedMotion = false, accessibilityLabel, testID }: RollingReadoutProps) {
   const prev = useRef<string>(value)
   const changed = new Set<number>()
   if (prev.current !== value) {
@@ -29,7 +31,7 @@ export function RollingReadout({ value, hero = false, reducedMotion = false, tes
   }, [value])
 
   return (
-    <Row accessibilityLiveRegion="polite" accessibilityLabel={value} testID={testID}>
+    <Row accessibilityLiveRegion="polite" accessibilityLabel={accessibilityLabel ?? value} testID={testID}>
       {Array.from(value).map((ch, i) => {
         const roll = changed.has(i) && !reducedMotion
         return (

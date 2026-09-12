@@ -2,9 +2,11 @@
  * AmountWell — the one amount field (Send, Swap, Bridge): a label row with an
  * optional control at its right, the amount big and bare beside the token
  * pill, then what it is worth on the left and what you hold on the right
- * with a MAX key. A read-only well (what you receive) shows the amount as
- * a readout instead of a field. Every screen that takes an amount uses it,
- * so the eye learns the shape once.
+ * with a MAX key. A read-only well shows the amount as a readout instead of
+ * a field (Bridge's receive side). Swap's receive well is an input too —
+ * typing there is exact-output — and `disabled` is for the cases that input
+ * cannot honour (fee-on-transfer). Every screen that takes an amount uses
+ * it, so the eye learns the shape once.
  */
 import { Body, Column, Icon, Input, MaxKey, Plate, Row, paint, type IconName } from '@boltvault/ui'
 import { useState, type ReactNode } from 'react'
@@ -15,6 +17,12 @@ export interface AmountWellProps {
   readonly value: string
   readonly onChange?: (value: string) => void
   readonly readOnly?: boolean
+  /**
+   * The field stays an input so the well still looks like a well, but nothing
+   * can be typed. Swap uses this when a fee-on-transfer token cannot honour
+   * an exact output — the web interface disables the same panel.
+   */
+  readonly disabled?: boolean
   /** The token pill (or a chain select) at the amount's right. */
   readonly tokenPill?: ReactNode
   /** A control at the label row's right (a chain select, a percentage). */
@@ -66,7 +74,7 @@ export interface AmountWellProps {
   readonly balanceTestID?: string
 }
 
-export function AmountWell({ label, value, onChange, readOnly = false, tokenPill, right, fiat, balance, balanceIcon = 'wallet', onMax, error, accent, louder = false, autoFocus, testID, inputTestID, maxTestID, balanceTestID }: AmountWellProps) {
+export function AmountWell({ label, value, onChange, readOnly = false, disabled = false, tokenPill, right, fiat, balance, balanceIcon = 'wallet', onMax, error, accent, louder = false, autoFocus, testID, inputTestID, maxTestID, balanceTestID }: AmountWellProps) {
   const empty = !value || value === '0' || value === '—'
   const [pinStart, setPinStart] = useState(0)
   const fillMax = onMax
@@ -90,7 +98,7 @@ export function AmountWell({ label, value, onChange, readOnly = false, tokenPill
               {value || '0'}
             </Body>
           ) : (
-            <Input value={value} onChange={onChange} placeholder="0" bare big {...(louder ? { louder: true } : {})} numeric autoFocus={autoFocus} pinStart={pinStart} testID={inputTestID} />
+            <Input value={value} onChange={onChange} placeholder="0" bare big {...(louder ? { louder: true } : {})} numeric autoFocus={autoFocus} pinStart={pinStart} disabled={disabled} testID={inputTestID} />
           )}
         </Column>
         {tokenPill ?? null}
