@@ -202,7 +202,18 @@ export function toDecChainId(v: unknown): number {
 }
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/
-const HEX = /^0x[0-9a-fA-F]*$/
+/*
+  Two grammars, because JSON-RPC has two (ES-BV-021).
+
+  One regular expression stood in for both and admitted `0x` and odd-length
+  values everywhere — so `value: '0x'` and `data: '0xabc'` reached a sheet,
+  and `parseInt('0x', 16)` is `NaN` while half a byte of calldata is not
+  calldata at all. A QUANTITY (EIP-1474) needs at least one digit and may be
+  odd-length: `0x1` is one. DATA is whole bytes, and `0x` is a legitimate
+  empty one — a plain send has no calldata.
+*/
+const HEX_QUANTITY = /^0x[0-9a-fA-F]+$/
+const HEX_DATA = /^0x([0-9a-fA-F]{2})*$/
 
 function param(params: readonly unknown[], i: number): unknown {
   return params[i]
@@ -213,13 +224,27 @@ function requireAddress(v: unknown, what: string): Hex {
   throw new RpcError(RPC.INVALID_PARAMS, `${what} must be an address`)
 }
 
-function requireHex(v: unknown, what: string): Hex {
-  if (typeof v === 'string' && HEX.test(v)) return v as Hex
-  throw new RpcError(RPC.INVALID_PARAMS, `${what} must be hex`)
+function requireHash32(v: unknown, what: string): Hex {
+  if (typeof v === 'string' && /^0x[0-9a-fA-F]{64}$/.test(v)) return v as Hex
+  throw new RpcError(RPC.INVALID_PARAMS, `${what} must be a 32-byte hash`)
 }
 
-function optionalHex(v: unknown, what: string): Hex | undefined {
-  return v === undefined || v === null ? undefined : requireHex(v, what)
+function requireQuantity(v: unknown, what: string): Hex {
+  if (typeof v === 'string' && HEX_QUANTITY.test(v)) return v as Hex
+  throw new RpcError(RPC.INVALID_PARAMS, `${what} must be a hex quantity`)
+}
+
+function requireData(v: unknown, what: string): Hex {
+  if (typeof v === 'string' && HEX_DATA.test(v)) return v as Hex
+  throw new RpcError(RPC.INVALID_PARAMS, `${what} must be hex bytes`)
+}
+
+function optionalQuantity(v: unknown, what: string): Hex | undefined {
+  return v === undefined || v === null ? undefined : requireQuantity(v, what)
+}
+
+function optionalData(v: unknown, what: string): Hex | undefined {
+  return v === undefined || v === null ? undefined : requireData(v, what)
 }
 
 /** A leaky bucket per origin for SAFE traffic. */
@@ -696,8 +721,13 @@ export class RpcFlow {
             : [a, b]
         const fromHex = requireAddress(from, 'address')
         owns(fromHex)
+        /*
+          A hex message is whole bytes and is not empty (ES-BV-021). Anything
+          else is read as the text it is, which is what a page that sent a
+          half-byte actually meant.
+        */
         const msg =
-          typeof message === 'string' && HEX.test(message)
+          typeof message === 'string' && message.length > 2 && HEX_DATA.test(message)
             ? (bounded(message, MAX_MESSAGE_BYTES * 2, 'message') as Hex)
             : (`0x${utf8Hex(bounded(String(message), MAX_MESSAGE_BYTES, 'message'))}` as Hex)
         return {
@@ -719,7 +749,15 @@ export class RpcFlow {
           chainId,
           accountId: session?.accountId ?? '',
           from,
-          hash: requireHex(param(params, 1), 'data'),
+          /*
+            Thirty-two bytes, because that is what will be signed (ES-BV-021).
+
+            `eth_sign` signs the value as a hash with no prefix and no
+            structure. Anything of another length cannot be one, so raising a
+            sheet for it puts the most dangerous request in the wallet in front
+            of the user for something that can never be signed.
+          */
+          hash: requireHash32(param(params, 1), 'data'),
           clientRequestId,
         }
       }
@@ -763,37 +801,37 @@ export class RpcFlow {
           ...(t['to'] !== undefined && t['to'] !== null
             ? { to: requireAddress(t['to'], 'to') }
             : {}),
-          ...(optionalHex(t['value'], 'value') !== undefined
-            ? { value: optionalHex(t['value'], 'value') }
+          ...(optionalQuantity(t['value'], 'value') !== undefined
+            ? { value: optionalQuantity(t['value'], 'value') }
             : {}),
-          ...(optionalHex(t['data'] ?? t['input'], 'data') !== undefined
+          ...(optionalData(t['data'] ?? t['input'], 'data') !== undefined
             ? {
                 data: bounded(
-                  optionalHex(t['data'] ?? t['input'], 'data') as string,
+                  optionalData(t['data'] ?? t['input'], 'data') as string,
                   MAX_CALLDATA_BYTES * 2,
                   'calldata',
                 ) as Hex,
               }
             : {}),
-          ...(optionalHex(t['gas'], 'gas') !== undefined
-            ? { gas: optionalHex(t['gas'], 'gas') }
+          ...(optionalQuantity(t['gas'], 'gas') !== undefined
+            ? { gas: optionalQuantity(t['gas'], 'gas') }
             : {}),
-          ...(optionalHex(t['gasPrice'], 'gasPrice') !== undefined
-            ? { gasPrice: optionalHex(t['gasPrice'], 'gasPrice') }
+          ...(optionalQuantity(t['gasPrice'], 'gasPrice') !== undefined
+            ? { gasPrice: optionalQuantity(t['gasPrice'], 'gasPrice') }
             : {}),
-          ...(optionalHex(t['maxFeePerGas'], 'maxFeePerGas') !== undefined
-            ? { maxFeePerGas: optionalHex(t['maxFeePerGas'], 'maxFeePerGas') }
+          ...(optionalQuantity(t['maxFeePerGas'], 'maxFeePerGas') !== undefined
+            ? { maxFeePerGas: optionalQuantity(t['maxFeePerGas'], 'maxFeePerGas') }
             : {}),
-          ...(optionalHex(t['maxPriorityFeePerGas'], 'maxPriorityFeePerGas') !== undefined
+          ...(optionalQuantity(t['maxPriorityFeePerGas'], 'maxPriorityFeePerGas') !== undefined
             ? {
-                maxPriorityFeePerGas: optionalHex(
+                maxPriorityFeePerGas: optionalQuantity(
                   t['maxPriorityFeePerGas'],
                   'maxPriorityFeePerGas',
                 ),
               }
             : {}),
-          ...(optionalHex(t['nonce'], 'nonce') !== undefined
-            ? { nonce: optionalHex(t['nonce'], 'nonce') }
+          ...(optionalQuantity(t['nonce'], 'nonce') !== undefined
+            ? { nonce: optionalQuantity(t['nonce'], 'nonce') }
             : {}),
           ...(Array.isArray(t['authorizationList'])
             ? { authorizationList: t['authorizationList'] }

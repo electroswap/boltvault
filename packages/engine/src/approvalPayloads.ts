@@ -337,25 +337,56 @@ export function clampPerGas(tx: PreparedTx, chosen: bigint): bigint {
  * from the sheet, because the sheet is a page and this is the last place before
  * a signature.
  */
+/**
+ * What a replacement must beat, per fee field (ES-BV-025).
+ *
+ * A node evicts the transaction in its pool only for one paying at least
+ * 112.5 % of *its* fields. The intent builder already floors the replacement
+ * there, but the sheet's fee editor offered a band floored at half the node's
+ * suggestion — so the user could drag the price below the original, the node
+ * would answer "replacement transaction underpriced", and the replacement was
+ * recorded pending and then dropped while the original stayed where it was. A
+ * band that offers a choice which cannot work is not a choice.
+ */
+const REPLACEMENT_BUMP_NUM = 1125n
+const REPLACEMENT_BUMP_DEN = 1000n
+
+function bumped(previous: string | null | undefined): bigint {
+  if (typeof previous !== 'string' || previous === '') return 0n
+  try {
+    return (BigInt(previous) * REPLACEMENT_BUMP_NUM + REPLACEMENT_BUMP_DEN - 1n) / REPLACEMENT_BUMP_DEN
+  } catch {
+    return 0n
+  }
+}
+
 export function applyGasDecision(
   tx: PreparedTx,
   data: unknown,
+  /** The transaction being replaced, when this sheet is a speed-up or a cancel. */
+  replaces?: {
+    readonly maxFeePerGas?: string | null | undefined
+    readonly maxPriorityFeePerGas?: string | null | undefined
+    readonly gasPrice?: string | null | undefined
+  } | null,
 ): Pick<PreparedTx, 'maxFeePerGas' | 'maxPriorityFeePerGas' | 'gasPrice'> | null {
   const parsed = GasDecisionDataSchema.safeParse(data)
   if (!parsed.success) return null
   const choice = parsed.data
+  const atLeast = (wanted: bigint, floor: bigint): bigint => (wanted < floor ? floor : wanted)
   if (tx.type === 'eip1559') {
     if (choice.maxFeePerGas === undefined) return null
-    const max = clampPerGas(tx, BigInt(choice.maxFeePerGas))
+    const max = atLeast(clampPerGas(tx, BigInt(choice.maxFeePerGas)), bumped(replaces?.maxFeePerGas))
     // A tip is paid out of the ceiling it sits under, so it can never exceed it.
     const wanted =
       choice.maxPriorityFeePerGas !== undefined
         ? BigInt(choice.maxPriorityFeePerGas)
         : BigInt(tx.maxPriorityFeePerGas ?? '0x0')
-    return { maxFeePerGas: hexOf(max), maxPriorityFeePerGas: hexOf(wanted > max ? max : wanted) }
+    const tip = atLeast(wanted, bumped(replaces?.maxPriorityFeePerGas))
+    return { maxFeePerGas: hexOf(max), maxPriorityFeePerGas: hexOf(tip > max ? max : tip) }
   }
   if (choice.gasPrice === undefined) return null
-  return { gasPrice: hexOf(clampPerGas(tx, BigInt(choice.gasPrice))) }
+  return { gasPrice: hexOf(atLeast(clampPerGas(tx, BigInt(choice.gasPrice)), bumped(replaces?.gasPrice))) }
 }
 
 export function parseApprovalPayload(payload: unknown): ApprovalPayload | null {

@@ -175,6 +175,22 @@ export class DappsService {
     return [...this.sessions.values()].map((l) => l.view)
   }
 
+  /**
+   * How many live sessions this origin still has (ES-BV-031).
+   *
+   * The same site can be connected twice at once — an in-app browser tab and
+   * a WalletConnect pairing — and both share one per-origin site record. So
+   * rejecting a WalletConnect proposal, or the peer deleting its session, used
+   * to disconnect the browser tab standing next to it: the page lost its
+   * accounts, its pending approvals were refused, and it had to reconnect for
+   * something the user did somewhere else.
+   */
+  countFor(origin: string): number {
+    let n = 0
+    for (const l of this.sessions.values()) if (l.view.origin === origin) n += 1
+    return n
+  }
+
   dispose(): void {
     for (const id of [...this.sessions.keys()]) this.close({ sessionId: id })
   }

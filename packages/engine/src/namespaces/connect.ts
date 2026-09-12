@@ -251,7 +251,15 @@ export class ConnectService {
           .rejectSession({ id: proposal.id, reason: WC_REASON.userRejected })
           .catch(() => undefined)
       this.deps.dapps.close({ sessionId: dapp.sessionId })
-      await this.deps.sites.disconnect(dapp.origin).catch(() => undefined)
+      /*
+        Only when nothing else of this origin is still connected (ES-BV-031).
+
+        A site open in the in-app browser and paired over WalletConnect shares
+        one per-origin record, so disconnecting on a rejected proposal tore
+        down the browser tab standing next to it.
+      */
+      if (this.deps.dapps.countFor(dapp.origin) === 0)
+        await this.deps.sites.disconnect(dapp.origin).catch(() => undefined)
     } finally {
       this.proposals.delete(proposal.id)
       this.emit()
@@ -331,7 +339,10 @@ export class ConnectService {
     if (!l) return
     this.live.delete(topic)
     this.deps.dapps.close({ sessionId: l.sessionId })
-    await this.deps.sites.disconnect(l.origin).catch(() => undefined)
+    // The peer ended its own session; another transport of the same origin has
+    // not ended anything (ES-BV-031).
+    if (this.deps.dapps.countFor(l.origin) === 0)
+      await this.deps.sites.disconnect(l.origin).catch(() => undefined)
     // Last, and after the disconnect: forgetting where the session was is
     // bookkeeping, and nothing downstream waits on it.
     await this.deps.sessions?.delete(topic).catch(() => undefined)

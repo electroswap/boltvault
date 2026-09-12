@@ -50,6 +50,7 @@ export type RiskCode =
   | 'SIM_UNAVAILABLE'
   | 'FEE_EXCESSIVE'
   | 'NONCE_NOT_NEXT'
+  | 'GAS_BELOW_ESTIMATE'
   | 'FEE_SINK_MISMATCH'
   | 'FEE_TIER_MISMATCH'
   | 'WALLET_FEE_OVERCHARGE'
@@ -211,6 +212,12 @@ export interface AssessmentContext {
   readonly supplied?: {
     readonly perGas?: { readonly theirs: bigint; readonly node: bigint; readonly gasLimit: bigint }
     readonly nonce?: { readonly theirs: number; readonly next: number }
+    /**
+     * A gas limit the request named that the node's estimate says is too small
+     * (ES-BV-023). The call runs out of gas part-way: the state change is
+     * undone and the fee is paid anyway.
+     */
+    readonly gasLimit?: { readonly theirs: bigint; readonly estimate: bigint }
   } | null
   /**
    * The chain's native currency symbol (§8.14 Networks).

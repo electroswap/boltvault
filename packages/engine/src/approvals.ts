@@ -200,11 +200,34 @@ export class ApprovalStore {
           'This tab already has requests waiting for you. Answer or dismiss one first.',
         )
     }
-    if (external && this.list().length >= MAX_PENDING)
-      throw new EngineError(
-        'limit_exceeded',
-        'Too many requests are already waiting for you. Answer or dismiss one first.',
-      )
+    /*
+      A full queue gives up its oldest page request, it does not lock
+      (ES-BV-019).
+
+      Refusing the newest request is the wrong end to refuse: four attacker
+      tabs with two hidden requests each filled the queue and every *later*
+      request — including the one from the site the user is actually looking
+      at, and the wallet's own — was turned away for up to the approval TTL.
+      Evicting the oldest external one instead means the queue is a window on
+      the most recent asks rather than a first-come lock, and the evicted page
+      is told its request was dismissed, which is a thing pages already handle.
+    */
+    if (external) {
+      while (this.list().length >= MAX_PENDING) {
+        const oldest = this.list()
+          .filter((r) => r.status === 'pending' && !r.origin.startsWith('internal:'))
+          .sort((a, b) => a.createdAt - b.createdAt)[0]
+        // Nothing external left to give up: the queue is the user's own work,
+        // and a page does not get to push that out.
+        if (!oldest) {
+          throw new EngineError(
+            'limit_exceeded',
+            'Too many requests are already waiting for you. Answer or dismiss one first.',
+          )
+        }
+        await this.decide({ id: oldest.id, approve: false }).catch(() => undefined)
+      }
+    }
     const now = this.platform.now()
     const req: ApprovalRequest = {
       id: toHex(this.platform.random(16)),

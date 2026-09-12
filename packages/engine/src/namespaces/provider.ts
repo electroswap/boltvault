@@ -50,6 +50,7 @@ import {
 import {
   keccak256,
   parseUnits,
+  stringToHex,
   recoverAddress,
   recoverMessageAddress,
   recoverTransactionAddress,
@@ -338,7 +339,16 @@ function intentDigest(intent: ApprovalIntent): string {
       }
     }
   }
-  return [intent.kind, intent.chainId, accountId, from, params()].join('|')
+  /*
+    Hashed, not carried whole (ES-BV-020).
+
+    The digest is stored inside the approval payload, and it used to be the
+    canonical JSON of the request — so every signing payload was persisted
+    roughly twice, and a page's 128 KiB of calldata or typed data cost 256 KiB
+    of session storage. Its only job is to answer "is this the same request",
+    which thirty-two bytes does exactly as well.
+  */
+  return keccak256(stringToHex([intent.kind, intent.chainId, accountId, from, params()].join('|')))
 }
 
 /** JSON with object keys in a fixed order, so two equal requests digest alike. */
@@ -1338,6 +1348,10 @@ export class ProviderService {
           intent.replaces?.nonce !== parseInt(intent.tx.nonce, 16)
             ? { nonce: { theirs: parseInt(intent.tx.nonce, 16), next: prepared.nextNonce } }
             : {}),
+          // A limit the site chose that the node says will run out (ES-BV-023).
+          ...(prepared.belowEstimate
+            ? { gasLimit: { theirs: prepared.belowEstimate.supplied, estimate: prepared.belowEstimate.estimate } }
+            : {}),
         }
         const assessment = await this.assessment(
           intent.origin,
@@ -2109,7 +2123,13 @@ export class ProviderService {
   private async prepare(
     chainId: number,
     tx: TxParams,
-  ): Promise<{ tx: PreparedTx; estimateError: string | null; nextNonce: number }> {
+  ): Promise<{
+    tx: PreparedTx
+    estimateError: string | null
+    nextNonce: number
+    /** A gas limit the request named that the node's estimate says is too small (ES-BV-023). */
+    belowEstimate: { supplied: bigint; estimate: bigint } | null
+  }> {
     const rpc = (method: string, params: readonly unknown[]): Promise<unknown> =>
       this.deps.chains.rpc(chainId, method, params)
     const value = tx.value ?? '0x0'
@@ -2145,6 +2165,8 @@ export class ProviderService {
         : this.reserveNonce(chainId, tx.from, nextNonce)
     let gas: bigint
     let estimateError: string | null = null
+    /** Set when the request named a gas limit the node says is too small (ES-BV-023). */
+    let belowEstimate: { supplied: bigint; estimate: bigint } | null = null
     /*
       The revert check runs whether or not a limit was supplied.
 
@@ -2162,6 +2184,16 @@ export class ProviderService {
         ),
       )
       gas = tx.gas !== undefined ? BigInt(tx.gas) : (est * 12n) / 10n
+      /*
+        A supplied limit below the estimate buys a revert (ES-BV-023).
+
+        The node has just said how much gas this call needs and the page asked
+        for less, so it runs out mid-execution: the state change is undone and
+        the fee is paid anyway. The limit the page named is still what gets
+        signed — it may know something the estimator does not — but the sheet
+        stops reading clean about it.
+      */
+      if (tx.gas !== undefined && BigInt(tx.gas) < est) belowEstimate = { supplied: BigInt(tx.gas), estimate: est }
     } catch (err) {
       estimateError = err instanceof Error ? err.message : String(err)
       gas = tx.gas !== undefined ? BigInt(tx.gas) : data === '0x' && to ? 21_000n : 500_000n
@@ -2211,6 +2243,7 @@ export class ProviderService {
       },
       estimateError,
       nextNonce,
+      belowEstimate,
     }
   }
 
@@ -2322,7 +2355,9 @@ export class ProviderService {
           `prepare` runs before the approval exists, so a choice made on the
           sheet can only arrive this way.
         */
-        const fee = applyGasDecision(payload.tx, data)
+        // A replacement's floor is the transaction it replaces, not the band
+        // the editor drew (ES-BV-025).
+        const fee = applyGasDecision(payload.tx, data, payload.replaces ?? null)
         const tx = fee ? { ...payload.tx, ...fee } : payload.tx
         // Sign-and-return versus broadcast is a property of the approved
         // request, not of whatever re-sent it.

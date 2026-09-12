@@ -1455,6 +1455,32 @@ export const nonceNotNext: Rule = ({ request, context }) => {
   }
 }
 
+/**
+ * A gas limit the site chose that the node says is too small (ES-BV-023).
+ *
+ * `eth_estimateGas` has just answered with what the call needs and the site
+ * asked for less, so the call runs out of gas part-way through: the state
+ * change is undone and the fee is paid anyway. The wallet still signs the
+ * limit the site named — a site may know something an estimator does not —
+ * but the preview used to read completely clean, because the estimate was
+ * thrown away whenever a limit was supplied.
+ */
+export const gasBelowEstimate: Rule = ({ request, context, chainId }) => {
+  if (request.kind !== 'transaction') return null
+  const g = context.supplied?.gasLimit
+  if (!g || g.theirs >= g.estimate) return null
+  // The price per unit of gas the sheet is showing, where the context carries
+  // it: the fee wasted on a revert is that price times the limit.
+  const perGas = context.supplied?.perGas?.theirs ?? 0n
+  const wasted = g.theirs * perGas
+  return {
+    code: 'GAS_BELOW_ESTIMATE',
+    severity: 'warn',
+    title: 'This site set a gas limit that is too small',
+    detail: `It asked for ${g.theirs.toString()} gas where this call needs about ${g.estimate.toString()}. The transaction will run out part-way, undo itself, and still cost${wasted > 0n ? ` up to ${nativeText(chainId, wasted, context)}` : ''} in network fees.`,
+  }
+}
+
 export const chainMismatch: Rule = ({ request, chainId }) => {
   if (request.kind !== 'transaction') return null
   if (request.tx.chainId !== chainId)
@@ -1496,6 +1522,7 @@ export const ALL_RULES: readonly Rule[] = [
   swapMinOutImplausible,
   feeExcessive,
   nonceNotNext,
+  gasBelowEstimate,
   multicallOpaque,
   unknownFunction,
   newContract,
