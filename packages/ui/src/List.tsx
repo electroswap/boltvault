@@ -4,5 +4,9 @@
  * web through react-native-web); FlashList can replace the native side later
  * without touching a screen.
  */
-export { FlatList as List, type FlatListProps as ListProps, type ListRenderItemInfo } from 'react-native'
+export {
+  FlatList as List,
+  type FlatListProps as ListProps,
+  type ListRenderItemInfo,
+} from 'react-native'
 export { Pressable, ScrollView, type ScrollViewProps, useWindowDimensions } from 'react-native'

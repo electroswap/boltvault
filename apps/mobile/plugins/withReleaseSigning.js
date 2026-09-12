@@ -85,7 +85,14 @@ function applyToBuildGradle(contents) {
   // types; only the one inside `release { … }` is ours to change.
   const release = out.indexOf('release {')
   if (release >= 0) {
-    out = out.slice(0, release) + out.slice(release).replace('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.boltvaultRelease')
+    out =
+      out.slice(0, release) +
+      out
+        .slice(release)
+        .replace(
+          'signingConfig signingConfigs.debug',
+          'signingConfig signingConfigs.boltvaultRelease',
+        )
   }
   return out + RELEASE_GUARD
 }

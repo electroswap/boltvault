@@ -39,7 +39,15 @@ export interface IntroArtProps {
   readonly testID?: string
 }
 
-const FILL = { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' } as const
+const FILL = {
+  position: 'absolute',
+  left: 0,
+  top: 0,
+  right: 0,
+  bottom: 0,
+  alignItems: 'center',
+  justifyContent: 'center',
+} as const
 
 /** A gentle catenary between two points — light hangs, it does not travel in straight lines. */
 function sag(x1: number, y1: number, x2: number, y2: number, drop: number): string {
@@ -61,16 +69,35 @@ function Orbit({ s, index, still }: { s: number; index: number; still: boolean }
   const c = s / 2
   const ring = (
     <Svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} pointerEvents="none">
-      <Circle cx={c} cy={s * 0.45} r={s * o.r} fill="none" stroke={o.colour} strokeOpacity={o.opacity} strokeWidth={1.1} strokeDasharray={`${s * o.dash} ${s * 0.34}`} strokeLinecap="round" transform={`rotate(${-28 + index * 47} ${c} ${s * 0.45})`} />
+      <Circle
+        cx={c}
+        cy={s * 0.45}
+        r={s * o.r}
+        fill="none"
+        stroke={o.colour}
+        strokeOpacity={o.opacity}
+        strokeWidth={1.1}
+        strokeDasharray={`${s * o.dash} ${s * 0.34}`}
+        strokeLinecap="round"
+        transform={`rotate(${-28 + index * 47} ${c} ${s * 0.45})`}
+      />
     </Svg>
   )
-  if (still) return <View style={FILL} pointerEvents="none">{ring}</View>
+  if (still)
+    return (
+      <View style={FILL} pointerEvents="none">
+        {ring}
+      </View>
+    )
   return (
     <Animated.View
       pointerEvents="none"
       style={{
         ...FILL,
-        animationName: { from: { transform: [{ rotate: '0deg' }] }, to: { transform: [{ rotate: o.reverse ? '-360deg' : '360deg' }] } },
+        animationName: {
+          from: { transform: [{ rotate: '0deg' }] },
+          to: { transform: [{ rotate: o.reverse ? '-360deg' : '360deg' }] },
+        },
         animationDuration: `${o.spin}ms`,
         animationTimingFunction: 'linear',
         animationIterationCount: 'infinite',
@@ -90,7 +117,12 @@ function CoreLight({ s, still }: { s: number; still: boolean }) {
       <Circle cx={c} cy={s * 0.45} r={s * 0.045} fill={light.core} fillOpacity={0.9} />
     </Svg>
   )
-  if (still) return <View style={FILL} pointerEvents="none">{light1}</View>
+  if (still)
+    return (
+      <View style={FILL} pointerEvents="none">
+        {light1}
+      </View>
+    )
   return (
     <Animated.View
       pointerEvents="none"
@@ -152,8 +184,14 @@ function Packet({ s, index }: { s: number; index: number }) {
         backgroundColor: light.core,
         animationName: {
           from: { opacity: 0, transform: [{ translateX: 0 }, { translateY: 0 }, { scale: 0.5 }] },
-          '15%': { opacity: 1, transform: [{ translateX: dx * 0.15 }, { translateY: dy * 0.15 }, { scale: 1 }] },
-          '70%': { opacity: 0.9, transform: [{ translateX: dx * 0.7 }, { translateY: dy * 0.7 }, { scale: 1 }] },
+          '15%': {
+            opacity: 1,
+            transform: [{ translateX: dx * 0.15 }, { translateY: dy * 0.15 }, { scale: 1 }],
+          },
+          '70%': {
+            opacity: 0.9,
+            transform: [{ translateX: dx * 0.7 }, { translateY: dy * 0.7 }, { scale: 1 }],
+          },
           to: { opacity: 0, transform: [{ translateX: dx }, { translateY: dy }, { scale: 0.6 }] },
         },
         animationDuration: `${1500 + (index % 4) * 260}ms`,
@@ -226,8 +264,15 @@ export function IntroArt({ slide, size, reducedMotion = false, testID }: IntroAr
               entering or leaving it — no padlock, no keyhole. The orbits are
               layers above this one so each can turn at its own rate.
             */}
-            <Path d={`M${c} ${s * 0.2} L${c + s * 0.17} ${s * 0.45} L${c} ${s * 0.7} L${c - s * 0.17} ${s * 0.45} Z`} fill={`url(#ia-face-${slide})`} />
-            <Path d={`M${c} ${s * 0.2} L${c + s * 0.17} ${s * 0.45} L${c} ${s * 0.7} Z`} fill={paint.void} fillOpacity={0.32} />
+            <Path
+              d={`M${c} ${s * 0.2} L${c + s * 0.17} ${s * 0.45} L${c} ${s * 0.7} L${c - s * 0.17} ${s * 0.45} Z`}
+              fill={`url(#ia-face-${slide})`}
+            />
+            <Path
+              d={`M${c} ${s * 0.2} L${c + s * 0.17} ${s * 0.45} L${c} ${s * 0.7} Z`}
+              fill={paint.void}
+              fillOpacity={0.32}
+            />
             <Path
               d={`M${c} ${s * 0.2} L${c + s * 0.17} ${s * 0.45} L${c} ${s * 0.7} L${c - s * 0.17} ${s * 0.45} Z M${c} ${s * 0.2} L${c} ${s * 0.7}`}
               fill="none"
@@ -249,11 +294,43 @@ export function IntroArt({ slide, size, reducedMotion = false, testID }: IntroAr
               const glow = i === 0 ? light.core : light.arc
               return (
                 <G key={`${x}-${y}`}>
-                  {i > 0 ? <Path d={sag(s * 0.5, s * 0.44, nx, ny, s * (0.05 + (i % 3) * 0.02))} fill="none" stroke={light.plasma} strokeOpacity={0.1 + near * 0.14} strokeWidth={s * 0.018} strokeLinecap="round" /> : null}
-                  {i > 0 ? <Path d={sag(s * 0.5, s * 0.44, nx, ny, s * (0.05 + (i % 3) * 0.02))} fill="none" stroke={light.arc} strokeOpacity={0.25 + near * 0.5} strokeWidth={1.1} strokeLinecap="round" /> : null}
-                  <Circle cx={nx} cy={ny} r={s * r * 2.1} fill={light.plasma} fillOpacity={0.06 + near * 0.06} />
+                  {i > 0 ? (
+                    <Path
+                      d={sag(s * 0.5, s * 0.44, nx, ny, s * (0.05 + (i % 3) * 0.02))}
+                      fill="none"
+                      stroke={light.plasma}
+                      strokeOpacity={0.1 + near * 0.14}
+                      strokeWidth={s * 0.018}
+                      strokeLinecap="round"
+                    />
+                  ) : null}
+                  {i > 0 ? (
+                    <Path
+                      d={sag(s * 0.5, s * 0.44, nx, ny, s * (0.05 + (i % 3) * 0.02))}
+                      fill="none"
+                      stroke={light.arc}
+                      strokeOpacity={0.25 + near * 0.5}
+                      strokeWidth={1.1}
+                      strokeLinecap="round"
+                    />
+                  ) : null}
+                  <Circle
+                    cx={nx}
+                    cy={ny}
+                    r={s * r * 2.1}
+                    fill={light.plasma}
+                    fillOpacity={0.06 + near * 0.06}
+                  />
                   <Circle cx={nx} cy={ny} r={s * r} fill={glow} fillOpacity={0.35 + near * 0.55} />
-                  <Circle cx={nx} cy={ny} r={s * r} fill="none" stroke={light.core} strokeOpacity={near * 0.6} strokeWidth={0.9} />
+                  <Circle
+                    cx={nx}
+                    cy={ny}
+                    r={s * r}
+                    fill="none"
+                    stroke={light.core}
+                    strokeOpacity={near * 0.6}
+                    strokeWidth={0.9}
+                  />
                 </G>
               )
             })}

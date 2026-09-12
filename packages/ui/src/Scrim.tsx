@@ -41,11 +41,21 @@ export function Scrim({ width, height, strength = 0.92, edge = 'bottom', testID 
   const id = `scrim-${useId().replace(/:/g, '')}`
   const solid = edge === 'top'
   return (
-    <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} testID={testID} pointerEvents="none">
+    <Svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      testID={testID}
+      pointerEvents="none"
+    >
       <Defs>
         <LinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
           <Stop offset="0" stopColor={paint.void} stopOpacity={solid ? strength : 0} />
-          <Stop offset={solid ? 0.45 : 0.55} stopColor={paint.void} stopOpacity={strength * (solid ? 0.32 : 0.55)} />
+          <Stop
+            offset={solid ? 0.45 : 0.55}
+            stopColor={paint.void}
+            stopOpacity={strength * (solid ? 0.32 : 0.55)}
+          />
           <Stop offset="1" stopColor={paint.void} stopOpacity={solid ? 0 : strength} />
         </LinearGradient>
       </Defs>

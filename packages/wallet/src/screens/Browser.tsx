@@ -6,7 +6,20 @@
  * origins never load; an SPA route change that dropped the provider gets it
  * re-injected.
  */
-import { Body, Chip, Column, Icon, Input, Key, Plate, Row, WebView, metrics, paint, type WebViewHandle } from '@boltvault/ui'
+import {
+  Body,
+  Chip,
+  Column,
+  Icon,
+  Input,
+  Key,
+  Plate,
+  Row,
+  WebView,
+  metrics,
+  paint,
+  type WebViewHandle,
+} from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
 import type { DappSession } from '@boltvault/engine'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -40,13 +53,25 @@ function normalise(input: string): string {
   return `https://duckduckgo.com/?q=${encodeURIComponent(s)}`
 }
 
-export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | 'extension-tab' | 'mobile'; url?: string }) {
+export function Browser({
+  body,
+  url: initialUrl,
+}: {
+  body: 'extension-popup' | 'extension-tab' | 'mobile'
+  url?: string
+}) {
   const engine = useEngine()
   const host = useHost()
   const router = useRouter()
   const [typed, setTyped] = useState(initialUrl ?? HOME)
   const [url, setUrl] = useState(initialUrl ?? HOME)
-  const [nav, setNav] = useState({ url: initialUrl ?? HOME, canGoBack: false, canGoForward: false, loading: false, title: '' })
+  const [nav, setNav] = useState({
+    url: initialUrl ?? HOME,
+    canGoBack: false,
+    canGoForward: false,
+    loading: false,
+    title: '',
+  })
   /*
     True from the moment a navigation begins until one commits. A page may
     start a navigation to any origin and cancel it while staying loaded, so in
@@ -57,7 +82,11 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
   const [session, setSession] = useState<DappSession | null>(null)
   const [error, setError] = useState<string | null>(null)
   const handle = useRef<WebViewHandle | null>(null)
-  const channel = useRef(Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join(''))
+  const channel = useRef(
+    Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) =>
+      b.toString(16).padStart(2, '0'),
+    ).join(''),
+  )
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
 
   // One session per committed origin; the engine refuses anything that is not http(s).
@@ -69,13 +98,20 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
       return
     }
     // Only a page the OS actually fetched over TLS is vouched for.
-    engine.dapps.open({ url: origin, kind: 'webview', verified: origin.startsWith('https://'), channel: channel.current }).then(
-      (s) => {
-        if (alive) setSession(s)
-        else void engine.dapps.close({ sessionId: s.sessionId })
-      },
-      (err: unknown) => alive && setError(err instanceof Error ? err.message : String(err)),
-    )
+    engine.dapps
+      .open({
+        url: origin,
+        kind: 'webview',
+        verified: origin.startsWith('https://'),
+        channel: channel.current,
+      })
+      .then(
+        (s) => {
+          if (alive) setSession(s)
+          else void engine.dapps.close({ sessionId: s.sessionId })
+        },
+        (err: unknown) => alive && setError(err instanceof Error ? err.message : String(err)),
+      )
     return () => {
       alive = false
     }
@@ -92,22 +128,51 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
     () =>
       engine.events.subscribe((e) => {
         if (e.type !== 'dapp.event' || e.sessionId !== session?.sessionId) return
-        handle.current?.postMessage(JSON.stringify({ target: CONTENT_TARGET, channel: channel.current, kind: 'event', event: e.event, payload: e.payload }))
+        handle.current?.postMessage(
+          JSON.stringify({
+            target: CONTENT_TARGET,
+            channel: channel.current,
+            kind: 'event',
+            event: e.event,
+            payload: e.payload,
+          }),
+        )
       }),
     [engine, session],
   )
 
   const onMessage = useCallback(
     (raw: string, frameUrl: string | null) => {
-      let data: { target?: unknown; channel?: unknown; id?: unknown; method?: unknown; params?: unknown }
+      let data: {
+        target?: unknown
+        channel?: unknown
+        id?: unknown
+        method?: unknown
+        params?: unknown
+      }
       try {
         data = JSON.parse(raw) as typeof data
       } catch {
         return
       }
-      if (data.target !== INPAGE_TARGET || data.channel !== channel.current || typeof data.id !== 'number' || typeof data.method !== 'string') return
+      if (
+        data.target !== INPAGE_TARGET ||
+        data.channel !== channel.current ||
+        typeof data.id !== 'number' ||
+        typeof data.method !== 'string'
+      )
+        return
       const id = data.id
-      const reply = (message: Record<string, unknown>): void => handle.current?.postMessage(JSON.stringify({ target: CONTENT_TARGET, channel: channel.current, kind: 'response', id, ...message }))
+      const reply = (message: Record<string, unknown>): void =>
+        handle.current?.postMessage(
+          JSON.stringify({
+            target: CONTENT_TARGET,
+            channel: channel.current,
+            kind: 'response',
+            id,
+            ...message,
+          }),
+        )
       if (!session) {
         reply({ error: { code: 4900, message: 'Not connected.' } })
         return
@@ -125,10 +190,21 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
         reply({ error: { code: 4900, message: 'Not connected.' } })
         return
       }
-      engine.dapps.request({ sessionId: session.sessionId, channel: channel.current, id, method: data.method, ...(data.params !== undefined ? { params: data.params } : {}) }).then(
-        (r) => reply(r.error ? { error: r.error } : { result: r.result ?? null }),
-        (err: unknown) => reply({ error: { code: -32603, message: err instanceof Error ? err.message : 'failed' } }),
-      )
+      engine.dapps
+        .request({
+          sessionId: session.sessionId,
+          channel: channel.current,
+          id,
+          method: data.method,
+          ...(data.params !== undefined ? { params: data.params } : {}),
+        })
+        .then(
+          (r) => reply(r.error ? { error: r.error } : { result: r.result ?? null }),
+          (err: unknown) =>
+            reply({
+              error: { code: -32603, message: err instanceof Error ? err.message : 'failed' },
+            }),
+        )
     },
     [engine, session],
   )
@@ -136,7 +212,9 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
   const script = `window.__BV_CHANNEL=${JSON.stringify(channel.current)};${host.browser?.providerScript ?? ''}`
   // An SPA route change on iOS can drop the early injection: check on every load end and re-inject (§5.3).
   const reinject = useCallback(() => {
-    handle.current?.injectJavaScript(`(function(){ if (!(window.ethereum && window.ethereum.isBoltVault)) { ${script} } })(); true;`)
+    handle.current?.injectJavaScript(
+      `(function(){ if (!(window.ethereum && window.ethereum.isBoltVault)) { ${script} } })(); true;`,
+    )
   }, [script])
 
   const go = (): void => {
@@ -151,8 +229,19 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
       <Column flex={1} padding={inset} gap="$3" testID="browser">
         <PageHeader title={t({ id: 'browser.title', message: 'Browser' })} />
         <Plate gap="$2">
-          <Body tone="mute">{t({ id: 'browser.web', message: 'The in-app browser is a phone feature. In the browser extension, BoltVault is already in every tab — open the site and connect from there.' })}</Body>
-          <Key label={t({ id: 'browser.open', message: 'Open app.electroswap.io' })} kind="secondary" onPress={() => void host.openUrl?.(HOME)} testID="browser-open" />
+          <Body tone="mute">
+            {t({
+              id: 'browser.web',
+              message:
+                'The in-app browser is a phone feature. In the browser extension, BoltVault is already in every tab — open the site and connect from there.',
+            })}
+          </Body>
+          <Key
+            label={t({ id: 'browser.open', message: 'Open app.electroswap.io' })}
+            kind="secondary"
+            onPress={() => void host.openUrl?.(HOME)}
+            testID="browser-open"
+          />
         </Plate>
       </Column>
     )
@@ -161,11 +250,22 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
   return (
     <Column flex={1} testID="browser">
       <Row gap="$2" padding={metrics.inset} paddingBottom={8} alignItems="center">
-        <Key label="" kind="secondary" onPress={() => (nav.canGoBack ? handle.current?.goBack() : router.back())} icon={<Icon name="back" size={18} color={paint.ink} />} testID="browser-back" />
+        <Key
+          label=""
+          kind="secondary"
+          onPress={() => (nav.canGoBack ? handle.current?.goBack() : router.back())}
+          icon={<Icon name="back" size={18} color={paint.ink} />}
+          testID="browser-back"
+        />
         <Column flex={1}>
           <Input value={typed} onChange={setTyped} placeholder="https://" testID="browser-url" />
         </Column>
-        <Key label={t({ id: 'browser.go', message: 'Go' })} kind="secondary" onPress={go} testID="browser-go" />
+        <Key
+          label={t({ id: 'browser.go', message: 'Go' })}
+          kind="secondary"
+          onPress={go}
+          testID="browser-go"
+        />
       </Row>
       <Row gap="$2" paddingHorizontal={metrics.inset} paddingBottom={8} alignItems="center">
         <Chip>
@@ -182,7 +282,13 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
             {nav.title}
           </Body>
         ) : null}
-        <Chip onPress={() => handle.current?.reload()} cursor="pointer" minHeight={44} justifyContent="center" testID="browser-reload">
+        <Chip
+          onPress={() => handle.current?.reload()}
+          cursor="pointer"
+          minHeight={44}
+          justifyContent="center"
+          testID="browser-reload"
+        >
           <Icon name="refresh" size={16} color={paint.mute} />
         </Chip>
       </Row>

@@ -38,13 +38,33 @@ export interface BusBarProps {
   readonly testID?: string
 }
 
-export function BusBar({ chainId, address, symbol, amount, value, change, share, logoUri, selected, mark, chainBadge = false, variant = 'bar', onPress, testID }: BusBarProps) {
+export function BusBar({
+  chainId,
+  address,
+  symbol,
+  amount,
+  value,
+  change,
+  share,
+  logoUri,
+  selected,
+  mark,
+  chainBadge = false,
+  variant = 'bar',
+  onPress,
+  testID,
+}: BusBarProps) {
   const card = variant === 'card'
   const up = change?.startsWith('+')
   const down = change?.startsWith('-') || change?.startsWith('−')
   const width = `${Math.max(0, Math.min(1, share)) * 100}%` as const
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${amount} ${symbol}${value ? `, ${value}` : ''}`} testID={testID}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${amount} ${symbol}${value ? `, ${value}` : ''}`}
+      testID={testID}
+    >
       <Column
         height={card ? 56 : metrics.busBar}
         justifyContent="center"
@@ -58,7 +78,13 @@ export function BusBar({ chainId, address, symbol, amount, value, change, share,
           {/* The chain rides on the token's own mark rather than taking a column:
               it qualifies the logo, and a row this size has no width to spare. */}
           <View>
-            <TokenAvatar chainId={chainId} address={address} symbol={symbol} logoUri={logoUri} size={32} />
+            <TokenAvatar
+              chainId={chainId}
+              address={address}
+              symbol={symbol}
+              logoUri={logoUri}
+              size={32}
+            />
             {chainBadge ? (
               <View style={{ position: 'absolute', right: -3, bottom: -3 }} pointerEvents="none">
                 <ChainMark chainId={chainId} size={15} ring />
@@ -95,8 +121,27 @@ export function BusBar({ chainId, address, symbol, amount, value, change, share,
             </Row>
           </Column>
         </Row>
-        <View style={{ position: 'absolute', left: 56, right: 12, bottom: 4, height: 2, borderRadius: 1, backgroundColor: edge }} pointerEvents="none">
-          <View style={{ width, height: 2, borderRadius: 1, overflow: 'hidden', opacity: selected ? 1 : 0.75 }}>
+        <View
+          style={{
+            position: 'absolute',
+            left: 56,
+            right: 12,
+            bottom: 4,
+            height: 2,
+            borderRadius: 1,
+            backgroundColor: edge,
+          }}
+          pointerEvents="none"
+        >
+          <View
+            style={{
+              width,
+              height: 2,
+              borderRadius: 1,
+              overflow: 'hidden',
+              opacity: selected ? 1 : 0.75,
+            }}
+          >
             <CurrentFill radius={1} />
           </View>
         </View>

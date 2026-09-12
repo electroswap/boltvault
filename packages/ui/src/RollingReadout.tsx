@@ -17,7 +17,12 @@ export interface RollingReadoutProps {
   readonly testID?: string
 }
 
-export function RollingReadout({ value, hero = false, reducedMotion = false, testID }: RollingReadoutProps) {
+export function RollingReadout({
+  value,
+  hero = false,
+  reducedMotion = false,
+  testID,
+}: RollingReadoutProps) {
   const prev = useRef<string>(value)
   const changed = new Set<number>()
   if (prev.current !== value) {
@@ -38,7 +43,10 @@ export function RollingReadout({ value, hero = false, reducedMotion = false, tes
             style={
               roll
                 ? {
-                    animationName: { from: { opacity: 0.2, transform: [{ translateY: -8 }] }, to: { opacity: 1, transform: [{ translateY: 0 }] } },
+                    animationName: {
+                      from: { opacity: 0.2, transform: [{ translateY: -8 }] },
+                      to: { opacity: 1, transform: [{ translateY: 0 }] },
+                    },
                     animationDuration: `${motion.roll}ms`,
                     animationTimingFunction: 'ease-out',
                     animationFillMode: 'forwards',

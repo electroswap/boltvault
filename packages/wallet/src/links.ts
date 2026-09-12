@@ -11,9 +11,24 @@ const Address = z.string().regex(/^0x[0-9a-fA-F]{40}$/)
 
 export type LinkAction =
   | { readonly kind: 'wc'; readonly uri: string }
-  | { readonly kind: 'launchpad'; readonly pool: string; readonly referrer: string | null; readonly url: string }
-  | { readonly kind: 'pay'; readonly to: string; readonly chainId: number | null; readonly token: string | null; readonly amount: string | null }
-  | { readonly kind: 'screen'; readonly screen: 'home' | 'swap' | 'explore' | 'activity' | 'bridge' | 'receive' | 'browser'; readonly url?: string }
+  | {
+      readonly kind: 'launchpad'
+      readonly pool: string
+      readonly referrer: string | null
+      readonly url: string
+    }
+  | {
+      readonly kind: 'pay'
+      readonly to: string
+      readonly chainId: number | null
+      readonly token: string | null
+      readonly amount: string | null
+    }
+  | {
+      readonly kind: 'screen'
+      readonly screen: 'home' | 'swap' | 'explore' | 'activity' | 'bridge' | 'receive' | 'browser'
+      readonly url?: string
+    }
 
 function query(u: URL): Record<string, string> {
   const out: Record<string, string> = {}
@@ -21,11 +36,22 @@ function query(u: URL): Record<string, string> {
   return out
 }
 
-function payFrom(to: string, chainId: number | null, q: Record<string, string>, token: string | null): LinkAction | null {
+function payFrom(
+  to: string,
+  chainId: number | null,
+  q: Record<string, string>,
+  token: string | null,
+): LinkAction | null {
   const parsedTo = Address.safeParse(to)
   if (!parsedTo.success) return null
   const amount = q['amount'] ?? q['value'] ?? q['uint256'] ?? null
-  return { kind: 'pay', to: parsedTo.data, chainId, token, amount: amount && /^[0-9.]+$/.test(amount) ? amount : null }
+  return {
+    kind: 'pay',
+    to: parsedTo.data,
+    chainId,
+    token,
+    amount: amount && /^[0-9.]+$/.test(amount) ? amount : null,
+  }
 }
 
 /** EIP-681: `ethereum:0xTo@52014?value=…` or `ethereum:0xToken@52014/transfer?address=0xTo&uint256=…`. */
@@ -60,7 +86,9 @@ export function parseLink(raw: string): LinkAction | null {
   const isUniversal = u.protocol === 'https:' && u.host === UNIVERSAL_HOST
   if (!isApp && !isUniversal) return null
   // boltvault://wc?uri=…  →  host "wc"; https://wallet.electroswap.io/wc?uri=…  →  path "/wc"
-  const segments = (isApp ? [u.host, ...u.pathname.split('/')] : u.pathname.split('/')).filter(Boolean)
+  const segments = (isApp ? [u.host, ...u.pathname.split('/')] : u.pathname.split('/')).filter(
+    Boolean,
+  )
   const [head, second] = segments
   const q = query(u)
   switch (head) {
@@ -83,7 +111,12 @@ export function parseLink(raw: string): LinkAction | null {
       return { kind: 'launchpad', pool: pool.data, referrer: ref.success ? ref.data : null, url: s }
     }
     case 'pay':
-      return payFrom(q['to'] ?? '', q['chainId'] ? Number(q['chainId']) : null, q, q['token'] ?? null)
+      return payFrom(
+        q['to'] ?? '',
+        q['chainId'] ? Number(q['chainId']) : null,
+        q,
+        q['token'] ?? null,
+      )
     case 'swap':
     case 'explore':
     case 'activity':

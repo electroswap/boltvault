@@ -11,7 +11,20 @@
  * signing, which is where it used to appear. Send offers what is saved here as
  * chips, plus the addresses you used recently, and never asks for a word.
  */
-import { Body, Column, Icon, IconButton, Input, Key, Plate, Row, ScrollView, metrics, paint, shortAddress } from '@boltvault/ui'
+import {
+  Body,
+  Column,
+  Icon,
+  IconButton,
+  Input,
+  Key,
+  Plate,
+  Row,
+  ScrollView,
+  metrics,
+  paint,
+  shortAddress,
+} from '@boltvault/ui'
 import type { ContactView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { PageHeader } from '../components/PageHeader'
@@ -33,13 +46,18 @@ export function AddressBook({ body }: { body: 'extension-popup' | 'extension-tab
     engine.contacts.list().then(setContacts, () => undefined)
   }, [engine])
 
-  const looksLikeAddress = /^0x[0-9a-fA-F]{40}$/.test(address.trim()) || /\.etn$/i.test(address.trim())
+  const looksLikeAddress =
+    /^0x[0-9a-fA-F]{40}$/.test(address.trim()) || /\.etn$/i.test(address.trim())
 
   const add = async (): Promise<void> => {
     setBusy(true)
     setError(null)
     try {
-      const c = await engine.contacts.add({ address: address.trim(), label: label.trim(), chainId: ETN })
+      const c = await engine.contacts.add({
+        address: address.trim(),
+        label: label.trim(),
+        chainId: ETN,
+      })
       setContacts((cs) => [...cs, c])
       setLabel('')
       setAddress('')
@@ -69,17 +87,43 @@ export function AddressBook({ body }: { body: 'extension-popup' | 'extension-tab
       <Plate gap="$3" testID="book-add">
         <Body size="title">{t({ id: 'book.add', message: 'Save an address' })}</Body>
         <Body tone="mute" size="caption">
-          {t({ id: 'book.add.hint', message: 'A name you will recognise later. Saved addresses appear as chips on the Send screen.' })}
+          {t({
+            id: 'book.add.hint',
+            message:
+              'A name you will recognise later. Saved addresses appear as chips on the Send screen.',
+          })}
         </Body>
-        <Input value={label} onChange={setLabel} placeholder={t({ id: 'book.name.ph', message: 'Name' })} testID="book-name" />
-        <Input value={address} onChange={setAddress} placeholder={t({ id: 'book.address.ph', message: '0x… or name.etn' })} autoCapitalize="none" testID="book-address" />
+        <Input
+          value={label}
+          onChange={setLabel}
+          placeholder={t({ id: 'book.name.ph', message: 'Name' })}
+          testID="book-name"
+        />
+        <Input
+          value={address}
+          onChange={setAddress}
+          placeholder={t({ id: 'book.address.ph', message: '0x… or name.etn' })}
+          autoCapitalize="none"
+          testID="book-address"
+        />
         {error ? <Body tone="burn">{error}</Body> : null}
-        <Key label={t({ id: 'save', message: 'Save' })} kind="secondary" disabled={busy || !label.trim() || !looksLikeAddress} onPress={() => void add()} testID="book-save" />
+        <Key
+          label={t({ id: 'save', message: 'Save' })}
+          kind="secondary"
+          disabled={busy || !label.trim() || !looksLikeAddress}
+          onPress={() => void add()}
+          testID="book-save"
+        />
       </Plate>
 
       {contacts.length === 0 ? (
         <Plate gap="$2" testID="book-empty">
-          <Body tone="mute">{t({ id: 'book.none', message: 'Nothing saved yet. Send still offers the addresses you used recently.' })}</Body>
+          <Body tone="mute">
+            {t({
+              id: 'book.none',
+              message: 'Nothing saved yet. Send still offers the addresses you used recently.',
+            })}
+          </Body>
         </Plate>
       ) : (
         <Plate gap="$3" testID="book-list">
@@ -95,7 +139,12 @@ export function AddressBook({ body }: { body: 'extension-popup' | 'extension-tab
                   {c.confirmed ? <Icon name="check" size={12} color={paint.surge} /> : null}
                 </Row>
               </Column>
-              <IconButton icon="trash" label={t({ id: 'book.remove', message: 'Remove {n}', values: { n: c.label } })} onPress={() => void remove(c.id)} testID={`book-remove-${c.id}`} />
+              <IconButton
+                icon="trash"
+                label={t({ id: 'book.remove', message: 'Remove {n}', values: { n: c.label } })}
+                onPress={() => void remove(c.id)}
+                testID={`book-remove-${c.id}`}
+              />
             </Row>
           ))}
         </Plate>

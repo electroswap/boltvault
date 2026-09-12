@@ -40,7 +40,18 @@ export interface SheetProps {
   readonly testID?: string
 }
 
-export function Sheet({ open, onClose, title, children, header, footer, scroll = true, quiet = false, reducedMotion = false, testID }: SheetProps) {
+export function Sheet({
+  open,
+  onClose,
+  title,
+  children,
+  header,
+  footer,
+  scroll = true,
+  quiet = false,
+  reducedMotion = false,
+  testID,
+}: SheetProps) {
   const insets = useInsets()
   const keyboard = useKeyboardHeight()
   // Android's back button dismisses the newest thing on screen, and that is a
@@ -59,29 +70,60 @@ export function Sheet({ open, onClose, title, children, header, footer, scroll =
   return (
     <Animated.View
       style={[
-        { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 10, justifyContent: 'flex-end', paddingBottom: keyboard, backgroundColor: quiet ? 'rgba(3, 4, 14, 0.88)' : 'rgba(3, 4, 14, 0.62)' },
+        {
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: 0,
+          bottom: 0,
+          zIndex: 10,
+          justifyContent: 'flex-end',
+          paddingBottom: keyboard,
+          backgroundColor: quiet ? 'rgba(3, 4, 14, 0.88)' : 'rgba(3, 4, 14, 0.62)',
+        },
         still
           ? null
-          : { animationName: { from: { opacity: 0 }, to: { opacity: 1 } }, animationDuration: `${motion.sheet}ms`, animationFillMode: 'forwards' },
+          : {
+              animationName: { from: { opacity: 0 }, to: { opacity: 1 } },
+              animationDuration: `${motion.sheet}ms`,
+              animationFillMode: 'forwards',
+            },
       ]}
       testID={testID}
     >
       <Pressable onPress={onClose} accessibilityLabel="Close" style={{ flex: 1 }} />
       <Animated.View
         style={[
-          { backgroundColor: paint.sheet, borderTopLeftRadius: radius.console, borderTopRightRadius: radius.console, maxHeight: '88%', overflow: 'hidden', flexDirection: 'column', shadowColor: glow.plate, shadowRadius: 32, shadowOpacity: 1, shadowOffset: { width: 0, height: -8 } },
+          {
+            backgroundColor: paint.sheet,
+            borderTopLeftRadius: radius.console,
+            borderTopRightRadius: radius.console,
+            maxHeight: '88%',
+            overflow: 'hidden',
+            flexDirection: 'column',
+            shadowColor: glow.plate,
+            shadowRadius: 32,
+            shadowOpacity: 1,
+            shadowOffset: { width: 0, height: -8 },
+          },
           // The panel only slides: it is opaque at every frame, so a paused or skipped animation never shows the screen beneath.
           still
             ? null
             : {
-                animationName: { from: { transform: [{ translateY: 28 }] }, to: { transform: [{ translateY: 0 }] } },
+                animationName: {
+                  from: { transform: [{ translateY: 28 }] },
+                  to: { transform: [{ translateY: 0 }] },
+                },
                 animationDuration: `${motion.sheet}ms`,
                 animationTimingFunction: cubicBezier(0.2, 0.9, 0.25, 1),
                 animationFillMode: 'forwards',
               },
         ]}
       >
-        <View style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 1, opacity: 0.8 }} pointerEvents="none">
+        <View
+          style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 1, opacity: 0.8 }}
+          pointerEvents="none"
+        >
           <CurrentFill />
         </View>
         {title || header ? (
@@ -91,7 +133,17 @@ export function Sheet({ open, onClose, title, children, header, footer, scroll =
                 <Body size="title" flexShrink={1} numberOfLines={1}>
                   {title}
                 </Body>
-                <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+                <Pressable
+                  onPress={onClose}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
+                  style={{
+                    minWidth: 44,
+                    minHeight: 44,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
                   <Icon name="close" size={20} color={paint.mute} />
                 </Pressable>
               </Row>
@@ -100,11 +152,27 @@ export function Sheet({ open, onClose, title, children, header, footer, scroll =
           </Column>
         ) : null}
         {scroll ? (
-          <ScrollView style={{ flexShrink: 1, minHeight: 0 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: topPad, paddingBottom: bottomPad, gap: 16 }} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            style={{ flexShrink: 1, minHeight: 0 }}
+            contentContainerStyle={{
+              paddingHorizontal: 20,
+              paddingTop: topPad,
+              paddingBottom: bottomPad,
+              gap: 16,
+            }}
+            keyboardShouldPersistTaps="handled"
+          >
             {children}
           </ScrollView>
         ) : (
-          <Column flexShrink={1} minHeight={0} paddingHorizontal="$5" paddingTop={topPad} paddingBottom={bottomPad} gap="$4">
+          <Column
+            flexShrink={1}
+            minHeight={0}
+            paddingHorizontal="$5"
+            paddingTop={topPad}
+            paddingBottom={bottomPad}
+            gap="$4"
+          >
             {children}
           </Column>
         )}
@@ -112,7 +180,13 @@ export function Sheet({ open, onClose, title, children, header, footer, scroll =
           /* When there is a footer it, not the content, is the sheet's bottom
              edge — so the gesture-bar inset is owed here. Owner: "the save
              button is cut off by bottom nav". */
-          <Column paddingHorizontal="$5" paddingBottom={20 + (keyboard > 0 ? 0 : insets.bottom)} paddingTop={4} gap="$2" flexShrink={0}>
+          <Column
+            paddingHorizontal="$5"
+            paddingBottom={20 + (keyboard > 0 ? 0 : insets.bottom)}
+            paddingTop={4}
+            gap="$2"
+            flexShrink={0}
+          >
             {footer}
           </Column>
         ) : null}

@@ -20,7 +20,15 @@ export interface PageHeaderProps extends Omit<ScreenHeaderProps, 'onBack' | 'bac
 export function PageHeader({ root = false, right, noExpand = false, ...rest }: PageHeaderProps) {
   const router = useRouter()
   const openInTab = useOpenInTab()
-  const expand = !noExpand && openInTab ? <IconButton icon="expand" label={t({ id: 'header.expand', message: 'Open in a full tab' })} onPress={() => openInTab()} testID="open-tab" /> : null
+  const expand =
+    !noExpand && openInTab ? (
+      <IconButton
+        icon="expand"
+        label={t({ id: 'header.expand', message: 'Open in a full tab' })}
+        onPress={() => openInTab()}
+        testID="open-tab"
+      />
+    ) : null
   const rightSlot =
     right || expand ? (
       <>
@@ -28,5 +36,12 @@ export function PageHeader({ root = false, right, noExpand = false, ...rest }: P
         {expand}
       </>
     ) : undefined
-  return <ScreenHeader {...rest} {...(root ? {} : { onBack: () => router.back() })} backLabel={t({ id: 'back', message: 'Back' })} {...(rightSlot ? { right: rightSlot } : {})} />
+  return (
+    <ScreenHeader
+      {...rest}
+      {...(root ? {} : { onBack: () => router.back() })}
+      backLabel={t({ id: 'back', message: 'Back' })}
+      {...(rightSlot ? { right: rightSlot } : {})}
+    />
+  )
 }

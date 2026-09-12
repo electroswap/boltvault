@@ -74,7 +74,11 @@ const ETHEREUM: ChainDef = {
   name: 'Ethereum',
   shortName: 'ETH',
   nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-  rpcUrls: ['https://eth.drpc.org', 'https://ethereum-rpc.publicnode.com', 'https://eth-pokt.nodies.app'],
+  rpcUrls: [
+    'https://eth.drpc.org',
+    'https://ethereum-rpc.publicnode.com',
+    'https://eth-pokt.nodies.app',
+  ],
   explorer: { name: 'Etherscan', url: 'https://etherscan.io' },
   blockTimeMs: 12_000,
   wrappedNative: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
@@ -218,9 +222,7 @@ export function assertElectroneum(chainId: number): asserts chainId is 52014 | 5
   }
 }
 
-export function chainIdToGraphQLChain(
-  chainId: number,
-): 'ELECTRONEUM' | 'ELECTRONEUM_TEST' {
+export function chainIdToGraphQLChain(chainId: number): 'ELECTRONEUM' | 'ELECTRONEUM_TEST' {
   assertElectroneum(chainId)
   return chainId === ELECTRONEUM_TESTNET_CHAIN_ID ? 'ELECTRONEUM_TEST' : 'ELECTRONEUM'
 }
@@ -271,5 +273,7 @@ const BACKGROUND_FLOOR_MS = 30_000
  */
 export function pollMs(chainId: number, mode: PollMode = 'foreground'): number {
   const block = byId.get(chainId)?.blockTimeMs ?? 12_000
-  return mode === 'background' ? Math.max(block * 4, BACKGROUND_FLOOR_MS) : Math.max(block, FOREGROUND_FLOOR_MS)
+  return mode === 'background'
+    ? Math.max(block * 4, BACKGROUND_FLOOR_MS)
+    : Math.max(block, FOREGROUND_FLOOR_MS)
 }

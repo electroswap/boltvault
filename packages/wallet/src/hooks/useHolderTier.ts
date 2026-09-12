@@ -21,8 +21,14 @@ export function useHolderTier(accountId: string | null): HolderTier | null {
     setTier(null)
     if (!accountId) return
     let alive = true
-    engine.holder.cachedTier({ accountId, chainId: ETN }).then((c) => alive && c && setTier((cur) => cur ?? c.value), () => undefined)
-    engine.holder.tier({ accountId, chainId: ETN }).then((x) => alive && setTier(x), () => undefined)
+    engine.holder.cachedTier({ accountId, chainId: ETN }).then(
+      (c) => alive && c && setTier((cur) => cur ?? c.value),
+      () => undefined,
+    )
+    engine.holder.tier({ accountId, chainId: ETN }).then(
+      (x) => alive && setTier(x),
+      () => undefined,
+    )
     return () => {
       alive = false
     }

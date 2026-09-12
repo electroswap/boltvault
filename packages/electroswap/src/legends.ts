@@ -32,7 +32,11 @@ export const DIVIDENDS_ABI = parseAbi([
   'function claimDividends(uint256[] tokenIds)',
 ])
 
-export const MINTER_ABI = parseAbi(['function mintPrice(address collection) view returns (uint256)', 'function mintableCount(address collection, address account) view returns (uint256)', 'function mint(address collection, uint256 mintCount) payable'])
+export const MINTER_ABI = parseAbi([
+  'function mintPrice(address collection) view returns (uint256)',
+  'function mintableCount(address collection, address account) view returns (uint256)',
+  'function mint(address collection, uint256 mintCount) payable',
+])
 
 /** `getClaimableDividends` dedupes with a fixed 1000-slot array: pass unique ids below 1000 (§8.10 caveat). */
 export function claimableIds(tokenIds: readonly bigint[]): bigint[] {
@@ -52,7 +56,11 @@ export function encodeRegister(tokenIds: readonly bigint[]): Hex {
 }
 
 export function encodeClaimDividends(tokenIds: readonly bigint[]): Hex {
-  return encodeFunctionData({ abi: DIVIDENDS_ABI, functionName: 'claimDividends', args: [[...tokenIds]] })
+  return encodeFunctionData({
+    abi: DIVIDENDS_ABI,
+    functionName: 'claimDividends',
+    args: [[...tokenIds]],
+  })
 }
 
 export function encodeMint(collection: Hex, count: bigint): Hex {
@@ -70,5 +78,5 @@ export function vesselLevel(claimableWei: bigint, bestClaimWei: bigint): number 
 /** "Your share of the next fee": ⅓ of the fee is split over the active pieces (EsDividendDistributorV2). */
 export function shareOfNextFee(ownedRegistered: number, activeTokenCount: number): number {
   if (activeTokenCount <= 0 || ownedRegistered <= 0) return 0
-  return (ownedRegistered / activeTokenCount) / 3
+  return ownedRegistered / activeTokenCount / 3
 }

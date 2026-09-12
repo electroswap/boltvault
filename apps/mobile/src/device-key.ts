@@ -16,7 +16,10 @@ function hex(bytes: Uint8Array): string {
 /** Mint (or return) the key. Requires biometry to be enrolled. */
 export async function ensureDeviceKey(): Promise<string> {
   const level = await Keychain.getSecurityLevel()
-  const existing = await Keychain.getGenericPassword({ service: SERVICE, authenticationPrompt: { title: 'Unlock BoltVault' } })
+  const existing = await Keychain.getGenericPassword({
+    service: SERVICE,
+    authenticationPrompt: { title: 'Unlock BoltVault' },
+  })
   if (existing && existing.password) return existing.password
   const key = new Uint8Array(32)
   globalThis.crypto.getRandomValues(key)
@@ -25,7 +28,9 @@ export async function ensureDeviceKey(): Promise<string> {
     service: SERVICE,
     accessControl: Keychain.ACCESS_CONTROL.BIOMETRY_CURRENT_SET,
     accessible: Keychain.ACCESSIBLE.WHEN_PASSCODE_SET_THIS_DEVICE_ONLY,
-    ...(level === Keychain.SECURITY_LEVEL.SECURE_HARDWARE ? { securityLevel: Keychain.SECURITY_LEVEL.SECURE_HARDWARE } : {}),
+    ...(level === Keychain.SECURITY_LEVEL.SECURE_HARDWARE
+      ? { securityLevel: Keychain.SECURITY_LEVEL.SECURE_HARDWARE }
+      : {}),
   })
   return keyHex
 }
@@ -33,7 +38,10 @@ export async function ensureDeviceKey(): Promise<string> {
 /** Read the key behind a biometric prompt; null if the user cancels or none exists. */
 export async function readDeviceKey(reason: string): Promise<string | null> {
   try {
-    const r = await Keychain.getGenericPassword({ service: SERVICE, authenticationPrompt: { title: reason } })
+    const r = await Keychain.getGenericPassword({
+      service: SERVICE,
+      authenticationPrompt: { title: reason },
+    })
     return r && r.password ? r.password : null
   } catch {
     return null

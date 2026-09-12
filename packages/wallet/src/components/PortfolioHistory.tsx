@@ -45,12 +45,23 @@ function spanLabel(from: number, to: number): string {
   const days = Math.round(ms / DAY_MS)
   if (ms < DAY_MS) {
     const hours = Math.max(1, Math.round(ms / 3_600_000))
-    return hours === 1 ? t({ id: 'home.history.hour', message: 'the last hour' }) : t({ id: 'home.history.hours', message: 'the last {n} hours', values: { n: hours } })
+    return hours === 1
+      ? t({ id: 'home.history.hour', message: 'the last hour' })
+      : t({ id: 'home.history.hours', message: 'the last {n} hours', values: { n: hours } })
   }
-  return days <= 1 ? t({ id: 'home.history.day', message: 'the last day' }) : t({ id: 'home.history.days', message: 'the last {n} days', values: { n: days } })
+  return days <= 1
+    ? t({ id: 'home.history.day', message: 'the last day' })
+    : t({ id: 'home.history.days', message: 'the last {n} days', values: { n: days } })
 }
 
-export function PortfolioHistory({ points, currency, body, inset, reducedMotion = false, testID }: PortfolioHistoryProps) {
+export function PortfolioHistory({
+  points,
+  currency,
+  body,
+  inset,
+  reducedMotion = false,
+  testID,
+}: PortfolioHistoryProps) {
   const { width } = useWindowDimensions()
   /*
     Unpriced readings are dropped rather than plotted as zero. A moment when
@@ -58,7 +69,10 @@ export function PortfolioHistory({ points, currency, body, inset, reducedMotion 
     and drawing it as a cliff would be the chart telling a lie the rest of the
     product takes care not to tell.
   */
-  const priced = points.filter((p): p is PortfolioPoint & { total: number } => typeof p.total === 'number' && Number.isFinite(p.total))
+  const priced = points.filter(
+    (p): p is PortfolioPoint & { total: number } =>
+      typeof p.total === 'number' && Number.isFinite(p.total),
+  )
   if (priced.length < MIN_POINTS) return null
 
   const series: ChartPoint[] = priced.map((p) => ({ t: p.at, v: p.total }))
@@ -100,10 +114,23 @@ export function PortfolioHistory({ points, currency, body, inset, reducedMotion 
             wallet has no price feed it treats as authoritative and does not
             pretend to know what the total was while it was shut.
           */}
-          {t({ id: 'home.history.caption', message: 'What you have been holding, over {span}', values: { span: spanLabel(first.at, last.at) } })}
+          {t({
+            id: 'home.history.caption',
+            message: 'What you have been holding, over {span}',
+            values: { span: spanLabel(first.at, last.at) },
+          })}
         </Body>
-        <Body tone="mute" size="caption" numberOfLines={1} testID={testID ? `${testID}-range` : undefined}>
-          {t({ id: 'home.history.range', message: '{low} – {high}', values: { low: formatFiat(low, currency), high: formatFiat(high, currency) } })}
+        <Body
+          tone="mute"
+          size="caption"
+          numberOfLines={1}
+          testID={testID ? `${testID}-range` : undefined}
+        >
+          {t({
+            id: 'home.history.range',
+            message: '{low} – {high}',
+            values: { low: formatFiat(low, currency), high: formatFiat(high, currency) },
+          })}
         </Body>
       </Row>
     </Column>

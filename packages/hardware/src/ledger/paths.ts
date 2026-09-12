@@ -29,7 +29,8 @@ export function pathToBytes(path: string): Uint8Array {
   parts.forEach((p, i) => {
     const hardened = p.endsWith("'") || p.endsWith('h')
     const n = Number(p.replace(/['h]$/, ''))
-    if (!Number.isInteger(n) || n < 0 || n >= HARDENED) throw new Error(`bad derivation path: ${path}`)
+    if (!Number.isInteger(n) || n < 0 || n >= HARDENED)
+      throw new Error(`bad derivation path: ${path}`)
     view.setUint32(1 + i * 4, hardened ? (n | HARDENED) >>> 0 : n)
   })
   return out

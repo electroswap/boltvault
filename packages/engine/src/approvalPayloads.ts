@@ -94,10 +94,32 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
     /** The site was already permitted; the vault was just locked. Auto-approve after unlock. */
     reconnect: z.boolean(),
     firstTime: z.boolean(),
-    clientRequestId: z.string(), intentDigest: z.string().optional(), tabId: z.number().int().optional(), frameId: z.number().int().optional(),
+    clientRequestId: z.string(),
+    intentDigest: z.string().optional(),
+    tabId: z.number().int().optional(),
+    frameId: z.number().int().optional(),
   }),
-  z.object({ kind: z.literal('sign_message'), from: AddressSchema, message: HexSchema, text: z.string().nullable(), assessment: AssessmentViewSchema, clientRequestId: z.string(), intentDigest: z.string().optional(), tabId: z.number().int().optional(), frameId: z.number().int().optional() }),
-  z.object({ kind: z.literal('eth_sign'), from: AddressSchema, hash: HexSchema, assessment: AssessmentViewSchema, clientRequestId: z.string(), intentDigest: z.string().optional(), tabId: z.number().int().optional(), frameId: z.number().int().optional() }),
+  z.object({
+    kind: z.literal('sign_message'),
+    from: AddressSchema,
+    message: HexSchema,
+    text: z.string().nullable(),
+    assessment: AssessmentViewSchema,
+    clientRequestId: z.string(),
+    intentDigest: z.string().optional(),
+    tabId: z.number().int().optional(),
+    frameId: z.number().int().optional(),
+  }),
+  z.object({
+    kind: z.literal('eth_sign'),
+    from: AddressSchema,
+    hash: HexSchema,
+    assessment: AssessmentViewSchema,
+    clientRequestId: z.string(),
+    intentDigest: z.string().optional(),
+    tabId: z.number().int().optional(),
+    frameId: z.number().int().optional(),
+  }),
   z.object({
     kind: z.literal('sign_typed_data'),
     from: AddressSchema,
@@ -106,7 +128,10 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
     domainName: z.string().nullable(),
     primaryType: z.string(),
     assessment: AssessmentViewSchema,
-    clientRequestId: z.string(), intentDigest: z.string().optional(), tabId: z.number().int().optional(), frameId: z.number().int().optional(),
+    clientRequestId: z.string(),
+    intentDigest: z.string().optional(),
+    tabId: z.number().int().optional(),
+    frameId: z.number().int().optional(),
   }),
   z.object({
     kind: z.literal('send_transaction'),
@@ -126,10 +151,27 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
      * request flip a sheet the user approved as "sign" into a broadcast.
      */
     signOnly: z.boolean().optional(),
-    clientRequestId: z.string(), intentDigest: z.string().optional(), tabId: z.number().int().optional(), frameId: z.number().int().optional(),
+    clientRequestId: z.string(),
+    intentDigest: z.string().optional(),
+    tabId: z.number().int().optional(),
+    frameId: z.number().int().optional(),
   }),
-  z.object({ kind: z.literal('switch_chain'), chainId: z.number().int().positive(), clientRequestId: z.string(), intentDigest: z.string().optional(), tabId: z.number().int().optional(), frameId: z.number().int().optional() }),
-  z.object({ kind: z.literal('add_chain'), chainId: z.number().int().positive(), clientRequestId: z.string(), intentDigest: z.string().optional(), tabId: z.number().int().optional(), frameId: z.number().int().optional() }),
+  z.object({
+    kind: z.literal('switch_chain'),
+    chainId: z.number().int().positive(),
+    clientRequestId: z.string(),
+    intentDigest: z.string().optional(),
+    tabId: z.number().int().optional(),
+    frameId: z.number().int().optional(),
+  }),
+  z.object({
+    kind: z.literal('add_chain'),
+    chainId: z.number().int().positive(),
+    clientRequestId: z.string(),
+    intentDigest: z.string().optional(),
+    tabId: z.number().int().optional(),
+    frameId: z.number().int().optional(),
+  }),
   z.object({
     kind: z.literal('watch_asset'),
     type: z.string(),
@@ -138,14 +180,24 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
     address: z.string().nullable(),
     symbol: z.string().nullable(),
     decimals: z.number().int().nonnegative().nullable(),
-    onChain: z.object({ name: z.string(), symbol: z.string(), decimals: z.number().int().nonnegative() }).nullable(),
+    onChain: z
+      .object({ name: z.string(), symbol: z.string(), decimals: z.number().int().nonnegative() })
+      .nullable(),
     mismatch: z.boolean(),
-    clientRequestId: z.string(), intentDigest: z.string().optional(), tabId: z.number().int().optional(), frameId: z.number().int().optional(),
+    clientRequestId: z.string(),
+    intentDigest: z.string().optional(),
+    tabId: z.number().int().optional(),
+    frameId: z.number().int().optional(),
   }),
 ])
 
 /** EIP-747 `wallet_watchAsset` options for an ERC-20. */
-export const WatchAssetOptionsSchema = z.object({ address: z.string().regex(/^0x[0-9a-fA-F]{40}$/), symbol: z.string().max(16).optional(), decimals: z.number().int().min(0).max(36).optional(), image: z.string().optional() })
+export const WatchAssetOptionsSchema = z.object({
+  address: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+  symbol: z.string().max(16).optional(),
+  decimals: z.number().int().min(0).max(36).optional(),
+  image: z.string().optional(),
+})
 export type WatchAssetOptions = z.infer<typeof WatchAssetOptionsSchema>
 export type ApprovalPayload = z.infer<typeof ApprovalPayloadSchema>
 
@@ -215,7 +267,11 @@ export function suggestedPerGas(tx: PreparedTx): bigint {
 export function gasBand(tx: PreparedTx): { floor: bigint; suggested: bigint; ceiling: bigint } {
   const node = tx.nodePerGas ? BigInt(tx.nodePerGas) : 0n
   const suggested = node > 0n ? node : suggestedPerGas(tx)
-  return { floor: (suggested * BigInt(GAS_FLOOR_PERCENT)) / 100n, suggested, ceiling: (suggested * BigInt(GAS_CEILING_PERCENT)) / 100n }
+  return {
+    floor: (suggested * BigInt(GAS_FLOOR_PERCENT)) / 100n,
+    suggested,
+    ceiling: (suggested * BigInt(GAS_CEILING_PERCENT)) / 100n,
+  }
 }
 
 /** Bring a chosen price per unit of gas inside the band. */
@@ -233,7 +289,10 @@ export function clampPerGas(tx: PreparedTx, chosen: bigint): bigint {
  * from the sheet, because the sheet is a page and this is the last place before
  * a signature.
  */
-export function applyGasDecision(tx: PreparedTx, data: unknown): Pick<PreparedTx, 'maxFeePerGas' | 'maxPriorityFeePerGas' | 'gasPrice'> | null {
+export function applyGasDecision(
+  tx: PreparedTx,
+  data: unknown,
+): Pick<PreparedTx, 'maxFeePerGas' | 'maxPriorityFeePerGas' | 'gasPrice'> | null {
   const parsed = GasDecisionDataSchema.safeParse(data)
   if (!parsed.success) return null
   const choice = parsed.data
@@ -241,7 +300,10 @@ export function applyGasDecision(tx: PreparedTx, data: unknown): Pick<PreparedTx
     if (choice.maxFeePerGas === undefined) return null
     const max = clampPerGas(tx, BigInt(choice.maxFeePerGas))
     // A tip is paid out of the ceiling it sits under, so it can never exceed it.
-    const wanted = choice.maxPriorityFeePerGas !== undefined ? BigInt(choice.maxPriorityFeePerGas) : BigInt(tx.maxPriorityFeePerGas ?? '0x0')
+    const wanted =
+      choice.maxPriorityFeePerGas !== undefined
+        ? BigInt(choice.maxPriorityFeePerGas)
+        : BigInt(tx.maxPriorityFeePerGas ?? '0x0')
     return { maxFeePerGas: hexOf(max), maxPriorityFeePerGas: hexOf(wanted > max ? max : wanted) }
   }
   if (choice.gasPrice === undefined) return null

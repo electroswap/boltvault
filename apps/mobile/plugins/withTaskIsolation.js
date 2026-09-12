@@ -27,7 +27,9 @@ const { withAndroidManifest, withMainActivity } = require('expo/config-plugins')
 
 function withPrivateTask(config) {
   return withAndroidManifest(config, (c) => {
-    const main = c.modResults.manifest.application?.[0]?.activity?.find((a) => a.$['android:name'] === '.MainActivity')
+    const main = c.modResults.manifest.application?.[0]?.activity?.find(
+      (a) => a.$['android:name'] === '.MainActivity',
+    )
     if (!main) return c
     // An empty affinity is a real value, not an absent one: it means "a task
     // of my own that nobody can join".
@@ -48,7 +50,9 @@ function withObscuredTouchFilter(config) {
     // corrupt it — the manifest half of this plugin still applies.
     const m = /(\n(\s*)super\.onCreate\([^)]*\)\s*\n)/.exec(src)
     if (!m) {
-      console.warn('[withTaskIsolation] could not find super.onCreate in MainActivity; obscured-touch filtering not applied')
+      console.warn(
+        '[withTaskIsolation] could not find super.onCreate in MainActivity; obscured-touch filtering not applied',
+      )
       return c
     }
     const indent = m[2] ?? '    '

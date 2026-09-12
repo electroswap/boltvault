@@ -9,5 +9,9 @@ export const UI_PORT_NAME = 'bv-ui'
 
 export function connectEngine(): WalletEngine {
   // Reconnects after a service-worker restart, so an open page never goes silently blank (plan A1).
-  return createEngineClient(createChannelClient(reconnectingPortChannel(() => browser.runtime.connect({ name: UI_PORT_NAME }))))
+  return createEngineClient(
+    createChannelClient(
+      reconnectingPortChannel(() => browser.runtime.connect({ name: UI_PORT_NAME })),
+    ),
+  )
 }

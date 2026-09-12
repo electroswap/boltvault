@@ -25,7 +25,9 @@ function createHash(algorithm: string): HashApi {
   const h = hash.create()
   const api: HashApi = {
     update(data, encoding) {
-      h.update(typeof data === 'string' ? Buffer.from(data, (encoding ?? 'utf8') as BufferEncoding) : data)
+      h.update(
+        typeof data === 'string' ? Buffer.from(data, (encoding ?? 'utf8') as BufferEncoding) : data,
+      )
       return api
     },
     digest(encoding) {

@@ -65,7 +65,8 @@ function siteOf(origin: string): { host: string; internal: boolean } {
     parses happily and answers an empty one, so the origin line on a remote-sign
     sheet was blank. It is named the way `explain.ts siteName()` names it.
   */
-  if (origin.startsWith('device:')) return { host: `your ${origin.slice(7)} (paired device)`, internal: true }
+  if (origin.startsWith('device:'))
+    return { host: `your ${origin.slice(7)} (paired device)`, internal: true }
   try {
     return { host: new URL(origin).host || origin, internal: false }
   } catch {
@@ -366,14 +367,22 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   const [biometricOk, setBiometricOk] = useState(false)
   useEffect(() => {
     let alive = true
-    if (passkeyIds.length && host.passkeys) host.passkeys.supported().then((ok) => alive && setPasskeyOk(ok), () => undefined)
+    if (passkeyIds.length && host.passkeys)
+      host.passkeys.supported().then(
+        (ok) => alive && setPasskeyOk(ok),
+        () => undefined,
+      )
     return () => {
       alive = false
     }
   }, [host.passkeys, passkeyIds.length])
   useEffect(() => {
     let alive = true
-    if (deviceWrapped && host.deviceKey) host.deviceKey.available().then((ok) => alive && setBiometricOk(ok), () => undefined)
+    if (deviceWrapped && host.deviceKey)
+      host.deviceKey.available().then(
+        (ok) => alive && setBiometricOk(ok),
+        () => undefined,
+      )
     return () => {
       alive = false
     }
@@ -387,25 +396,38 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
       setStepUpDone(true)
       setStepUpPassword('')
     } catch {
-      setStepUpError(t({ id: 'approval.stepup.fail', message: 'That did not open this vault. Nothing has been signed.' }))
+      setStepUpError(
+        t({
+          id: 'approval.stepup.fail',
+          message: 'That did not open this vault. Nothing has been signed.',
+        }),
+      )
     } finally {
       setStepUpBusy(false)
     }
   }
-  const stepUpWithPassword = (): Promise<void> => stepUp(async () => {
-    await engine.vault.unlock({ password: stepUpPassword })
-  })
-  const stepUpWithPasskey = (): Promise<void> => stepUp(async () => {
-    if (!host.passkeys) throw new Error('no passkeys here')
-    const r = await host.passkeys.get(passkeyIds)
-    await engine.vault.unlockWithPasskey({ credentialId: r.credentialId, prfSecretHex: r.prfSecretHex })
-  })
-  const stepUpWithDevice = (): Promise<void> => stepUp(async () => {
-    if (!host.deviceKey) throw new Error('no keystore here')
-    const keyHex = await host.deviceKey.read(t({ id: 'approval.stepup.reason', message: 'Confirm this send' }))
-    if (keyHex === null) throw new Error('cancelled')
-    await engine.vault.unlockWithDevice({ keyId: host.deviceKey.id, keyHex })
-  })
+  const stepUpWithPassword = (): Promise<void> =>
+    stepUp(async () => {
+      await engine.vault.unlock({ password: stepUpPassword })
+    })
+  const stepUpWithPasskey = (): Promise<void> =>
+    stepUp(async () => {
+      if (!host.passkeys) throw new Error('no passkeys here')
+      const r = await host.passkeys.get(passkeyIds)
+      await engine.vault.unlockWithPasskey({
+        credentialId: r.credentialId,
+        prfSecretHex: r.prfSecretHex,
+      })
+    })
+  const stepUpWithDevice = (): Promise<void> =>
+    stepUp(async () => {
+      if (!host.deviceKey) throw new Error('no keystore here')
+      const keyHex = await host.deviceKey.read(
+        t({ id: 'approval.stepup.reason', message: 'Confirm this send' }),
+      )
+      if (keyHex === null) throw new Error('cancelled')
+      await engine.vault.unlockWithDevice({ keyId: host.deviceKey.id, keyHex })
+    })
 
   /*
     Leaving without deciding is a rejection.
@@ -509,7 +531,8 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   const stepUpPending = largeSend && !stepUpDone
   // A device that has told us it cannot sign holds the verb: pressing it would
   // only spend a round trip to be told the same thing.
-  const armed = now >= enableAt && typedOk && !stepUpPending && !busy && !signing && ledger?.ready !== false
+  const armed =
+    now >= enableAt && typedOk && !stepUpPending && !busy && !signing && ledger?.ready !== false
   const secondsLeft = Math.max(0, Math.ceil((enableAt - now) / 1000))
   const recipient = payload.kind === 'send_transaction' ? recipientOf(payload.tx) : null
   const verb = verbFor(payload, request.origin)
@@ -811,7 +834,8 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
             <Body tone="mute" size="caption">
               {t({
                 id: 'approval.firstTimeTo.body',
-                message: 'Check the whole address against the one you were given — every character, not just the ends. An address that only matches at the ends is the commonest theft there is.',
+                message:
+                  'Check the whole address against the one you were given — every character, not just the ends. An address that only matches at the ends is the commonest theft there is.',
               })}
             </Body>
             {recipient ? (
@@ -821,7 +845,11 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
             ) : null}
             {secondsLeft > 0 ? (
               <Body tone="ember" size="caption" testID="approval-cooling">
-                {t({ id: 'approval.cooling', message: '{n} seconds to read it.', values: { n: secondsLeft } })}
+                {t({
+                  id: 'approval.cooling',
+                  message: '{n} seconds to read it.',
+                  values: { n: secondsLeft },
+                })}
               </Body>
             ) : null}
           </Plate>
@@ -834,7 +862,11 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
           typed in front of whoever is standing there is the weaker proof.
         */}
         {largeSend ? (
-          <Plate gap="$2" borderColor={stepUpDone ? paint.arc : paint.ember} testID="approval-stepup">
+          <Plate
+            gap="$2"
+            borderColor={stepUpDone ? paint.arc : paint.ember}
+            testID="approval-stepup"
+          >
             <Body tone={stepUpDone ? 'arc' : 'ember'}>
               {stepUpDone
                 ? t({ id: 'approval.stepup.done', message: 'Unlocked — you can continue' })
@@ -845,11 +877,30 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
                 <Body tone="mute" size="caption">
                   {t({
                     id: 'approval.stepup.body',
-                    message: 'This moves more than a tenth of what you hold of that token, so BoltVault asks who is at the keyboard before it signs — an open wallet is not the same as you.',
+                    message:
+                      'This moves more than a tenth of what you hold of that token, so BoltVault asks who is at the keyboard before it signs — an open wallet is not the same as you.',
                   })}
                 </Body>
-                {passkeyOk ? <Key label={t({ id: 'unlock.passkey', message: 'Unlock with passkey' })} kind="secondary" size="compact" disabled={stepUpBusy} onPress={() => void stepUpWithPasskey()} testID="approval-stepup-passkey" /> : null}
-                {biometricOk ? <Key label={t({ id: 'unlock.biometric', message: 'Unlock with biometrics' })} kind="secondary" size="compact" disabled={stepUpBusy} onPress={() => void stepUpWithDevice()} testID="approval-stepup-biometric" /> : null}
+                {passkeyOk ? (
+                  <Key
+                    label={t({ id: 'unlock.passkey', message: 'Unlock with passkey' })}
+                    kind="secondary"
+                    size="compact"
+                    disabled={stepUpBusy}
+                    onPress={() => void stepUpWithPasskey()}
+                    testID="approval-stepup-passkey"
+                  />
+                ) : null}
+                {biometricOk ? (
+                  <Key
+                    label={t({ id: 'unlock.biometric', message: 'Unlock with biometrics' })}
+                    kind="secondary"
+                    size="compact"
+                    disabled={stepUpBusy}
+                    onPress={() => void stepUpWithDevice()}
+                    testID="approval-stepup-biometric"
+                  />
+                ) : null}
                 <Input
                   value={stepUpPassword}
                   onChange={setStepUpPassword}
@@ -859,7 +910,18 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
                   testID="approval-stepup-password"
                 />
                 {/* Argon2id takes a moment, and a key that looks inert is a key people press again. */}
-                <Key label={stepUpBusy ? t({ id: 'approval.stepup.checking', message: 'Checking…' }) : t({ id: 'unlock.key', message: 'Unlock' })} kind="secondary" size="compact" disabled={stepUpBusy || !stepUpPassword} onPress={() => void stepUpWithPassword()} testID="approval-stepup-submit" />
+                <Key
+                  label={
+                    stepUpBusy
+                      ? t({ id: 'approval.stepup.checking', message: 'Checking…' })
+                      : t({ id: 'unlock.key', message: 'Unlock' })
+                  }
+                  kind="secondary"
+                  size="compact"
+                  disabled={stepUpBusy || !stepUpPassword}
+                  onPress={() => void stepUpWithPassword()}
+                  testID="approval-stepup-submit"
+                />
                 {stepUpError ? (
                   <Body tone="burn" size="caption" testID="approval-stepup-error">
                     {stepUpError}
@@ -960,7 +1022,11 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
               {t({ id: 'approval.fee', message: 'Network fee up to' })}
             </Body>
             <Row gap="$2" alignItems="center">
-              <Body size="caption" tone={gasChoice ? 'arc' : 'ink'} testID="approval-fee-total">{`${formatWei(feeTotalWei.toString())} ${feeSymbol}`}</Body>
+              <Body
+                size="caption"
+                tone={gasChoice ? 'arc' : 'ink'}
+                testID="approval-fee-total"
+              >{`${formatWei(feeTotalWei.toString())} ${feeSymbol}`}</Body>
               <Pill
                 size="sm"
                 label={t({ id: 'approval.fee.change', message: 'Change' })}
@@ -969,7 +1035,10 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
                   setGasTyped(formatWei(feeTotalWei.toString()))
                   setGasOpen(true)
                 }}
-                accessibilityLabel={t({ id: 'approval.fee.change.a11y', message: 'Change the network fee' })}
+                accessibilityLabel={t({
+                  id: 'approval.fee.change.a11y',
+                  message: 'Change the network fee',
+                })}
                 testID="approval-fee-change"
               />
             </Row>
@@ -1234,7 +1303,11 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
         ) : null}
         {!blocked && !armed && !busy && !signing && secondsLeft > 0 ? (
           <Body tone="ember" size="caption" testID="approval-wait">
-            {t({ id: 'approval.wait', message: '{verb} in {n} s', values: { verb, n: secondsLeft } })}
+            {t({
+              id: 'approval.wait',
+              message: '{verb} in {n} s',
+              values: { verb, n: secondsLeft },
+            })}
           </Body>
         ) : null}
         {!blocked && stepUpPending && secondsLeft === 0 ? (
@@ -1282,7 +1355,15 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
         onClose={() => setGasOpen(false)}
         title={t({ id: 'gas.title', message: 'Network fee' })}
         reducedMotion={reducedMotion}
-        footer={<Key label={t({ id: 'close', message: 'Close' })} kind="secondary" size="compact" onPress={() => setGasOpen(false)} testID="gas-close" />}
+        footer={
+          <Key
+            label={t({ id: 'close', message: 'Close' })}
+            kind="secondary"
+            size="compact"
+            onPress={() => setGasOpen(false)}
+            testID="gas-close"
+          />
+        }
         testID="approval-gas-sheet"
       >
         {tx && band ? (
@@ -1290,14 +1371,18 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
             <Body tone="mute" size="caption">
               {t({
                 id: 'gas.body',
-                message: 'This is what the network charges to process your transaction, not a BoltVault fee. It is paid in {sym} whether the transaction succeeds or fails.',
+                message:
+                  'This is what the network charges to process your transaction, not a BoltVault fee. It is paid in {sym} whether the transaction succeeds or fails.',
                 values: { sym: feeSymbol },
               })}
             </Body>
             <Row gap="$2" flexWrap="wrap">
               {GAS_CHOICES.map((choice) => {
                 const at = gasChoiceFor(tx, (suggestedPerGas(tx) * BigInt(choice.percent)) / 100n)
-                const isOn = choice.percent === 100 ? gasChoice === null : perGasOf(tx, gasChoice) === perGasOf(tx, at)
+                const isOn =
+                  choice.percent === 100
+                    ? gasChoice === null
+                    : perGasOf(tx, gasChoice) === perGasOf(tx, at)
                 return (
                   <Pill
                     key={choice.percent}
@@ -1313,13 +1398,19 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
               })}
             </Row>
             <Input
-              label={t({ id: 'gas.exact', message: 'Or set the most you will pay ({sym})', values: { sym: feeSymbol } })}
+              label={t({
+                id: 'gas.exact',
+                message: 'Or set the most you will pay ({sym})',
+                values: { sym: feeSymbol },
+              })}
               value={gasTyped}
               onChange={(v) => {
                 setGasTyped(v)
                 const wei = parseCoin(v)
                 // An unreadable or empty field means "no choice", not "a fee of nothing".
-                setGasChoice(wei === null || gasLimit === 0n ? null : gasChoiceFor(tx, wei / gasLimit))
+                setGasChoice(
+                  wei === null || gasLimit === 0n ? null : gasChoiceFor(tx, wei / gasLimit),
+                )
               }}
               numeric
               testID="gas-exact"
@@ -1334,7 +1425,8 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
               <Body tone="ember" size="caption" testID="gas-too-low">
                 {t({
                   id: 'gas.tooLow',
-                  message: 'Under {min} {sym} the network will not pick this up at all — it would sit unsent until it expired. BoltVault will use {min} {sym}.',
+                  message:
+                    'Under {min} {sym} the network will not pick this up at all — it would sit unsent until it expired. BoltVault will use {min} {sym}.',
                   values: { min: formatWei((band.floor * gasLimit).toString()), sym: feeSymbol },
                 })}
               </Body>
@@ -1343,21 +1435,29 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
               <Body tone="ember" size="caption" testID="gas-too-high">
                 {t({
                   id: 'gas.tooHigh',
-                  message: 'That is far more than this transaction needs. BoltVault will use {max} {sym}, which is already four times the going rate.',
+                  message:
+                    'That is far more than this transaction needs. BoltVault will use {max} {sym}, which is already four times the going rate.',
                   values: { max: formatWei((band.ceiling * gasLimit).toString()), sym: feeSymbol },
                 })}
               </Body>
             ) : null}
             {gasChoice && !tooLow && !tooHigh && perGas < band.suggested ? (
               <Body tone="ember" size="caption" testID="gas-slower">
-                {t({ id: 'gas.slower', message: 'Paying less than the network suggests means waiting longer, and in a busy hour it may not go through at all.' })}
+                {t({
+                  id: 'gas.slower',
+                  message:
+                    'Paying less than the network suggests means waiting longer, and in a busy hour it may not go through at all.',
+                })}
               </Body>
             ) : null}
             <Row justifyContent="space-between" alignItems="center">
               <Body tone="mute" size="caption">
                 {t({ id: 'gas.willPay', message: 'You will pay up to' })}
               </Body>
-              <Body size="caption" testID="gas-total">{`${formatWei(feeTotalWei.toString())} ${feeSymbol}`}</Body>
+              <Body
+                size="caption"
+                testID="gas-total"
+              >{`${formatWei(feeTotalWei.toString())} ${feeSymbol}`}</Body>
             </Row>
             {/*
               The gas limit stays a readout. Raising it changes nothing — unused
@@ -1371,7 +1471,11 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
                 {t({ id: 'gas.work', message: 'Work this needs' })}
               </Body>
               <Body tone="mute" size="caption" testID="gas-limit">
-                {t({ id: 'gas.work.units', message: '{n} units of gas', values: { n: gasLimit.toString() } })}
+                {t({
+                  id: 'gas.work.units',
+                  message: '{n} units of gas',
+                  values: { n: gasLimit.toString() },
+                })}
               </Body>
             </Row>
           </Column>

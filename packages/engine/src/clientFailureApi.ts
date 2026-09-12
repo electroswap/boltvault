@@ -42,7 +42,15 @@
  * the same reason.
  */
 import { UR_COMMAND } from '@boltvault/security'
-import { decodeAbiParameters, decodeFunctionData, encodeAbiParameters, encodeFunctionData, parseAbi, parseAbiParameters, type Hex } from 'viem'
+import {
+  decodeAbiParameters,
+  decodeFunctionData,
+  encodeAbiParameters,
+  encodeFunctionData,
+  parseAbi,
+  parseAbiParameters,
+  type Hex,
+} from 'viem'
 import { authHeaders } from './apiAuth'
 
 /** The path on the ElectroSwap API; `{apiOrigin}` in front of it. */
@@ -84,14 +92,27 @@ const EVEN_HEX = /^0x([0-9a-fA-F]{2})*$/
 
 export type FailureClient = 'extension-worker' | 'extension-page' | 'mobile' | 'interface'
 /** What the user was trying to do. Add to this list rather than inventing a second endpoint. */
-export type FailureOperation = 'swap' | 'bridge' | 'limit-order' | 'send' | 'approve' | 'wrap' | 'nft' | 'farm' | 'launchpad' | 'sync' | 'other'
+export type FailureOperation =
+  | 'swap'
+  | 'bridge'
+  | 'limit-order'
+  | 'send'
+  | 'approve'
+  | 'wrap'
+  | 'nft'
+  | 'farm'
+  | 'launchpad'
+  | 'sync'
+  | 'other'
 /** Where in the attempt it stopped. `quote` and `simulate` precede any signature; the rest follow one. */
-export type FailureStage = 'quote' | 'approve' | 'permit' | 'sign' | 'simulate' | 'broadcast' | 'receipt'
+export type FailureStage =
+  'quote' | 'approve' | 'permit' | 'sign' | 'simulate' | 'broadcast' | 'receipt'
 export type FailureKind = 'revert' | 'rejected' | 'timeout' | 'network' | 'validation' | 'unknown'
 export type QuoteSource = 'routing-api' | 'client-fallback' | 'onchain-mini-router' | 'unknown'
 /** What the fee-on-transfer detector said about one side, including that it could not say. */
 /** Mirrors the endpoint's own enum. `not-answered` is the call failing, which is not a statement about the token. */
-export type TaxProbeStatus = 'measured' | 'no-pair' | 'pair-too-thin' | 'probe-reverted' | 'not-answered' | 'no-detector'
+export type TaxProbeStatus =
+  'measured' | 'no-pair' | 'pair-too-thin' | 'probe-reverted' | 'not-answered' | 'no-detector'
 
 export interface FailureTaxProbe {
   readonly status: TaxProbeStatus
@@ -204,11 +225,20 @@ export interface ClientFailureReport {
 /** The envelope minus the three fields the reporter stamps for itself. */
 export type ClientFailureInput = Omit<ClientFailureReport, 'client' | 'version' | 'at'>
 
-const UR_ABI = parseAbi(['function execute(bytes commands, bytes[] inputs, uint256 deadline) payable'])
-const PERMIT_SINGLE = parseAbiParameters('((address token, uint160 amount, uint48 expiration, uint48 nonce) details, address spender, uint256 sigDeadline) permit, bytes signature')
-const PERMIT_BATCH = parseAbiParameters('((address token, uint160 amount, uint48 expiration, uint48 nonce)[] details, address spender, uint256 sigDeadline) permit, bytes signature')
+const UR_ABI = parseAbi([
+  'function execute(bytes commands, bytes[] inputs, uint256 deadline) payable',
+])
+const PERMIT_SINGLE = parseAbiParameters(
+  '((address token, uint160 amount, uint48 expiration, uint48 nonce) details, address spender, uint256 sigDeadline) permit, bytes signature',
+)
+const PERMIT_BATCH = parseAbiParameters(
+  '((address token, uint160 amount, uint48 expiration, uint48 nonce)[] details, address spender, uint256 sigDeadline) permit, bytes signature',
+)
 /** The two commands whose input carries a signature, from the pinned table in @boltvault/security. */
-const SIGNATURE_BEARING: ReadonlySet<number> = new Set<number>([UR_COMMAND.PERMIT2_PERMIT, UR_COMMAND.PERMIT2_PERMIT_BATCH])
+const SIGNATURE_BEARING: ReadonlySet<number> = new Set<number>([
+  UR_COMMAND.PERMIT2_PERMIT,
+  UR_COMMAND.PERMIT2_PERMIT_BATCH,
+])
 
 /**
  * Blank the signature out of every permit command, keeping the rest.
@@ -226,7 +256,10 @@ const SIGNATURE_BEARING: ReadonlySet<number> = new Set<number>([UR_COMMAND.PERMI
 export function stripPermitSignatures(data: string): string {
   let decoded: { functionName: string; args: readonly unknown[] }
   try {
-    decoded = decodeFunctionData({ abi: UR_ABI, data: data as Hex }) as { functionName: string; args: readonly unknown[] }
+    decoded = decodeFunctionData({ abi: UR_ABI, data: data as Hex }) as {
+      functionName: string
+      args: readonly unknown[]
+    }
   } catch {
     return data
   }
@@ -240,7 +273,9 @@ export function stripPermitSignatures(data: string): string {
     Erring wider only ever strips more, which is the safe direction to be wrong
     in when the thing being stripped is a live signature.
   */
-  const carrying = bytes.map((b, i) => ({ command: Number.parseInt(b, 16) & 0x3f, i })).filter(({ command }) => SIGNATURE_BEARING.has(command))
+  const carrying = bytes
+    .map((b, i) => ({ command: Number.parseInt(b, 16) & 0x3f, i }))
+    .filter(({ command }) => SIGNATURE_BEARING.has(command))
   if (carrying.length === 0) return data
   const next = [...inputs]
   for (const { command, i } of carrying) {
@@ -248,7 +283,11 @@ export function stripPermitSignatures(data: string): string {
     if (input === undefined) continue
     next[i] = blankSignature(command, input)
   }
-  return encodeFunctionData({ abi: UR_ABI, functionName: 'execute', args: [commandsHex, next, deadline] })
+  return encodeFunctionData({
+    abi: UR_ABI,
+    functionName: 'execute',
+    args: [commandsHex, next, deadline],
+  })
 }
 
 /** Keep the permit's terms, drop its signature. An input that will not decode is dropped whole rather than guessed at. */
@@ -266,17 +305,26 @@ function blankSignature(command: number, input: Hex): Hex {
 }
 
 const clamp = (v: string, max: number): string => (v.length > max ? v.slice(0, max) : v)
-const clampOrNull = (v: string | null, max: number): string | null => (v === null ? null : clamp(v, max))
-const addressOrNull = (v: string | null): string | null => (v !== null && ADDRESS.test(v) ? v : null)
+const clampOrNull = (v: string | null, max: number): string | null =>
+  v === null ? null : clamp(v, max)
+const addressOrNull = (v: string | null): string | null =>
+  v !== null && ADDRESS.test(v) ? v : null
 const amountOrNull = (v: string | null): string | null => (v !== null && DECIMAL.test(v) ? v : null)
-const intIn = (v: number, lo: number, hi: number): number => (Number.isInteger(v) ? Math.min(Math.max(v, lo), hi) : lo)
-const intInOrNull = (v: number | null, lo: number, hi: number): number | null => (v === null || !Number.isInteger(v) ? null : Math.min(Math.max(v, lo), hi))
-const finiteOrNull = (v: number | null): number | null => (v !== null && Number.isFinite(v) ? v : null)
+const intIn = (v: number, lo: number, hi: number): number =>
+  Number.isInteger(v) ? Math.min(Math.max(v, lo), hi) : lo
+const intInOrNull = (v: number | null, lo: number, hi: number): number | null =>
+  v === null || !Number.isInteger(v) ? null : Math.min(Math.max(v, lo), hi)
+const finiteOrNull = (v: number | null): number | null =>
+  v !== null && Number.isFinite(v) ? v : null
 const bipsOrNull = (v: number | null): number | null => intInOrNull(v, 0, MAX_BIPS)
 
 function tokenOrNull(t: FailureToken): FailureToken | null {
   if (t.address !== 'native' && !ADDRESS.test(t.address)) return null
-  return { address: t.address, symbol: clamp(t.symbol, MAX_SYMBOL), decimals: intIn(t.decimals, 0, MAX_DECIMALS) }
+  return {
+    address: t.address,
+    symbol: clamp(t.symbol, MAX_SYMBOL),
+    decimals: intIn(t.decimals, 0, MAX_DECIMALS),
+  }
 }
 
 function probeOrNull(p: FailureTaxProbe | null): FailureTaxProbe | null {
@@ -309,7 +357,12 @@ function swapOrNull(s: SwapFailureDetail): SwapFailureDetail | null {
     route = []
     for (const hop of s.route.slice(0, MAX_HOPS)) {
       if (!ADDRESS.test(hop.tokenIn) || !ADDRESS.test(hop.tokenOut)) return null
-      route.push({ protocol: hop.protocol, tokenIn: hop.tokenIn, tokenOut: hop.tokenOut, feeTier: hop.feeTier === null || !Number.isInteger(hop.feeTier) ? null : hop.feeTier })
+      route.push({
+        protocol: hop.protocol,
+        tokenIn: hop.tokenIn,
+        tokenOut: hop.tokenOut,
+        feeTier: hop.feeTier === null || !Number.isInteger(hop.feeTier) ? null : hop.feeTier,
+      })
     }
   }
   return {
@@ -320,7 +373,14 @@ function swapOrNull(s: SwapFailureDetail): SwapFailureDetail | null {
       blockNumber: clampOrNull(s.quote.blockNumber, MAX_BLOCK_NUMBER),
       fallbackReason: clampOrNull(s.quote.fallbackReason, MAX_FALLBACK_REASON),
     },
-    trade: { type: s.trade.type, tokenIn, tokenOut, amountIn, slippageBips: intIn(s.trade.slippageBips, 0, MAX_BIPS), taxBips: bipsOrNull(s.trade.taxBips) },
+    trade: {
+      type: s.trade.type,
+      tokenIn,
+      tokenOut,
+      amountIn,
+      slippageBips: intIn(s.trade.slippageBips, 0, MAX_BIPS),
+      taxBips: bipsOrNull(s.trade.taxBips),
+    },
     quoted: {
       amountOut: amountOrNull(s.quoted.amountOut),
       minimumOut: amountOrNull(s.quoted.minimumOut),
@@ -330,15 +390,25 @@ function swapOrNull(s: SwapFailureDetail): SwapFailureDetail | null {
     route,
     splits: intInOrNull(s.splits, 1, MAX_SPLITS),
     tax: { in: probeOrNull(s.tax.in), out: probeOrNull(s.tax.out) },
-    fee: s.fee === null ? null : { bips: intIn(s.fee.bips, 0, MAX_BIPS), sink: addressOrNull(s.fee.sink), onInput: s.fee.onInput },
+    fee:
+      s.fee === null
+        ? null
+        : {
+            bips: intIn(s.fee.bips, 0, MAX_BIPS),
+            sink: addressOrNull(s.fee.sink),
+            onInput: s.fee.onInput,
+          },
   }
 }
 
-function detailOrNull(d: Readonly<Record<string, FailureDetailValue>>): Record<string, FailureDetailValue> {
+function detailOrNull(
+  d: Readonly<Record<string, FailureDetailValue>>,
+): Record<string, FailureDetailValue> {
   const out: Record<string, FailureDetailValue> = {}
   for (const [key, value] of Object.entries(d).slice(0, MAX_DETAIL_KEYS)) {
     if (typeof value === 'string') out[clamp(key, MAX_DETAIL_KEY)] = clamp(value, MAX_DETAIL_VALUE)
-    else if (typeof value === 'number') out[clamp(key, MAX_DETAIL_KEY)] = Number.isFinite(value) ? value : null
+    else if (typeof value === 'number')
+      out[clamp(key, MAX_DETAIL_KEY)] = Number.isFinite(value) ? value : null
     else out[clamp(key, MAX_DETAIL_KEY)] = value
   }
   return out
@@ -367,18 +437,30 @@ export function normalise(report: ClientFailureReport): ClientFailureReport | nu
     reporter rather than a habit of its callers.
   */
   if (report.failure.kind === 'rejected') return null
-  const state = report.state === null || !ADDRESS.test(report.state.account) ? null : {
-    account: report.state.account,
-    balanceIn: amountOrNull(report.state.balanceIn),
-    nativeBalance: amountOrNull(report.state.nativeBalance),
-    erc20Allowance: amountOrNull(report.state.erc20Allowance),
-    permit2Amount: amountOrNull(report.state.permit2Amount),
-    permit2Expiration: report.state.permit2Expiration === null || !Number.isInteger(report.state.permit2Expiration) || report.state.permit2Expiration < 0 ? null : report.state.permit2Expiration,
-  }
+  const state =
+    report.state === null || !ADDRESS.test(report.state.account)
+      ? null
+      : {
+          account: report.state.account,
+          balanceIn: amountOrNull(report.state.balanceIn),
+          nativeBalance: amountOrNull(report.state.nativeBalance),
+          erc20Allowance: amountOrNull(report.state.erc20Allowance),
+          permit2Amount: amountOrNull(report.state.permit2Amount),
+          permit2Expiration:
+            report.state.permit2Expiration === null ||
+            !Number.isInteger(report.state.permit2Expiration) ||
+            report.state.permit2Expiration < 0
+              ? null
+              : report.state.permit2Expiration,
+        }
   const callTo = report.call === null ? null : addressOrNull(report.call.to)
   const callValue = report.call === null ? null : amountOrNull(report.call.value)
   const call =
-    report.call === null || callTo === null || callValue === null || !EVEN_HEX.test(report.call.data) || report.call.data.length > MAX_DATA_CHARS
+    report.call === null ||
+    callTo === null ||
+    callValue === null ||
+    !EVEN_HEX.test(report.call.data) ||
+    report.call.data.length > MAX_DATA_CHARS
       ? null
       : { to: callTo, value: callValue, data: report.call.data }
   return {
@@ -399,8 +481,12 @@ export function normalise(report: ClientFailureReport): ClientFailureReport | nu
     },
     call,
     state,
-    ...(report.swap === undefined ? {} : { swap: report.swap === null ? null : swapOrNull(report.swap) }),
-    ...(report.detail === undefined ? {} : { detail: report.detail === null ? null : detailOrNull(report.detail) }),
+    ...(report.swap === undefined
+      ? {}
+      : { swap: report.swap === null ? null : swapOrNull(report.swap) }),
+    ...(report.detail === undefined
+      ? {}
+      : { detail: report.detail === null ? null : detailOrNull(report.detail) }),
   }
 }
 
@@ -460,21 +546,34 @@ export class ClientFailures {
       if (input.failure.kind === 'rejected') return
       if (!(await this.deps.enabled())) return
       const now = this.deps.now()
-      while (this.sentAt.length > 0 && now - (this.sentAt[0] as number) > WINDOW_MS) this.sentAt.shift()
+      while (this.sentAt.length > 0 && now - (this.sentAt[0] as number) > WINDOW_MS)
+        this.sentAt.shift()
       if (this.sentAt.length >= MAX_PER_WINDOW) return
-      const report = normalise({ ...input, client: this.deps.client, version: this.deps.version, at: now })
+      const report = normalise({
+        ...input,
+        client: this.deps.client,
+        version: this.deps.version,
+        at: now,
+      })
       if (!report) return
       /*
         The signature comes out here, at the last possible moment, so no path
         into this class can forget to do it — including ones written later. It
         is a no-op on calldata that carries no permit.
       */
-      const body = JSON.stringify(report.call === null ? report : { ...report, call: { ...report.call, data: stripPermitSignatures(report.call.data) } })
+      const body = JSON.stringify(
+        report.call === null
+          ? report
+          : { ...report, call: { ...report.call, data: stripPermitSignatures(report.call.data) } },
+      )
       this.sentAt.push(now)
       // The key never travels; a per-request signature does (§9.1, `apiAuth`).
       await this.deps.fetch(this.deps.url, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', ...authHeaders({ key: this.deps.key, method: 'POST', url: this.deps.url, body, now }) },
+        headers: {
+          'content-type': 'application/json',
+          ...authHeaders({ key: this.deps.key, method: 'POST', url: this.deps.url, body, now }),
+        },
         body,
         /*
           The extension's worker can be torn down the moment a flow stops
@@ -503,6 +602,8 @@ export class ClientFailures {
  * this reason, and a dependency that is present but inert is the kind of thing
  * that gets debugged twice.
  */
-export function clientFailuresFor(deps: Omit<ClientFailureDeps, 'key'> & { readonly key?: string | undefined }): ClientFailures | undefined {
+export function clientFailuresFor(
+  deps: Omit<ClientFailureDeps, 'key'> & { readonly key?: string | undefined },
+): ClientFailures | undefined {
   return deps.key ? new ClientFailures({ ...deps, key: deps.key }) : undefined
 }

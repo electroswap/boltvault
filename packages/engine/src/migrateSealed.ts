@@ -48,7 +48,10 @@ export interface MigrationReport {
   readonly removed: readonly string[]
 }
 
-export async function migrateSealed(platform: Platform, sealed: SealedStores): Promise<MigrationReport> {
+export async function migrateSealed(
+  platform: Platform,
+  sealed: SealedStores,
+): Promise<MigrationReport> {
   const local = platform.storage.local
   const keys = await local.keys()
   const removed: string[] = []

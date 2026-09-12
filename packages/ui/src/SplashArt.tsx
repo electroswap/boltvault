@@ -119,7 +119,17 @@ function Shockwave({ size, delay }: { size: number; delay: number }) {
 }
 
 /** A general entrance with real travel — Ignition is deliberately smaller than this. */
-function Rise({ children, delay, travel = 18, duration = 480 }: { children: ReactNode; delay: number; travel?: number; duration?: number }) {
+function Rise({
+  children,
+  delay,
+  travel = 18,
+  duration = 480,
+}: {
+  children: ReactNode
+  delay: number
+  travel?: number
+  duration?: number
+}) {
   return (
     <Animated.View
       style={{
@@ -190,16 +200,51 @@ export interface SplashArtProps {
   readonly testID?: string
 }
 
-export function SplashArt({ width, height, name, brand, reducedMotion = false, testID }: SplashArtProps) {
+export function SplashArt({
+  width,
+  height,
+  name,
+  brand,
+  reducedMotion = false,
+  testID,
+}: SplashArtProps) {
   const mark = SPLASH_MARK
   const still = reducedMotion
-  const field = <Field scene="circuit" address="0x0000000000000000000000000000000000000e7n" quiet width={width} height={height} reducedMotion={reducedMotion} />
+  const field = (
+    <Field
+      scene="circuit"
+      address="0x0000000000000000000000000000000000000e7n"
+      quiet
+      width={width}
+      height={height}
+      reducedMotion={reducedMotion}
+    />
+  )
   return (
-    <Animated.View style={{ flex: 1, backgroundColor: paint.void, alignItems: 'center', justifyContent: 'center' }} testID={testID}>
+    <Animated.View
+      style={{
+        flex: 1,
+        backgroundColor: paint.void,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+      testID={testID}
+    >
       {still ? field : <Wake>{field}</Wake>}
 
       {/* The strike, dead centre — where the native drawable already put it. */}
-      <Animated.View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }} pointerEvents="none">
+      <Animated.View
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: 0,
+          bottom: 0,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+        pointerEvents="none"
+      >
         {still ? null : (
           <>
             <Shockwave size={mark} delay={30} />
@@ -208,7 +253,13 @@ export function SplashArt({ width, height, name, brand, reducedMotion = false, t
             <Flash size={mark} />
           </>
         )}
-        {still ? <BoltMark size={mark} testID="splash-mark" /> : <Recoil><BoltMark size={mark} testID="splash-mark" /></Recoil>}
+        {still ? (
+          <BoltMark size={mark} testID="splash-mark" />
+        ) : (
+          <Recoil>
+            <BoltMark size={mark} testID="splash-mark" />
+          </Recoil>
+        )}
       </Animated.View>
 
       {/* The name sits under the mark rather than sharing a column with it, so
@@ -216,12 +267,36 @@ export function SplashArt({ width, height, name, brand, reducedMotion = false, t
           0.244 is where the bolt's tail ends inside the box: the polygon runs
           to y=0.94 of the unit square, which is 0.744 of the 1.8-unit viewBox,
           which is 0.244 below the box's own centre. */}
-      <Animated.View style={{ position: 'absolute', left: 0, right: 0, top: height / 2 + mark * 0.244 + 22, alignItems: 'center' }} pointerEvents="none">
-        {still ? name : <Rise delay={240} duration={480}>{name}</Rise>}
+      <Animated.View
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: height / 2 + mark * 0.244 + 22,
+          alignItems: 'center',
+        }}
+        pointerEvents="none"
+      >
+        {still ? (
+          name
+        ) : (
+          <Rise delay={240} duration={480}>
+            {name}
+          </Rise>
+        )}
       </Animated.View>
 
-      <Animated.View style={{ position: 'absolute', left: 0, right: 0, bottom: 44, alignItems: 'center' }} pointerEvents="none">
-        {still ? brand : <Rise delay={520} travel={10} duration={420}>{brand}</Rise>}
+      <Animated.View
+        style={{ position: 'absolute', left: 0, right: 0, bottom: 44, alignItems: 'center' }}
+        pointerEvents="none"
+      >
+        {still ? (
+          brand
+        ) : (
+          <Rise delay={520} travel={10} duration={420}>
+            {brand}
+          </Rise>
+        )}
       </Animated.View>
     </Animated.View>
   )

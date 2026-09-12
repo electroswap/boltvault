@@ -22,8 +22,14 @@ export const YIELD_FARM_ABI = parseAbi([
   'function withdraw(uint256 _farmId, uint256 _liquidityAmt, bool _asNative)',
 ])
 
-export const V2_PAIR_ABI = parseAbi(['function getReserves() view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)', 'function token0() view returns (address)', 'function totalSupply() view returns (uint256)'])
-export const V3_POOL_ABI = parseAbi(['function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)'])
+export const V2_PAIR_ABI = parseAbi([
+  'function getReserves() view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)',
+  'function token0() view returns (address)',
+  'function totalSupply() view returns (uint256)',
+])
+export const V3_POOL_ABI = parseAbi([
+  'function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)',
+])
 
 /** One year of Electroneum blocks; the duration bonus is linear to 2.5× and capped there (YieldFarm.sol). */
 export const MAX_BLOCKS_FOR_BONUS = 6_307_200n
@@ -50,12 +56,16 @@ export const BOLT_STAIRS: ReadonlyArray<{ readonly bolt: bigint; readonly multip
   { bolt: 100_000n * 10n ** 18n, multiplier: 11_500n },
 ]
 
-export function boltStair(totalBolt: bigint): { readonly bolt: bigint; readonly multiplier: bigint } | null {
+export function boltStair(
+  totalBolt: bigint,
+): { readonly bolt: bigint; readonly multiplier: bigint } | null {
   return BOLT_STAIRS.find((s) => s.bolt === totalBolt) ?? null
 }
 
 /** The next stair above `totalBolt` and how much more BOLT it takes; null at the top. */
-export function nextBoltStair(totalBolt: bigint): { readonly bolt: bigint; readonly multiplier: bigint; readonly more: bigint } | null {
+export function nextBoltStair(
+  totalBolt: bigint,
+): { readonly bolt: bigint; readonly multiplier: bigint; readonly more: bigint } | null {
   const next = BOLT_STAIRS.find((s) => s.bolt > totalBolt)
   return next ? { ...next, more: next.bolt - totalBolt } : null
 }
@@ -65,11 +75,19 @@ export function nextBoltStair(totalBolt: bigint): { readonly bolt: bigint; reado
  * new liquidity is of the total (YieldFarm.deposit): the multiplier the
  * farmer keeps afterwards, so the dilution plate can say so before signing.
  */
-export function dilution(input: { readonly existingLiquidity: bigint; readonly startingBlock: bigint; readonly currentBlock: bigint; readonly addedLiquidity: bigint }): { readonly before: bigint; readonly after: bigint; readonly blocksLost: bigint } {
-  const blocksServed = input.currentBlock > input.startingBlock ? input.currentBlock - input.startingBlock : 0n
+export function dilution(input: {
+  readonly existingLiquidity: bigint
+  readonly startingBlock: bigint
+  readonly currentBlock: bigint
+  readonly addedLiquidity: bigint
+}): { readonly before: bigint; readonly after: bigint; readonly blocksLost: bigint } {
+  const blocksServed =
+    input.currentBlock > input.startingBlock ? input.currentBlock - input.startingBlock : 0n
   const before = durationMultiplier(blocksServed)
-  if (input.existingLiquidity === 0n || input.addedLiquidity === 0n) return { before, after: before, blocksLost: 0n }
-  const increaseOfTotal = (input.addedLiquidity * 10n ** 18n) / (input.existingLiquidity + input.addedLiquidity)
+  if (input.existingLiquidity === 0n || input.addedLiquidity === 0n)
+    return { before, after: before, blocksLost: 0n }
+  const increaseOfTotal =
+    (input.addedLiquidity * 10n ** 18n) / (input.existingLiquidity + input.addedLiquidity)
   const adjusted = blocksServed - (blocksServed * increaseOfTotal) / 10n ** 18n
   return { before, after: durationMultiplier(adjusted), blocksLost: blocksServed - adjusted }
 }
@@ -79,12 +97,25 @@ export function effectiveShare(liquidity: bigint, duration: bigint, bolt: bigint
   return (liquidity * duration * bolt) / (MULTIPLIER_BASE * MULTIPLIER_BASE)
 }
 
-export function encodeDeposit(farmId: bigint, amount0: bigint, amount1: bigint, amountBolt: bigint): Hex {
-  return encodeFunctionData({ abi: YIELD_FARM_ABI, functionName: 'deposit', args: [farmId, amount0, amount1, amountBolt] })
+export function encodeDeposit(
+  farmId: bigint,
+  amount0: bigint,
+  amount1: bigint,
+  amountBolt: bigint,
+): Hex {
+  return encodeFunctionData({
+    abi: YIELD_FARM_ABI,
+    functionName: 'deposit',
+    args: [farmId, amount0, amount1, amountBolt],
+  })
 }
 
 export function encodeWithdraw(farmId: bigint, liquidity: bigint, asNative: boolean): Hex {
-  return encodeFunctionData({ abi: YIELD_FARM_ABI, functionName: 'withdraw', args: [farmId, liquidity, asNative] })
+  return encodeFunctionData({
+    abi: YIELD_FARM_ABI,
+    functionName: 'withdraw',
+    args: [farmId, liquidity, asNative],
+  })
 }
 
 /** Collect = `withdraw(farmId, 0, asNative)`: runs `_collectRewardsAndFees` and leaves the liquidity untouched. */
@@ -101,7 +132,13 @@ export function v2Counterpart(amountIn: bigint, reserveIn: bigint, reserveOut: b
 }
 
 /** The LP tokens a V2 deposit mints, for the share preview (Router02.addLiquidity math). */
-export function v2LiquidityMinted(amount0: bigint, amount1: bigint, reserve0: bigint, reserve1: bigint, totalSupply: bigint): bigint {
+export function v2LiquidityMinted(
+  amount0: bigint,
+  amount1: bigint,
+  reserve0: bigint,
+  reserve1: bigint,
+  totalSupply: bigint,
+): bigint {
   if (totalSupply === 0n || reserve0 === 0n || reserve1 === 0n) return 0n
   const a = (amount0 * totalSupply) / reserve0
   const b = (amount1 * totalSupply) / reserve1
@@ -114,7 +151,10 @@ const Q96 = 1n << 96n
 export function sqrtRatioAtTick(tick: number): bigint {
   const absTick = BigInt(Math.abs(tick))
   if (absTick > 887_272n) throw new Error('tick out of range')
-  let ratio = (absTick & 0x1n) !== 0n ? 0xfffcb933bd6fad37aa2d162d1a594001n : 0x100000000000000000000000000000000n
+  let ratio =
+    (absTick & 0x1n) !== 0n
+      ? 0xfffcb933bd6fad37aa2d162d1a594001n
+      : 0x100000000000000000000000000000000n
   const mul = (m: bigint): void => {
     ratio = (ratio * m) >> 128n
   }
@@ -143,7 +183,12 @@ export function sqrtRatioAtTick(tick: number): bigint {
 }
 
 /** Amounts of token0/token1 a V3 position of `liquidity` holds between the ticks at the current price (LiquidityAmounts). */
-export function v3AmountsForLiquidity(sqrtPriceX96: bigint, tickLower: number, tickUpper: number, liquidity: bigint): { amount0: bigint; amount1: bigint } {
+export function v3AmountsForLiquidity(
+  sqrtPriceX96: bigint,
+  tickLower: number,
+  tickUpper: number,
+  liquidity: bigint,
+): { amount0: bigint; amount1: bigint } {
   const lower = sqrtRatioAtTick(tickLower)
   const upper = sqrtRatioAtTick(tickUpper)
   const amount0 = (a: bigint, b: bigint): bigint => (liquidity * Q96 * (b - a)) / b / a
@@ -154,7 +199,12 @@ export function v3AmountsForLiquidity(sqrtPriceX96: bigint, tickLower: number, t
 }
 
 /** The token1 a V3 deposit needs beside `amount0` in the farm's range (0n when the range is one-sided). */
-export function v3Counterpart(amount0: bigint, sqrtPriceX96: bigint, tickLower: number, tickUpper: number): { amount1: bigint; liquidity: bigint } {
+export function v3Counterpart(
+  amount0: bigint,
+  sqrtPriceX96: bigint,
+  tickLower: number,
+  tickUpper: number,
+): { amount1: bigint; liquidity: bigint } {
   const lower = sqrtRatioAtTick(tickLower)
   const upper = sqrtRatioAtTick(tickUpper)
   if (sqrtPriceX96 <= lower || amount0 === 0n) return { amount1: 0n, liquidity: 0n }

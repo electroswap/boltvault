@@ -108,8 +108,12 @@ export function feePortion(price: bigint, bps: number): bigint {
 }
 
 /** What a seller actually receives from a listing or an accepted offer at `price`. */
-export function sellerProceeds(price: bigint, creatorFee: CreatorFee | null): { seller: bigint; creator: bigint; platform: bigint } {
-  const creator = creatorFee && creatorFee.basisPoints > 0 ? feePortion(price, creatorFee.basisPoints) : 0n
+export function sellerProceeds(
+  price: bigint,
+  creatorFee: CreatorFee | null,
+): { seller: bigint; creator: bigint; platform: bigint } {
+  const creator =
+    creatorFee && creatorFee.basisPoints > 0 ? feePortion(price, creatorFee.basisPoints) : 0n
   const platform = feePortion(price, MARKETPLACE_FEE_BPS)
   return { seller: price - creator - platform, creator, platform }
 }
@@ -142,14 +146,30 @@ export interface ListingInput {
 export function buildListing(input: ListingInput): OrderComponents {
   if (input.priceWei <= 0n) throw new Error('price must be positive')
   const split = sellerProceeds(input.priceWei, input.creatorFee)
-  const native = (amount: bigint, recipient: Hex): ConsiderationItem => ({ itemType: ItemType.NATIVE, token: ZERO_ADDRESS, identifierOrCriteria: 0n, startAmount: amount, endAmount: amount, recipient })
+  const native = (amount: bigint, recipient: Hex): ConsiderationItem => ({
+    itemType: ItemType.NATIVE,
+    token: ZERO_ADDRESS,
+    identifierOrCriteria: 0n,
+    startAmount: amount,
+    endAmount: amount,
+    recipient,
+  })
   const consideration: ConsiderationItem[] = [native(split.seller, input.seller)]
-  if (split.creator > 0n && input.creatorFee) consideration.push(native(split.creator, input.creatorFee.payoutAddress))
+  if (split.creator > 0n && input.creatorFee)
+    consideration.push(native(split.creator, input.creatorFee.payoutAddress))
   if (split.platform > 0n) consideration.push(native(split.platform, input.config.feeReceiver))
   return {
     offerer: input.seller,
     zone: ZERO_ADDRESS,
-    offer: [{ itemType: input.standard === 'ERC1155' ? ItemType.ERC1155 : ItemType.ERC721, token: input.token, identifierOrCriteria: input.tokenId, startAmount: 1n, endAmount: 1n }],
+    offer: [
+      {
+        itemType: input.standard === 'ERC1155' ? ItemType.ERC1155 : ItemType.ERC721,
+        token: input.token,
+        identifierOrCriteria: input.tokenId,
+        startAmount: 1n,
+        endAmount: 1n,
+      },
+    ],
     consideration,
     orderType: OrderType.PARTIAL_OPEN,
     startTime: nowSeconds(input.now),
@@ -179,15 +199,38 @@ export interface OfferInput {
 export function buildOffer(input: OfferInput): OrderComponents {
   if (input.priceWei <= 0n) throw new Error('price must be positive')
   const split = sellerProceeds(input.priceWei, input.creatorFee)
-  const wetn = (amount: bigint, recipient: Hex): ConsiderationItem => ({ itemType: ItemType.ERC20, token: input.config.wetn, identifierOrCriteria: 0n, startAmount: amount, endAmount: amount, recipient })
+  const wetn = (amount: bigint, recipient: Hex): ConsiderationItem => ({
+    itemType: ItemType.ERC20,
+    token: input.config.wetn,
+    identifierOrCriteria: 0n,
+    startAmount: amount,
+    endAmount: amount,
+    recipient,
+  })
   const consideration: ConsiderationItem[] = [wetn(split.seller, input.owner)]
-  if (split.creator > 0n && input.creatorFee) consideration.push(wetn(split.creator, input.creatorFee.payoutAddress))
+  if (split.creator > 0n && input.creatorFee)
+    consideration.push(wetn(split.creator, input.creatorFee.payoutAddress))
   if (split.platform > 0n) consideration.push(wetn(split.platform, input.config.feeReceiver))
-  consideration.push({ itemType: ItemType.ERC721, token: input.token, identifierOrCriteria: input.tokenId, startAmount: 1n, endAmount: 1n, recipient: input.bidder })
+  consideration.push({
+    itemType: ItemType.ERC721,
+    token: input.token,
+    identifierOrCriteria: input.tokenId,
+    startAmount: 1n,
+    endAmount: 1n,
+    recipient: input.bidder,
+  })
   return {
     offerer: input.bidder,
     zone: ZERO_ADDRESS,
-    offer: [{ itemType: ItemType.ERC20, token: input.config.wetn, identifierOrCriteria: 0n, startAmount: input.priceWei, endAmount: input.priceWei }],
+    offer: [
+      {
+        itemType: ItemType.ERC20,
+        token: input.config.wetn,
+        identifierOrCriteria: 0n,
+        startAmount: input.priceWei,
+        endAmount: input.priceWei,
+      },
+    ],
     consideration,
     orderType: OrderType.FULL_OPEN,
     startTime: nowSeconds(input.now),
@@ -200,7 +243,15 @@ export function buildOffer(input: OfferInput): OrderComponents {
 }
 
 /** The typed data the signer signs — JSON-safe (uints as decimal strings), the shape dApps send. */
-export function orderTypedData(config: MarketplaceConfig, order: OrderComponents): { domain: { name: 'Seaport'; version: '1.5'; chainId: number; verifyingContract: Hex }; types: typeof EIP712_ORDER_TYPES; primaryType: 'OrderComponents'; message: Record<string, unknown> } {
+export function orderTypedData(
+  config: MarketplaceConfig,
+  order: OrderComponents,
+): {
+  domain: { name: 'Seaport'; version: '1.5'; chainId: number; verifyingContract: Hex }
+  types: typeof EIP712_ORDER_TYPES
+  primaryType: 'OrderComponents'
+  message: Record<string, unknown>
+} {
   const item = (i: OfferItem | ConsiderationItem): Record<string, unknown> => ({
     itemType: i.itemType,
     token: i.token,
@@ -210,7 +261,12 @@ export function orderTypedData(config: MarketplaceConfig, order: OrderComponents
     ...('recipient' in i ? { recipient: i.recipient } : {}),
   })
   return {
-    domain: { name: 'Seaport', version: '1.5', chainId: config.chainId, verifyingContract: config.seaport },
+    domain: {
+      name: 'Seaport',
+      version: '1.5',
+      chainId: config.chainId,
+      verifyingContract: config.seaport,
+    },
     types: EIP712_ORDER_TYPES,
     primaryType: 'OrderComponents',
     message: {
@@ -231,25 +287,77 @@ export function orderTypedData(config: MarketplaceConfig, order: OrderComponents
 
 /** Seaport's order hash is the EIP-712 struct hash of the components (what `getOrderHash` returns). */
 export function orderHash(order: OrderComponents): Hex {
-  return hashStruct({ data: { ...order, offer: [...order.offer], consideration: [...order.consideration] }, primaryType: 'OrderComponents', types: EIP712_ORDER_TYPES })
+  return hashStruct({
+    data: { ...order, offer: [...order.offer], consideration: [...order.consideration] },
+    primaryType: 'OrderComponents',
+    types: EIP712_ORDER_TYPES,
+  })
 }
 
-export function toParameters(order: OrderComponents): { offerer: Hex; zone: Hex; offer: OfferItem[]; consideration: ConsiderationItem[]; orderType: number; startTime: bigint; endTime: bigint; zoneHash: Hex; salt: bigint; conduitKey: Hex; totalOriginalConsiderationItems: bigint } {
-  return { offerer: order.offerer, zone: order.zone, offer: [...order.offer], consideration: [...order.consideration], orderType: order.orderType, startTime: order.startTime, endTime: order.endTime, zoneHash: order.zoneHash, salt: order.salt, conduitKey: order.conduitKey, totalOriginalConsiderationItems: BigInt(order.consideration.length) }
+export function toParameters(order: OrderComponents): {
+  offerer: Hex
+  zone: Hex
+  offer: OfferItem[]
+  consideration: ConsiderationItem[]
+  orderType: number
+  startTime: bigint
+  endTime: bigint
+  zoneHash: Hex
+  salt: bigint
+  conduitKey: Hex
+  totalOriginalConsiderationItems: bigint
+} {
+  return {
+    offerer: order.offerer,
+    zone: order.zone,
+    offer: [...order.offer],
+    consideration: [...order.consideration],
+    orderType: order.orderType,
+    startTime: order.startTime,
+    endTime: order.endTime,
+    zoneHash: order.zoneHash,
+    salt: order.salt,
+    conduitKey: order.conduitKey,
+    totalOriginalConsiderationItems: BigInt(order.consideration.length),
+  }
 }
 
 /** `fulfillOrder(order, fulfillerConduitKey)`; native listings need `value` = the ETN consideration total. */
-export function encodeFulfillOrder(parameters: ReturnType<typeof toParameters>, signature: Hex, fulfillerConduitKey: Hex = ZERO_BYTES32): { data: Hex; value: bigint } {
-  const value = parameters.consideration.filter((c) => c.itemType === ItemType.NATIVE).reduce((s, c) => s + c.startAmount, 0n)
-  return { data: encodeFunctionData({ abi: SEAPORT_ABI, functionName: 'fulfillOrder', args: [{ parameters, signature }, fulfillerConduitKey] }), value }
+export function encodeFulfillOrder(
+  parameters: ReturnType<typeof toParameters>,
+  signature: Hex,
+  fulfillerConduitKey: Hex = ZERO_BYTES32,
+): { data: Hex; value: bigint } {
+  const value = parameters.consideration
+    .filter((c) => c.itemType === ItemType.NATIVE)
+    .reduce((s, c) => s + c.startAmount, 0n)
+  return {
+    data: encodeFunctionData({
+      abi: SEAPORT_ABI,
+      functionName: 'fulfillOrder',
+      args: [{ parameters, signature }, fulfillerConduitKey],
+    }),
+    value,
+  }
 }
 
 export function encodeCancel(orders: readonly OrderComponents[]): Hex {
-  return encodeFunctionData({ abi: SEAPORT_ABI, functionName: 'cancel', args: [orders.map((o) => ({ ...o, offer: [...o.offer], consideration: [...o.consideration] }))] })
+  return encodeFunctionData({
+    abi: SEAPORT_ABI,
+    functionName: 'cancel',
+    args: [orders.map((o) => ({ ...o, offer: [...o.offer], consideration: [...o.consideration] }))],
+  })
 }
 
 /** The body `POST /api/nfts/order` validates (services/api NftMarketService.orderBodySchema). */
-export function orderIntakeBody(input: { type: 'LISTING' | 'BID'; config: MarketplaceConfig; token: Hex; tokenId: bigint; order: OrderComponents; signature: Hex }): Record<string, unknown> {
+export function orderIntakeBody(input: {
+  type: 'LISTING' | 'BID'
+  config: MarketplaceConfig
+  token: Hex
+  tokenId: bigint
+  order: OrderComponents
+  signature: Hex
+}): Record<string, unknown> {
   const item = (i: OfferItem | ConsiderationItem): Record<string, unknown> => ({
     itemType: i.itemType,
     token: i.token,
@@ -285,21 +393,36 @@ export function orderIntakeBody(input: { type: 'LISTING' | 'BID'; config: Market
 
 const HexSchema = z.string().regex(/^0x[0-9a-fA-F]*$/)
 const AddressSchema = z.string().regex(/^0x[0-9a-fA-F]{40}$/)
-const Uint = z.union([z.string(), z.number()]).transform((v) => BigInt(typeof v === 'number' ? Math.trunc(v) : v))
-const ItemSchema = z.object({ itemType: z.union([z.number(), z.string()]).transform((v) => Number(v)), token: AddressSchema, identifierOrCriteria: Uint, startAmount: Uint, endAmount: Uint })
+const Uint = z
+  .union([z.string(), z.number()])
+  .transform((v) => BigInt(typeof v === 'number' ? Math.trunc(v) : v))
+const ItemSchema = z.object({
+  itemType: z.union([z.number(), z.string()]).transform((v) => Number(v)),
+  token: AddressSchema,
+  identifierOrCriteria: Uint,
+  startAmount: Uint,
+  endAmount: Uint,
+})
 const ParametersSchema = z.object({
   offerer: AddressSchema,
   zone: AddressSchema.optional().default(ZERO_ADDRESS),
   offer: z.array(ItemSchema),
   consideration: z.array(ItemSchema.extend({ recipient: AddressSchema })),
-  orderType: z.union([z.number(), z.string()]).transform((v) => Number(v)).optional().default(0),
+  orderType: z
+    .union([z.number(), z.string()])
+    .transform((v) => Number(v))
+    .optional()
+    .default(0),
   startTime: Uint,
   endTime: Uint,
   zoneHash: HexSchema.optional().default(ZERO_BYTES32),
   salt: Uint.optional().default('0'),
   conduitKey: HexSchema,
   counter: Uint.optional(),
-  totalOriginalConsiderationItems: z.union([z.number(), z.string()]).transform((v) => Number(v)).optional(),
+  totalOriginalConsiderationItems: z
+    .union([z.number(), z.string()])
+    .transform((v) => Number(v))
+    .optional(),
 })
 
 /** The API's `protocolParameters` (as stored from the intake) back into components; null when unparseable. */
@@ -312,8 +435,21 @@ export function parseProtocolParameters(raw: unknown, counter?: bigint): OrderCo
   return {
     offerer: p.offerer as Hex,
     zone: p.zone as Hex,
-    offer: p.offer.map((i) => ({ itemType: i.itemType, token: i.token as Hex, identifierOrCriteria: i.identifierOrCriteria, startAmount: i.startAmount, endAmount: i.endAmount })),
-    consideration: p.consideration.map((i) => ({ itemType: i.itemType, token: i.token as Hex, identifierOrCriteria: i.identifierOrCriteria, startAmount: i.startAmount, endAmount: i.endAmount, recipient: i.recipient as Hex })),
+    offer: p.offer.map((i) => ({
+      itemType: i.itemType,
+      token: i.token as Hex,
+      identifierOrCriteria: i.identifierOrCriteria,
+      startAmount: i.startAmount,
+      endAmount: i.endAmount,
+    })),
+    consideration: p.consideration.map((i) => ({
+      itemType: i.itemType,
+      token: i.token as Hex,
+      identifierOrCriteria: i.identifierOrCriteria,
+      startAmount: i.startAmount,
+      endAmount: i.endAmount,
+      recipient: i.recipient as Hex,
+    })),
     orderType: p.orderType,
     startTime: p.startTime,
     endTime: p.endTime,

@@ -19,5 +19,12 @@ import { useRouter } from '../navigation/router'
 
 export function HomeKey() {
   const router = useRouter()
-  return <IconButton icon="home" label={t({ id: 'rail.home', message: 'Home' })} onPress={() => router.setTab('home')} testID="rail-home" />
+  return (
+    <IconButton
+      icon="home"
+      label={t({ id: 'rail.home', message: 'Home' })}
+      onPress={() => router.setTab('home')}
+      testID="rail-home"
+    />
+  )
 }

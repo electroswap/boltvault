@@ -10,7 +10,17 @@
 import { t } from '../../i18n'
 
 export type OnboardingPath = 'create' | 'import' | 'watch'
-export type Step = 'intro' | 'blocked' | 'welcome' | 'words' | 'quiz' | 'password' | 'import' | 'preview' | 'watch' | 'passkey'
+export type Step =
+  | 'intro'
+  | 'blocked'
+  | 'welcome'
+  | 'words'
+  | 'quiz'
+  | 'password'
+  | 'import'
+  | 'preview'
+  | 'watch'
+  | 'passkey'
 
 export const MIN_PASSWORD = 12
 /**
@@ -25,12 +35,19 @@ export const MIN_PASSWORD = 12
 const MIN_DISTINCT = 5
 
 export function passwordStrength(pw: string): { score: 0 | 1 | 2 | 3; label: string } {
-  if (pw.length < MIN_PASSWORD) return { score: 0, label: t({ id: 'pw.short', message: 'At least {n} characters', values: { n: MIN_PASSWORD } }) }
-  if (new Set(pw).size < MIN_DISTINCT) return { score: 0, label: t({ id: 'pw.repetitive', message: 'Too few different characters' }) }
+  if (pw.length < MIN_PASSWORD)
+    return {
+      score: 0,
+      label: t({ id: 'pw.short', message: 'At least {n} characters', values: { n: MIN_PASSWORD } }),
+    }
+  if (new Set(pw).size < MIN_DISTINCT)
+    return { score: 0, label: t({ id: 'pw.repetitive', message: 'Too few different characters' }) }
   const classes = [/[a-z]/, /[A-Z]/, /\d/, /[^\w]/].filter((r) => r.test(pw)).length
   const words = pw.trim().split(/\s+/).length
-  if (pw.length >= 20 || words >= 4) return { score: 3, label: t({ id: 'pw.strong', message: 'Strong' }) }
-  if (classes >= 3 && pw.length >= 14) return { score: 2, label: t({ id: 'pw.good', message: 'Good' }) }
+  if (pw.length >= 20 || words >= 4)
+    return { score: 3, label: t({ id: 'pw.strong', message: 'Strong' }) }
+  if (classes >= 3 && pw.length >= 14)
+    return { score: 2, label: t({ id: 'pw.good', message: 'Good' }) }
   return { score: 1, label: t({ id: 'pw.ok', message: 'Usable — a longer phrase is stronger' }) }
 }
 
@@ -55,8 +72,13 @@ export function mnemonicLengthOk(phrase: string): boolean {
 export function mnemonicHint(phrase: string): string | null {
   const n = mnemonicWords(phrase).length
   if (n === 0) return null
-  if (BIP39_LENGTHS.has(n)) return t({ id: 'ob.import.count.ok', message: '{n} words', values: { n } })
-  return t({ id: 'ob.import.count.bad', message: '{n} words — a phrase is 12, 15, 18, 21 or 24', values: { n } })
+  if (BIP39_LENGTHS.has(n))
+    return t({ id: 'ob.import.count.ok', message: '{n} words', values: { n } })
+  return t({
+    id: 'ob.import.count.bad',
+    message: '{n} words — a phrase is 12, 15, 18, 21 or 24',
+    values: { n },
+  })
 }
 
 /**
@@ -69,19 +91,37 @@ export function mnemonicHint(phrase: string): string | null {
 export function engineErrorCopy(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err)
   if (/invalid_mnemonic|not a valid recovery phrase/i.test(raw)) {
-    return t({ id: 'ob.err.mnemonic', message: 'That is not a valid recovery phrase. Check the spelling and the order of the words.' })
+    return t({
+      id: 'ob.err.mnemonic',
+      message:
+        'That is not a valid recovery phrase. Check the spelling and the order of the words.',
+    })
   }
   if (/already exists/i.test(raw)) {
-    return t({ id: 'ob.err.exists', message: 'This device already has a vault. Unlock it instead, or add another account from Accounts.' })
+    return t({
+      id: 'ob.err.exists',
+      message:
+        'This device already has a vault. Unlock it instead, or add another account from Accounts.',
+    })
   }
   if (/prf-unsupported/i.test(raw)) {
-    return t({ id: 'ob.passkey.noprf', message: 'This browser created a passkey without the PRF feature, so it cannot unlock the vault on its own. Use your password.' })
+    return t({
+      id: 'ob.passkey.noprf',
+      message:
+        'This browser created a passkey without the PRF feature, so it cannot unlock the vault on its own. Use your password.',
+    })
   }
   if (/no such seed|not_found/i.test(raw)) {
-    return t({ id: 'ob.err.notfound', message: 'That step expired. Start again from the beginning.' })
+    return t({
+      id: 'ob.err.notfound',
+      message: 'That step expired. Start again from the beginning.',
+    })
   }
   if (/quota|storage/i.test(raw)) {
-    return t({ id: 'ob.err.storage', message: 'This device would not save the vault. Free some space and try again.' })
+    return t({
+      id: 'ob.err.storage',
+      message: 'This device would not save the vault. Free some space and try again.',
+    })
   }
   return t({ id: 'ob.err.generic', message: 'Something went wrong: {m}', values: { m: raw } })
 }

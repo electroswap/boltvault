@@ -52,8 +52,13 @@ function hex(bytes: Uint8Array): `0x${string}` {
 }
 
 function parseSignature(payload: Uint8Array): RawSignature {
-  if (payload.length < 65) throw new LedgerError('device', 0x9000, 'The device answered with a short signature.')
-  return { v: payload[0] as number, r: hex(payload.subarray(1, 33)), s: hex(payload.subarray(33, 65)) }
+  if (payload.length < 65)
+    throw new LedgerError('device', 0x9000, 'The device answered with a short signature.')
+  return {
+    v: payload[0] as number,
+    r: hex(payload.subarray(1, 33)),
+    s: hex(payload.subarray(33, 65)),
+  }
 }
 
 /** Where a legacy transaction's `[chainId, 0, 0]` tail starts, or 0 for typed transactions. */
@@ -77,7 +82,13 @@ export function eip155TailOffset(raw: Uint8Array, chainId: number): number {
 export class LedgerEthApp {
   constructor(private readonly transport: ApduTransport) {}
 
-  private async send(ins: number, p1: number, p2: number, data: Uint8Array, timeoutMs?: number): Promise<Uint8Array> {
+  private async send(
+    ins: number,
+    p1: number,
+    p2: number,
+    data: Uint8Array,
+    timeoutMs?: number,
+  ): Promise<Uint8Array> {
     return unwrapResponse(await this.transport.exchange(buildApdu(ins, p1, p2, data), timeoutMs))
   }
 
@@ -105,19 +116,30 @@ export class LedgerEthApp {
       }
       // A transport timeout on THIS apdu means the dashboard, not a slow device:
       // the app answers its own configuration immediately or not at all.
-      return { state: 'no_answer', message: 'Open the Ethereum app on your Ledger, then try again.' }
+      return {
+        state: 'no_answer',
+        message: 'Open the Ethereum app on your Ledger, then try again.',
+      }
     }
   }
 
   async getAppConfiguration(timeoutMs?: number): Promise<AppConfiguration> {
     const r = await this.send(INS.GET_APP_CONFIGURATION, 0, 0, new Uint8Array(), timeoutMs)
-    if (r.length < 4) throw new LedgerError('wrong_app', 0x9000, 'Open the Ethereum app on your Ledger.')
+    if (r.length < 4)
+      throw new LedgerError('wrong_app', 0x9000, 'Open the Ethereum app on your Ledger.')
     const flags = r[0] as number
-    return { blindSigning: (flags & 0x01) !== 0, erc20Provisioning: (flags & 0x02) !== 0, version: `${r[1]}.${r[2]}.${r[3]}` }
+    return {
+      blindSigning: (flags & 0x01) !== 0,
+      erc20Provisioning: (flags & 0x02) !== 0,
+      version: `${r[1]}.${r[2]}.${r[3]}`,
+    }
   }
 
   /** The address at `path`; `verify` makes the device show it for confirmation (§8.5 "Verify on device"). */
-  async getAddress(path: string, verify = false): Promise<{ address: `0x${string}`; publicKey: `0x${string}` }> {
+  async getAddress(
+    path: string,
+    verify = false,
+  ): Promise<{ address: `0x${string}`; publicKey: `0x${string}` }> {
     const r = await this.send(INS.GET_ADDRESS, verify ? 1 : 0, 0, pathToBytes(path))
     const pkLen = r[0] as number
     const publicKey = hex(r.subarray(1, 1 + pkLen))
@@ -151,10 +173,21 @@ export class LedgerEthApp {
         run long is deliberate and safe: the APDU data limit is 255, not
         `CHUNK`. The bound below is the real one.
       */
-      if (tail !== 0 && offset + size >= tail && offset + size < raw.length) size = raw.length - offset
-      if (size > APDU_DATA_MAX - pathBytes.length) throw new LedgerError('unsupported', 0, 'This transaction is too large for the Ethereum app to receive in one piece.')
+      if (tail !== 0 && offset + size >= tail && offset + size < raw.length)
+        size = raw.length - offset
+      if (size > APDU_DATA_MAX - pathBytes.length)
+        throw new LedgerError(
+          'unsupported',
+          0,
+          'This transaction is too large for the Ethereum app to receive in one piece.',
+        )
       const chunk = raw.subarray(offset, offset + size)
-      response = await this.send(INS.SIGN_TRANSACTION, first ? 0x00 : 0x80, 0x00, first ? concatBytes(pathBytes, chunk) : chunk)
+      response = await this.send(
+        INS.SIGN_TRANSACTION,
+        first ? 0x00 : 0x80,
+        0x00,
+        first ? concatBytes(pathBytes, chunk) : chunk,
+      )
       offset += size
       first = false
     }
@@ -173,7 +206,12 @@ export class LedgerEthApp {
       const max = first ? CHUNK - pathBytes.length - 4 : CHUNK
       const size = Math.min(max, message.length - offset)
       const chunk = message.subarray(offset, offset + size)
-      response = await this.send(INS.SIGN_PERSONAL_MESSAGE, first ? 0x00 : 0x80, 0x00, first ? concatBytes(pathBytes, len, chunk) : chunk)
+      response = await this.send(
+        INS.SIGN_PERSONAL_MESSAGE,
+        first ? 0x00 : 0x80,
+        0x00,
+        first ? concatBytes(pathBytes, len, chunk) : chunk,
+      )
       offset += size
       first = false
     }
@@ -181,8 +219,20 @@ export class LedgerEthApp {
   }
 
   /** EIP-712 by hashes (every app version; the device shows the two hashes — our sheet is the source of truth). */
-  async signTypedDataHashed(path: string, domainSeparator: Uint8Array, messageHash: Uint8Array): Promise<RawSignature> {
-    if (domainSeparator.length !== 32 || messageHash.length !== 32) throw new Error('hashes must be 32 bytes')
-    return parseSignature(await this.send(INS.SIGN_EIP712_HASHED, 0x00, 0x00, concatBytes(pathToBytes(path), domainSeparator, messageHash)))
+  async signTypedDataHashed(
+    path: string,
+    domainSeparator: Uint8Array,
+    messageHash: Uint8Array,
+  ): Promise<RawSignature> {
+    if (domainSeparator.length !== 32 || messageHash.length !== 32)
+      throw new Error('hashes must be 32 bytes')
+    return parseSignature(
+      await this.send(
+        INS.SIGN_EIP712_HASHED,
+        0x00,
+        0x00,
+        concatBytes(pathToBytes(path), domainSeparator, messageHash),
+      ),
+    )
   }
 }

@@ -97,7 +97,11 @@ function bipsAt(config: WalletFeeConfig, score: bigint): number {
  * thresholds: checking the union of those points checks every score.
  */
 function neverRaises(candidate: WalletFeeConfig, bundled: WalletFeeConfig): boolean {
-  const points = [0n, ...candidate.tiers.map((t) => BigInt(t.minScore)), ...bundled.tiers.map((t) => BigInt(t.minScore))]
+  const points = [
+    0n,
+    ...candidate.tiers.map((t) => BigInt(t.minScore)),
+    ...bundled.tiers.map((t) => BigInt(t.minScore)),
+  ]
   return points.every((score) => bipsAt(candidate, score) <= bipsAt(bundled, score))
 }
 
@@ -134,7 +138,11 @@ export function applyServedLadder(chainId: number, ladder: ServedLadder): boolea
     ...bundled,
     baseName: ladder.baseName,
     baseBips: ladder.baseBips,
-    tiers: ladder.tiers.map((tier) => ({ name: tier.name, minScore: tier.minScore, bips: tier.bips })),
+    tiers: ladder.tiers.map((tier) => ({
+      name: tier.name,
+      minScore: tier.minScore,
+      bips: tier.bips,
+    })),
     dynoWeight: ladder.dynoWeight,
     dynoWeightBand: ladder.dynoWeightBand,
     countFarmBolt: ladder.countFarmBolt,
@@ -203,7 +211,9 @@ export function tierName(chainId: number, tier: number): string | null {
 }
 
 /** Every rung, base first, for the fee sheet's ladder. */
-export function tierLadder(chainId: number): ReadonlyArray<{ name: string; minScore: string; bips: number }> {
+export function tierLadder(
+  chainId: number,
+): ReadonlyArray<{ name: string; minScore: string; bips: number }> {
   const c = walletFeeConfig(chainId)
   if (!c) return []
   return [{ name: c.baseName, minScore: '0', bips: c.baseBips }, ...c.tiers]

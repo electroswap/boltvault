@@ -1,5 +1,20 @@
 /** Settings › Connected sites (master plan §8.14): origins as plugs, per-site chain and account, disconnect. */
-import { Body, ChainMark, Column, Input, Key, Pill, Plate, Pressable, Row, ScrollView, Signature, Toggle, metrics, shortAddress } from '@boltvault/ui'
+import {
+  Body,
+  ChainMark,
+  Column,
+  Input,
+  Key,
+  Pill,
+  Plate,
+  Pressable,
+  Row,
+  ScrollView,
+  Signature,
+  Toggle,
+  metrics,
+  shortAddress,
+} from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
 import type { ChainView, Settings, SiteView, WcSessionView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
@@ -25,11 +40,15 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
 
   useEffect(() => {
     const offWc = engine.events.subscribe((e) => {
-      if (e.type === 'connect.changed') setWc((prev) => ({ available: prev?.available ?? true, sessions: e.sessions }))
+      if (e.type === 'connect.changed')
+        setWc((prev) => ({ available: prev?.available ?? true, sessions: e.sessions }))
     })
     engine.sites.list().then(setSites, () => undefined)
     engine.settings.get().then(setSettings, () => undefined)
-    engine.connect.status().then((st) => setWc({ available: st.available, sessions: st.sessions }), () => setWc({ available: false, sessions: [] }))
+    engine.connect.status().then(
+      (st) => setWc({ available: st.available, sessions: st.sessions }),
+      () => setWc({ available: false, sessions: [] }),
+    )
     engine.chains.list().then(setChains, () => undefined)
     const offSites = engine.events.subscribe((e) => {
       if (e.type === 'sites.changed') setSites(e.sites)
@@ -79,7 +98,11 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
           value={settings?.defaultWallet ?? false}
           onChange={(v) => setSetting({ defaultWallet: v })}
           label={t({ id: 'sites.default', message: 'BoltVault is my default wallet' })}
-          hint={t({ id: 'sites.default.hint', message: 'Off. Sites that offer a wallet chooser find BoltVault either way. Turn this on and BoltVault also takes the single slot older sites reach for — which is the same slot another extension wants, so the last one to load wins and neither is reliable.' })}
+          hint={t({
+            id: 'sites.default.hint',
+            message:
+              'Off. Sites that offer a wallet chooser find BoltVault either way. Turn this on and BoltVault also takes the single slot older sites reach for — which is the same slot another extension wants, so the last one to load wins and neither is reliable.',
+          })}
           testID="sites-default-toggle"
         />
       </Plate>
@@ -89,52 +112,110 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
           value={settings?.metaMaskCompat ?? false}
           onChange={(v) => setSetting({ metaMaskCompat: v })}
           label={t({ id: 'sites.compat', message: 'Answer to sites that only support MetaMask' })}
-          hint={t({ id: 'sites.compat.hint', message: 'Off. Some sites refuse anything that does not say it is MetaMask; with this on, BoltVault says so. Nothing else changes — every request still comes to you in this wallet’s own sheet — but a site will name MetaMask in its own copy, and a site that behaves differently for MetaMask will do that too.' })}
+          hint={t({
+            id: 'sites.compat.hint',
+            message:
+              'Off. Some sites refuse anything that does not say it is MetaMask; with this on, BoltVault says so. Nothing else changes — every request still comes to you in this wallet’s own sheet — but a site will name MetaMask in its own copy, and a site that behaves differently for MetaMask will do that too.',
+          })}
           testID="sites-compat-toggle"
         />
       </Plate>
 
       <Body tone="mute" size="caption" testID="sites-reload-note">
-        {t({ id: 'sites.reload', message: 'A page decides which wallet it is talking to when it loads. Reload any site you already have open for either of these to reach it.' })}
+        {t({
+          id: 'sites.reload',
+          message:
+            'A page decides which wallet it is talking to when it loads. Reload any site you already have open for either of these to reach it.',
+        })}
       </Body>
 
       {sites.length === 0 ? (
         <Plate gap="$1">
-          <Body tone="mute">{t({ id: 'sites.none', message: 'No site is connected. When a site asks to connect, it appears here with the account and chain it sees.' })}</Body>
+          <Body tone="mute">
+            {t({
+              id: 'sites.none',
+              message:
+                'No site is connected. When a site asks to connect, it appears here with the account and chain it sees.',
+            })}
+          </Body>
         </Plate>
       ) : null}
       {/* WalletConnect is the phone's; in the browser BoltVault is already in every tab (plan A4). */}
       {body === 'mobile' ? (
-      <Plate gap="$2" testID="walletconnect">
-        <Row justifyContent="space-between" alignItems="center">
-          <Body size="title">{t({ id: 'wc.title', message: 'WalletConnect' })}</Body>
-          {wc?.available && host.scanQr ? <Key label={t({ id: 'wc.scan', message: 'Scan' })} kind="secondary" onPress={() => void host.scanQr?.().then((uri) => engine.connect.pair({ uri })).catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))} testID="wc-scan" /> : null}
-        </Row>
-        {wc && !wc.available ? (
-          <Body tone="mute" size="caption">
-            {t({ id: 'wc.web', message: 'WalletConnect lives in the phone app. In the browser, BoltVault is already in every tab.' })}
-          </Body>
-        ) : (
-          <>
-            <Body tone="mute" size="caption">
-              {t({ id: 'wc.body', message: 'Paste or scan a wc: link from a site. The site then asks to connect like any other, and its signatures come through the same sheet.' })}
-            </Body>
-            <Input value={wcUri} onChange={setWcUri} placeholder="wc:…" testID="wc-uri" />
-            <Key label={t({ id: 'wc.pair', message: 'Pair' })} kind="secondary" disabled={!wcUri.startsWith('wc:')} onPress={() => void engine.connect.pair({ uri: wcUri.trim() }).then(() => setWcUri(''), (err: unknown) => setError(err instanceof Error ? err.message : String(err)))} testID="wc-pair" />
-          </>
-        )}
-        {wc?.sessions.map((s) => (
-          <Row key={s.topic} justifyContent="space-between" alignItems="center" testID={`wc-session-${s.topic}`}>
-            <Column gap={2} flexShrink={1}>
-              <Body numberOfLines={1}>{s.name || hostOf(s.origin)}</Body>
-              <Body tone="mute" size="caption">
-                {hostOf(s.origin)} · {s.chains.length} {t({ id: 'wc.chains', message: 'chains' })}
-              </Body>
-            </Column>
-            <Key label={t({ id: 'sites.disconnect', message: 'Disconnect' })} kind="danger" size="compact" onPress={() => void engine.connect.disconnect({ topic: s.topic })} testID={`wc-disconnect-${s.topic}`} />
+        <Plate gap="$2" testID="walletconnect">
+          <Row justifyContent="space-between" alignItems="center">
+            <Body size="title">{t({ id: 'wc.title', message: 'WalletConnect' })}</Body>
+            {wc?.available && host.scanQr ? (
+              <Key
+                label={t({ id: 'wc.scan', message: 'Scan' })}
+                kind="secondary"
+                onPress={() =>
+                  void host
+                    .scanQr?.()
+                    .then((uri) => engine.connect.pair({ uri }))
+                    .catch((err: unknown) =>
+                      setError(err instanceof Error ? err.message : String(err)),
+                    )
+                }
+                testID="wc-scan"
+              />
+            ) : null}
           </Row>
-        ))}
-      </Plate>
+          {wc && !wc.available ? (
+            <Body tone="mute" size="caption">
+              {t({
+                id: 'wc.web',
+                message:
+                  'WalletConnect lives in the phone app. In the browser, BoltVault is already in every tab.',
+              })}
+            </Body>
+          ) : (
+            <>
+              <Body tone="mute" size="caption">
+                {t({
+                  id: 'wc.body',
+                  message:
+                    'Paste or scan a wc: link from a site. The site then asks to connect like any other, and its signatures come through the same sheet.',
+                })}
+              </Body>
+              <Input value={wcUri} onChange={setWcUri} placeholder="wc:…" testID="wc-uri" />
+              <Key
+                label={t({ id: 'wc.pair', message: 'Pair' })}
+                kind="secondary"
+                disabled={!wcUri.startsWith('wc:')}
+                onPress={() =>
+                  void engine.connect.pair({ uri: wcUri.trim() }).then(
+                    () => setWcUri(''),
+                    (err: unknown) => setError(err instanceof Error ? err.message : String(err)),
+                  )
+                }
+                testID="wc-pair"
+              />
+            </>
+          )}
+          {wc?.sessions.map((s) => (
+            <Row
+              key={s.topic}
+              justifyContent="space-between"
+              alignItems="center"
+              testID={`wc-session-${s.topic}`}
+            >
+              <Column gap={2} flexShrink={1}>
+                <Body numberOfLines={1}>{s.name || hostOf(s.origin)}</Body>
+                <Body tone="mute" size="caption">
+                  {hostOf(s.origin)} · {s.chains.length} {t({ id: 'wc.chains', message: 'chains' })}
+                </Body>
+              </Column>
+              <Key
+                label={t({ id: 'sites.disconnect', message: 'Disconnect' })}
+                kind="danger"
+                size="compact"
+                onPress={() => void engine.connect.disconnect({ topic: s.topic })}
+                testID={`wc-disconnect-${s.topic}`}
+              />
+            </Row>
+          ))}
+        </Plate>
       ) : null}
       {sites.map((s) => {
         const account = accounts.find((a) => a.id === s.accountId)
@@ -145,7 +226,14 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
               <Body size="title" numberOfLines={1}>
                 {hostOf(s.origin)}
               </Body>
-              <Pill label={chain?.name ?? String(s.chainId)} icon={<ChainMark chainId={s.chainId} size={14} />} chevron size="sm" onPress={() => setEditing(editing === s.origin ? null : s.origin)} testID={`site-chain-${hostOf(s.origin)}`} />
+              <Pill
+                label={chain?.name ?? String(s.chainId)}
+                icon={<ChainMark chainId={s.chainId} size={14} />}
+                chevron
+                size="sm"
+                onPress={() => setEditing(editing === s.origin ? null : s.origin)}
+                testID={`site-chain-${hostOf(s.origin)}`}
+              />
             </Row>
             {/*
               The account was a caption — the one fact on this plate the user
@@ -156,7 +244,10 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
             <Pressable
               onPress={() => setSeating(seating === s.origin ? null : s.origin)}
               accessibilityRole="button"
-              accessibilityLabel={t({ id: 'sites.account.a11y', message: 'Change the account this site sees' })}
+              accessibilityLabel={t({
+                id: 'sites.account.a11y',
+                message: 'Change the account this site sees',
+              })}
               style={{ minHeight: 44, justifyContent: 'center' }}
               testID={`site-account-${hostOf(s.origin)}`}
             >
@@ -164,14 +255,24 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
                 {account ? <Signature address={account.address} size={22} /> : null}
                 <Column flex={1} minWidth={0} alignItems="flex-start">
                   <Body size="caption" numberOfLines={1}>
-                    {account ? `${account.label} · ${shortAddress(account.address)}` : t({ id: 'sites.noaccount', message: 'No account' })}
+                    {account
+                      ? `${account.label} · ${shortAddress(account.address)}`
+                      : t({ id: 'sites.noaccount', message: 'No account' })}
                   </Body>
                   <Body tone="mute" size="caption">
-                    {s.lastUsed ? t({ id: 'sites.lastused', message: 'Last used {d}', values: { d: new Date(s.lastUsed).toLocaleDateString() } }) : t({ id: 'sites.account.change', message: 'Tap to change' })}
+                    {s.lastUsed
+                      ? t({
+                          id: 'sites.lastused',
+                          message: 'Last used {d}',
+                          values: { d: new Date(s.lastUsed).toLocaleDateString() },
+                        })
+                      : t({ id: 'sites.account.change', message: 'Tap to change' })}
                   </Body>
                 </Column>
                 <Body tone="arc" size="caption">
-                  {seating === s.origin ? t({ id: 'sites.account.done', message: 'Done' }) : t({ id: 'sites.account.key', message: 'Change' })}
+                  {seating === s.origin
+                    ? t({ id: 'sites.account.done', message: 'Done' })
+                    : t({ id: 'sites.account.key', message: 'Change' })}
                 </Body>
               </Row>
             </Pressable>
@@ -207,7 +308,11 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
                     </Pressable>
                   ))}
                 <Body tone="mute" size="caption">
-                  {t({ id: 'sites.account.body', message: 'The site is told straight away, the way it would be if you switched accounts on the site itself. No other site and no other screen is affected.' })}
+                  {t({
+                    id: 'sites.account.body',
+                    message:
+                      'The site is told straight away, the way it would be if you switched accounts on the site itself. No other site and no other screen is affected.',
+                  })}
                 </Body>
               </Column>
             ) : null}
@@ -222,7 +327,11 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
                     size="sm"
                     onPress={() => {
                       setError(null)
-                      engine.sites.setChain({ origin: s.origin, chainId: c.chainId }).then(() => setEditing(null), (err: unknown) => setError(err instanceof Error ? err.message : String(err)))
+                      engine.sites.setChain({ origin: s.origin, chainId: c.chainId }).then(
+                        () => setEditing(null),
+                        (err: unknown) =>
+                          setError(err instanceof Error ? err.message : String(err)),
+                      )
                     }}
                     testID={`site-chain-${hostOf(s.origin)}-${c.chainId}`}
                   />
@@ -230,7 +339,13 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
               </Row>
             ) : null}
             <Row>
-              <Key label={t({ id: 'sites.disconnect', message: 'Disconnect' })} kind="danger" size="compact" onPress={() => void engine.sites.disconnect({ origin: s.origin })} testID={`site-disconnect-${hostOf(s.origin)}`} />
+              <Key
+                label={t({ id: 'sites.disconnect', message: 'Disconnect' })}
+                kind="danger"
+                size="compact"
+                onPress={() => void engine.sites.disconnect({ origin: s.origin })}
+                testID={`site-disconnect-${hostOf(s.origin)}`}
+              />
             </Row>
           </Plate>
         )
@@ -238,7 +353,11 @@ export function ConnectedSites({ body }: { body: 'extension-popup' | 'extension-
       {error ? <Body tone="burn">{error}</Body> : null}
       <Column gap="$1">
         <Body tone="mute" size="caption">
-          {t({ id: 'sites.note.v2', message: 'Each site keeps its own account and its own chain. Changing what Home shows never changes a site, and changing a site never tells any other site.' })}
+          {t({
+            id: 'sites.note.v2',
+            message:
+              'Each site keeps its own account and its own chain. Changing what Home shows never changes a site, and changing a site never tells any other site.',
+          })}
         </Body>
       </Column>
     </ScrollView>

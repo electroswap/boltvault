@@ -125,6 +125,7 @@ export function prefixedStore(inner: KeyValueStore, prefix: string): KeyValueSto
     get: (k) => inner.get(p + k),
     set: (k, v) => inner.set(p + k, v),
     remove: (k) => inner.remove(p + k),
-    keys: async () => (await inner.keys()).filter((k) => k.startsWith(p)).map((k) => k.slice(p.length)),
+    keys: async () =>
+      (await inner.keys()).filter((k) => k.startsWith(p)).map((k) => k.slice(p.length)),
   }
 }

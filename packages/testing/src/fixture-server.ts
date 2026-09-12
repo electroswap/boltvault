@@ -23,10 +23,14 @@ export interface FixtureServer {
   close(): Promise<void>
 }
 
-export async function serveFixture(dir: string = FIXTURE_DAPP_DIR, port = 0): Promise<FixtureServer> {
+export async function serveFixture(
+  dir: string = FIXTURE_DAPP_DIR,
+  port = 0,
+): Promise<FixtureServer> {
   const server: Server = createServer((req, res) => {
     void (async () => {
-      const path = normalize(new URL(req.url ?? '/', 'http://x').pathname).replace(/^\/+/, '') || 'index.html'
+      const path =
+        normalize(new URL(req.url ?? '/', 'http://x').pathname).replace(/^\/+/, '') || 'index.html'
       const file = join(dir, path.endsWith('/') ? `${path}index.html` : path)
       if (!file.startsWith(dir)) {
         res.writeHead(403)
@@ -35,7 +39,10 @@ export async function serveFixture(dir: string = FIXTURE_DAPP_DIR, port = 0): Pr
       }
       try {
         const body = await readFile(file)
-        res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-store' })
+        res.writeHead(200, {
+          'content-type': TYPES[extname(file)] ?? 'application/octet-stream',
+          'cache-control': 'no-store',
+        })
         res.end(body)
       } catch {
         res.writeHead(404)
@@ -48,6 +55,9 @@ export async function serveFixture(dir: string = FIXTURE_DAPP_DIR, port = 0): Pr
   const p = typeof address === 'object' && address ? address.port : port
   return {
     url: `http://127.0.0.1:${p}/`,
-    close: () => new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve()))),
+    close: () =>
+      new Promise<void>((resolve, reject) =>
+        server.close((err) => (err ? reject(err) : resolve())),
+      ),
   }
 }

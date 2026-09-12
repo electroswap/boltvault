@@ -610,11 +610,18 @@ export class VaultManager {
   }
 
   /**
-   * Revealing a seed is re-authenticated, but the factor is whichever one the
-   * vault is wrapped under — not the password specifically. Demanding the
-   * password shut out anyone who set the wallet up behind a passkey or the
-   * device key and never had a memorable one to type; the vault file has
-   * supported all three wraps since v2 and only this method insisted.
+   * Revealing a seed is re-authenticated.
+   *
+   * The factor was whichever one the vault is wrapped under — the reasoning
+   * being that demanding the password shuts out anyone who set the wallet up
+   * behind a passkey or the device key and never had a memorable one to type.
+   * That reasoning still holds, and it is now a setting rather than a silent
+   * policy: `revealNeedsPassword` defaults to ON, because Security and
+   * Onboarding both tell the user the password "is still required to reveal or
+   * export your phrase" and it was not, and because a phrase is the one secret
+   * a fingerprint should not be enough for — a phone left unlocked on a table
+   * is exactly the threat. The gate lives in the namespace, which is the only
+   * door the UI has to this method.
    */
   async reveal(
     input: { seedId: string } & RevealFactor,
@@ -1167,7 +1174,20 @@ export function vaultNamespace(vault: VaultManager, settings: SettingsStore): Na
     touch: { handler: () => vault.touch() },
     reveal: {
       input: z.intersection(z.object({ seedId: z.string() }), RevealFactorSchema),
-      handler: (arg) => vault.reveal(arg as { seedId: string } & RevealFactor),
+      handler: async (arg) => {
+        const input = arg as { seedId: string } & RevealFactor
+        /*
+          §3.2, and the two strings on Security and Onboarding that say so.
+          A biometric or a passkey unlocks the wallet; the phrase is the whole
+          wallet, for ever, on any device, and it costs the password.
+        */
+        if (!('password' in input) && (await settings.get()).revealNeedsPassword)
+          throw new EngineError(
+            'unauthorized',
+            'Your password is required to show a recovery phrase. Turn that off in Settings › Security if you would rather use a device factor.',
+          )
+        return vault.reveal(input)
+      },
     },
     changePassword: {
       input: z.object({ current: PasswordSchema, next: PasswordSchema }),

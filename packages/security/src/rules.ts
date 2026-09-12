@@ -16,14 +16,7 @@ import { typosquat, hostOf, isScamOrigin } from './origin'
 import { clipboardCheck } from './clipboard'
 import { inSet, poisonCheck, sameAddress } from './poison'
 import { isKnownSpender, knownContract } from './registry'
-import {
-  UR_MSG_SENDER,
-  UR_ROUTER_SELF,
-  isUrSwap,
-  urDeliveredAfter,
-  urPathTokens,
-  type UrCommand,
-} from './ur'
+import { UR_MSG_SENDER, UR_ROUTER_SELF, isUrSwap, urDeliveredAfter, urPathTokens } from './ur'
 import type { AssessmentContext, RiskRule, SignRequest, Simulation } from './types'
 
 export interface RuleInput {
@@ -61,9 +54,20 @@ function amountText(ctx: AssessmentContext, token: string, amount: bigint): stri
  * decimals is not a guess: every chain in the registry uses them for its
  * native coin, and a chain that did not would be wrong in the statements too.
  */
-function nativeText(chainId: number, amount: bigint): string {
-  const symbol = chainId === 52014 || chainId === 5201420 ? 'ETN' : 'native'
-  return `${formatUnits(amount, 18)} ${symbol}`
+function nativeText(chainId: number, amount: bigint, ctx?: AssessmentContext): string {
+  return `${formatUnits(amount, 18)} ${nativeSymbolOf(chainId, ctx)}`
+}
+
+/**
+ * What this chain calls its own coin.
+ *
+ * The context carries it from the registry; the two Electroneum ids are the
+ * fallback for a caller that has not threaded it through yet. "native" — the
+ * old answer for every other chain — is not a currency and told the reader
+ * nothing about what was leaving.
+ */
+export function nativeSymbolOf(chainId: number, ctx?: AssessmentContext): string {
+  return ctx?.nativeSymbol ?? (chainId === 52014 || chainId === 5201420 ? 'ETN' : 'native')
 }
 
 // ---- origin ----------------------------------------------------------------------------
@@ -368,7 +372,7 @@ export const seaportUnderpriced: Rule = ({ request, typed, context, chainId }) =
       code: 'SEAPORT_UNDERPRICED',
       severity: 'danger',
       title: 'Far below what this collection sells for',
-      detail: `This lists ${label(context, chainId, item.token)} #${item.identifier.toString()} for ${nativeText(chainId, total)} while the collection's floor is ${nativeText(chainId, floor)}. Whoever fills it keeps the difference.`,
+      detail: `This lists ${label(context, chainId, item.token)} #${item.identifier.toString()} for ${nativeText(chainId, total, context)} while the collection's floor is ${nativeText(chainId, floor, context)}. Whoever fills it keeps the difference.`,
     }
   }
   return null
@@ -1179,7 +1183,7 @@ export const valueExceedsBudget: Rule = ({ request, context, chainId, origin }) 
     code: 'VALUE_EXCEEDS_BUDGET',
     severity: 'danger',
     title: 'Over the limit you set for this site',
-    detail: `${who} has ${nativeText(chainId, remaining)} left of the ${nativeText(chainId, budget.limit)} you allowed it, and this asks for ${nativeText(chainId, request.tx.value)}. Raise the limit in Settings › Connected sites if you meant to.`,
+    detail: `${who} has ${nativeText(chainId, remaining)} left of the ${nativeText(chainId, budget.limit)} you allowed it, and this asks for ${nativeText(chainId, request.tx.value, context)}. Raise the limit in Settings › Connected sites if you meant to.`,
   }
 }
 
@@ -1310,7 +1314,7 @@ export const feeExcessive: Rule = ({ request, context, chainId }) => {
     code: 'FEE_EXCESSIVE',
     severity: wild || overValue ? 'danger' : 'warn',
     title: 'This site set the fee, and set it high',
-    detail: `It asks to pay ${nativeText(chainId, total)} in network fees — ${times}× what this network is currently charging${overValue ? `, more than the ${nativeText(chainId, request.tx.value)} being sent` : ''}. The fee editor cannot go below half of what the site chose.`,
+    detail: `It asks to pay ${nativeText(chainId, total, context)} in network fees — ${times}× what this network is currently charging${overValue ? `, more than the ${nativeText(chainId, request.tx.value, context)} being sent` : ''}. The fee editor cannot go below half of what the site chose.`,
   }
 }
 

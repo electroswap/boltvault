@@ -51,10 +51,18 @@ const NAMES_FAMILY = 'names.reverse.'
  * Names for a set of addresses, lowercase-keyed. Absent from the map means
  * "no name" — show the shortened address.
  */
-export function useNames(addresses: ReadonlyArray<string | null | undefined>): ReadonlyMap<string, string> {
+export function useNames(
+  addresses: ReadonlyArray<string | null | undefined>,
+): ReadonlyMap<string, string> {
   const engine = useEngine()
   const [, bump] = useState(0)
-  const wanted = [...new Set(addresses.filter((a): a is string => typeof a === 'string' && a.length > 0).map((a) => a.toLowerCase()))]
+  const wanted = [
+    ...new Set(
+      addresses
+        .filter((a): a is string => typeof a === 'string' && a.length > 0)
+        .map((a) => a.toLowerCase()),
+    ),
+  ]
   // The effect keys on the addresses themselves, not on the array identity: a
   // parent that rebuilds the list every render must not re-run the lookup.
   const signature = wanted.join(',')

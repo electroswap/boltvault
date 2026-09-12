@@ -59,18 +59,55 @@ const PlateFrame = styled(TView, {
   padding: '$4',
   variants: {
     role: {
-      recessed: { backgroundColor: '$glass', borderRadius: '$recessed', borderWidth: 1, borderColor: '$edge' },
-      raised: { backgroundColor: '$glassRaised', borderRadius: '$raised', borderWidth: 0, shadowColor: glow.plateSoft, shadowRadius: 16, shadowOpacity: 1, shadowOffset: { width: 0, height: 4 } },
-      console: { backgroundColor: '$glassRaised', borderRadius: '$console', borderWidth: 0, shadowColor: glow.plate, shadowRadius: 32, shadowOpacity: 1, shadowOffset: { width: 0, height: 10 } },
-      card: { backgroundColor: '$glass', borderRadius: '$recessed', borderWidth: 0, hoverStyle: { backgroundColor: '$glassRaised' }, pressStyle: { opacity: 0.9 } },
-      tile: { backgroundColor: '$glassRaised', borderRadius: '$raised', borderWidth: 0, pressStyle: { backgroundColor: '$glassRaisedSolid' } },
+      recessed: {
+        backgroundColor: '$glass',
+        borderRadius: '$recessed',
+        borderWidth: 1,
+        borderColor: '$edge',
+      },
+      raised: {
+        backgroundColor: '$glassRaised',
+        borderRadius: '$raised',
+        borderWidth: 0,
+        shadowColor: glow.plateSoft,
+        shadowRadius: 16,
+        shadowOpacity: 1,
+        shadowOffset: { width: 0, height: 4 },
+      },
+      console: {
+        backgroundColor: '$glassRaised',
+        borderRadius: '$console',
+        borderWidth: 0,
+        shadowColor: glow.plate,
+        shadowRadius: 32,
+        shadowOpacity: 1,
+        shadowOffset: { width: 0, height: 10 },
+      },
+      card: {
+        backgroundColor: '$glass',
+        borderRadius: '$recessed',
+        borderWidth: 0,
+        hoverStyle: { backgroundColor: '$glassRaised' },
+        pressStyle: { opacity: 0.9 },
+      },
+      tile: {
+        backgroundColor: '$glassRaised',
+        borderRadius: '$raised',
+        borderWidth: 0,
+        pressStyle: { backgroundColor: '$glassRaisedSolid' },
+      },
       // `borderRadius: radius.well`, not `'$well'`. `well` is the one name that
       // is both a colour token (paint.well) and a radius token, and the string
       // form resolved to the colour — an invalid radius, so it computed to 0.
       // That is why every amount well drew hard corners inside its rounded
       // console while every other plate nested correctly. Measured, not read:
       // e2e/radii.spec.ts.
-      well: { backgroundColor: '$well', borderRadius: radius.well, borderWidth: 1, borderColor: '$edge' },
+      well: {
+        backgroundColor: '$well',
+        borderRadius: radius.well,
+        borderWidth: 1,
+        borderColor: '$edge',
+      },
     },
   } as const,
   defaultVariants: { role: 'recessed' },
@@ -102,16 +139,34 @@ export type PlateProps = Omit<ComponentProps<typeof PlateFrame>, 'role'> & {
  * dimmed when pressed and told the reader something had happened. Restating the
  * resting values wins over the base rule, the same way the disabled key does it.
  */
-const RESTING_PRESS: Partial<Record<PlateRole, object>> = { card: { opacity: 1 }, tile: { backgroundColor: '$glassRaised' } }
+const RESTING_PRESS: Partial<Record<PlateRole, object>> = {
+  card: { opacity: 1 },
+  tile: { backgroundColor: '$glassRaised' },
+}
 
-const RIM_BY_ROLE: Record<PlateRole, number> = { recessed: 0, raised: 0.45, console: 0.7, card: 0.3, tile: 0.45, well: 0 }
-const RADIUS_BY_ROLE: Record<PlateRole, number> = { recessed: radius.recessed, raised: radius.raised, console: radius.console, card: radius.recessed, tile: radius.raised, well: radius.well }
+const RIM_BY_ROLE: Record<PlateRole, number> = {
+  recessed: 0,
+  raised: 0.45,
+  console: 0.7,
+  card: 0.3,
+  tile: 0.45,
+  well: 0,
+}
+const RADIUS_BY_ROLE: Record<PlateRole, number> = {
+  recessed: radius.recessed,
+  raised: radius.raised,
+  console: radius.console,
+  card: radius.recessed,
+  tile: radius.raised,
+  well: radius.well,
+}
 
 export function Plate({ role = 'recessed', rim, children, ...rest }: PlateProps) {
   const lit = rim ?? RIM_BY_ROLE[role]
   // A plate nobody can press must not react to being pressed. Spread before
   // `rest`, so a caller that wants its own press treatment still gets it.
-  const pressable = rest.onPress !== undefined || rest.onPressIn !== undefined || rest.onLongPress !== undefined
+  const pressable =
+    rest.onPress !== undefined || rest.onPressIn !== undefined || rest.onLongPress !== undefined
   const resting = pressable ? undefined : RESTING_PRESS[role]
   /*
     The gradient goes UNDER the children and over the frame's flat colour, which
@@ -169,7 +224,14 @@ export const Readout = styled(TText, {
   color: '$ink',
   variants: {
     hero: {
-      true: { fontSize: '$4', lineHeight: '$4', letterSpacing: -1.3, textShadowColor: glow.text, textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
+      true: {
+        fontSize: '$4',
+        lineHeight: '$4',
+        letterSpacing: -1.3,
+        textShadowColor: glow.text,
+        textShadowRadius: 12,
+        textShadowOffset: { width: 0, height: 0 },
+      },
     },
     stat: {
       true: { fontSize: 20, lineHeight: 24, letterSpacing: -0.5 },
@@ -210,7 +272,13 @@ export const KeyFrame = styled(TView, {
       // The gradient measures its box before it can paint (see Rim.tsx), so the
       // frame carries the current's first stop underneath it. Without that a
       // primary key would show one transparent frame on mount.
-      primary: { backgroundColor: current.from, shadowColor: glow.key, shadowRadius: 14, shadowOpacity: 1, shadowOffset: { width: 0, height: 5 } },
+      primary: {
+        backgroundColor: current.from,
+        shadowColor: glow.key,
+        shadowRadius: 14,
+        shadowOpacity: 1,
+        shadowOffset: { width: 0, height: 5 },
+      },
       secondary: { backgroundColor: '$glassRaised', borderWidth: 0 },
       danger: { backgroundColor: '$burn' },
     },

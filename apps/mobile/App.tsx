@@ -16,7 +16,7 @@ import { pushStatus, registerPush, unregisterPush } from './src/push'
 import { ScanHost, scanQr } from './src/scan'
 import { registerTokenLogos } from './src/token-logos'
 import { createWalletKit } from './src/walletkit'
-import { publishWidgetSnapshot } from './src/widget'
+import { clearWidgetSnapshot, publishWidgetSnapshot } from './src/widget'
 
 /** The phone's capabilities (master plan §5): everything the shared screens may ask their body for. */
 const host: Partial<UiHost> = {
@@ -61,7 +61,7 @@ const host: Partial<UiHost> = {
     enable: async () => registerPush({ addresses: [], topics: ['incoming', 'sales', 'campaigns', 'rewards', 'dividends', 'tier', 'bridge'] }),
     disable: unregisterPush,
   },
-  widget: { publish: publishWidgetSnapshot },
+  widget: { publish: publishWidgetSnapshot, clear: clearWidgetSnapshot },
   version: process.env['EXPO_PUBLIC_APP_VERSION'] ?? '0.1.0',
   buildHash: process.env['EXPO_PUBLIC_BUILD_HASH'] ?? null,
 }

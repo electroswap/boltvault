@@ -37,7 +37,13 @@
  * with five sixths of it missing.
  */
 import { useEffect, useRef, useState } from 'react'
-import { ScrollView, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
+import {
+  ScrollView,
+  View,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native'
 import { Icon, type IconName } from './Icon'
 import { Body, Column, Plate, Row } from './primitives'
 import { CurrentFill } from './Rim'
@@ -120,7 +126,14 @@ export function Rotor({ items, intervalMs = DWELL_MS, reducedMotion = false, tes
 
   const paged = count > 1
   return (
-    <Plate role="card" padding={0} overflow="hidden" minHeight={metrics.hit} justifyContent="center" testID={testID}>
+    <Plate
+      role="card"
+      padding={0}
+      overflow="hidden"
+      minHeight={metrics.hit}
+      justifyContent="center"
+      testID={testID}
+    >
       <Row alignItems="stretch">
         {/* Measured here, inside the arrows, so a page is the width an entry actually gets. */}
         <Column flex={1} minWidth={0} onLayout={onLayout}>
@@ -145,7 +158,14 @@ export function Rotor({ items, intervalMs = DWELL_MS, reducedMotion = false, tes
                 accessibilityRole={item.onPress ? 'button' : undefined}
                 accessibilityLabel={item.sub ? `${item.text}. ${item.sub}` : item.text}
                 testID={item.testID}
-                style={{ width: width > 0 ? width : undefined, minHeight: metrics.hit, justifyContent: 'center', paddingVertical: 8, paddingLeft: 12, paddingRight: paged ? 4 : 12 }}
+                style={{
+                  width: width > 0 ? width : undefined,
+                  minHeight: metrics.hit,
+                  justifyContent: 'center',
+                  paddingVertical: 8,
+                  paddingLeft: 12,
+                  paddingRight: paged ? 4 : 12,
+                }}
               >
                 <Row gap="$2" alignItems="center">
                   <Icon name={item.icon} size={16} color={item.tone} />
@@ -154,7 +174,13 @@ export function Rotor({ items, intervalMs = DWELL_MS, reducedMotion = false, tes
                       {item.text}
                     </Body>
                     {item.sub ? (
-                      <Body tone="mute" size="caption" fontSize={11} lineHeight={13} numberOfLines={1}>
+                      <Body
+                        tone="mute"
+                        size="caption"
+                        fontSize={11}
+                        lineHeight={13}
+                        numberOfLines={1}
+                      >
                         {item.sub}
                       </Body>
                     ) : null}
@@ -174,7 +200,14 @@ export function Rotor({ items, intervalMs = DWELL_MS, reducedMotion = false, tes
           with one. Forward wraps, so five presses reach anything from anywhere,
           and a finger still swipes both ways.
         */}
-        {paged ? <Arrow icon="refresh" label="Next" onPress={() => step(1)} testID={testID ? `${testID}-next` : undefined} /> : null}
+        {paged ? (
+          <Arrow
+            icon="refresh"
+            label="Next"
+            onPress={() => step(1)}
+            testID={testID ? `${testID}-next` : undefined}
+          />
+        ) : null}
       </Row>
       {paged ? (
         /*
@@ -187,7 +220,11 @@ export function Rotor({ items, intervalMs = DWELL_MS, reducedMotion = false, tes
           the parent's content box under Yoga and its padding box in CSS (see
           `Rim`), and flex is the same on both.
         */
-        <Row style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 2 }} pointerEvents="none" aria-hidden>
+        <Row
+          style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 2 }}
+          pointerEvents="none"
+          aria-hidden
+        >
           {items.map((item, i) => (
             <View key={item.id} style={{ flex: 1, height: 2, overflow: 'hidden' }}>
               {i === index ? <CurrentFill radius={1} /> : null}
@@ -210,9 +247,25 @@ export function Rotor({ items, intervalMs = DWELL_MS, reducedMotion = false, tes
  * notice instead. A cycle glyph cannot be read that way, and it is the same
  * gesture the strip makes on its own.
  */
-function Arrow({ icon, label, onPress, testID }: { icon: IconName; label: string; onPress: () => void; testID?: string }) {
+function Arrow({
+  icon,
+  label,
+  onPress,
+  testID,
+}: {
+  icon: IconName
+  label: string
+  onPress: () => void
+  testID?: string
+}) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} testID={testID} style={{ width: metrics.hit, alignItems: 'center', justifyContent: 'center' }}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      testID={testID}
+      style={{ width: metrics.hit, alignItems: 'center', justifyContent: 'center' }}
+    >
       <Icon name={icon} size={16} color={paint.mute} />
     </Pressable>
   )

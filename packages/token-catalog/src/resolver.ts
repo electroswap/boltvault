@@ -18,12 +18,7 @@
  *                        (RPC-verified to have code on chain 59144).
  */
 
-import {
-  PUBLIC_LIST_URLS,
-  parseTokenList,
-  type RawTokenList,
-  type TokenEntry,
-} from './catalog'
+import { PUBLIC_LIST_URLS, parseTokenList, type RawTokenList, type TokenEntry } from './catalog'
 import electroswapFallback from '../lists/electroswap-etn.json'
 import lineaFallback from '../lists/linea-59144.json'
 import unichainFallback from '../lists/unichain-130.json'
@@ -82,7 +77,10 @@ export interface ResolveOpts {
  * Resolve the token universe for a chain across the 4-tier pipeline. Never
  * throws on a failed remote fetch — it degrades to last-good / in-repo / none.
  */
-export async function resolveChainList(chainId: number, opts: ResolveOpts = {}): Promise<ResolveResult> {
+export async function resolveChainList(
+  chainId: number,
+  opts: ResolveOpts = {},
+): Promise<ResolveResult> {
   const fetchImpl = opts.fetchImpl ?? fetch
   const cache = opts.cache
   const cacheMs = opts.cacheMs ?? 6 * 60 * 60 * 1000

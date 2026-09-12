@@ -13,4 +13,10 @@ import { installFromChannel, type MainWorldWindow } from './main-world'
 
 declare const window: MainWorldWindow
 
-installFromChannel({ win: window, uuid: BOLTVAULT_PROVIDER_UUID, name: BOLTVAULT_NAME, icon: BOLTVAULT_ICON, rdns: BOLTVAULT_RDNS })
+installFromChannel({
+  win: window,
+  uuid: BOLTVAULT_PROVIDER_UUID,
+  name: BOLTVAULT_NAME,
+  icon: BOLTVAULT_ICON,
+  rdns: BOLTVAULT_RDNS,
+})

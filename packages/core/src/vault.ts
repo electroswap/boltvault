@@ -26,9 +26,7 @@ export interface Argon2idParams {
 export const DEFAULT_ARGON2ID: Argon2idParams = { m: 64 * 1024, t: 3, p: 1 }
 
 const toB64 = (u8: Uint8Array): string =>
-  typeof btoa === 'function'
-    ? btoa(String.fromCharCode(...u8))
-    : Buffer.from(u8).toString('base64')
+  typeof btoa === 'function' ? btoa(String.fromCharCode(...u8)) : Buffer.from(u8).toString('base64')
 const fromB64 = (s: string): Uint8Array => {
   const b = typeof atob === 'function' ? atob(s) : Buffer.from(s, 'base64').toString('binary')
   const u8 = new Uint8Array(b.length)
@@ -36,7 +34,9 @@ const fromB64 = (s: string): Uint8Array => {
   return u8
 }
 export const toHex = (u8: Uint8Array): string =>
-  Array.from(u8).map((b) => b.toString(16).padStart(2, '0')).join('')
+  Array.from(u8)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
 export const fromHex = (hex: string): Uint8Array => {
   const clean = hex.replace(/^0x/, '')
   const u8 = new Uint8Array(clean.length / 2)
@@ -88,11 +88,7 @@ function seal(key: Uint8Array, plaintext: Uint8Array, nonce: Uint8Array): string
   return toB64(ct)
 }
 
-function open(
-  key: Uint8Array,
-  ciphertextB64: string,
-  nonce: Uint8Array,
-): Uint8Array | null {
+function open(key: Uint8Array, ciphertextB64: string, nonce: Uint8Array): Uint8Array | null {
   try {
     return xchacha20poly1305(key, nonce, AAD_BYTES).decrypt(fromB64(ciphertextB64))
   } catch {
@@ -137,11 +133,11 @@ export async function openVault(
   password: string,
 ): Promise<VaultPlaintext | null> {
   if (file.version !== VAULT_VERSION) return null
-  const key = await kdfArgon2id(
-    password,
-    fromHex(file.kdf.salt),
-    { m: file.kdf.m, t: file.kdf.t, p: file.kdf.p },
-  )
+  const key = await kdfArgon2id(password, fromHex(file.kdf.salt), {
+    m: file.kdf.m,
+    t: file.kdf.t,
+    p: file.kdf.p,
+  })
   const pt = open(key, file.ciphertext, fromHex(file.nonce))
   if (pt === null) return null
   try {
@@ -160,19 +156,15 @@ export async function updateVault(
   const pt = await openVault(file, password)
   if (pt === null) throw new Error('updateVault: current password invalid')
   const next = mutate(pt)
-  const nextFile = await createVault(
-    password,
-    next,
-    { salt: fromHex(file.kdf.salt), nonce: randomBytes(24) },
-  )
+  const nextFile = await createVault(password, next, {
+    salt: fromHex(file.kdf.salt),
+    nonce: randomBytes(24),
+  })
   return { file: nextFile, plaintext: next }
 }
 
 /** Add an account (HD / hardware / watch) — no key material in the envelope. */
-export function addAccountToPlaintext(
-  pt: VaultPlaintext,
-  meta: VaultAccountMeta,
-): VaultPlaintext {
+export function addAccountToPlaintext(pt: VaultPlaintext, meta: VaultAccountMeta): VaultPlaintext {
   if (pt.accounts.some((a) => a.id === meta.id)) {
     throw new Error(`duplicate account id ${meta.id}`)
   }

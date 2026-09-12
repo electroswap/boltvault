@@ -19,7 +19,13 @@ export interface CableProps {
 
 const PERIOD_MS = 2_400
 
-export function Cable({ state, width = 120, height = 24, reducedMotion = false, testID }: CableProps) {
+export function Cable({
+  state,
+  width = 120,
+  height = 24,
+  reducedMotion = false,
+  testID,
+}: CableProps) {
   const [phase, setPhase] = useState(0)
   const moving = (state === 'pending' || state === 'dispatched') && !reducedMotion
   useEffect(() => {
@@ -31,8 +37,22 @@ export function Cable({ state, width = 120, height = 24, reducedMotion = false, 
   const y = height / 2
   const x0 = 6
   const x1 = width - 6
-  const lit = state === 'delivered' ? 1 : state === 'dispatched' ? 0.55 : state === 'pending' ? 0.25 : state === 'failed' || state === 'timeout' ? 0.15 : 0.12
-  const pulseX = state === 'delivered' ? x1 : state === 'pending' ? x0 + (x1 - x0) * 0.35 * phase : x0 + (x1 - x0) * phase
+  const lit =
+    state === 'delivered'
+      ? 1
+      : state === 'dispatched'
+        ? 0.55
+        : state === 'pending'
+          ? 0.25
+          : state === 'failed' || state === 'timeout'
+            ? 0.15
+            : 0.12
+  const pulseX =
+    state === 'delivered'
+      ? x1
+      : state === 'pending'
+        ? x0 + (x1 - x0) * 0.35 * phase
+        : x0 + (x1 - x0) * phase
   const showPulse = state === 'pending' || state === 'dispatched' || state === 'delivered'
   return (
     <Column alignItems="center" justifyContent="center" testID={testID}>
@@ -43,8 +63,25 @@ export function Cable({ state, width = 120, height = 24, reducedMotion = false, 
             <Stop offset="100%" stopColor={light.plasma} stopOpacity={lit} />
           </LinearGradient>
         </Defs>
-        <Line x1={x0} y1={y} x2={x1} y2={y} stroke={paint.mute} strokeOpacity={0.35} strokeWidth={2} strokeLinecap="round" />
-        <Line x1={x0} y1={y} x2={state === 'failed' || state === 'timeout' ? x0 + 14 : x1} y2={y} stroke={state === 'failed' || state === 'timeout' ? paint.burn : 'url(#cableLit)'} strokeWidth={2} strokeLinecap="round" />
+        <Line
+          x1={x0}
+          y1={y}
+          x2={x1}
+          y2={y}
+          stroke={paint.mute}
+          strokeOpacity={0.35}
+          strokeWidth={2}
+          strokeLinecap="round"
+        />
+        <Line
+          x1={x0}
+          y1={y}
+          x2={state === 'failed' || state === 'timeout' ? x0 + 14 : x1}
+          y2={y}
+          stroke={state === 'failed' || state === 'timeout' ? paint.burn : 'url(#cableLit)'}
+          strokeWidth={2}
+          strokeLinecap="round"
+        />
         {showPulse ? <Circle cx={pulseX} cy={y} r={4} fill={light.core} opacity={0.95} /> : null}
         {showPulse ? <Circle cx={pulseX} cy={y} r={8} fill={light.plasma} opacity={0.35} /> : null}
       </Svg>

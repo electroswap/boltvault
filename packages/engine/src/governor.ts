@@ -70,7 +70,13 @@ const DEFAULT_BUDGET: HostBudget = { perMinute: 600, burst: 60 }
  */
 function isPrivateHost(host: string): boolean {
   const name = host.split(':')[0] ?? host
-  if (name === 'localhost' || name === '::1' || name.endsWith('.local') || name.endsWith('.localhost')) return true
+  if (
+    name === 'localhost' ||
+    name === '::1' ||
+    name.endsWith('.local') ||
+    name.endsWith('.localhost')
+  )
+    return true
   if (/^127\./.test(name) || /^10\./.test(name) || /^192\.168\./.test(name)) return true
   return /^172\.(1[6-9]|2\d|3[01])\./.test(name)
 }
@@ -161,7 +167,8 @@ export class Governor {
 
   constructor(
     private readonly now: () => number,
-    private readonly sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+    private readonly sleep: (ms: number) => Promise<void> = (ms) =>
+      new Promise((r) => setTimeout(r, ms)),
   ) {}
 
   budget(host: string): HostBudget {
@@ -171,7 +178,14 @@ export class Governor {
   private state(host: string): HostState {
     let s = this.hosts.get(host)
     if (!s) {
-      s = { tokens: this.budget(host).burst, lastRefill: this.now(), coolUntil: 0, strikes: 0, cooldowns: 0, refused: false }
+      s = {
+        tokens: this.budget(host).burst,
+        lastRefill: this.now(),
+        coolUntil: 0,
+        strikes: 0,
+        cooldowns: 0,
+        refused: false,
+      }
       this.hosts.set(host, s)
     }
     return s
@@ -199,7 +213,11 @@ export class Governor {
   async reserve(host: string): Promise<void> {
     const s = this.state(host)
     const now = this.now()
-    if (now < s.coolUntil) throw new RateLimited(host, `backing off for another ${Math.ceil((s.coolUntil - now) / 1000)}s`)
+    if (now < s.coolUntil)
+      throw new RateLimited(
+        host,
+        `backing off for another ${Math.ceil((s.coolUntil - now) / 1000)}s`,
+      )
     this.refill(host, s)
     if (s.tokens >= 1) {
       s.tokens -= 1
@@ -226,7 +244,8 @@ export class Governor {
   private refuse(host: string): void {
     const s = this.state(host)
     s.cooldowns += 1
-    s.coolUntil = this.now() + Math.min(REFUSED_COOLDOWN_MAX_MS, REFUSED_COOLDOWN_MS * 2 ** (s.cooldowns - 1))
+    s.coolUntil =
+      this.now() + Math.min(REFUSED_COOLDOWN_MAX_MS, REFUSED_COOLDOWN_MS * 2 ** (s.cooldowns - 1))
     s.strikes = 0
     s.refused = true
   }

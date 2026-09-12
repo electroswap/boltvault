@@ -100,7 +100,11 @@ export function minimumOut(quotedOut: bigint, feeBips: number, slippageBips: num
  * on the Swap screen, the number on the signing sheet and the `amountMin` in
  * the bytes are one value.
  */
-export function deliveredMinimumOut(quotedOut: bigint, feeBips: number, slippageBips: number): bigint {
+export function deliveredMinimumOut(
+  quotedOut: bigint,
+  feeBips: number,
+  slippageBips: number,
+): bigint {
   const afterSlippage = routerMinimumOut(quotedOut, slippageBips)
   return afterSlippage - feeAmount(afterSlippage, feeBips)
 }
@@ -156,7 +160,13 @@ export function maximumIn(quotedIn: bigint, slippageBips: number): bigint {
 }
 
 /** Price impact in percent from spot (mid) and executed prices; null when spot is unknown. */
-export function priceImpactPct(amountIn: bigint, amountOut: bigint, spotOutPerIn: number | null, decimalsIn: number, decimalsOut: number): number | null {
+export function priceImpactPct(
+  amountIn: bigint,
+  amountOut: bigint,
+  spotOutPerIn: number | null,
+  decimalsIn: number,
+  decimalsOut: number,
+): number | null {
   if (spotOutPerIn === null || amountIn === 0n) return null
   const executed = Number(amountOut) / 10 ** decimalsOut / (Number(amountIn) / 10 ** decimalsIn)
   if (!Number.isFinite(executed) || spotOutPerIn <= 0) return null

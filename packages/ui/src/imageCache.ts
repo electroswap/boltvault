@@ -48,7 +48,9 @@ export function resolvedImage(uri: string): string | null {
  */
 export function useCachedImage(uri: string | null | undefined): string | null {
   const remote = uri !== null && uri !== undefined && /^https?:/.test(uri) ? uri : null
-  const [best, setBest] = useState<string | null>(() => (remote === null ? null : (resolved.get(remote) ?? remote)))
+  const [best, setBest] = useState<string | null>(() =>
+    remote === null ? null : (resolved.get(remote) ?? remote),
+  )
 
   useEffect(() => {
     if (remote === null) {

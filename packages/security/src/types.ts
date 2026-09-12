@@ -201,6 +201,16 @@ export interface AssessmentContext {
     readonly perGas?: { readonly theirs: bigint; readonly node: bigint; readonly gasLimit: bigint }
     readonly nonce?: { readonly theirs: number; readonly next: number }
   } | null
+  /**
+   * The chain's native currency symbol (§8.14 Networks).
+   *
+   * `explain.ts` and `rules.ts` each carried the same two-line table — ETN for
+   * 52014 and 5201420, the literal word "native" for everything else — so the
+   * primary statement of a send on Ethereum read "Send 1 native to 0x2222…",
+   * which names no asset at all. The registry knows; it just was not asked.
+   * Absent means the old behaviour, which keeps every existing fixture honest.
+   */
+  readonly nativeSymbol?: string | null
   /** BOLT's address on this chain, for farm-boost statements; optional. */
   readonly boltToken?: Hex
   /** For `internal:bridge`: whether the recipient is a contract on the origin and on the destination (§8.7). */

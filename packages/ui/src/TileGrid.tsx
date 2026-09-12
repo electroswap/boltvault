@@ -24,13 +24,27 @@ export interface TileGridProps {
   readonly testID?: string
 }
 
-export function tileLayout(width: number, target: number, gap: number, minCols: number, maxCols: number): TileLayout {
+export function tileLayout(
+  width: number,
+  target: number,
+  gap: number,
+  minCols: number,
+  maxCols: number,
+): TileLayout {
   const cols = Math.max(minCols, Math.min(maxCols, Math.floor((width + gap) / (target + gap))))
   const size = Math.max(1, Math.floor((width - gap * (cols - 1)) / cols))
   return { size, cols, width }
 }
 
-export function TileGrid({ target, gap = 8, minCols = 2, maxCols = 6, fallbackWidth, children, testID }: TileGridProps) {
+export function TileGrid({
+  target,
+  gap = 8,
+  minCols = 2,
+  maxCols = 6,
+  fallbackWidth,
+  children,
+  testID,
+}: TileGridProps) {
   const [width, setWidth] = useState(fallbackWidth)
   const onLayout = (e: LayoutChangeEvent): void => {
     const w = Math.floor(e.nativeEvent.layout.width)

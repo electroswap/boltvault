@@ -16,7 +16,11 @@
  * a rung you can name, how far you are into it, and what the next one saves.
  */
 import { Body, Column, Gauge, Key, Plate, Row, Sheet, StatStrip, shortAddress } from '@boltvault/ui'
-import { ELECTRONEUM_TESTNET_CHAIN_ID, type FeeScheduleView, type HolderTier } from '@boltvault/engine'
+import {
+  ELECTRONEUM_TESTNET_CHAIN_ID,
+  type FeeScheduleView,
+  type HolderTier,
+} from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { formatBolt, formatBoltPart, formatPct } from '../format'
@@ -44,21 +48,57 @@ function progress(schedule: FeeScheduleView, tier: HolderTier): number {
   return Number((into * 10_000n) / span) / 10_000
 }
 
-export function FeeScheduleSheet({ open, onClose, accountId, chainId, onGetBolt, reducedMotion = false }: { open: boolean; onClose: () => void; accountId: string | null; chainId: number; onGetBolt?: () => void; reducedMotion?: boolean }) {
+export function FeeScheduleSheet({
+  open,
+  onClose,
+  accountId,
+  chainId,
+  onGetBolt,
+  reducedMotion = false,
+}: {
+  open: boolean
+  onClose: () => void
+  accountId: string | null
+  chainId: number
+  onGetBolt?: () => void
+  reducedMotion?: boolean
+}) {
   const engine = useEngine()
   const [schedule, setSchedule] = useState<FeeScheduleView | null>(null)
   const [tier, setTier] = useState<HolderTier | null>(null)
   useEffect(() => {
     if (!open) return
     let alive = true
-    engine.holder.schedule({ chainId }).then((s) => alive && setSchedule(s), () => undefined)
-    if (accountId) engine.holder.tier({ accountId, chainId }).then((x) => alive && setTier(x), () => undefined)
+    engine.holder.schedule({ chainId }).then(
+      (s) => alive && setSchedule(s),
+      () => undefined,
+    )
+    if (accountId)
+      engine.holder.tier({ accountId, chainId }).then(
+        (x) => alive && setTier(x),
+        () => undefined,
+      )
     return () => {
       alive = false
     }
   }, [engine, open, accountId, chainId])
   return (
-    <Sheet open={open} onClose={onClose} title={t({ id: 'fee.sheet.title', message: 'Wallet fee schedule' })} reducedMotion={reducedMotion} footer={<Key label={t({ id: 'close', message: 'Close' })} kind="secondary" size="compact" onPress={onClose} testID="fee-close" />} testID="fee-sheet">
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={t({ id: 'fee.sheet.title', message: 'Wallet fee schedule' })}
+      reducedMotion={reducedMotion}
+      footer={
+        <Key
+          label={t({ id: 'close', message: 'Close' })}
+          kind="secondary"
+          size="compact"
+          onPress={onClose}
+          testID="fee-close"
+        />
+      }
+      testID="fee-sheet"
+    >
       <Column gap="$3">
         {/* Your standing, first: the rung, the fee, the climb. */}
         {tier && schedule ? (
@@ -66,7 +106,11 @@ export function FeeScheduleSheet({ open, onClose, accountId, chainId, onGetBolt,
             <Row justifyContent="space-between" alignItems="baseline" gap="$2">
               <Body size="title">{t({ id: 'fee.you.v2', message: 'Your tier' })}</Body>
               <Body size="title" tone="ember" testID="fee-you-name">
-                {t({ id: 'fee.you.rung', message: '{name} · {p}', values: { name: tier.name, p: formatPct(tier.bips) } })}
+                {t({
+                  id: 'fee.you.rung',
+                  message: '{name} · {p}',
+                  values: { name: tier.name, p: formatPct(tier.bips) },
+                })}
               </Body>
             </Row>
 
@@ -74,20 +118,52 @@ export function FeeScheduleSheet({ open, onClose, accountId, chainId, onGetBolt,
               <Column gap="$2">
                 <Gauge
                   value={progress(schedule, tier)}
-                  from={t({ id: 'fee.gauge.here', message: '{s} BOLT-eq', values: { s: formatBolt(tier.score) } })}
-                  to={t({ id: 'fee.gauge.next', message: '{name} at {s}', values: { name: tier.nextTierName, s: formatBolt(tier.nextTierAt) } })}
+                  from={t({
+                    id: 'fee.gauge.here',
+                    message: '{s} BOLT-eq',
+                    values: { s: formatBolt(tier.score) },
+                  })}
+                  to={t({
+                    id: 'fee.gauge.next',
+                    message: '{name} at {s}',
+                    values: { name: tier.nextTierName, s: formatBolt(tier.nextTierAt) },
+                  })}
                   testID="fee-gauge"
                 />
                 <Body tone="ember" size="caption" testID="fee-next">
-                  {t({ id: 'fee.next.v2', message: '{n} more BOLT-eq and every swap costs {p} instead of {c}.', values: { n: formatBolt((BigInt(tier.nextTierAt) - BigInt(tier.score)).toString()), p: formatPct(tier.nextTierBips), c: formatPct(tier.bips) } })}
+                  {t({
+                    id: 'fee.next.v2',
+                    message: '{n} more BOLT-eq and every swap costs {p} instead of {c}.',
+                    values: {
+                      n: formatBolt((BigInt(tier.nextTierAt) - BigInt(tier.score)).toString()),
+                      p: formatPct(tier.nextTierBips),
+                      c: formatPct(tier.bips),
+                    },
+                  })}
                 </Body>
                 {/* Primary: it is the one thing this sheet is asking you to do. */}
-                {onGetBolt ? <Key label={t({ id: 'fee.getBolt', message: 'Get BOLT' })} size="compact" onPress={onGetBolt} testID="fee-get-bolt" /> : null}
+                {onGetBolt ? (
+                  <Key
+                    label={t({ id: 'fee.getBolt', message: 'Get BOLT' })}
+                    size="compact"
+                    onPress={onGetBolt}
+                    testID="fee-get-bolt"
+                  />
+                ) : null}
               </Column>
             ) : (
               // At the top the bar is full and the right-hand label is the news;
               // it does not also need a sentence of its own under the gauge.
-              <Gauge value={1} from={t({ id: 'fee.gauge.here', message: '{s} BOLT-eq', values: { s: formatBolt(tier.score) } })} to={t({ id: 'fee.gauge.top', message: 'Top tier · lowest fee' })} testID="fee-gauge" />
+              <Gauge
+                value={1}
+                from={t({
+                  id: 'fee.gauge.here',
+                  message: '{s} BOLT-eq',
+                  values: { s: formatBolt(tier.score) },
+                })}
+                to={t({ id: 'fee.gauge.top', message: 'Top tier · lowest fee' })}
+                testID="fee-gauge"
+              />
             )}
 
             {/*
@@ -105,15 +181,39 @@ export function FeeScheduleSheet({ open, onClose, accountId, chainId, onGetBolt,
               small
               columns={2}
               cells={[
-                { label: t({ id: 'fee.from.wallet', message: 'In your wallet' }), value: t({ id: 'fee.from.wallet.v', message: '{n} BOLT', values: { n: formatBoltPart(tier.breakdown.wallet) } }), testID: 'fee-from-wallet' },
-                { label: t({ id: 'fee.from.dyno', message: 'From DYNO' }), value: t({ id: 'fee.from.dyno.v', message: '{n} BOLT-eq', values: { n: formatBoltPart(tier.breakdown.dyno) } }), testID: 'fee-from-dyno' },
+                {
+                  label: t({ id: 'fee.from.wallet', message: 'In your wallet' }),
+                  value: t({
+                    id: 'fee.from.wallet.v',
+                    message: '{n} BOLT',
+                    values: { n: formatBoltPart(tier.breakdown.wallet) },
+                  }),
+                  testID: 'fee-from-wallet',
+                },
+                {
+                  label: t({ id: 'fee.from.dyno', message: 'From DYNO' }),
+                  value: t({
+                    id: 'fee.from.dyno.v',
+                    message: '{n} BOLT-eq',
+                    values: { n: formatBoltPart(tier.breakdown.dyno) },
+                  }),
+                  testID: 'fee-from-dyno',
+                },
               ]}
               testID="fee-breakdown"
             />
             <Body tone="mute" size="caption" fontSize={11} lineHeight={14} numberOfLines={1}>
               {schedule.dynoWeightSource === 'average'
-                ? t({ id: 'fee.weight.measured.v2', message: '1 DYNO = {n} BOLT · seven-day average', values: { n: formatBolt(schedule.dynoWeight) } })
-                : t({ id: 'fee.weight.fixed', message: '1 DYNO = {n} BOLT', values: { n: formatBolt(schedule.dynoWeight) } })}
+                ? t({
+                    id: 'fee.weight.measured.v2',
+                    message: '1 DYNO = {n} BOLT · seven-day average',
+                    values: { n: formatBolt(schedule.dynoWeight) },
+                  })
+                : t({
+                    id: 'fee.weight.fixed',
+                    message: '1 DYNO = {n} BOLT',
+                    values: { n: formatBolt(schedule.dynoWeight) },
+                  })}
             </Body>
           </Plate>
         ) : null}
@@ -122,8 +222,19 @@ export function FeeScheduleSheet({ open, onClose, accountId, chainId, onGetBolt,
         {schedule ? (
           <Plate gap="$1" testID="fee-tiers">
             <Row justifyContent="space-between">
-              <Body size="caption" fontWeight={tier?.tier === 0 ? '700' : '400'} tone={tier?.tier === 0 ? 'arc' : 'mute'}>
-                {t({ id: 'fee.tier.base.named', message: '{name} · under {n} BOLT-eq', values: { name: schedule.baseName, n: formatBolt(schedule.tiers[0]?.minScore ?? '0') } })}
+              <Body
+                size="caption"
+                fontWeight={tier?.tier === 0 ? '700' : '400'}
+                tone={tier?.tier === 0 ? 'arc' : 'mute'}
+              >
+                {t({
+                  id: 'fee.tier.base.named',
+                  message: '{name} · under {n} BOLT-eq',
+                  values: {
+                    name: schedule.baseName,
+                    n: formatBolt(schedule.tiers[0]?.minScore ?? '0'),
+                  },
+                })}
               </Body>
               <Body size="caption" tone={tier?.tier === 0 ? 'arc' : 'ink'}>
                 {formatPct(schedule.baseBips)}
@@ -131,8 +242,16 @@ export function FeeScheduleSheet({ open, onClose, accountId, chainId, onGetBolt,
             </Row>
             {schedule.tiers.map((x, i) => (
               <Row key={x.minScore} justifyContent="space-between">
-                <Body size="caption" fontWeight={tier?.tier === i + 1 ? '700' : '400'} tone={tier?.tier === i + 1 ? 'arc' : 'mute'}>
-                  {t({ id: 'fee.tier.row.named', message: '{name} · {n}+ BOLT-eq', values: { name: x.name, n: formatBolt(x.minScore) } })}
+                <Body
+                  size="caption"
+                  fontWeight={tier?.tier === i + 1 ? '700' : '400'}
+                  tone={tier?.tier === i + 1 ? 'arc' : 'mute'}
+                >
+                  {t({
+                    id: 'fee.tier.row.named',
+                    message: '{name} · {n}+ BOLT-eq',
+                    values: { name: x.name, n: formatBolt(x.minScore) },
+                  })}
                 </Body>
                 <Body size="caption" tone={tier?.tier === i + 1 ? 'arc' : 'ink'}>
                   {formatPct(x.bips)}
@@ -141,7 +260,11 @@ export function FeeScheduleSheet({ open, onClose, accountId, chainId, onGetBolt,
             ))}
             {schedule.source === 'fallback' ? (
               <Body tone="mute" size="caption">
-                {t({ id: 'fee.sheet.fallback.named', message: 'This network has no fee ladder configured; these are the published defaults.' })}
+                {t({
+                  id: 'fee.sheet.fallback.named',
+                  message:
+                    'This network has no fee ladder configured; these are the published defaults.',
+                })}
               </Body>
             ) : null}
           </Plate>
@@ -153,15 +276,32 @@ export function FeeScheduleSheet({ open, onClose, accountId, chainId, onGetBolt,
           fact the reader came for — what they pay, and what the next rung costs.
         */}
         <Body tone="mute" size="caption">
-          {t({ id: 'fee.sheet.body.v2', message: 'Every in-wallet swap pays a fee on what you receive. The more BOLT and DYNO you hold, the less you pay — five rungs, from Static to Reactor. The ladder ships inside the wallet, so it is the same at signing time as it is here.' })}
+          {t({
+            id: 'fee.sheet.body.v2',
+            message:
+              'Every in-wallet swap pays a fee on what you receive. The more BOLT and DYNO you hold, the less you pay — five rungs, from Static to Reactor. The ladder ships inside the wallet, so it is the same at signing time as it is here.',
+          })}
         </Body>
 
         <Body tone="mute" size="caption" testID="fee-recipient">
           {schedule?.sink
-            ? t({ id: 'fee.recipient', message: 'The fee goes to {a}, in the same transaction as the swap. Every payment is on the explorer.', values: { a: shortAddress(schedule.sink) } })
+            ? t({
+                id: 'fee.recipient',
+                message:
+                  'The fee goes to {a}, in the same transaction as the swap. Every payment is on the explorer.',
+                values: { a: shortAddress(schedule.sink) },
+              })
             : chainId === ELECTRONEUM_TESTNET_CHAIN_ID
-              ? t({ id: 'fee.recipient.testnet', message: 'Swaps on testnet pay no fee at all — there is no fee address here and nothing worth collecting.' })
-              : t({ id: 'fee.recipient.none', message: 'In-wallet swaps are off on this network — no fee address is set for it in this build.' })}
+              ? t({
+                  id: 'fee.recipient.testnet',
+                  message:
+                    'Swaps on testnet pay no fee at all — there is no fee address here and nothing worth collecting.',
+                })
+              : t({
+                  id: 'fee.recipient.none',
+                  message:
+                    'In-wallet swaps are off on this network — no fee address is set for it in this build.',
+                })}
         </Body>
       </Column>
     </Sheet>

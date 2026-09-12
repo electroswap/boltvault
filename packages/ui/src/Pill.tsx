@@ -32,7 +32,19 @@ export interface PillProps {
   readonly testID?: string
 }
 
-export function Pill({ label, icon, chevron = false, selected = false, tone, size = 'md', strong = false, disabled = false, onPress, accessibilityLabel, testID }: PillProps) {
+export function Pill({
+  label,
+  icon,
+  chevron = false,
+  selected = false,
+  tone,
+  size = 'md',
+  strong = false,
+  disabled = false,
+  onPress,
+  accessibilityLabel,
+  testID,
+}: PillProps) {
   // xs is a badge, not a control: it states a fact ('Pays dividends',
   // 'ERC-721') and should not carry the weight of something you can press.
   const height = size === 'xs' ? 20 : size === 'sm' ? 28 : 36
@@ -63,7 +75,12 @@ export function Pill({ label, icon, chevron = false, selected = false, tone, siz
           selected style.
         */
         ...(strong && !disabled
-          ? { shadowColor: glow.tab, shadowRadius: 12, shadowOpacity: 1, shadowOffset: { width: 0, height: 0 } }
+          ? {
+              shadowColor: glow.tab,
+              shadowRadius: 12,
+              shadowOpacity: 1,
+              shadowOffset: { width: 0, height: 0 },
+            }
           : {}),
         transitionProperty: ['backgroundColor', 'borderColor'],
         transitionDuration: reduced ? 0 : motion.micro,
@@ -72,10 +89,19 @@ export function Pill({ label, icon, chevron = false, selected = false, tone, siz
     >
       <Row gap={size === 'xs' ? 4 : 6} alignItems="center">
         {icon}
-        <Body size="caption" fontSize={size === 'xs' ? 11 : undefined} lineHeight={size === 'xs' ? 14 : undefined} tone={labelTone} fontWeight={strong ? '700' : selected ? '600' : '400'} numberOfLines={1}>
+        <Body
+          size="caption"
+          fontSize={size === 'xs' ? 11 : undefined}
+          lineHeight={size === 'xs' ? 14 : undefined}
+          tone={labelTone}
+          fontWeight={strong ? '700' : selected ? '600' : '400'}
+          numberOfLines={1}
+        >
           {label}
         </Body>
-        {chevron ? <Icon name="chevronDown" size={14} color={selected ? paint.ink : paint.mute} /> : null}
+        {chevron ? (
+          <Icon name="chevronDown" size={14} color={selected ? paint.ink : paint.mute} />
+        ) : null}
       </Row>
     </Animated.View>
   )

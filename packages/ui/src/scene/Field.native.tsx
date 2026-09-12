@@ -23,7 +23,18 @@ import type { FieldProps } from './Field.types'
 const grid = Skia.RuntimeEffect.Make(FIELD_SKSL)
 const circuit = Skia.RuntimeEffect.Make(CIRCUIT_SKSL)
 
-export function Field({ address, pulse = 0, warmth = 0, intensity = 1, quiet = false, reducedMotion = false, scene = 'grid', width, height, testID }: FieldProps) {
+export function Field({
+  address,
+  pulse = 0,
+  warmth = 0,
+  intensity = 1,
+  quiet = false,
+  reducedMotion = false,
+  scene = 'grid',
+  width,
+  height,
+  testID,
+}: FieldProps) {
   const seed = useMemo(() => fieldSeed(address), [address])
   const time = useSharedValue(reducedMotion ? 3.7 : 0)
   const pulseSv = useSharedValue(0)
@@ -57,10 +68,20 @@ export function Field({ address, pulse = 0, warmth = 0, intensity = 1, quiet = f
 
   // Off is a real choice, not a hidden shader: nothing compiles, nothing ticks.
   const effect = scene === 'circuit' ? circuit : grid
-  if (scene === 'off' || !effect) return <View style={{ position: 'absolute', width, height, backgroundColor: paint.void }} testID={testID} />
+  if (scene === 'off' || !effect)
+    return (
+      <View
+        style={{ position: 'absolute', width, height, backgroundColor: paint.void }}
+        testID={testID}
+      />
+    )
   const opacity = (quiet ? 0.15 : 1) * intensity
   return (
-    <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width, height, opacity }} testID={testID}>
+    <View
+      pointerEvents="none"
+      style={{ position: 'absolute', left: 0, top: 0, width, height, opacity }}
+      testID={testID}
+    >
       <Canvas style={{ width, height }}>
         <Fill>
           <Shader source={effect} uniforms={uniforms} />

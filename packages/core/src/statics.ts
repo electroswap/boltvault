@@ -13,13 +13,16 @@ import { z } from 'zod'
  * ops (an offline signer); rotating it is a wallet release. This value is a
  * key ops generated on 2026-09-05; the private half lives in the ops secrets.
  */
-export const STATIC_SIGNING_PUBLIC_KEY = '98b03890bbc570eae1416856bc11e252b603104c040e7a9048e2d7ee088ce567'
+export const STATIC_SIGNING_PUBLIC_KEY =
+  '98b03890bbc570eae1416856bc11e252b603104c040e7a9048e2d7ee088ce567'
 
 export const FlagsSchema = z.object({
   v: z.literal(1),
   /** Unix ms; a file older than the one already held is refused (anti-rollback). */
   issuedAt: z.number().int().nonnegative(),
-  minVersion: z.object({ extension: z.string().optional(), mobile: z.string().optional() }).default({}),
+  minVersion: z
+    .object({ extension: z.string().optional(), mobile: z.string().optional() })
+    .default({}),
   /** Kill-switches (§3.7): a flag can only turn something off. */
   disabled: z
     .object({
@@ -46,7 +49,13 @@ export const ScamOriginsSchema = z.object({
 })
 export type ScamOrigins = z.infer<typeof ScamOriginsSchema>
 
-export const DEFAULT_FLAGS: Flags = { v: 1, issuedAt: 0, minVersion: {}, disabled: {}, notice: null }
+export const DEFAULT_FLAGS: Flags = {
+  v: 1,
+  issuedAt: 0,
+  minVersion: {},
+  disabled: {},
+  notice: null,
+}
 
 const fromHex = (h: string): Uint8Array => {
   const s = h.startsWith('0x') ? h.slice(2) : h
@@ -54,10 +63,15 @@ const fromHex = (h: string): Uint8Array => {
   for (let i = 0; i < out.length; i++) out[i] = Number.parseInt(s.slice(i * 2, i * 2 + 2), 16)
   return out
 }
-const toHex = (b: Uint8Array): string => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
+const toHex = (b: Uint8Array): string =>
+  Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
 
 /** True when `signatureHex` is a valid ed25519 signature of exactly these bytes by the key. */
-export function verifyStatic(bytes: Uint8Array, signatureHex: string, publicKeyHex = STATIC_SIGNING_PUBLIC_KEY): boolean {
+export function verifyStatic(
+  bytes: Uint8Array,
+  signatureHex: string,
+  publicKeyHex = STATIC_SIGNING_PUBLIC_KEY,
+): boolean {
   try {
     const sig = fromHex(signatureHex.trim())
     if (sig.length !== 64) return false
@@ -72,7 +86,10 @@ export function signStatic(bytes: Uint8Array, privateKeyHex: string): string {
   return toHex(ed25519.sign(bytes, fromHex(privateKeyHex)))
 }
 
-export function staticKeyPair(privateKey: Uint8Array): { privateKeyHex: string; publicKeyHex: string } {
+export function staticKeyPair(privateKey: Uint8Array): {
+  privateKeyHex: string
+  publicKeyHex: string
+} {
   return { privateKeyHex: toHex(privateKey), publicKeyHex: toHex(ed25519.getPublicKey(privateKey)) }
 }
 

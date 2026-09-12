@@ -61,6 +61,8 @@ function blobSchema<T>(inner: ZodType<T>): ZodType<{ v: 1; items: Item<T>[] }> {
 
 export class SealedMap<T> {
   private items: Item<T>[] | null = null
+  /** The stored blob would not open; writing would destroy it. See `load`. */
+  private poisoned = false
   private readonly blob: ZodType<{ v: 1; items: Item<T>[] }>
   private readonly aadBytes: Uint8Array
   private readonly infoBytes: Uint8Array
@@ -132,6 +134,7 @@ export class SealedMap<T> {
 
   /** Forget the decrypted entries on lock. */
   forget(): void {
+    this.poisoned = false
     this.items = null
   }
 
@@ -140,7 +143,8 @@ export class SealedMap<T> {
       const next = f(await this.load())
       await this.persist(next)
     } catch (err) {
-      if (this.opts.whenLocked === 'skip' && err instanceof EngineError && err.code === 'locked') return false
+      if (this.opts.whenLocked === 'skip' && err instanceof EngineError && err.code === 'locked')
+        return false
       throw err
     }
     this.onChange?.()
@@ -176,26 +180,71 @@ export class SealedMap<T> {
       return this.items
     }
     try {
-      const pt = xchacha20poly1305(key, fromHex(parsed.nonce), this.aadBytes).decrypt(fromHex(parsed.ct))
+      const pt = xchacha20poly1305(key, fromHex(parsed.nonce), this.aadBytes).decrypt(
+        fromHex(parsed.ct),
+      )
       const blob = this.blob.safeParse(JSON.parse(new TextDecoder().decode(pt)))
       this.items = blob.success ? blob.data.items : []
       zeroise(pt)
     } catch {
-      // wrong key (a different vault) or tamper → treat as empty, never overwrite silently
+      /*
+        A blob that will not open is not an empty blob.
+
+        The comment here used to say "never overwrite silently" and the code
+        did exactly that: `items = []`, and the next `set()` persisted the
+        empty list straight over the ciphertext. One transient wrong key — an
+        interrupted v1→v2 migration, a vault restored from an export beside an
+        older `activity.blob` — and the write-ahead history the design leans on
+        was gone, along with the address book and the sync state, with nothing
+        said. The ciphertext is copied aside under its own key first, and the
+        map refuses to write until somebody decides what to do about it.
+      */
+      await this.quarantine(raw)
       this.items = []
+      this.poisoned = true
     } finally {
       zeroise(key)
     }
     return this.items
   }
 
+  /**
+   * Keep the bytes. `<key>.sealed-quarantine.<ts>` is deliberately outside the
+   * at-rest allow-list's shape for live documents: it is ciphertext nobody can
+   * read without the old DEK, and it is there so a support conversation can
+   * begin with "your history is still on the disk" rather than with a
+   * shrug.
+   */
+  private async quarantine(raw: string): Promise<void> {
+    try {
+      const at = this.platform.now()
+      await this.platform.storage.local.set(`${this.opts.key}.sealed-quarantine.${at}`, raw)
+    } catch {
+      // Storage that will not take a copy is storage that will not take the
+      // overwrite either; `poisoned` is what actually protects the bytes.
+    }
+  }
+
   private async persist(items: Item<T>[]): Promise<void> {
+    /*
+      Nothing is written over a blob this map could not read. The DEK changing
+      — a password rotation, a different vault unlocking — clears the flag on
+      the next load, because that load is a fresh attempt with a fresh key.
+    */
+    if (this.poisoned)
+      throw new EngineError(
+        'internal',
+        `${this.opts.key} could not be decrypted and has been set aside; it will not be overwritten.`,
+      )
     const key = await this.key()
     const nonce = this.platform.random(24)
     const pt = new TextEncoder().encode(JSON.stringify({ v: 1, items }))
     const ct = xchacha20poly1305(key, nonce, this.aadBytes).encrypt(pt)
     zeroise(key, pt)
-    await this.platform.storage.local.set(this.opts.key, JSON.stringify({ nonce: toHex(nonce), ct: toHex(ct) }))
+    await this.platform.storage.local.set(
+      this.opts.key,
+      JSON.stringify({ nonce: toHex(nonce), ct: toHex(ct) }),
+    )
     this.items = items
   }
 }

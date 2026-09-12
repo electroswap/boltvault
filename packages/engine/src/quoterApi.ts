@@ -63,12 +63,20 @@ export type QuoterOutcome =
    * of the story the server already has, so it is carried even though nothing
    * in the pricing path reads it.
    */
-  | { readonly kind: 'route'; readonly quote: RouteQuote; readonly cached: boolean; readonly blockNumber: string | null; readonly id: string | null }
+  | {
+      readonly kind: 'route'
+      readonly quote: RouteQuote
+      readonly cached: boolean
+      readonly blockNumber: string | null
+      readonly id: string | null
+    }
   /** Asked and got no usable answer. The caller quotes on chain; the reason is for the log, not the user. */
   | { readonly kind: 'none'; readonly reason: string }
 
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
-const addr = (v: unknown): Hex | null => (typeof v === 'string' && /^0x[0-9a-fA-F]{40}$/.test(v) ? (v.toLowerCase() as Hex) : null)
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v)
+const addr = (v: unknown): Hex | null =>
+  typeof v === 'string' && /^0x[0-9a-fA-F]{40}$/.test(v) ? (v.toLowerCase() as Hex) : null
 const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
 
 function bigintOf(v: unknown): bigint | null {
@@ -153,7 +161,8 @@ export function parseQuote(body: unknown, input: QuoterInput): QuoterOutcome {
     it also catches a cache key collision, which is a live risk: the service's
     key is the tuple (type, tokenIn, tokenOut, amount) and nothing else.
   */
-  if (quote['amount'] !== input.amountIn.toString()) return { kind: 'none', reason: 'amount echo mismatch' }
+  if (quote['amount'] !== input.amountIn.toString())
+    return { kind: 'none', reason: 'amount echo mismatch' }
   const amountOut = bigintOf(quote['quote'])
   if (amountOut === null || amountOut <= 0n) return { kind: 'none', reason: 'no output' }
   const splits = quote['route']
@@ -167,13 +176,17 @@ export function parseQuote(body: unknown, input: QuoterInput): QuoterOutcome {
   */
   if (splits.length !== 1) return { kind: 'none', reason: `${String(splits.length)} splits` }
   const raw: unknown = splits[0]
-  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_HOPS) return { kind: 'none', reason: 'bad hop list' }
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_HOPS)
+    return { kind: 'none', reason: 'bad hop list' }
   const hops = parseHops(raw)
   if (!hops || hops.length === 0) return { kind: 'none', reason: 'bad hop' }
   // The path has to start where the money is, end where the user wants it, and join up in between.
   if (!same(hops[0]?.tokenIn ?? '', input.tokenIn)) return { kind: 'none', reason: 'wrong tokenIn' }
-  if (!same(hops[hops.length - 1]?.tokenOut ?? '', input.tokenOut)) return { kind: 'none', reason: 'wrong tokenOut' }
-  for (let i = 1; i < hops.length; i++) if (!same(hops[i - 1]?.tokenOut ?? '', hops[i]?.tokenIn ?? '')) return { kind: 'none', reason: 'broken path' }
+  if (!same(hops[hops.length - 1]?.tokenOut ?? '', input.tokenOut))
+    return { kind: 'none', reason: 'wrong tokenOut' }
+  for (let i = 1; i < hops.length; i++)
+    if (!same(hops[i - 1]?.tokenOut ?? '', hops[i]?.tokenIn ?? ''))
+      return { kind: 'none', reason: 'broken path' }
 
   const gas = bigintOf(quote['gasUseEstimate'])
   return {
@@ -270,7 +283,11 @@ export class Quoter {
       */
       const response = await this.deps.fetch(this.deps.url, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json', 'x-boltvault-key': this.deps.key },
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json',
+          'x-boltvault-key': this.deps.key,
+        },
         body,
         // ACAO is `*` on this service, which is incompatible with sending credentials.
         credentials: 'omit',

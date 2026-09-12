@@ -3,7 +3,18 @@
  * address with the last-good balance beside it, an "Active" mark, and the
  * menu control. Tapping the row makes it the active account.
  */
-import { Body, Column, Dot, Icon, IconButton, Pressable, Row, Signature, paint, shortAddress } from '@boltvault/ui'
+import {
+  Body,
+  Column,
+  Dot,
+  Icon,
+  IconButton,
+  Pressable,
+  Row,
+  Signature,
+  paint,
+  shortAddress,
+} from '@boltvault/ui'
 import type { AccountView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../../engine/EngineProvider'
@@ -24,7 +35,13 @@ export function useAccountTotal(accountId: string): string {
       () => undefined,
     )
     const off = engine.events.subscribe((e) => {
-      if (e.type === 'portfolio.snapshot' && e.snapshot.accountId === accountId && e.snapshot.total !== null && alive) setText(formatFiat(e.snapshot.total, e.snapshot.currency))
+      if (
+        e.type === 'portfolio.snapshot' &&
+        e.snapshot.accountId === accountId &&
+        e.snapshot.total !== null &&
+        alive
+      )
+        setText(formatFiat(e.snapshot.total, e.snapshot.currency))
     })
     return () => {
       alive = false
@@ -54,7 +71,8 @@ export function kindLabel(a: AccountView): string {
 /** "BIP-44 · #3" for a hardware account, "#3" for a phrase account, nothing for the rest. */
 export function derivationLabel(a: AccountView): string | null {
   if (a.hardware) {
-    const scheme = a.hardware.scheme === 'live' ? 'Ledger Live' : a.hardware.scheme === 'bip44' ? 'BIP-44' : null
+    const scheme =
+      a.hardware.scheme === 'live' ? 'Ledger Live' : a.hardware.scheme === 'bip44' ? 'BIP-44' : null
     if (scheme && a.hardware.index !== undefined) return `${scheme} · #${a.hardware.index}`
     return a.hardware.path
   }
@@ -62,7 +80,21 @@ export function derivationLabel(a: AccountView): string | null {
   return null
 }
 
-export function AccountRow({ account, active, onSelect, onMenu, onCopy, copied = false }: { account: AccountView; active: boolean; onSelect: () => void; onMenu: () => void; onCopy?: () => void; copied?: boolean }) {
+export function AccountRow({
+  account,
+  active,
+  onSelect,
+  onMenu,
+  onCopy,
+  copied = false,
+}: {
+  account: AccountView
+  active: boolean
+  onSelect: () => void
+  onMenu: () => void
+  onCopy?: () => void
+  copied?: boolean
+}) {
   const total = useAccountTotal(account.id)
   /*
     The second line is the only place this row says which address it is, and
@@ -72,8 +104,20 @@ export function AccountRow({ account, active, onSelect, onMenu, onCopy, copied =
   */
   const name = useName(account.address)
   return (
-    <Row alignItems="center" gap="$2" opacity={account.hidden ? 0.55 : 1} testID={`account-${account.id}`}>
-      <Pressable onPress={onSelect} accessibilityRole="button" accessibilityLabel={account.label} accessibilityState={{ selected: active }} style={{ flex: 1, minHeight: 52, justifyContent: 'center' }} testID={`use-${account.id}`}>
+    <Row
+      alignItems="center"
+      gap="$2"
+      opacity={account.hidden ? 0.55 : 1}
+      testID={`account-${account.id}`}
+    >
+      <Pressable
+        onPress={onSelect}
+        accessibilityRole="button"
+        accessibilityLabel={account.label}
+        accessibilityState={{ selected: active }}
+        style={{ flex: 1, minHeight: 52, justifyContent: 'center' }}
+        testID={`use-${account.id}`}
+      >
         <Row gap="$3" alignItems="center">
           <Signature address={account.address} size={32} />
           <Column flex={1} minWidth={0} alignItems="flex-start">
@@ -96,12 +140,36 @@ export function AccountRow({ account, active, onSelect, onMenu, onCopy, copied =
               ) : null}
             </Row>
             <Row gap={2} alignItems="center">
-              <Body tone={copied ? 'arc' : 'mute'} size="caption" fontVariant={['tabular-nums']} numberOfLines={1}>
-                {copied ? t({ id: 'copied', message: 'Copied' }) : (name ?? shortAddress(account.address))}
+              <Body
+                tone={copied ? 'arc' : 'mute'}
+                size="caption"
+                fontVariant={['tabular-nums']}
+                numberOfLines={1}
+              >
+                {copied
+                  ? t({ id: 'copied', message: 'Copied' })
+                  : (name ?? shortAddress(account.address))}
               </Body>
               {onCopy ? (
-                <Pressable onPress={onCopy} accessibilityRole="button" accessibilityLabel={t({ id: 'acct.copy', message: 'Copy address' })} style={{ minHeight: 44, minWidth: 44, marginVertical: -12, justifyContent: 'center', alignItems: 'flex-start', paddingLeft: 4 }} testID={`copy-${account.id}`}>
-                  <Icon name={copied ? 'check' : 'copy'} size={12} color={copied ? paint.arc : paint.mute} />
+                <Pressable
+                  onPress={onCopy}
+                  accessibilityRole="button"
+                  accessibilityLabel={t({ id: 'acct.copy', message: 'Copy address' })}
+                  style={{
+                    minHeight: 44,
+                    minWidth: 44,
+                    marginVertical: -12,
+                    justifyContent: 'center',
+                    alignItems: 'flex-start',
+                    paddingLeft: 4,
+                  }}
+                  testID={`copy-${account.id}`}
+                >
+                  <Icon
+                    name={copied ? 'check' : 'copy'}
+                    size={12}
+                    color={copied ? paint.arc : paint.mute}
+                  />
                 </Pressable>
               ) : null}
             </Row>
@@ -113,7 +181,12 @@ export function AccountRow({ account, active, onSelect, onMenu, onCopy, copied =
           ) : null}
         </Row>
       </Pressable>
-      <IconButton icon="more" label={t({ id: 'acct.menu', message: 'Account options' })} onPress={onMenu} testID={`menu-${account.id}`} />
+      <IconButton
+        icon="more"
+        label={t({ id: 'acct.menu', message: 'Account options' })}
+        onPress={onMenu}
+        testID={`menu-${account.id}`}
+      />
     </Row>
   )
 }

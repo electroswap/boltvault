@@ -12,7 +12,12 @@
  */
 import type { Cached } from './cache'
 import type { GovernorSnapshot } from './governor'
-import type { AvailabilityView, PendingRegistration, PriceView, RegistrarView } from './namespaces/names'
+import type {
+  AvailabilityView,
+  PendingRegistration,
+  PriceView,
+  RegistrarView,
+} from './namespaces/names'
 import type { CustomCollection } from './namespaces/nftCustom'
 import type { AssessInput, PreAssessment, SpendPolicyView } from './namespaces/security'
 import type { SyncIncomingItem } from './namespaces/sync'
@@ -81,8 +86,19 @@ export type { SyncIncomingItem }
 // The views these namespaces answer with are declared beside their service
 // (§schema.ts belongs to the shared shapes); re-exported here so a screen
 // imports them from the contract like everything else it renders.
-export type { AssessInput, AssessRequest, PreAssessment, SpendPolicyView } from './namespaces/security'
-export type { AvailabilityView, CommitmentState, PendingRegistration, PriceView, RegistrarView } from './namespaces/names'
+export type {
+  AssessInput,
+  AssessRequest,
+  PreAssessment,
+  SpendPolicyView,
+} from './namespaces/security'
+export type {
+  AvailabilityView,
+  CommitmentState,
+  PendingRegistration,
+  PriceView,
+  RegistrarView,
+} from './namespaces/names'
 
 export type Unsubscribe = () => void
 
@@ -99,31 +115,60 @@ export interface VaultNamespace {
   /** A fresh phrase with nothing written: the words are shown and checked before a password exists (§8.1). */
   propose(input: { bits?: 128 | 256 }): Promise<{ mnemonic: string }>
   /** Onboarding: a fresh 12/24-word seed. The mnemonic is returned exactly once. */
-  create(input: { password: string; bits?: 128 | 256; label?: string }): Promise<{ accounts: AccountView[]; mnemonic: string; seedId: string }>
-  import(input: { mnemonic: string; password: string; passphrase?: string; label?: string }): Promise<{ accounts: AccountView[]; seedId: string }>
+  create(input: {
+    password: string
+    bits?: 128 | 256
+    label?: string
+  }): Promise<{ accounts: AccountView[]; mnemonic: string; seedId: string }>
+  import(input: {
+    mnemonic: string
+    password: string
+    passphrase?: string
+    label?: string
+  }): Promise<{ accounts: AccountView[]; seedId: string }>
   unlock(input: { password: string }): Promise<{ accounts: AccountView[] }>
-  unlockWithPasskey(input: { credentialId: string; prfSecretHex: string }): Promise<{ accounts: AccountView[] }>
+  unlockWithPasskey(input: {
+    credentialId: string
+    prfSecretHex: string
+  }): Promise<{ accounts: AccountView[] }>
   unlockWithDevice(input: { keyId: string; keyHex: string }): Promise<{ accounts: AccountView[] }>
   lock(): Promise<void>
   /** A human interacted: the idle auto-lock timer restarts (debounced in the engine). */
   touch(): Promise<{ lockAt: number | null }>
   /** Seed reveal — password re-verified, UI-class senders only, quiet mode in the UI. */
   /** Any factor the vault is wrapped under — password, passkey PRF, or device key (§3.2). */
-  reveal(input: { seedId: string } & ({ password: string } | { credentialId: string; prfSecretHex: string } | { keyId: string; keyHex: string })): Promise<{ mnemonic: string; passphraseSet: boolean }>
+  reveal(
+    input: { seedId: string } & (
+      | { password: string }
+      | { credentialId: string; prfSecretHex: string }
+      | { keyId: string; keyHex: string }
+    ),
+  ): Promise<{ mnemonic: string; passphraseSet: boolean }>
   changePassword(input: { current: string; next: string }): Promise<VaultStatus>
   /** Changing who can open the vault costs the password, every time. */
-  enrolPasskey(input: { credentialId: string; prfSecretHex: string; password: string }): Promise<VaultStatus>
+  enrolPasskey(input: {
+    credentialId: string
+    prfSecretHex: string
+    password: string
+  }): Promise<VaultStatus>
   removePasskey(input: { credentialId: string; password: string }): Promise<VaultStatus>
   enrolDevice(input: { keyId: string; keyHex: string; password: string }): Promise<VaultStatus>
   removeDevice(input: { keyId: string; password: string }): Promise<VaultStatus>
   setAutoLock(input: { autoLock: AutoLock }): Promise<VaultStatus>
   /** Three word positions to ask for; the words themselves never leave the engine. */
   backupQuiz(input: { seedId: string }): Promise<{ positions: number[]; wordCount: number }>
-  confirmBackup(input: { seedId: string; answers: Array<{ position: number; word: string }> }): Promise<{ ok: boolean; status: VaultStatus }>
+  confirmBackup(input: {
+    seedId: string
+    answers: Array<{ position: number; word: string }>
+  }): Promise<{ ok: boolean; status: VaultStatus }>
   /** Air-gapped move (§6): the plaintext under a one-time code, as animated-QR frames. */
   /** `code` is minted by the engine when absent; the caller shows what comes back. */
   export(input: { password: string; code?: string }): Promise<{ frames: string[]; code: string }>
-  importExport(input: { frames: string[]; code: string; password: string }): Promise<{ accounts: AccountView[] }>
+  importExport(input: {
+    frames: string[]
+    code: string
+    password: string
+  }): Promise<{ accounts: AccountView[] }>
 }
 
 export interface AccountsNamespace {
@@ -137,14 +182,28 @@ export interface AccountsNamespace {
   renameSeed(input: { seedId: string; label: string }): Promise<SeedView>
   /** Next BIP-44 index of a seed. */
   derive(input: { seedId: string; label?: string }): Promise<AccountView>
-  addSeed(input: { mnemonic: string; label?: string; passphrase?: string }): Promise<{ seedId: string; account: AccountView }>
+  addSeed(input: {
+    mnemonic: string
+    label?: string
+    passphrase?: string
+  }): Promise<{ seedId: string; account: AccountView }>
   addImported(input: { privateKey: string; label?: string }): Promise<AccountView>
   addWatch(input: { address: string; label?: string }): Promise<AccountView>
-  addHardware(input: { kind: 'ledger' | 'trezor' | 'keystone'; address: string; path: string; deviceId?: string; label?: string }): Promise<AccountView>
+  addHardware(input: {
+    kind: 'ledger' | 'trezor' | 'keystone'
+    address: string
+    path: string
+    deviceId?: string
+    label?: string
+  }): Promise<AccountView>
   /** Imported, watch and hardware accounts can be removed; HD accounts are hidden instead. */
   remove(input: { id: AccountId }): Promise<void>
   /** BIP-44 vs Ledger Live preview addresses for an import decision (§8.1). */
-  previewDerivations(input: { mnemonic: string; passphrase?: string; count?: number }): Promise<{ bip44: string[]; ledgerLive: string[] }>
+  previewDerivations(input: {
+    mnemonic: string
+    passphrase?: string
+    count?: number
+  }): Promise<{ bip44: string[]; ledgerLive: string[] }>
 }
 
 /** Replacing a transaction already in a node's pool (§8.12). */
@@ -215,7 +274,9 @@ export interface PortfolioNamespace {
   snapshot(input: { accountId: AccountId; chainIds?: number[] }): Promise<PortfolioSnapshot>
   refresh(input: { accountId: AccountId; chainIds?: number[] }): Promise<PortfolioSnapshot>
   /** "Since you last looked" (§7.13): the previous first-open total, and record this open. */
-  lastLook(input: { accountId: AccountId }): Promise<{ previous: { at: number; total: number | null } | null; total: number | null }>
+  lastLook(input: {
+    accountId: AccountId
+  }): Promise<{ previous: { at: number; total: number | null } | null; total: number | null }>
   /** The persisted last-good snapshot, no refresh (plan C1): balances beside an account, badges on Home. */
   cached(input: { accountId: AccountId }): Promise<PortfolioSnapshot | null>
   /** The totals this wallet has seen in this scope, oldest first and bounded (§8.2). */
@@ -224,7 +285,10 @@ export interface PortfolioNamespace {
 
 export interface ActivityScanNamespace {
   /** Bounded inbound transfer scan (§8.12); returns how many entries were added. */
-  scan(input: { accountId: AccountId; chainId: number }): Promise<{ added: number; fromBlock: number; toBlock: number }>
+  scan(input: {
+    accountId: AccountId
+    chainId: number
+  }): Promise<{ added: number; fromBlock: number; toBlock: number }>
   /** Every enabled chain in turn; a round younger than 60 s is returned as is unless forced. */
   scanAll(input: { accountId: AccountId; force?: boolean }): Promise<ScanSummary>
   cached(input: { accountId: AccountId }): Promise<Cached<ScanSummary> | null>
@@ -234,10 +298,23 @@ export interface TokensNamespace {
   universe(input: { chainId?: number }): Promise<TokenView[]>
   get(input: { chainId?: number; address: string }): Promise<TokenView | null>
   search(input: { chainId?: number; query: string }): Promise<TokenView[]>
-  metadata(input: { chainId?: number; address: string }): Promise<{ address: string; name: string; symbol: string; decimals: number; hasCode: boolean }>
-  addCustom(input: { chainId?: number; address: string; source?: 'user' | 'dapp'; origin?: string }): Promise<TokenView>
+  metadata(input: {
+    chainId?: number
+    address: string
+  }): Promise<{ address: string; name: string; symbol: string; decimals: number; hasCode: boolean }>
+  addCustom(input: {
+    chainId?: number
+    address: string
+    source?: 'user' | 'dapp'
+    origin?: string
+  }): Promise<TokenView>
   removeCustom(input: { chainId?: number; address: string }): Promise<void>
-  setPrefs(input: { chainId?: number; address: string; pinned?: boolean; hidden?: boolean }): Promise<void>
+  setPrefs(input: {
+    chainId?: number
+    address: string
+    pinned?: boolean
+    hidden?: boolean
+  }): Promise<void>
 }
 
 export interface NamesNamespace {
@@ -256,15 +333,33 @@ export interface NamesNamespace {
    * `commit` transaction and persists the commitment, so the mandatory wait
    * survives a worker restart. `setPrimary` defaults to true.
    */
-  commit(input: { accountId: AccountId; chainId: number; name: string; durationSeconds?: number; setPrimary?: boolean }): Promise<{ id: string; requestId: string; commitment: string; name: string; waitSeconds: number }>
+  commit(input: {
+    accountId: AccountId
+    chainId: number
+    name: string
+    durationSeconds?: number
+    setPrimary?: boolean
+  }): Promise<{
+    id: string
+    requestId: string
+    commitment: string
+    name: string
+    waitSeconds: number
+  }>
   /** Commitments this device holds, with the countdown read off the chain. */
   pending(input?: { chainId?: number }): Promise<PendingRegistration[]>
   /** Step two: the payable reveal, again as an approval. */
-  register(input: { id: string }): Promise<{ requestId: string; name: string; priceWei: string; valueWei: string }>
+  register(input: {
+    id: string
+  }): Promise<{ requestId: string; name: string; priceWei: string; valueWei: string }>
   /** Forget a commitment held here. */
   cancel(input: { id: string }): Promise<PendingRegistration[]>
   /** `ReverseRegistrar.setName` — the primary name every other wallet will show. */
-  setPrimary(input: { accountId: AccountId; chainId: number; name: string }): Promise<{ requestId: string; name: string }>
+  setPrimary(input: {
+    accountId: AccountId
+    chainId: number
+    name: string
+  }): Promise<{ requestId: string; name: string }>
 }
 
 /**
@@ -284,10 +379,19 @@ export interface SecurityNamespace {
 }
 
 export interface AllowancesNamespace {
-  cached(input: { accountId: AccountId; chainId: number }): Promise<{ rows: AllowanceView[]; at: number }>
+  cached(input: {
+    accountId: AccountId
+    chainId: number
+  }): Promise<{ rows: AllowanceView[]; at: number }>
   scan(input: { accountId: AccountId; chainId: number; logs?: boolean }): Promise<AllowanceView[]>
   /** Zero the allowance through the internal approval path; the sheet decides. */
-  revoke(input: { accountId: AccountId; chainId: number; token: string; spender: string; standard: 'erc20' | 'permit2' | 'erc721' }): Promise<{ requestId: string }>
+  revoke(input: {
+    accountId: AccountId
+    chainId: number
+    token: string
+    spender: string
+    standard: 'erc20' | 'permit2' | 'erc721'
+  }): Promise<{ requestId: string }>
 }
 
 export interface ContactsNamespace {
@@ -298,9 +402,21 @@ export interface ContactsNamespace {
 }
 
 export interface SendNamespace {
-  quote(input: { accountId: AccountId; chainId: number; token: string; to: string; amount: string }): Promise<SendQuote>
+  quote(input: {
+    accountId: AccountId
+    chainId: number
+    token: string
+    to: string
+    amount: string
+  }): Promise<SendQuote>
   /** Creates the `internal:send` approval; Activity carries the result under `requestId`. */
-  submit(input: { accountId: AccountId; chainId: number; token: string; to: string; amount: string }): Promise<{ requestId: string; to: string }>
+  submit(input: {
+    accountId: AccountId
+    chainId: number
+    token: string
+    to: string
+    amount: string
+  }): Promise<{ requestId: string; to: string }>
 }
 
 /** In-wallet swaps (§8.6): quote on chain, execute as a flow of sheets (approve → permit → swap). */
@@ -334,14 +450,38 @@ export interface HolderNamespace {
   schedule(input: { chainId: number }): Promise<FeeScheduleView>
   addresses(input: { chainId: number }): Promise<{ sink: string | null; schedule: string | null }>
   /** Dev/test only; refused for a chain whose sink is pinned in the build. */
-  configure(input: { chainId: number; sink: string | null; schedule: string | null }): Promise<{ sink: string | null; schedule: string | null }>
+  configure(input: {
+    chainId: number
+    sink: string | null
+    schedule: string | null
+  }): Promise<{ sink: string | null; schedule: string | null }>
 }
 
 /** Limit orders on EsLimitOrderManagerV1 (§8.6). */
 export interface LimitNamespace {
-  quote(input: { accountId: AccountId; chainId: number; tokenIn: string; tokenOut: string; amountIn: string; minOut: string; durationSeconds: number }): Promise<LimitQuote>
-  place(input: { accountId: AccountId; chainId: number; tokenIn: string; tokenOut: string; amountIn: string; minOut: string; durationSeconds: number }): Promise<{ flowId: string; requestId: string | null }>
-  cancel(input: { accountId: AccountId; chainId: number; orderId: string }): Promise<{ flowId: string; requestId: string | null }>
+  quote(input: {
+    accountId: AccountId
+    chainId: number
+    tokenIn: string
+    tokenOut: string
+    amountIn: string
+    minOut: string
+    durationSeconds: number
+  }): Promise<LimitQuote>
+  place(input: {
+    accountId: AccountId
+    chainId: number
+    tokenIn: string
+    tokenOut: string
+    amountIn: string
+    minOut: string
+    durationSeconds: number
+  }): Promise<{ flowId: string; requestId: string | null }>
+  cancel(input: {
+    accountId: AccountId
+    chainId: number
+    orderId: string
+  }): Promise<{ flowId: string; requestId: string | null }>
   list(input: { accountId: AccountId; chainId: number }): Promise<LimitOrderView[]>
 }
 
@@ -351,38 +491,147 @@ export interface ExploreNamespace {
   tokens(input: { chainId: number }): Promise<ExploreToken[]>
   cachedTokens(input: { chainId: number }): Promise<Cached<ExploreToken[]> | null>
   tokenDetail(input: { chainId: number; address: string }): Promise<TokenDetailView | null>
-  cachedTokenDetail(input: { chainId: number; address: string }): Promise<Cached<TokenDetailView> | null>
+  cachedTokenDetail(input: {
+    chainId: number
+    address: string
+  }): Promise<Cached<TokenDetailView> | null>
   /** One timeframe of price history (plan B5); null when the market is unreachable. */
-  priceHistory(input: { chainId: number; address: string; duration: ChartDuration }): Promise<PriceHistoryView | null>
-  cachedPriceHistory(input: { chainId: number; address: string; duration: ChartDuration }): Promise<Cached<PriceHistoryView> | null>
+  priceHistory(input: {
+    chainId: number
+    address: string
+    duration: ChartDuration
+  }): Promise<PriceHistoryView | null>
+  cachedPriceHistory(input: {
+    chainId: number
+    address: string
+    duration: ChartDuration
+  }): Promise<Cached<PriceHistoryView> | null>
   /** Locked liquidity for a token (native → WETN); null when the market is unreachable. */
   liquidity(input: { chainId: number; address: string }): Promise<LiquidityView | null>
-  cachedLiquidity(input: { chainId: number; address: string }): Promise<Cached<LiquidityView> | null>
+  cachedLiquidity(input: {
+    chainId: number
+    address: string
+  }): Promise<Cached<LiquidityView> | null>
   /** Listed collections by default (verified, traded, listed or owned) plus the user's own; `all` for the whole index (plan C3). */
-  collections(input: { chainId: number; accountId?: AccountId; all?: boolean; window?: CollectionWindow }): Promise<CollectionView[]>
-  cachedCollections(input: { chainId: number; accountId?: AccountId; all?: boolean; window?: CollectionWindow }): Promise<Cached<CollectionView[]> | null>
-  collection(input: { chainId: number; address: string; accountId?: AccountId }): Promise<CollectionView | null>
-  search(input: { chainId: number; query: string }): Promise<{ tokens: ExploreToken[]; collections: CollectionView[] }>
+  collections(input: {
+    chainId: number
+    accountId?: AccountId
+    all?: boolean
+    window?: CollectionWindow
+  }): Promise<CollectionView[]>
+  cachedCollections(input: {
+    chainId: number
+    accountId?: AccountId
+    all?: boolean
+    window?: CollectionWindow
+  }): Promise<Cached<CollectionView[]> | null>
+  collection(input: {
+    chainId: number
+    address: string
+    accountId?: AccountId
+  }): Promise<CollectionView | null>
+  search(input: {
+    chainId: number
+    query: string
+  }): Promise<{ tokens: ExploreToken[]; collections: CollectionView[] }>
 }
 
 /** The NFT marketplace (§8.10) on Seaport 1.5. Flows resolve once the first sheet exists; progress arrives as `swap.progress`. */
 export interface NftNamespace {
   inventory(input: { accountId: AccountId; chainId: number }): Promise<Inventory>
-  cachedInventory(input: { accountId: AccountId; chainId: number }): Promise<Cached<Inventory> | null>
-  assets(input: { chainId: number; address: string; orderBy?: 'PRICE' | 'RARITY'; asc?: boolean; listed?: boolean; traits?: Array<{ name: string; values: string[] }>; query?: string; after?: string; accountId?: AccountId }): Promise<{ assets: AssetView[]; total: number | null; next: string | null }>
-  asset(input: { chainId: number; address: string; tokenId: string; accountId?: AccountId }): Promise<AssetView | null>
-  activity(input: { chainId: number; address: string; tokenId?: string }): Promise<NftActivityView[]>
+  cachedInventory(input: {
+    accountId: AccountId
+    chainId: number
+  }): Promise<Cached<Inventory> | null>
+  assets(input: {
+    chainId: number
+    address: string
+    orderBy?: 'PRICE' | 'RARITY'
+    asc?: boolean
+    listed?: boolean
+    traits?: Array<{ name: string; values: string[] }>
+    query?: string
+    after?: string
+    accountId?: AccountId
+  }): Promise<{ assets: AssetView[]; total: number | null; next: string | null }>
+  asset(input: {
+    chainId: number
+    address: string
+    tokenId: string
+    accountId?: AccountId
+  }): Promise<AssetView | null>
+  activity(input: {
+    chainId: number
+    address: string
+    tokenId?: string
+  }): Promise<NftActivityView[]>
   offers(input: { accountId: AccountId; chainId: number }): Promise<OffersInbox>
-  list(input: { accountId: AccountId; chainId: number; address: string; tokenId: string; priceEtn: string; days: number }): Promise<{ flowId: string; requestId: string | null }>
-  offer(input: { accountId: AccountId; chainId: number; address: string; tokenId: string; priceEtn: string; days: number }): Promise<{ flowId: string; requestId: string | null }>
-  buy(input: { accountId: AccountId; chainId: number; address: string; tokenId: string }): Promise<{ flowId: string; requestId: string | null }>
-  accept(input: { accountId: AccountId; chainId: number; address: string; tokenId: string; orderHash: string }): Promise<{ flowId: string; requestId: string | null }>
-  cancel(input: { accountId: AccountId; chainId: number; address: string; tokenId: string; orderHash: string }): Promise<{ flowId: string; requestId: string | null }>
-  transfer(input: { accountId: AccountId; chainId: number; address: string; tokenId: string; to: string }): Promise<{ flowId: string; requestId: string | null }>
-  mint(input: { accountId: AccountId; chainId: number; count: number; address?: string }): Promise<{ flowId: string; requestId: string | null }>
-  collectionApproved(input: { accountId: AccountId; chainId: number; address: string }): Promise<boolean>
+  list(input: {
+    accountId: AccountId
+    chainId: number
+    address: string
+    tokenId: string
+    priceEtn: string
+    days: number
+  }): Promise<{ flowId: string; requestId: string | null }>
+  offer(input: {
+    accountId: AccountId
+    chainId: number
+    address: string
+    tokenId: string
+    priceEtn: string
+    days: number
+  }): Promise<{ flowId: string; requestId: string | null }>
+  buy(input: {
+    accountId: AccountId
+    chainId: number
+    address: string
+    tokenId: string
+  }): Promise<{ flowId: string; requestId: string | null }>
+  accept(input: {
+    accountId: AccountId
+    chainId: number
+    address: string
+    tokenId: string
+    orderHash: string
+  }): Promise<{ flowId: string; requestId: string | null }>
+  cancel(input: {
+    accountId: AccountId
+    chainId: number
+    address: string
+    tokenId: string
+    orderHash: string
+  }): Promise<{ flowId: string; requestId: string | null }>
+  transfer(input: {
+    accountId: AccountId
+    chainId: number
+    address: string
+    tokenId: string
+    to: string
+  }): Promise<{ flowId: string; requestId: string | null }>
+  mint(input: {
+    accountId: AccountId
+    chainId: number
+    count: number
+    address?: string
+  }): Promise<{ flowId: string; requestId: string | null }>
+  collectionApproved(input: {
+    accountId: AccountId
+    chainId: number
+    address: string
+  }): Promise<boolean>
   /** Custom collections (plan A3): the chain's word on a contract, add, remove, list. */
-  previewCollection(input: { chainId: number; address: string }): Promise<{ chainId: number; address: string; name: string; symbol: string; standard: 'ERC721' | 'ERC1155'; enumerable: boolean }>
+  previewCollection(input: {
+    chainId: number
+    address: string
+  }): Promise<{
+    chainId: number
+    address: string
+    name: string
+    symbol: string
+    standard: 'ERC721' | 'ERC1155'
+    enumerable: boolean
+  }>
   addCollection(input: { chainId: number; address: string }): Promise<CustomCollection>
   removeCollection(input: { chainId: number; address: string }): Promise<void>
   customCollections(input: { chainId: number }): Promise<CustomCollection[]>
@@ -391,9 +640,19 @@ export interface NftNamespace {
 /** Electric Legends dividends (§8.10). */
 export interface LegendsNamespace {
   status(input: { accountId: AccountId; chainId: number }): Promise<LegendsStatus | null>
-  activate(input: { accountId: AccountId; chainId: number }): Promise<{ flowId: string; requestId: string | null }>
-  claim(input: { accountId: AccountId; chainId: number }): Promise<{ flowId: string; requestId: string | null }>
-  mint(input: { accountId: AccountId; chainId: number; count: number }): Promise<{ flowId: string; requestId: string | null }>
+  activate(input: {
+    accountId: AccountId
+    chainId: number
+  }): Promise<{ flowId: string; requestId: string | null }>
+  claim(input: {
+    accountId: AccountId
+    chainId: number
+  }): Promise<{ flowId: string; requestId: string | null }>
+  mint(input: {
+    accountId: AccountId
+    chainId: number
+    count: number
+  }): Promise<{ flowId: string; requestId: string | null }>
 }
 
 /** The Hyperlane bridge (§8.7): verified corridors, a quote with the interchain gas, the flow, and delivery status. */
@@ -401,8 +660,22 @@ export interface BridgeNamespace {
   /** Every chain a warp route starts on, whether it is turned on, and the assets it can send (plan C4). */
   origins(): Promise<Array<{ chainId: number; enabled: boolean; symbols: Array<'USDC' | 'USDT'> }>>
   routes(input: { fromChainId: number; token?: string }): Promise<BridgeRoute[]>
-  quote(input: { accountId: AccountId; fromChainId: number; toChainId: number; token: string; amount: string; recipient?: string }): Promise<BridgeQuote>
-  execute(input: { accountId: AccountId; fromChainId: number; toChainId: number; token: string; amount: string; recipient?: string }): Promise<{ flowId: string; requestId: string | null }>
+  quote(input: {
+    accountId: AccountId
+    fromChainId: number
+    toChainId: number
+    token: string
+    amount: string
+    recipient?: string
+  }): Promise<BridgeQuote>
+  execute(input: {
+    accountId: AccountId
+    fromChainId: number
+    toChainId: number
+    token: string
+    amount: string
+    recipient?: string
+  }): Promise<{ flowId: string; requestId: string | null }>
   list(input?: { accountId?: AccountId }): Promise<BridgeStatus[]>
   status(input: { id: string }): Promise<BridgeStatus | null>
 }
@@ -412,30 +685,100 @@ export interface FarmNamespace {
   list(input: { chainId: number; accountId?: AccountId }): Promise<FarmView[]>
   cachedList(input: { chainId: number; accountId?: AccountId }): Promise<Cached<FarmView[]> | null>
   farm(input: { chainId: number; farmId: number; accountId?: AccountId }): Promise<FarmView | null>
-  quoteDeposit(input: { accountId: AccountId; chainId: number; farmId: number; amount0?: string; amount1?: string; bolt?: string }): Promise<FarmDepositQuote>
-  deposit(input: { accountId: AccountId; chainId: number; farmId: number; amount0?: string; amount1?: string; bolt?: string }): Promise<{ flowId: string; requestId: string | null }>
-  quoteWithdraw(input: { accountId: AccountId; chainId: number; farmId: number; percent: number; asNative: boolean }): Promise<FarmWithdrawQuote>
-  withdraw(input: { accountId: AccountId; chainId: number; farmId: number; percent: number; asNative: boolean }): Promise<{ flowId: string; requestId: string | null }>
-  collect(input: { accountId: AccountId; chainId: number; farmId: number; asNative: boolean }): Promise<{ flowId: string; requestId: string | null }>
+  quoteDeposit(input: {
+    accountId: AccountId
+    chainId: number
+    farmId: number
+    amount0?: string
+    amount1?: string
+    bolt?: string
+  }): Promise<FarmDepositQuote>
+  deposit(input: {
+    accountId: AccountId
+    chainId: number
+    farmId: number
+    amount0?: string
+    amount1?: string
+    bolt?: string
+  }): Promise<{ flowId: string; requestId: string | null }>
+  quoteWithdraw(input: {
+    accountId: AccountId
+    chainId: number
+    farmId: number
+    percent: number
+    asNative: boolean
+  }): Promise<FarmWithdrawQuote>
+  withdraw(input: {
+    accountId: AccountId
+    chainId: number
+    farmId: number
+    percent: number
+    asNative: boolean
+  }): Promise<{ flowId: string; requestId: string | null }>
+  collect(input: {
+    accountId: AccountId
+    chainId: number
+    farmId: number
+    asNative: boolean
+  }): Promise<{ flowId: string; requestId: string | null }>
 }
 
 /** Launchpad (§8.9). */
 export interface LaunchpadNamespace {
-  list(input: { chainId: number; accountId?: AccountId; statuses?: Array<'ACTIVE' | 'LAUNCHED' | 'FAILED' | 'CANCELLED' | 'PENDING'> }): Promise<CampaignView[]>
-  cachedList(input: { chainId: number; accountId?: AccountId }): Promise<Cached<CampaignView[]> | null>
-  detail(input: { chainId: number; pool: string; accountId?: AccountId }): Promise<CampaignView | null>
-  contribute(input: { accountId: AccountId; chainId: number; pool: string; amountEtn: string }): Promise<{ flowId: string; requestId: string | null }>
-  claim(input: { accountId: AccountId; chainId: number; pool: string; kind: 'tokens' | 'refund' | 'referral' }): Promise<{ flowId: string; requestId: string | null }>
+  list(input: {
+    chainId: number
+    accountId?: AccountId
+    statuses?: Array<'ACTIVE' | 'LAUNCHED' | 'FAILED' | 'CANCELLED' | 'PENDING'>
+  }): Promise<CampaignView[]>
+  cachedList(input: {
+    chainId: number
+    accountId?: AccountId
+  }): Promise<Cached<CampaignView[]> | null>
+  detail(input: {
+    chainId: number
+    pool: string
+    accountId?: AccountId
+  }): Promise<CampaignView | null>
+  contribute(input: {
+    accountId: AccountId
+    chainId: number
+    pool: string
+    amountEtn: string
+  }): Promise<{ flowId: string; requestId: string | null }>
+  claim(input: {
+    accountId: AccountId
+    chainId: number
+    pool: string
+    kind: 'tokens' | 'refund' | 'referral'
+  }): Promise<{ flowId: string; requestId: string | null }>
   rememberReferral(input: { chainId: number; pool: string; referrer: string }): Promise<void>
-  rememberFromLink(input: { url: string }): Promise<{ pool: string; referrer: string | null } | null>
+  rememberFromLink(input: {
+    url: string
+  }): Promise<{ pool: string; referrer: string | null } | null>
 }
 
 /** Watchlist and alerts (§7.13). */
 export interface WatchlistNamespace {
   list(): Promise<WatchItem[]>
-  star(input: { kind: 'token' | 'collection' | 'campaign'; chainId: number; address: string; label: string }): Promise<WatchItem[]>
-  unstar(input: { kind: 'token' | 'collection' | 'campaign'; chainId: number; address: string }): Promise<WatchItem[]>
-  setAlert(input: { kind: 'token' | 'collection' | 'campaign'; chainId: number; address: string; above: number | null; below: number | null; onLive: boolean }): Promise<WatchItem[]>
+  star(input: {
+    kind: 'token' | 'collection' | 'campaign'
+    chainId: number
+    address: string
+    label: string
+  }): Promise<WatchItem[]>
+  unstar(input: {
+    kind: 'token' | 'collection' | 'campaign'
+    chainId: number
+    address: string
+  }): Promise<WatchItem[]>
+  setAlert(input: {
+    kind: 'token' | 'collection' | 'campaign'
+    chainId: number
+    address: string
+    above: number | null
+    below: number | null
+    onLive: boolean
+  }): Promise<WatchItem[]>
   /** One alert pass now (the alarm does this every five minutes). Returns the tags sent. */
   check(): Promise<string[]>
 }
@@ -448,20 +791,52 @@ export interface PositionsNamespace {
 
 /** Hardware devices (§2.7 S7): Ledger over HID from the worker in M5. */
 export interface HardwareNamespace {
-  ledgerStatus(): Promise<{ available: boolean; devices: Array<{ deviceId: string; model: string }>; app: { version: string; blindSigning: boolean } | null; problem: string | null }>
+  ledgerStatus(): Promise<{
+    available: boolean
+    devices: Array<{ deviceId: string; model: string }>
+    app: { version: string; blindSigning: boolean } | null
+    problem: string | null
+  }>
   /**
    * Can the device be asked to sign right now? Bounded at a few seconds and
    * silent on the device, so a sheet may ask while it is being read.
    */
-  ledgerPreflight(input?: { deviceId?: string }): Promise<{ state: 'ready' | 'no_device' | 'locked' | 'wrong_app' | 'no_answer' | 'unavailable' | 'error'; message: string | null; blindSigning: boolean | null }>
-  ledgerAddresses(input: { scheme: 'bip44' | 'live'; from?: number; count?: number; deviceId?: string }): Promise<Array<{ path: string; address: string; index: number }>>
+  ledgerPreflight(input?: {
+    deviceId?: string
+  }): Promise<{
+    state: 'ready' | 'no_device' | 'locked' | 'wrong_app' | 'no_answer' | 'unavailable' | 'error'
+    message: string | null
+    blindSigning: boolean | null
+  }>
+  ledgerAddresses(input: {
+    scheme: 'bip44' | 'live'
+    from?: number
+    count?: number
+    deviceId?: string
+  }): Promise<Array<{ path: string; address: string; index: number }>>
   ledgerVerify(input: { path: string; deviceId?: string }): Promise<{ address: string }>
   verifyAccount(input: { accountId: AccountId }): Promise<{ address: string }>
-  trezorStatus(): Promise<{ available: boolean; model: string | null; label: string | null; problem: string | null }>
-  trezorAddresses(input: { scheme: 'bip44' | 'live'; from?: number; count?: number }): Promise<Array<{ path: string; address: string; index: number }>>
+  trezorStatus(): Promise<{
+    available: boolean
+    model: string | null
+    label: string | null
+    problem: string | null
+  }>
+  trezorAddresses(input: {
+    scheme: 'bip44' | 'live'
+    from?: number
+    count?: number
+  }): Promise<Array<{ path: string; address: string; index: number }>>
   trezorVerify(input: { path: string }): Promise<{ address: string }>
   /** The Keystone's account QR (crypto-hdkey / crypto-account) as picker rows. */
-  keystoneImport(input: { parts: string[]; count?: number }): Promise<{ xfp: string; name: string | null; addresses: Array<{ path: string; address: string; index: number }> }>
+  keystoneImport(input: {
+    parts: string[]
+    count?: number
+  }): Promise<{
+    xfp: string
+    name: string | null
+    addresses: Array<{ path: string; address: string; index: number }>
+  }>
   keystonePending(): Promise<KeystonePending[]>
   keystoneSubmit(input: { id: string; parts: string[] }): Promise<{ ok: true }>
   keystoneCancel(input: { id: string }): Promise<{ ok: true }>
@@ -470,8 +845,19 @@ export interface HardwareNamespace {
 /** External dApp transports (§2.7 S9): the in-app browser opens a session per committed origin and relays EIP-1193 messages. */
 export interface DappsNamespace {
   /** `channel` is the nonce the host injected into the committed document; every request must carry it back. */
-  open(input: { url: string; kind: 'webview' | 'walletconnect'; verified?: boolean; channel?: string }): Promise<DappSession>
-  request(input: { sessionId: string; channel?: string; id: number; method: string; params?: unknown }): Promise<{ result?: unknown; error?: { code: number; message: string; data?: unknown } }>
+  open(input: {
+    url: string
+    kind: 'webview' | 'walletconnect'
+    verified?: boolean
+    channel?: string
+  }): Promise<DappSession>
+  request(input: {
+    sessionId: string
+    channel?: string
+    id: number
+    method: string
+    params?: unknown
+  }): Promise<{ result?: unknown; error?: { code: number; message: string; data?: unknown } }>
   close(input: { sessionId: string }): Promise<void>
   list(): Promise<DappSession[]>
 }
@@ -505,7 +891,10 @@ export interface PrefsNamespace {
 
 export interface FlagsNamespace {
   get(): Promise<FlagsView>
-  refresh(): Promise<{ flags: 'updated' | 'kept' | 'refused'; scam: 'updated' | 'kept' | 'refused' }>
+  refresh(): Promise<{
+    flags: 'updated' | 'kept' | 'refused'
+    scam: 'updated' | 'kept' | 'refused'
+  }>
 }
 
 /** Remote sign (§6, §8.16): what this device is waiting on, and what paired devices are asking it to sign. */
@@ -517,7 +906,11 @@ export interface RemoteNamespace {
 /** The encrypted local activity log (§8.12). Locked vault = empty. */
 export interface ActivityNamespace {
   /** The local log merged with the account feed, newest first (§8.12). */
-  list(input?: { accountId?: AccountId; chainId?: number; limit?: number }): Promise<ActivityEntry[]>
+  list(input?: {
+    accountId?: AccountId
+    chainId?: number
+    limit?: number
+  }): Promise<ActivityEntry[]>
   /** One row by its id or its transaction hash, for the detail sheet. */
   detail(input: { id: string }): Promise<ActivityEntry | null>
   clear(): Promise<void>
@@ -548,9 +941,15 @@ export interface SyncNamespace {
    */
   incoming(): Promise<SyncIncomingItem[]>
   /** Vouch for one here; returns what is still waiting. */
-  confirmIncoming(input: { collection: SyncIncomingItem['collection']; key: string }): Promise<SyncIncomingItem[]>
+  confirmIncoming(input: {
+    collection: SyncIncomingItem['collection']
+    key: string
+  }): Promise<SyncIncomingItem[]>
   /** Refuse one: it goes from this device, and the refusal does not travel back. */
-  rejectIncoming(input: { collection: SyncIncomingItem['collection']; key: string }): Promise<SyncIncomingItem[]>
+  rejectIncoming(input: {
+    collection: SyncIncomingItem['collection']
+    key: string
+  }): Promise<SyncIncomingItem[]>
 }
 
 export interface WalletEngine {

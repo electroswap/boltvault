@@ -29,8 +29,25 @@ export interface IconButtonProps {
   readonly testID?: string
 }
 
-export function IconButton({ icon, label, onPress, active = false, tone = 'mute', badge = null, disabled = false, testID }: IconButtonProps) {
-  const color = active ? paint.arc : tone === 'ink' ? paint.ink : tone === 'arc' ? paint.arc : tone === 'burn' ? paint.burn : paint.mute
+export function IconButton({
+  icon,
+  label,
+  onPress,
+  active = false,
+  tone = 'mute',
+  badge = null,
+  disabled = false,
+  testID,
+}: IconButtonProps) {
+  const color = active
+    ? paint.arc
+    : tone === 'ink'
+      ? paint.ink
+      : tone === 'arc'
+        ? paint.arc
+        : tone === 'burn'
+          ? paint.burn
+          : paint.mute
   const showBadge = badge !== null && badge !== undefined && badge !== 0 && badge !== ''
   return (
     <Pressable
@@ -40,16 +57,46 @@ export function IconButton({ icon, label, onPress, active = false, tone = 'mute'
       accessibilityState={{ disabled, selected: active }}
       disabled={disabled}
       testID={testID}
-      style={{ width: metrics.hit, height: metrics.hit, alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.45 : 1 }}
+      style={{
+        width: metrics.hit,
+        height: metrics.hit,
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: disabled ? 0.45 : 1,
+      }}
     >
-      <View style={{ width: metrics.disc, height: metrics.disc, borderRadius: metrics.disc / 2, backgroundColor: paint.glassRaised, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+      <View
+        style={{
+          width: metrics.disc,
+          height: metrics.disc,
+          borderRadius: metrics.disc / 2,
+          backgroundColor: paint.glassRaised,
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+        }}
+      >
         <View style={{ zIndex: 1 }}>
           <Icon name={icon} size={18} color={color} />
         </View>
         <Rim radius={metrics.disc / 2} opacity={active ? 0.7 : 0.35} />
       </View>
       {showBadge ? (
-        <View style={{ position: 'absolute', top: 2, right: 0, minWidth: 16, height: 16, paddingHorizontal: 4, borderRadius: 8, backgroundColor: paint.ember, alignItems: 'center', justifyContent: 'center' }} pointerEvents="none">
+        <View
+          style={{
+            position: 'absolute',
+            top: 2,
+            right: 0,
+            minWidth: 16,
+            height: 16,
+            paddingHorizontal: 4,
+            borderRadius: 8,
+            backgroundColor: paint.ember,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          pointerEvents="none"
+        >
           <Body size="caption" fontSize={11} lineHeight={14} fontWeight="600" color={paint.void}>
             {String(badge)}
           </Body>

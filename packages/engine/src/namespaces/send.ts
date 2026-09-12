@@ -15,6 +15,7 @@ import {
   type Hex,
 } from 'viem'
 import { z } from 'zod'
+import { getChain } from '@boltvault/chains'
 import { EngineError } from '../errors'
 import type { NamespaceSpec } from '../host'
 import { readMany } from '../multicall'
@@ -89,6 +90,9 @@ export class SendService {
     }
     if (amountRaw <= 0n) problems.push('Enter an amount above zero.')
     const owner = account.address as Hex
+    // What this chain charges its fees in. It was the literal string 'ETN' on
+    // every chain, which is wrong the moment the wallet is not on Electroneum.
+    const feeSymbol = getChain(input.chainId)?.nativeCurrency.symbol ?? 'ETN'
     const nativeBalance = BigInt(
       String(
         (await d.chains
@@ -103,20 +107,36 @@ export class SendService {
       ])
       balanceRaw = r?.ok && typeof r.value === 'bigint' ? r.value : 0n
     }
-    const gasPrice = BigInt(
-      String(
-        (await d.chains.rpc(input.chainId, 'eth_gasPrice', []).catch(() => '0x3b9aca00')) ??
-          '0x3b9aca00',
-      ),
-    )
+    /*
+      Priced the way the transaction will actually be priced.
+
+      `eth_gasPrice` is the legacy answer, and `prepare()` signs an EIP-1559
+      transaction wherever the chain has a base fee — at `2 × baseFee + tip`,
+      which on a busy chain is well above what `eth_gasPrice` reported. So MAX
+      reserved less than the transaction would cost and the pool refused the
+      send for insufficient funds. On Electroneum the base fee is zero and the
+      two agree, which is why this never showed up at home.
+    */
+    const [head, gasPriceRaw, tipRaw] = await Promise.all([
+      d.chains
+        .rpc(input.chainId, 'eth_getBlockByNumber', ['latest', false])
+        .catch(() => null) as Promise<{ baseFeePerGas?: string } | null>,
+      d.chains.rpc(input.chainId, 'eth_gasPrice', []).catch(() => '0x3b9aca00'),
+      d.chains.rpc(input.chainId, 'eth_maxPriorityFeePerGas', []).catch(() => '0x3b9aca00'),
+    ])
+    const baseFee = head?.baseFeePerGas ? BigInt(head.baseFeePerGas) : 0n
+    const perGas =
+      baseFee > 0n
+        ? baseFee * 2n + BigInt(String(tipRaw ?? '0x0'))
+        : BigInt(String(gasPriceRaw ?? '0x3b9aca00'))
     const gas = token.address === 'native' ? 21_000n : 65_000n
-    const feeWei = gas * gasPrice
+    const feeWei = gas * perGas
     if (token.address === 'native') {
       if (amountRaw + feeWei > nativeBalance)
         problems.push('Not enough for the amount plus the network fee.')
     } else {
       if (amountRaw > balanceRaw) problems.push(`Not enough ${token.symbol}.`)
-      if (feeWei > nativeBalance) problems.push('Not enough ETN for the network fee.')
+      if (feeWei > nativeBalance) problems.push(`Not enough ${feeSymbol} for the network fee.`)
     }
     if (account.kind === 'watch')
       problems.push('Watch-only — import a key or pair a device to send.')
@@ -149,7 +169,7 @@ export class SendService {
       maxRaw: maxRaw.toString(),
       max: formatUnits(maxRaw, token.decimals),
       feeWei: feeWei.toString(),
-      feeSymbol: 'ETN',
+      feeSymbol,
       ok: problems.length === 0 && rcpt.address !== null,
       problems,
     }

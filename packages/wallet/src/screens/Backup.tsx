@@ -1,5 +1,21 @@
 /** Backup quiz for a seed that was created but not confirmed (the gate, §8.1). */
-import { Backdrop, Body, Column, EsWordmark, Icon, IconButton, Input, Key, Plate, Row, ScrollView, WordGrid, metrics, paint, useWindowDimensions } from '@boltvault/ui'
+import {
+  Backdrop,
+  Body,
+  Column,
+  EsWordmark,
+  Icon,
+  IconButton,
+  Input,
+  Key,
+  Plate,
+  Row,
+  ScrollView,
+  WordGrid,
+  metrics,
+  paint,
+  useWindowDimensions,
+} from '@boltvault/ui'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
@@ -22,7 +38,9 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
   const [words, setWords] = useState<string[] | null>(null)
   // On from the moment a phrase is revealed until this screen goes away.
   const { masked } = useSecretGuard(words !== null)
-  const [quiz, setQuiz] = useState<{ positions: number[]; answers: Record<number, string> } | null>(null)
+  const [quiz, setQuiz] = useState<{ positions: number[]; answers: Record<number, string> } | null>(
+    null,
+  )
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
@@ -46,7 +64,11 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
 
   useEffect(() => {
     let alive = true
-    if (passkeyIds.length && host.passkeys) host.passkeys.supported().then((ok) => alive && setPasskeyOk(ok), () => undefined)
+    if (passkeyIds.length && host.passkeys)
+      host.passkeys.supported().then(
+        (ok) => alive && setPasskeyOk(ok),
+        () => undefined,
+      )
     return () => {
       alive = false
     }
@@ -56,7 +78,11 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
   // invalidates the keystore entry, so ask the keystore, not just the vault.
   useEffect(() => {
     let alive = true
-    if (deviceWrapped && host.deviceKey) host.deviceKey.available().then((ok) => alive && setBiometricOk(ok), () => undefined)
+    if (deviceWrapped && host.deviceKey)
+      host.deviceKey.available().then(
+        (ok) => alive && setBiometricOk(ok),
+        () => undefined,
+      )
     return () => {
       alive = false
     }
@@ -91,11 +117,20 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
     setError(null)
     try {
       const k = await host.passkeys.get(passkeyIds)
-      const r = await engine.vault.reveal({ seedId: id, credentialId: k.credentialId, prfSecretHex: k.prfSecretHex })
+      const r = await engine.vault.reveal({
+        seedId: id,
+        credentialId: k.credentialId,
+        prfSecretHex: k.prfSecretHex,
+      })
       setWords(r.mnemonic.split(' '))
       setPassword('')
     } catch {
-      setError(t({ id: 'reveal.passkey.fail', message: 'The passkey did not open the vault. Use your password.' }))
+      setError(
+        t({
+          id: 'reveal.passkey.fail',
+          message: 'The passkey did not open the vault. Use your password.',
+        }),
+      )
     } finally {
       setBusy(false)
     }
@@ -107,14 +142,21 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
     setBusy(true)
     setError(null)
     try {
-      const keyHex = await deviceKey.read(t({ id: 'reveal.biometric.reason', message: 'Show your recovery phrase' }))
+      const keyHex = await deviceKey.read(
+        t({ id: 'reveal.biometric.reason', message: 'Show your recovery phrase' }),
+      )
       // A cancelled prompt is a choice, not a failure; the password field is right there.
       if (keyHex === null) return
       const r = await engine.vault.reveal({ seedId: id, keyId: deviceKey.id, keyHex })
       setWords(r.mnemonic.split(' '))
       setPassword('')
     } catch {
-      setError(t({ id: 'reveal.biometric.fail', message: 'That did not open the vault. Use your password.' }))
+      setError(
+        t({
+          id: 'reveal.biometric.fail',
+          message: 'That did not open the vault. Use your password.',
+        }),
+      )
     } finally {
       setBusy(false)
     }
@@ -123,7 +165,10 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
   return (
     <Column flex={1} backgroundColor="$void" testID="backup">
       <Backdrop scene={scene} width={width} height={height} reducedMotion={reducedMotion} />
-      <ScrollView style={{ zIndex: 1 }} contentContainerStyle={{ padding: metrics.insetWide, gap: 16 }}>
+      <ScrollView
+        style={{ zIndex: 1 }}
+        contentContainerStyle={{ padding: metrics.insetWide, gap: 16 }}
+      >
         {/*
           A way out. With no dock (see TabShell) a screen without Back is a room
           without a door, and this one is reached from the Accounts sheet by
@@ -133,41 +178,113 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
           and `useSecretGuard` clears it on unmount either way.
         */}
         <Row gap="$2" alignItems="center">
-          {words ? null : <IconButton icon="back" label={t({ id: 'back', message: 'Back' })} onPress={() => router.back()} testID="backup-back" />}
+          {words ? null : (
+            <IconButton
+              icon="back"
+              label={t({ id: 'back', message: 'Back' })}
+              onPress={() => router.back()}
+              testID="backup-back"
+            />
+          )}
           <Icon name="lock" size={18} color={paint.mute} />
-          <Body size="title" flexShrink={1}>{t({ id: 'backup.title', message: 'Back up your recovery phrase' })}</Body>
+          <Body size="title" flexShrink={1}>
+            {t({ id: 'backup.title', message: 'Back up your recovery phrase' })}
+          </Body>
         </Row>
         {done ? (
           <Column gap="$3">
-            <Body>{t({ id: 'backup.done', message: 'Backed up. Swapping and signing are unlocked.' })}</Body>
-            <Key label={t({ id: 'backup.home', message: 'Back to Home' })} onPress={() => router.reset()} testID="backup-home" />
+            <Body>
+              {t({ id: 'backup.done', message: 'Backed up. Swapping and signing are unlocked.' })}
+            </Body>
+            <Key
+              label={t({ id: 'backup.home', message: 'Back to Home' })}
+              onPress={() => router.reset()}
+              testID="backup-home"
+            />
           </Column>
         ) : !id ? (
-          <Body tone="mute">{t({ id: 'backup.none', message: 'Every seed in this vault is backed up.' })}</Body>
+          <Body tone="mute">
+            {t({ id: 'backup.none', message: 'Every seed in this vault is backed up.' })}
+          </Body>
         ) : !words ? (
           <Column gap="$3">
             {pending.length > 1 ? (
               <Row gap="$2">
                 {pending.map((s) => (
-                  <Key key={s.id} label={s.label} kind={s.id === id ? 'primary' : 'secondary'} onPress={() => setSeedId(s.id)} />
+                  <Key
+                    key={s.id}
+                    label={s.label}
+                    kind={s.id === id ? 'primary' : 'secondary'}
+                    onPress={() => setSeedId(s.id)}
+                  />
                 ))}
               </Row>
             ) : null}
-            <Body tone="mute">{t({ id: 'backup.body', message: 'Enter your password to show the words, write them down, then confirm three of them.' })}</Body>
-            <Input value={password} onChange={setPassword} secure autoFocus error={error} testID="backup-password" />
-            <Key label={t({ id: 'backup.show', message: 'Show words' })} disabled={busy || !password} onPress={() => run(async () => { const r = await engine.vault.reveal({ seedId: id, password }); setWords(r.mnemonic.split(' ')); setPassword('') })} testID="backup-show" />
-            {passkeyOk ? <Key label={t({ id: 'backup.show.passkey', message: 'Show with passkey' })} kind="secondary" disabled={busy} onPress={() => void revealWithPasskey()} testID="backup-show-passkey" /> : null}
-            {biometricOk ? <Key label={t({ id: 'backup.show.biometric', message: 'Show with biometrics' })} kind="secondary" disabled={busy} onPress={() => void revealWithBiometric()} testID="backup-show-biometric" /> : null}
+            <Body tone="mute">
+              {t({
+                id: 'backup.body',
+                message:
+                  'Enter your password to show the words, write them down, then confirm three of them.',
+              })}
+            </Body>
+            <Input
+              value={password}
+              onChange={setPassword}
+              secure
+              autoFocus
+              error={error}
+              sensitive
+              testID="backup-password"
+            />
+            <Key
+              label={t({ id: 'backup.show', message: 'Show words' })}
+              disabled={busy || !password}
+              onPress={() =>
+                run(async () => {
+                  const r = await engine.vault.reveal({ seedId: id, password })
+                  setWords(r.mnemonic.split(' '))
+                  setPassword('')
+                })
+              }
+              testID="backup-show"
+            />
+            {passkeyOk ? (
+              <Key
+                label={t({ id: 'backup.show.passkey', message: 'Show with passkey' })}
+                kind="secondary"
+                disabled={busy}
+                onPress={() => void revealWithPasskey()}
+                testID="backup-show-passkey"
+              />
+            ) : null}
+            {biometricOk ? (
+              <Key
+                label={t({ id: 'backup.show.biometric', message: 'Show with biometrics' })}
+                kind="secondary"
+                disabled={busy}
+                onPress={() => void revealWithBiometric()}
+                testID="backup-show-biometric"
+              />
+            ) : null}
           </Column>
         ) : !quiz ? (
           <Column gap="$3">
             <Plate role="raised">
               {/* Screenshot-blocked while shown, masked the moment this stops being the active surface. */}
               {masked ? (
-                <Column minHeight={168} alignItems="center" justifyContent="center" gap="$2" testID="backup-masked">
+                <Column
+                  minHeight={168}
+                  alignItems="center"
+                  justifyContent="center"
+                  gap="$2"
+                  testID="backup-masked"
+                >
                   <Icon name="eyeOff" size={20} color={paint.mute} />
                   <Body tone="mute" size="caption">
-                    {t({ id: 'secret.masked', message: 'Hidden while this window is not in front' })}
+                    {t({
+                      id: 'secret.masked',
+                      message: 'Hidden while this window is not in front',
+                    })}
                   </Body>
                 </Column>
               ) : (
@@ -184,7 +301,8 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
                 <Body tone="ember" size="caption" testID="backup-passphrase-warning">
                   {t({
                     id: 'backup.passphrase',
-                    message: 'This recovery phrase has a BIP-39 passphrase. These words alone will not restore it — write the passphrase down too, and keep it somewhere separate.',
+                    message:
+                      'This recovery phrase has a BIP-39 passphrase. These words alone will not restore it — write the passphrase down too, and keep it somewhere separate.',
                   })}
                 </Body>
               ) : null}
@@ -196,12 +314,28 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
               time — a worse trade than holding it for the length of a quiz it
               is already being compared against.
             */}
-            <Key label={t({ id: 'ob.words.done', message: 'I wrote them down' })} onPress={() => run(async () => { const q = await engine.vault.backupQuiz({ seedId: id }); setQuiz({ positions: q.positions, answers: {} }) })} testID="backup-written" />
+            <Key
+              label={t({ id: 'ob.words.done', message: 'I wrote them down' })}
+              onPress={() =>
+                run(async () => {
+                  const q = await engine.vault.backupQuiz({ seedId: id })
+                  setQuiz({ positions: q.positions, answers: {} })
+                })
+              }
+              testID="backup-written"
+            />
           </Column>
         ) : (
           <Column gap="$3">
             {quiz.positions.map((p) => (
-              <Input key={p} label={t({ id: 'ob.quiz.word', message: 'Word {n}', values: { n: p } })} value={quiz.answers[p] ?? ''} onChange={(v) => setQuiz({ ...quiz, answers: { ...quiz.answers, [p]: v } })} testID={`quiz-${p}`} />
+              <Input
+                key={p}
+                label={t({ id: 'ob.quiz.word', message: 'Word {n}', values: { n: p } })}
+                value={quiz.answers[p] ?? ''}
+                onChange={(v) => setQuiz({ ...quiz, answers: { ...quiz.answers, [p]: v } })}
+                sensitive="code"
+                testID={`quiz-${p}`}
+              />
             ))}
             {error ? <Body tone="burn">{error}</Body> : null}
             <Key
@@ -209,9 +343,21 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
               disabled={busy || quiz.positions.some((p) => !(quiz.answers[p] ?? '').trim())}
               onPress={() =>
                 run(async () => {
-                  const r = await engine.vault.confirmBackup({ seedId: id, answers: quiz.positions.map((p) => ({ position: p, word: quiz.answers[p] ?? '' })) })
+                  const r = await engine.vault.confirmBackup({
+                    seedId: id,
+                    answers: quiz.positions.map((p) => ({
+                      position: p,
+                      word: quiz.answers[p] ?? '',
+                    })),
+                  })
                   if (!r.ok) {
-                    setError(t({ id: 'quiz.wrong', message: 'Those words do not match your phrase. Check the numbers and try again.' }))
+                    setError(
+                      t({
+                        id: 'quiz.wrong',
+                        message:
+                          'Those words do not match your phrase. Check the numbers and try again.',
+                      }),
+                    )
                     return
                   }
                   refresh()
@@ -221,7 +367,13 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
               }
               testID="backup-confirm"
             />
-            <Key label={t({ id: 'ob.quiz.back', message: 'Show the words again' })} kind="secondary" disabled={busy} onPress={() => setQuiz(null)} testID="backup-quiz-back" />
+            <Key
+              label={t({ id: 'ob.quiz.back', message: 'Show the words again' })}
+              kind="secondary"
+              disabled={busy}
+              onPress={() => setQuiz(null)}
+              testID="backup-quiz-back"
+            />
           </Column>
         )}
       </ScrollView>

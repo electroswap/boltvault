@@ -22,13 +22,40 @@ export function UpdateRequired() {
     })
   }, [engine])
   if (!flags?.updateRequired) return null
-  const store = host.body === 'mobile' ? 'https://wallet.electroswap.io/get' : 'https://wallet.electroswap.io/get#extension'
+  const store =
+    host.body === 'mobile'
+      ? 'https://wallet.electroswap.io/get'
+      : 'https://wallet.electroswap.io/get#extension'
   return (
-    <Column position="absolute" top={0} left={0} right={0} bottom={0} zIndex={20} backgroundColor="rgba(2,3,8,0.92)" justifyContent="center" padding="$5" testID="update-required">
+    <Column
+      position="absolute"
+      top={0}
+      left={0}
+      right={0}
+      bottom={0}
+      zIndex={20}
+      backgroundColor="rgba(2,3,8,0.92)"
+      justifyContent="center"
+      padding="$5"
+      testID="update-required"
+    >
       <Plate role="raised" gap="$3">
-        <Body size="title">{t({ id: 'update.title', message: 'Update BoltVault to keep going' })}</Body>
-        <Body tone="mute">{t({ id: 'update.body', message: 'This version ({v}) is older than the minimum ElectroSwap signed ({m}) — usually a security fix. Your vault stays where it is; the update just needs installing.', values: { v: host.version ?? '?', m: flags.minVersion ?? '?' } })}</Body>
-        <Key label={t({ id: 'update.key', message: 'Get the update' })} onPress={() => void host.openUrl?.(store)} testID="update-key" />
+        <Body size="title">
+          {t({ id: 'update.title', message: 'Update BoltVault to keep going' })}
+        </Body>
+        <Body tone="mute">
+          {t({
+            id: 'update.body',
+            message:
+              'This version ({v}) is older than the minimum ElectroSwap signed ({m}) — usually a security fix. Your vault stays where it is; the update just needs installing.',
+            values: { v: host.version ?? '?', m: flags.minVersion ?? '?' },
+          })}
+        </Body>
+        <Key
+          label={t({ id: 'update.key', message: 'Get the update' })}
+          onPress={() => void host.openUrl?.(store)}
+          testID="update-key"
+        />
       </Plate>
     </Column>
   )

@@ -20,7 +20,13 @@ import { useWalletState } from '../state/useWalletState'
 const ETN = 52014
 type BodyKind = 'extension-popup' | 'extension-tab' | 'mobile'
 
-export function Legends({ body, reducedMotion = false }: { body: BodyKind; reducedMotion?: boolean }) {
+export function Legends({
+  body,
+  reducedMotion = false,
+}: {
+  body: BodyKind
+  reducedMotion?: boolean
+}) {
   const engine = useEngine()
   const router = useRouter()
   const { active } = useWalletState()
@@ -39,7 +45,10 @@ export function Legends({ body, reducedMotion = false }: { body: BodyKind; reduc
   useEffect(() => {
     if (!active) return
     let alive = true
-    engine.legends.status({ accountId: active.id, chainId: ETN }).then((s) => alive && setStatus(s), (err: unknown) => alive && setError(err instanceof Error ? err.message : String(err)))
+    engine.legends.status({ accountId: active.id, chainId: ETN }).then(
+      (s) => alive && setStatus(s),
+      (err: unknown) => alive && setError(err instanceof Error ? err.message : String(err)),
+    )
     return () => {
       alive = false
     }
@@ -58,7 +67,24 @@ export function Legends({ body, reducedMotion = false }: { body: BodyKind; reduc
     }
   }
 
-  if (flow) return <FlowPlate flow={flow} body={body} reducedMotion={reducedMotion} titles={{ working: t({ id: 'legends.working', message: 'Working…' }), done: flow.steps.some((s) => s.step === 'mint') ? t({ id: 'legends.minted', message: 'Minted' }) : flow.steps.some((s) => s.step === 'register') ? t({ id: 'legends.activated', message: 'Dividends activated' }) : t({ id: 'legends.claimed', message: 'Claimed' }) }} onDone={dismiss} testID="legends-flow" />
+  if (flow)
+    return (
+      <FlowPlate
+        flow={flow}
+        body={body}
+        reducedMotion={reducedMotion}
+        titles={{
+          working: t({ id: 'legends.working', message: 'Working…' }),
+          done: flow.steps.some((s) => s.step === 'mint')
+            ? t({ id: 'legends.minted', message: 'Minted' })
+            : flow.steps.some((s) => s.step === 'register')
+              ? t({ id: 'legends.activated', message: 'Dividends activated' })
+              : t({ id: 'legends.claimed', message: 'Claimed' }),
+        }}
+        onDone={dismiss}
+        testID="legends-flow"
+      />
+    )
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="legends">
@@ -66,33 +92,92 @@ export function Legends({ body, reducedMotion = false }: { body: BodyKind; reduc
       {error ? <Body tone="burn">{error}</Body> : null}
       {status && active ? (
         <>
-          <DividendsCard status={status} busy={busy} reducedMotion={reducedMotion} onActivate={() => void run(() => engine.legends.activate({ accountId: active.id, chainId: ETN }))} onClaim={() => void run(() => engine.legends.claim({ accountId: active.id, chainId: ETN }))} onPiece={(tokenId) => router.navigate('nft', { chainId: ETN, address: status.collection, tokenId })} />
+          <DividendsCard
+            status={status}
+            busy={busy}
+            reducedMotion={reducedMotion}
+            onActivate={() =>
+              void run(() => engine.legends.activate({ accountId: active.id, chainId: ETN }))
+            }
+            onClaim={() =>
+              void run(() => engine.legends.claim({ accountId: active.id, chainId: ETN }))
+            }
+            onPiece={(tokenId) =>
+              router.navigate('nft', { chainId: ETN, address: status.collection, tokenId })
+            }
+          />
           {status.ownedTokenIds.length === 0 ? (
             <Plate gap="$2" testID="legends-none">
               <Body tone="mute" size="caption">
-                {t({ id: 'legends.none', message: 'You hold no Electric Legends yet. Every Legend shares a third of the marketplace fees, forever.' })}
+                {t({
+                  id: 'legends.none',
+                  message:
+                    'You hold no Electric Legends yet. Every Legend shares a third of the marketplace fees, forever.',
+                })}
               </Body>
-              <Key label={t({ id: 'legends.browse', message: 'See the collection' })} kind="secondary" size="compact" onPress={() => router.navigate('collection', { chainId: ETN, address: status.collection })} testID="legends-browse" />
+              <Key
+                label={t({ id: 'legends.browse', message: 'See the collection' })}
+                kind="secondary"
+                size="compact"
+                onPress={() =>
+                  router.navigate('collection', { chainId: ETN, address: status.collection })
+                }
+                testID="legends-browse"
+              />
             </Plate>
           ) : null}
           {status.mint?.mintable && status.mint.mintableCount > 0 ? (
             <Plate gap="$2" testID="legends-mint">
               <Body size="title">{t({ id: 'collection.mint', message: 'Mint a Legend' })}</Body>
               <Body tone="mute" size="caption">
-                {t({ id: 'collection.mint.body', message: '{p} ETN each · {n} left for you · {s} minted', values: { p: formatRaw(status.mint.priceWei, 18), n: status.mint.mintableCount, s: status.mint.totalSupply } })}
+                {t({
+                  id: 'collection.mint.body',
+                  message: '{p} ETN each · {n} left for you · {s} minted',
+                  values: {
+                    p: formatRaw(status.mint.priceWei, 18),
+                    n: status.mint.mintableCount,
+                    s: status.mint.totalSupply,
+                  },
+                })}
               </Body>
               <Row gap="$2" alignItems="center">
-                <IconButton icon="minus" label={t({ id: 'mint.fewer', message: 'One fewer' })} disabled={count <= 1} onPress={() => setCount((n) => Math.max(1, n - 1))} testID="legends-mint-minus" />
+                <IconButton
+                  icon="minus"
+                  label={t({ id: 'mint.fewer', message: 'One fewer' })}
+                  disabled={count <= 1}
+                  onPress={() => setCount((n) => Math.max(1, n - 1))}
+                  testID="legends-mint-minus"
+                />
                 <Body size="title" testID="legends-mint-count">
                   {String(count)}
                 </Body>
-                <IconButton icon="plus" label={t({ id: 'mint.more', message: 'One more' })} disabled={count >= status.mint.mintableCount} onPress={() => setCount((n) => Math.min(status.mint?.mintableCount ?? 1, n + 1))} testID="legends-mint-plus" />
-                <Key label={t({ id: 'collection.mint.key', message: 'Mint' })} size="compact" disabled={busy || status.mint.mintableCount === 0} onPress={() => void run(() => engine.legends.mint({ accountId: active.id, chainId: ETN, count }))} testID="legends-mint-go" />
+                <IconButton
+                  icon="plus"
+                  label={t({ id: 'mint.more', message: 'One more' })}
+                  disabled={count >= status.mint.mintableCount}
+                  onPress={() => setCount((n) => Math.min(status.mint?.mintableCount ?? 1, n + 1))}
+                  testID="legends-mint-plus"
+                />
+                <Key
+                  label={t({ id: 'collection.mint.key', message: 'Mint' })}
+                  size="compact"
+                  disabled={busy || status.mint.mintableCount === 0}
+                  onPress={() =>
+                    void run(() =>
+                      engine.legends.mint({ accountId: active.id, chainId: ETN, count }),
+                    )
+                  }
+                  testID="legends-mint-go"
+                />
               </Row>
             </Plate>
           ) : null}
           <Body tone="mute" size="caption">
-            {t({ id: 'legends.how', message: 'How it works: the marketplace fee receiver is the dividend distributor. It keeps two thirds for ElectroSwap and credits one third to every registered Legend. Claiming pays the ETN straight to you; there is no allowance involved.' })}
+            {t({
+              id: 'legends.how',
+              message:
+                'How it works: the marketplace fee receiver is the dividend distributor. It keeps two thirds for ElectroSwap and credits one third to every registered Legend. Claiming pays the ETN straight to you; there is no allowance involved.',
+            })}
           </Body>
         </>
       ) : null}

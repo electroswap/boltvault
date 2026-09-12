@@ -10,7 +10,10 @@ import type { MessageChannelLike } from '@boltvault/engine'
 export interface PortLike {
   postMessage(message: unknown): void
   disconnect(): void
-  onMessage: { addListener(cb: (message: unknown) => void): void; removeListener(cb: (message: unknown) => void): void }
+  onMessage: {
+    addListener(cb: (message: unknown) => void): void
+    removeListener(cb: (message: unknown) => void): void
+  }
   onDisconnect: { addListener(cb: () => void): void; removeListener(cb: () => void): void }
 }
 
@@ -43,7 +46,10 @@ export interface ReconnectingOptions {
  * `post` with no live Port connects synchronously (`runtime.connect` is),
  * and a Port that throws on post is replaced once and the post retried.
  */
-export function reconnectingPortChannel(connect: () => PortLike, opts: ReconnectingOptions = {}): MessageChannelLike {
+export function reconnectingPortChannel(
+  connect: () => PortLike,
+  opts: ReconnectingOptions = {},
+): MessageChannelLike {
   const later = opts.setTimeout ?? ((fn, ms) => setTimeout(fn, ms))
   const now = opts.now ?? (() => Date.now())
   const messages = new Set<(message: unknown) => void>()

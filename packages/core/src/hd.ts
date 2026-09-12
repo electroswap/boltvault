@@ -121,7 +121,12 @@ export async function discoverAccounts(
 }
 
 /** Build vault account metadata for a derived (HD) account. */
-export function hdAccountMeta(accountId: AccountId, label: string, index: number, seedHex: string): VaultAccountMeta {
+export function hdAccountMeta(
+  accountId: AccountId,
+  label: string,
+  index: number,
+  seedHex: string,
+): VaultAccountMeta {
   const acc = deriveAccount(seedHex, index)
   return {
     id: accountId,

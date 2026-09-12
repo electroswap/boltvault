@@ -2,7 +2,14 @@ export * from './schema'
 export * from './contract'
 export * from './errors'
 export * from './wire'
-export { EngineHost, EventBus, type SenderClass, type MethodSpec, type NamespaceSpec, type Handler } from './host'
+export {
+  EngineHost,
+  EventBus,
+  type SenderClass,
+  type MethodSpec,
+  type NamespaceSpec,
+  type Handler,
+} from './host'
 export {
   createInProcessTransport,
   createChannelClient,
@@ -19,14 +26,35 @@ export { readDoc, writeDoc, type DocSpec, type ReadDocResult } from './storage'
 export { DocCache, cacheKey, cachedSchema, type Cached, type CacheSpec } from './cache'
 export { NotificationsService } from './namespaces/notifications'
 export { PrefsService, DEFAULT_PREFS } from './namespaces/prefs'
-export { CustomCollectionsService, CustomCollectionSchema, NftMetadataSchema, parseMetadata, resolveMediaUrl, type CustomCollection, type NftMetadata } from './namespaces/nftCustom'
+export {
+  CustomCollectionsService,
+  CustomCollectionSchema,
+  NftMetadataSchema,
+  parseMetadata,
+  resolveMediaUrl,
+  type CustomCollection,
+  type NftMetadata,
+} from './namespaces/nftCustom'
 export { SettingsStore } from './settingsStore'
 export { ActivityStore } from './activityStore'
 export { VaultManager, AUTOLOCK_ALARM, toView as accountToView } from './namespaces/vault'
 export { SitesService } from './namespaces/sites'
 export { ChainsService, toChainView, type HeadSource } from './namespaces/chains'
-export { Governor, RateLimited, governedFetch, type GovernorSnapshot, type HostBudget } from './governor'
-export { authHeaders, walletAuthHeader, keyIdOf, pathOf, signingString, type AuthInput } from './apiAuth'
+export {
+  Governor,
+  RateLimited,
+  governedFetch,
+  type GovernorSnapshot,
+  type HostBudget,
+} from './governor'
+export {
+  authHeaders,
+  walletAuthHeader,
+  keyIdOf,
+  pathOf,
+  signingString,
+  type AuthInput,
+} from './apiAuth'
 export {
   ClientFailures,
   clientFailuresFor,
@@ -49,19 +77,41 @@ export { ELECTRONEUM_TESTNET_CHAIN_ID } from '@boltvault/chains'
 export { SyncService, MemoryRelay, HttpRelay, type Relay, type SyncDeps } from './namespaces/sync'
 export { createEngine, type Engine, type EngineDeps } from './create'
 export * from './approvalPayloads'
-export { ProviderService, normaliseTypedData, type ProviderDeps, type PortInfo } from './namespaces/provider'
+export {
+  ProviderService,
+  normaliseTypedData,
+  type ProviderDeps,
+  type PortInfo,
+} from './namespaces/provider'
 export { TokensService, type TokenMetadata } from './namespaces/tokens'
 export { PortfolioService } from './namespaces/portfolio'
 export { NamesService, ETN_UNIVERSAL_RESOLVER } from './namespaces/names'
 export { AllowancesService } from './namespaces/allowances'
 export { ContactsStore } from './namespaces/contacts'
 export { SendService, type SendInput } from './namespaces/send'
-export { SwapService, swapFailureReport, type SwapInput, type SwapDeps, type SwapQuoteView, type SwapDiagnostics } from './namespaces/swap'
+export {
+  SwapService,
+  swapFailureReport,
+  type SwapInput,
+  type SwapDeps,
+  type SwapQuoteView,
+  type SwapDiagnostics,
+} from './namespaces/swap'
 export { HolderService, type FeeAddresses } from './namespaces/holder'
 export { DynoWeight, twap, type DynoWeightValue, type DynoWeightDeps } from './dynoweight'
 export { LimitService, type LimitInput } from './namespaces/limit'
-export { FlowStore, FlowReceiptError, type FlowStepRun, type FlowStepFailure } from './namespaces/flows'
-export { HardwareService, type HardwareDeps, type LedgerStatusView, type LedgerDeviceView } from './namespaces/hardware'
+export {
+  FlowStore,
+  FlowReceiptError,
+  type FlowStepRun,
+  type FlowStepFailure,
+} from './namespaces/flows'
+export {
+  HardwareService,
+  type HardwareDeps,
+  type LedgerStatusView,
+  type LedgerDeviceView,
+} from './namespaces/hardware'
 export { ExploreService } from './namespaces/explore'
 export { NftService, marketplaceConfig } from './namespaces/nft'
 export { LegendsService } from './namespaces/legends'
@@ -70,11 +120,23 @@ export { LaunchpadService } from './namespaces/launchpad'
 export { WatchlistService, WATCH_ALARM } from './namespaces/watchlist'
 export { PositionsService } from './namespaces/positions'
 export { BridgeService } from './namespaces/bridge'
-export { RemoteSignService, assertSignedTheTransaction, assertSignedTheMessage, assertSignedTheTypedData } from './namespaces/remote'
+export {
+  RemoteSignService,
+  assertSignedTheTransaction,
+  assertSignedTheMessage,
+  assertSignedTheTypedData,
+} from './namespaces/remote'
 export { DappsService } from './namespaces/dapps'
 export { ConnectService } from './namespaces/connect'
 export { StaticsService, STATICS_ALARM, STATICS_BASE } from './namespaces/statics'
 export { hasRawBytes } from './wire'
 export { GeckoTerminalPrices, type PriceSource } from './prices'
 export { ActivityScanner, ACTIVITY_ALARM } from './namespaces/activityScan'
-export { readMany, multicallAddress, resetMulticallCache, CANONICAL_MULTICALL3, type ReadCall, type ReadResult } from './multicall'
+export {
+  readMany,
+  multicallAddress,
+  resetMulticallCache,
+  CANONICAL_MULTICALL3,
+  type ReadCall,
+  type ReadResult,
+} from './multicall'

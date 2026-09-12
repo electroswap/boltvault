@@ -6,15 +6,9 @@
 import { feeRecipient } from '@boltvault/chains'
 import { formatUnits, type Hex } from 'viem'
 import { decodeCalldata, decodeMessage, type DecodedCall, type ParsedTypedData } from './decode'
+import { nativeSymbolOf } from './rules'
 import { knownContract } from './registry'
-import {
-  UR_MSG_SENDER,
-  UR_ROUTER_SELF,
-  isUrSwap,
-  urDeliveredAfter,
-  urPathTokens,
-  type UrCommand,
-} from './ur'
+import { UR_MSG_SENDER, UR_ROUTER_SELF, urDeliveredAfter, urPathTokens } from './ur'
 import type { AssessmentContext, SignRequest, Simulation, Statement } from './types'
 
 const DOMAIN_NAMES: Readonly<Record<number, string>> = {
@@ -94,8 +88,9 @@ function amount(
 ): string {
   const abs = raw < 0n ? -raw : raw
   if (token === 'native') {
-    const symbol = chainId === 52014 || chainId === 5201420 ? 'ETN' : 'native'
-    return `${trim(formatUnits(abs, 18))} ${symbol}`
+    // The chain's own coin, from the registry — "Send 1 native to 0x2222…"
+    // named no asset at all (§8.14 Networks).
+    return `${trim(formatUnits(abs, 18))} ${nativeSymbolOf(chainId, ctx)}`
   }
   const t = ctx.tokens[token.toLowerCase()]
   if (t) return `${trim(formatUnits(abs, t.decimals))} ${untrusted(t.symbol, 12)}`

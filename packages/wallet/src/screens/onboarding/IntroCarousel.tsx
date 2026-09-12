@@ -19,7 +19,19 @@
  * worse than one that never moves, and it would make the screenshot baselines
  * non-deterministic.
  */
-import { Body, Column, CurrentFill, IconButton, IntroArt, Key, Plate, Row, ScrollView, Signature, useWindowDimensions } from '@boltvault/ui'
+import {
+  Body,
+  Column,
+  CurrentFill,
+  IconButton,
+  IntroArt,
+  Key,
+  Plate,
+  Row,
+  ScrollView,
+  Signature,
+  useWindowDimensions,
+} from '@boltvault/ui'
 import { useRef, useState } from 'react'
 import { t } from '../../i18n'
 
@@ -58,8 +70,18 @@ function ProductSlide({ width }: { width: number }) {
         {t({ id: 'ob.slide3.moves', message: 'This transaction moves' })}
       </Body>
       {[
-        { key: 'out', asset: 'USDC', amount: t({ id: 'ob.slide3.out', message: '− 250' }), tone: 'burn' as const },
-        { key: 'in', asset: 'ETN', amount: t({ id: 'ob.slide3.in', message: '+ 0.41' }), tone: 'surge' as const },
+        {
+          key: 'out',
+          asset: 'USDC',
+          amount: t({ id: 'ob.slide3.out', message: '− 250' }),
+          tone: 'burn' as const,
+        },
+        {
+          key: 'in',
+          asset: 'ETN',
+          amount: t({ id: 'ob.slide3.in', message: '+ 0.41' }),
+          tone: 'surge' as const,
+        },
       ].map((r) => (
         <Row key={r.key} justifyContent="space-between" alignItems="center">
           <Body size="caption" fontSize={11} lineHeight={14}>
@@ -72,7 +94,10 @@ function ProductSlide({ width }: { width: number }) {
       ))}
       <Column height={1} backgroundColor="$edge" />
       <Body tone="ember" size="caption" fontSize={11} lineHeight={14} numberOfLines={2}>
-        {t({ id: 'ob.slide3.warn', message: 'Unlimited approval — BoltVault will ask you to make it exact.' })}
+        {t({
+          id: 'ob.slide3.warn',
+          message: 'Unlimited approval — BoltVault will ask you to make it exact.',
+        })}
       </Body>
     </Plate>
   )
@@ -84,23 +109,56 @@ interface Slide {
   readonly body: string
 }
 
-export function IntroCarousel({ onDone, onSkip, reducedMotion = false }: { onDone: () => void; onSkip: () => void; reducedMotion?: boolean }) {
+export function IntroCarousel({
+  onDone,
+  onSkip,
+  reducedMotion = false,
+}: {
+  onDone: () => void
+  onSkip: () => void
+  reducedMotion?: boolean
+}) {
   const { width: screenWidth } = useWindowDimensions()
   const [width, setWidth] = useState(0)
   const [index, setIndex] = useState(0)
   const scroller = useRef<ScrollView | null>(null)
 
   const slides: Slide[] = [
-    { id: 'keys', title: t({ id: 'ob.slide1.title', message: 'Your keys stay here' }), body: t({ id: 'ob.slide1.body', message: 'Your recovery phrase is sealed with your password on this device. Nothing leaves it unless you export it.' }) },
-    { id: 'chains', title: t({ id: 'ob.slide2.title', message: 'Electroneum, and nine chains beside it' }), body: t({ id: 'ob.slide2.body', message: 'One phrase, one wallet, every balance in one place. Swap and bridge without leaving it.' }) },
-    { id: 'firewall', title: t({ id: 'ob.slide3.title', message: 'See what a transaction moves' }), body: t({ id: 'ob.slide3.body', message: 'BoltVault previews the balance changes before you sign, and refuses what it cannot verify.' }) },
+    {
+      id: 'keys',
+      title: t({ id: 'ob.slide1.title', message: 'Your keys stay here' }),
+      body: t({
+        id: 'ob.slide1.body',
+        message:
+          'Your recovery phrase is sealed with your password on this device. Nothing leaves it unless you export it.',
+      }),
+    },
+    {
+      id: 'chains',
+      title: t({ id: 'ob.slide2.title', message: 'Electroneum, and nine chains beside it' }),
+      body: t({
+        id: 'ob.slide2.body',
+        message:
+          'One phrase, one wallet, every balance in one place. Swap and bridge without leaving it.',
+      }),
+    },
+    {
+      id: 'firewall',
+      title: t({ id: 'ob.slide3.title', message: 'See what a transaction moves' }),
+      body: t({
+        id: 'ob.slide3.body',
+        message:
+          'BoltVault previews the balance changes before you sign, and refuses what it cannot verify.',
+      }),
+    },
   ]
   const last = index >= slides.length - 1
 
   const go = (next: number): void => {
     const clamped = Math.min(Math.max(next, 0), slides.length - 1)
     setIndex(clamped)
-    if (width > 0) scroller.current?.scrollTo({ x: clamped * width, y: 0, animated: !reducedMotion })
+    if (width > 0)
+      scroller.current?.scrollTo({ x: clamped * width, y: 0, animated: !reducedMotion })
   }
 
   const onScrollEnd = (e: ScrollEvent): void => {
@@ -129,16 +187,55 @@ export function IntroCarousel({ onDone, onSkip, reducedMotion = false }: { onDon
   return (
     <Column flex={1} testID="ob-intro">
       <Row justifyContent="space-between" alignItems="center" minHeight={44}>
-        {index > 0 ? <IconButton icon="back" label={t({ id: 'back', message: 'Back' })} onPress={() => go(index - 1)} testID="ob-intro-back" /> : <Column width={44} />}
-        <Key label={t({ id: 'ob.intro.skip', message: 'Skip' })} kind="secondary" size="compact" onPress={onSkip} testID="ob-intro-skip" />
+        {index > 0 ? (
+          <IconButton
+            icon="back"
+            label={t({ id: 'back', message: 'Back' })}
+            onPress={() => go(index - 1)}
+            testID="ob-intro-back"
+          />
+        ) : (
+          <Column width={44} />
+        )}
+        <Key
+          label={t({ id: 'ob.intro.skip', message: 'Skip' })}
+          kind="secondary"
+          size="compact"
+          onPress={onSkip}
+          testID="ob-intro-skip"
+        />
       </Row>
 
       <Column flex={1} onLayout={onPageLayout}>
-        <ScrollView ref={scroller} horizontal pagingEnabled showsHorizontalScrollIndicator={false} onMomentumScrollEnd={onScrollEnd} onScrollEndDrag={onScrollEnd}>
+        <ScrollView
+          ref={scroller}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={onScrollEnd}
+          onScrollEndDrag={onScrollEnd}
+        >
           {slides.map((s, i) => (
-            <Column key={s.id} width={width > 0 ? width : undefined} alignItems="center" justifyContent="center" gap="$4" paddingHorizontal={4} testID={`ob-slide-${s.id}`}>
+            <Column
+              key={s.id}
+              width={width > 0 ? width : undefined}
+              alignItems="center"
+              justifyContent="center"
+              gap="$4"
+              paddingHorizontal={4}
+              testID={`ob-slide-${s.id}`}
+            >
               <Column minHeight={art} alignItems="center" justifyContent="center">
-                {i === 2 ? <ProductSlide width={width || art} /> : <IntroArt slide={i === 0 ? 1 : 2} size={art} reducedMotion={reducedMotion} testID={`ob-art-${s.id}`} />}
+                {i === 2 ? (
+                  <ProductSlide width={width || art} />
+                ) : (
+                  <IntroArt
+                    slide={i === 0 ? 1 : 2}
+                    size={art}
+                    reducedMotion={reducedMotion}
+                    testID={`ob-art-${s.id}`}
+                  />
+                )}
               </Column>
               <Column gap="$2" alignItems="center" paddingHorizontal={8}>
                 <Body size="title" textAlign="center">
@@ -159,15 +256,37 @@ export function IntroCarousel({ onDone, onSkip, reducedMotion = false }: { onDon
         popup spent on decoration, and every slide is reachable by swipe, by the
         key below and by Tab, since all three stay in the document.
       */}
-      <Row gap={6} justifyContent="center" paddingVertical="$3" pointerEvents="none" aria-hidden testID="ob-intro-dots">
+      <Row
+        gap={6}
+        justifyContent="center"
+        paddingVertical="$3"
+        pointerEvents="none"
+        aria-hidden
+        testID="ob-intro-dots"
+      >
         {slides.map((s, i) => (
-          <Column key={s.id} width={i === index ? 18 : 6} height={6} borderRadius={3} overflow="hidden" backgroundColor={i === index ? undefined : 'rgba(143,153,196,0.35)'}>
+          <Column
+            key={s.id}
+            width={i === index ? 18 : 6}
+            height={6}
+            borderRadius={3}
+            overflow="hidden"
+            backgroundColor={i === index ? undefined : 'rgba(143,153,196,0.35)'}
+          >
             {i === index ? <CurrentFill radius={3} /> : null}
           </Column>
         ))}
       </Row>
 
-      <Key label={last ? t({ id: 'ob.intro.start', message: 'Get started' }) : t({ id: 'ob.intro.next', message: 'Next' })} onPress={() => (last ? onDone() : go(index + 1))} testID="ob-intro-next" />
+      <Key
+        label={
+          last
+            ? t({ id: 'ob.intro.start', message: 'Get started' })
+            : t({ id: 'ob.intro.next', message: 'Next' })
+        }
+        onPress={() => (last ? onDone() : go(index + 1))}
+        testID="ob-intro-next"
+      />
     </Column>
   )
 }

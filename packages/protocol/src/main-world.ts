@@ -16,7 +16,10 @@ import { CHANNEL_EVENT, CHANNEL_REQUEST_EVENT } from './wire'
 interface SameOriginMessaging {
   readonly location: { readonly origin: string }
   postMessage(message: unknown, targetOrigin: string): void
-  addEventListener(type: string, listener: (ev: { source: unknown; origin: string; data: unknown }) => void): void
+  addEventListener(
+    type: string,
+    listener: (ev: { source: unknown; origin: string; data: unknown }) => void,
+  ): void
 }
 
 export type MainWorldWindow = WindowLike & SameOriginMessaging

@@ -28,9 +28,27 @@ export function Signature({ address, size = 40, ring = true, testID }: Signature
   const c = size / 2
   const id = `sig-${address.slice(2, 10).toLowerCase()}`
   const arcs = [
-    { r: size * (0.2 + s0 * 0.12), a0: s1 * Math.PI * 2, span: 0.9 + s2 * 1.4, color: light.core, w: 1.6 },
-    { r: size * (0.3 + s1 * 0.1), a0: s2 * Math.PI * 2, span: 1.2 + s3 * 1.8, color: light.arc, w: 1.3 },
-    { r: size * (0.38 + s2 * 0.06), a0: s3 * Math.PI * 2, span: 0.6 + s0 * 1.2, color: light.plasma, w: 1.1 },
+    {
+      r: size * (0.2 + s0 * 0.12),
+      a0: s1 * Math.PI * 2,
+      span: 0.9 + s2 * 1.4,
+      color: light.core,
+      w: 1.6,
+    },
+    {
+      r: size * (0.3 + s1 * 0.1),
+      a0: s2 * Math.PI * 2,
+      span: 1.2 + s3 * 1.8,
+      color: light.arc,
+      w: 1.3,
+    },
+    {
+      r: size * (0.38 + s2 * 0.06),
+      a0: s3 * Math.PI * 2,
+      span: 0.6 + s0 * 1.2,
+      color: light.plasma,
+      w: 1.1,
+    },
   ]
   return (
     <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} testID={testID}>
@@ -47,9 +65,26 @@ export function Signature({ address, size = 40, ring = true, testID }: Signature
       </Defs>
       <Circle cx={c} cy={c} r={c} fill={`url(#${id})`} />
       {arcs.map((a, i) => (
-        <Path key={i} d={arc(c, c, a.r, a.a0, a.a0 + a.span)} stroke={a.color} strokeWidth={a.w} strokeLinecap="round" fill="none" opacity={0.95} />
+        <Path
+          key={i}
+          d={arc(c, c, a.r, a.a0, a.a0 + a.span)}
+          stroke={a.color}
+          strokeWidth={a.w}
+          strokeLinecap="round"
+          fill="none"
+          opacity={0.95}
+        />
       ))}
-      {ring ? <Circle cx={c} cy={c} r={c - 0.75} stroke={`url(#${id}-ring)`} strokeWidth={1.5} fill="none" /> : null}
+      {ring ? (
+        <Circle
+          cx={c}
+          cy={c}
+          r={c - 0.75}
+          stroke={`url(#${id}-ring)`}
+          strokeWidth={1.5}
+          fill="none"
+        />
+      ) : null}
     </Svg>
   )
 }

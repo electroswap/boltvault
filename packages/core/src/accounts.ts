@@ -126,7 +126,8 @@ export function buildAccount(input: CreateAccountInput, seedHex: string | null):
     }
     case 'ledger':
     case 'trezor': {
-      if (!input.address) throw new Error(`hardware account ${input.kind} needs a device-resolved address`)
+      if (!input.address)
+        throw new Error(`hardware account ${input.kind} needs a device-resolved address`)
       const address = toChecksum(input.address)
       const meta: VaultAccountMeta = {
         id,

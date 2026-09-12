@@ -13,9 +13,23 @@ export interface StatCell {
   readonly testID?: string
 }
 
-const COLOR = { ink: '$ink', arc: '$arc', ember: '$ember', surge: '$surge', burn: '$burn', mute: '$mute' } as const
+const COLOR = {
+  ink: '$ink',
+  arc: '$arc',
+  ember: '$ember',
+  surge: '$surge',
+  burn: '$burn',
+  mute: '$mute',
+} as const
 
-export function StatCellView({ label, value, caption, tone = 'ink', small = false, testID }: StatCell & { small?: boolean }) {
+export function StatCellView({
+  label,
+  value,
+  caption,
+  tone = 'ink',
+  small = false,
+  testID,
+}: StatCell & { small?: boolean }) {
   return (
     <Column gap={2} minWidth={0} testID={testID}>
       <Body tone="mute" size="caption" numberOfLines={1}>

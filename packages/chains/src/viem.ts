@@ -10,7 +10,10 @@ import { requireChain } from './registry.js'
  * a working endpoint, so a flaky primary transparently yields to the fallback
  * of record (PublicNode keyless tier). No hand-rolled fetch.
  */
-export function createChainClient(chainId: number, opts?: { timeout?: number; batch?: boolean }): PublicClient {
+export function createChainClient(
+  chainId: number,
+  opts?: { timeout?: number; batch?: boolean },
+): PublicClient {
   const chain = requireChain(chainId)
   const timeout = opts?.timeout ?? 10_000
   return createPublicClient({

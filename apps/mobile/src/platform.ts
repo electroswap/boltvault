@@ -98,7 +98,10 @@ function timerAlarms(): AlarmScheduler {
   const arm = (name: string, at: number): void => {
     const t = timers.get(name)
     if (t) clearTimeout(t)
-    timers.set(name, setTimeout(() => fire(name), Math.max(0, at - Date.now())))
+    timers.set(
+      name,
+      setTimeout(() => fire(name), Math.max(0, at - Date.now())),
+    )
   }
   // Timers do not run while the app sleeps; on foreground fire anything overdue.
   AppState.addEventListener('change', (s) => {
@@ -128,19 +131,38 @@ function timerAlarms(): AlarmScheduler {
 export async function createMobilePlatform(): Promise<Platform> {
   await Sodium.ready
   const local = createMMKV({ id: 'bv-local' })
-  const secret = createMMKV({ id: 'bv-secret', encryptionKey: await secretStoreKey(), encryptionType: 'AES-256' })
+  const secret = createMMKV({
+    id: 'bv-secret',
+    encryptionKey: await secretStoreKey(),
+    encryptionType: 'AES-256',
+  })
   return {
     kind: 'mobile',
     storage: { local: mmkvStore(local), secret: mmkvStore(secret), session: memoryStore() },
     kdf: {
       argon2id: async (i) =>
-        Sodium.crypto_pwhash(i.hashLength, i.password, i.salt, i.iterations, i.memoryKiB * 1024, Sodium.crypto_pwhash_ALG_ARGON2ID13),
+        Sodium.crypto_pwhash(
+          i.hashLength,
+          i.password,
+          i.salt,
+          i.iterations,
+          i.memoryKiB * 1024,
+          Sodium.crypto_pwhash_ALG_ARGON2ID13,
+        ),
     },
     alarms: timerAlarms(),
     keepAlive: { hold: () => () => undefined },
     biometric: {
-      available: async () => (await LocalAuthentication.hasHardwareAsync()) && (await LocalAuthentication.isEnrolledAsync()),
-      prompt: async (reason) => (await LocalAuthentication.authenticateAsync({ promptMessage: reason, disableDeviceFallback: false })).success,
+      available: async () =>
+        (await LocalAuthentication.hasHardwareAsync()) &&
+        (await LocalAuthentication.isEnrolledAsync()),
+      prompt: async (reason) =>
+        (
+          await LocalAuthentication.authenticateAsync({
+            promptMessage: reason,
+            disableDeviceFallback: false,
+          })
+        ).success,
     },
     clipboard: {
       write: async (text) => {
@@ -160,7 +182,11 @@ export async function createMobilePlatform(): Promise<Platform> {
     },
     notify: async (n) => {
       const { notifyLocal } = await import('./push')
-      await notifyLocal({ title: n.title, body: n.body, ...(n.tag ? { data: { tag: n.tag } } : {}) })
+      await notifyLocal({
+        title: n.title,
+        body: n.body,
+        ...(n.tag ? { data: { tag: n.tag } } : {}),
+      })
     },
     hidePreview: async (hide) => {
       const ScreenCapture = await import('expo-screen-capture')

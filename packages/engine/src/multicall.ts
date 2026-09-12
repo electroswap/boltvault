@@ -56,17 +56,24 @@ const verified = new Map<number, Hex | null>()
  * wins on mainnet and the pinned address is only the fallback.
  */
 function candidates(chainId: number): Hex[] {
-  if (chainId === 52014) return [CANONICAL_MULTICALL3, ELECTRONEUM_ADDRESSES[52014].multicall3 as Hex]
-  if (chainId === 5201420) return [ELECTRONEUM_ADDRESSES[5201420].multicall3 as Hex, CANONICAL_MULTICALL3]
+  if (chainId === 52014)
+    return [CANONICAL_MULTICALL3, ELECTRONEUM_ADDRESSES[52014].multicall3 as Hex]
+  if (chainId === 5201420)
+    return [ELECTRONEUM_ADDRESSES[5201420].multicall3 as Hex, CANONICAL_MULTICALL3]
   return [CANONICAL_MULTICALL3]
 }
 
 /** The multicall address for a chain, verified to hold code; null when none answers. */
-export async function multicallAddress(chains: ChainsService, chainId: number): Promise<Hex | null> {
+export async function multicallAddress(
+  chains: ChainsService,
+  chainId: number,
+): Promise<Hex | null> {
   const known = verified.get(chainId)
   if (known !== undefined) return known
   for (const address of candidates(chainId)) {
-    const code = (await chains.rpc(chainId, 'eth_getCode', [address, 'latest']).catch(() => '0x')) as string
+    const code = (await chains
+      .rpc(chainId, 'eth_getCode', [address, 'latest'])
+      .catch(() => '0x')) as string
     if (typeof code === 'string' && code.length > 2) {
       verified.set(chainId, address)
       return address
@@ -113,7 +120,11 @@ const queues = new Map<number, Queue>()
 const COALESCE_MS = 12
 
 /** Collect the burst, then send it as one aggregate. */
-export function readMany(chains: ChainsService, chainId: number, calls: readonly ReadCall[]): Promise<ReadResult[]> {
+export function readMany(
+  chains: ChainsService,
+  chainId: number,
+  calls: readonly ReadCall[],
+): Promise<ReadResult[]> {
   if (calls.length === 0) return Promise.resolve([])
   return new Promise<ReadResult[]>((resolve, reject) => {
     let q = queues.get(chainId)
@@ -141,7 +152,11 @@ export function readMany(chains: ChainsService, chainId: number, calls: readonly
   })
 }
 
-async function readManyNow(chains: ChainsService, chainId: number, calls: readonly ReadCall[]): Promise<ReadResult[]> {
+async function readManyNow(
+  chains: ChainsService,
+  chainId: number,
+  calls: readonly ReadCall[],
+): Promise<ReadResult[]> {
   if (calls.length === 0) return []
   const client = await chains.client(chainId)
   const mc = await multicallAddress(chains, chainId)
@@ -163,7 +178,9 @@ async function readManyNow(chains: ChainsService, chainId: number, calls: readon
         done[i] = await aggregate(client, mc, chunk)
       }
     }
-    await Promise.all(Array.from({ length: Math.min(CHUNK_CONCURRENCY, chunks.length) }, () => worker()))
+    await Promise.all(
+      Array.from({ length: Math.min(CHUNK_CONCURRENCY, chunks.length) }, () => worker()),
+    )
     return done.flat()
   }
   // No multicall on this chain: individual calls, bounded so a huge universe cannot melt the RPC.
@@ -173,10 +190,25 @@ async function readManyNow(chains: ChainsService, chainId: number, calls: readon
 }
 
 /** One aggregate, falling back to individual calls when the whole thing fails. */
-async function aggregate(client: PublicClient, mc: Hex, chunk: readonly ReadCall[]): Promise<ReadResult[]> {
+async function aggregate(
+  client: PublicClient,
+  mc: Hex,
+  chunk: readonly ReadCall[],
+): Promise<ReadResult[]> {
   try {
-    const results = await client.multicall({ contracts: chunk.map((c) => ({ address: c.address, abi: c.abi, functionName: c.functionName, args: c.args as never })) as never, multicallAddress: mc, allowFailure: true })
-    return (results as Array<{ status: 'success' | 'failure'; result?: unknown }>).map((r) => (r.status === 'success' ? { ok: true, value: r.result } : { ok: false }))
+    const results = await client.multicall({
+      contracts: chunk.map((c) => ({
+        address: c.address,
+        abi: c.abi,
+        functionName: c.functionName,
+        args: c.args as never,
+      })) as never,
+      multicallAddress: mc,
+      allowFailure: true,
+    })
+    return (results as Array<{ status: 'success' | 'failure'; result?: unknown }>).map((r) =>
+      r.status === 'success' ? { ok: true, value: r.result } : { ok: false },
+    )
   } catch {
     // A whole chunk failed (RPC hiccup): fall back per call for this chunk.
     const out: ReadResult[] = []
@@ -187,7 +219,15 @@ async function aggregate(client: PublicClient, mc: Hex, chunk: readonly ReadCall
 
 async function one(client: PublicClient, c: ReadCall): Promise<ReadResult> {
   try {
-    return { ok: true, value: await client.readContract({ address: c.address, abi: c.abi, functionName: c.functionName, args: c.args as never }) }
+    return {
+      ok: true,
+      value: await client.readContract({
+        address: c.address,
+        abi: c.abi,
+        functionName: c.functionName,
+        args: c.args as never,
+      }),
+    }
   } catch {
     return { ok: false }
   }

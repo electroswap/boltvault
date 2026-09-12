@@ -97,7 +97,8 @@ export function formatQuantity(q: string): string {
   const abs = Math.abs(n)
   if (abs >= COMPACT_FROM) return compact(n)
   // Truncate first, then group: `toLocaleString`'s own rounding would round up.
-  if (abs >= 1_000_000) return Number(cut(q, 0)).toLocaleString('en-US', { maximumFractionDigits: 0 })
+  if (abs >= 1_000_000)
+    return Number(cut(q, 0)).toLocaleString('en-US', { maximumFractionDigits: 0 })
   if (abs >= 1) return Number(cut(q, 2)).toLocaleString('en-US', { maximumFractionDigits: 2 })
   // Below one, "4 significant digits" starts at the first non-zero decimal.
   const f = q.split('.')[1] ?? ''
@@ -276,7 +277,10 @@ export function formatFloor(raw: string, decimals: number, places = 6): string {
   if (neg) n = -n
   const base = 10n ** BigInt(decimals)
   const whole = (n / base).toString()
-  const frac = decimals > 0 ? (n % base).toString().padStart(decimals, '0').slice(0, places).replace(/0+$/, '') : ''
+  const frac =
+    decimals > 0
+      ? (n % base).toString().padStart(decimals, '0').slice(0, places).replace(/0+$/, '')
+      : ''
   const grouped = Number(whole) >= 1000 ? Number(whole).toLocaleString('en-US') : whole
   return `${neg ? '−' : ''}${frac ? `${grouped}.${frac}` : grouped}`
 }

@@ -69,7 +69,15 @@ const AssetSchema = z
     standard: Str,
     tokenId: Str,
     name: Str,
-    collection: z.object({ nftContracts: z.array(z.object({ address: Str }).nullable()).nullable().optional() }).nullable().optional(),
+    collection: z
+      .object({
+        nftContracts: z
+          .array(z.object({ address: Str }).nullable())
+          .nullable()
+          .optional(),
+      })
+      .nullable()
+      .optional(),
   })
   .nullable()
   .optional()
@@ -90,19 +98,40 @@ const ActivitySchema = z.object({
   timestamp: Num,
   type: Str,
   chain: Str,
-  transaction: z.object({ blockNumber: Num, hash: Str, from: Str, to: Str, status: Str }).nullable().optional(),
-  details: z.object({ type: Str, hash: Str, transactionStatus: Str, assetChanges: z.array(ChangeSchema.nullable()).nullable().optional() }).nullable().optional(),
+  transaction: z
+    .object({ blockNumber: Num, hash: Str, from: Str, to: Str, status: Str })
+    .nullable()
+    .optional(),
+  details: z
+    .object({
+      type: Str,
+      hash: Str,
+      transactionStatus: Str,
+      assetChanges: z.array(ChangeSchema.nullable()).nullable().optional(),
+    })
+    .nullable()
+    .optional(),
 })
 
 const ResponseSchema = z.object({
-  portfolios: z.array(z.object({ assetActivities: z.array(ActivitySchema.nullable()).nullable().optional() }).nullable()).nullable().optional(),
+  portfolios: z
+    .array(
+      z
+        .object({ assetActivities: z.array(ActivitySchema.nullable()).nullable().optional() })
+        .nullable(),
+    )
+    .nullable()
+    .optional(),
 })
 
 const DIRECTIONS = new Set(['IN', 'OUT', 'SELF'])
 const STATUSES = new Set(['PENDING', 'CONFIRMED', 'FAILED'])
 const STANDARDS = new Set(['ERC20', 'ERC721', 'ERC1155', 'NATIVE'])
 
-const oneOf = <T extends string>(set: ReadonlySet<string>, v: string | null | undefined): T | null => (typeof v === 'string' && set.has(v) ? (v as T) : null)
+const oneOf = <T extends string>(
+  set: ReadonlySet<string>,
+  v: string | null | undefined,
+): T | null => (typeof v === 'string' && set.has(v) ? (v as T) : null)
 
 /**
  * Whole units to raw, without floating point: a token with 18 decimals and a
@@ -124,11 +153,18 @@ export function toRawUnits(quantity: string, decimals: number): string | null {
 function changeOf(raw: z.infer<typeof ChangeSchema>): FeedAssetChange | null {
   const asset = raw.asset
   const nft = typeof raw.nftStandard === 'string' && raw.nftStandard.length > 0
-  const standard = oneOf<'ERC20' | 'ERC721' | 'ERC1155' | 'NATIVE'>(STANDARDS, nft ? raw.nftStandard : raw.tokenStandard)
-  const address = asset?.address ?? asset?.collection?.nftContracts?.find((c) => c?.address)?.address ?? null
+  const standard = oneOf<'ERC20' | 'ERC721' | 'ERC1155' | 'NATIVE'>(
+    STANDARDS,
+    nft ? raw.nftStandard : raw.tokenStandard,
+  )
+  const address =
+    asset?.address ?? asset?.collection?.nftContracts?.find((c) => c?.address)?.address ?? null
   const decimals = asset?.decimals
   const quantity = raw.quantity
-  const amountRaw = typeof quantity === 'string' && typeof decimals === 'number' ? toRawUnits(quantity, decimals) : null
+  const amountRaw =
+    typeof quantity === 'string' && typeof decimals === 'number'
+      ? toRawUnits(quantity, decimals)
+      : null
   const direction = oneOf<'IN' | 'OUT' | 'SELF'>(DIRECTIONS, raw.direction)
   if (!standard && !address && !amountRaw && !asset?.tokenId) return null
   return {
@@ -149,14 +185,20 @@ function rowOf(raw: z.infer<typeof ActivitySchema>): FeedRow | null {
   // A row with no transaction hash cannot be merged against the local log, and
   // merging is the whole point — drop it rather than inventing an identity.
   if (!id || !hash) return null
-  const changes = (raw.details?.assetChanges ?? []).flatMap((c) => (c ? [changeOf(c)] : [])).filter((c): c is FeedAssetChange => c !== null)
+  const changes = (raw.details?.assetChanges ?? [])
+    .flatMap((c) => (c ? [changeOf(c)] : []))
+    .filter((c): c is FeedAssetChange => c !== null)
   return {
     id,
     hash,
-    blockNumber: typeof raw.transaction?.blockNumber === 'number' ? raw.transaction.blockNumber : null,
+    blockNumber:
+      typeof raw.transaction?.blockNumber === 'number' ? raw.transaction.blockNumber : null,
     timestamp: typeof raw.timestamp === 'number' ? raw.timestamp : 0,
     type: raw.details?.type ?? raw.type ?? 'UNKNOWN',
-    status: oneOf<'PENDING' | 'CONFIRMED' | 'FAILED'>(STATUSES, raw.details?.transactionStatus ?? raw.transaction?.status),
+    status: oneOf<'PENDING' | 'CONFIRMED' | 'FAILED'>(
+      STATUSES,
+      raw.details?.transactionStatus ?? raw.transaction?.status,
+    ),
     from: raw.transaction?.from ?? null,
     to: raw.transaction?.to ?? null,
     changes,
@@ -176,7 +218,10 @@ export interface WalletActivityInput {
  * malformed body yields an empty page, because Activity is enrichment and must
  * never be the reason the screen fails to paint.
  */
-export async function fetchWalletActivity(client: ElectroSwapClient, input: WalletActivityInput): Promise<FeedRow[]> {
+export async function fetchWalletActivity(
+  client: ElectroSwapClient,
+  input: WalletActivityInput,
+): Promise<FeedRow[]> {
   const data = await client.query<unknown>(WALLET_ACTIVITY, {
     owner: input.owner,
     chains: [chainEnum(input.chainId)],

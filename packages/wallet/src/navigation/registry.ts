@@ -12,7 +12,8 @@ export interface ScreenParams {
   home: undefined
   portfolio: undefined
   swap: { tokenIn?: string; tokenOut?: string } | undefined
-  explore: { segment?: 'tokens' | 'collectibles' | 'launch' | 'farms'; search?: boolean } | undefined
+  explore:
+    { segment?: 'tokens' | 'collectibles' | 'launch' | 'farms'; search?: boolean } | undefined
   collection: { chainId: number; address: string }
   nft: { chainId: number; address: string; tokenId: string }
   rack: undefined
@@ -68,7 +69,19 @@ export interface ScreenMeta {
   readonly grid: boolean
 }
 
-const meta = (id: ScreenId, presentation: Presentation, opts: Partial<Omit<ScreenMeta, 'id' | 'presentation'>> = {}): ScreenMeta => ({ id, presentation, quiet: false, secrets: false, dock: presentation === 'tab' || presentation === 'push', grid: false, ...opts })
+const meta = (
+  id: ScreenId,
+  presentation: Presentation,
+  opts: Partial<Omit<ScreenMeta, 'id' | 'presentation'>> = {},
+): ScreenMeta => ({
+  id,
+  presentation,
+  quiet: false,
+  secrets: false,
+  dock: presentation === 'tab' || presentation === 'push',
+  grid: false,
+  ...opts,
+})
 
 export const SCREENS: Record<ScreenId, ScreenMeta> = {
   home: meta('home', 'tab', { grid: true }),
@@ -109,10 +122,18 @@ export const SCREENS: Record<ScreenId, ScreenMeta> = {
   splash: meta('splash', 'push', { dock: false, quiet: true }),
 }
 
-export const TABS: Record<TabId, { screen: ScreenId; icon: IconName; labelId: string; labelMessage: string }> = {
+export const TABS: Record<
+  TabId,
+  { screen: ScreenId; icon: IconName; labelId: string; labelMessage: string }
+> = {
   home: { screen: 'home', icon: 'home', labelId: 'tab.home', labelMessage: 'Home' },
   swap: { screen: 'swap', icon: 'swap', labelId: 'tab.swap', labelMessage: 'Swap' },
-  activity: { screen: 'activity', icon: 'activity', labelId: 'tab.activity', labelMessage: 'Activity' },
+  activity: {
+    screen: 'activity',
+    icon: 'activity',
+    labelId: 'tab.activity',
+    labelMessage: 'Activity',
+  },
 }
 
 /** The dock, in order (plan B2): Home · Swap · Activity. Every body derives its tabs from this. */

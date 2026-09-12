@@ -28,7 +28,13 @@ export interface WebViewProps {
    */
   readonly onMessage: (data: string, frameUrl: string | null) => void
   /** A committed navigation — never a provisional one, and never what the page claims. */
-  readonly onNavigate: (state: { url: string; canGoBack: boolean; canGoForward: boolean; loading: boolean; title: string }) => void
+  readonly onNavigate: (state: {
+    url: string
+    canGoBack: boolean
+    canGoForward: boolean
+    loading: boolean
+    title: string
+  }) => void
   /**
    * A navigation has begun. Nothing is committed yet: a page can start a
    * cross-origin navigation and cancel it while staying loaded, so between
@@ -47,7 +53,8 @@ export function WebView({ url, testID }: WebViewProps) {
       <Plate gap="$2">
         <Body size="title">{url}</Body>
         <Body tone="mute" size="caption">
-          The in-app browser lives in the phone app. Here, open the site in a tab — BoltVault is already injected into every page.
+          The in-app browser lives in the phone app. Here, open the site in a tab — BoltVault is
+          already injected into every page.
         </Body>
       </Plate>
     </Column>

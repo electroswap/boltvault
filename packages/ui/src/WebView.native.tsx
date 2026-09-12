@@ -4,15 +4,42 @@
  * URL reported on every navigation, no file access, inline media allowed,
  * JavaScript on (dApps need it; NFT media views use a separate JS-off host).
  */
-import { WebView as RNWebView, type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview'
+import {
+  WebView as RNWebView,
+  type WebViewMessageEvent,
+  type WebViewNavigation,
+} from 'react-native-webview'
 import type { WebViewHandle, WebViewProps } from './WebView'
 
 export type { WebViewHandle, WebViewProps } from './WebView'
 
-type Instance = { postMessage(m: string): void; injectJavaScript(s: string): void; goBack(): void; goForward(): void; reload(): void }
+type Instance = {
+  postMessage(m: string): void
+  injectJavaScript(s: string): void
+  goBack(): void
+  goForward(): void
+  reload(): void
+}
 
-export function WebView({ url, injectedScriptBeforeLoad, onMessage, onNavigate, onNavigateStart, onLoadEnd, onError, handleRef, testID }: WebViewProps) {
-  const report = (n: WebViewNavigation): void => onNavigate({ url: n.url, canGoBack: n.canGoBack, canGoForward: n.canGoForward, loading: n.loading, title: n.title })
+export function WebView({
+  url,
+  injectedScriptBeforeLoad,
+  onMessage,
+  onNavigate,
+  onNavigateStart,
+  onLoadEnd,
+  onError,
+  handleRef,
+  testID,
+}: WebViewProps) {
+  const report = (n: WebViewNavigation): void =>
+    onNavigate({
+      url: n.url,
+      canGoBack: n.canGoBack,
+      canGoForward: n.canGoForward,
+      loading: n.loading,
+      title: n.title,
+    })
   const attach = (r: Instance | null): void => {
     const handle: WebViewHandle | null = r
       ? {
@@ -43,7 +70,9 @@ export function WebView({ url, injectedScriptBeforeLoad, onMessage, onNavigate, 
         It used to be dropped, which left the host attributing an advert
         iframe's request to the page that embeds it.
       */
-      onMessage={(e: WebViewMessageEvent) => onMessage(e.nativeEvent.data, (e.nativeEvent as { url?: string }).url ?? null)}
+      onMessage={(e: WebViewMessageEvent) =>
+        onMessage(e.nativeEvent.data, (e.nativeEvent as { url?: string }).url ?? null)
+      }
       /*
         Committed navigations only. `onLoadStart` is reported from
         `didStartProvisionalNavigation` on WKWebView, so a page could announce

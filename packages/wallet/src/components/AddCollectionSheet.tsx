@@ -9,9 +9,27 @@ import { useEngine } from '../engine/EngineProvider'
 import { t } from '../i18n'
 
 const ETN = 52014
-type Preview = { address: string; name: string; symbol: string; standard: 'ERC721' | 'ERC1155'; enumerable: boolean }
+type Preview = {
+  address: string
+  name: string
+  symbol: string
+  standard: 'ERC721' | 'ERC1155'
+  enumerable: boolean
+}
 
-export function AddCollectionSheet({ open, onClose, onAdded, initialAddress, reducedMotion = false }: { open: boolean; onClose: () => void; onAdded?: (address: string) => void; initialAddress?: string; reducedMotion?: boolean }) {
+export function AddCollectionSheet({
+  open,
+  onClose,
+  onAdded,
+  initialAddress,
+  reducedMotion = false,
+}: {
+  open: boolean
+  onClose: () => void
+  onAdded?: (address: string) => void
+  initialAddress?: string
+  reducedMotion?: boolean
+}) {
   const engine = useEngine()
   const [address, setAddress] = useState(initialAddress ?? '')
   const [preview, setPreview] = useState<Preview | null>(null)
@@ -65,12 +83,37 @@ export function AddCollectionSheet({ open, onClose, onAdded, initialAddress, red
     }
   }
   return (
-    <Sheet open={open} onClose={onClose} title={t({ id: 'collection.add.title', message: 'Add a collection' })} reducedMotion={reducedMotion} footer={<Key label={t({ id: 'collection.add.key', message: 'Add collection' })} size="compact" disabled={busy || looking || !preview} onPress={() => void add()} testID="add-collection-submit" />} testID="add-collection">
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={t({ id: 'collection.add.title', message: 'Add a collection' })}
+      reducedMotion={reducedMotion}
+      footer={
+        <Key
+          label={t({ id: 'collection.add.key', message: 'Add collection' })}
+          size="compact"
+          disabled={busy || looking || !preview}
+          onPress={() => void add()}
+          testID="add-collection-submit"
+        />
+      }
+      testID="add-collection"
+    >
       <Column gap="$3">
         <Body tone="mute" size="caption">
-          {t({ id: 'collection.add.body', message: 'Paste the contract address of an NFT collection on Electroneum. BoltVault reads its pieces and their images from the contract itself.' })}
+          {t({
+            id: 'collection.add.body',
+            message:
+              'Paste the contract address of an NFT collection on Electroneum. BoltVault reads its pieces and their images from the contract itself.',
+          })}
         </Body>
-        <Input value={address} onChange={setAddress} placeholder={t({ id: 'token.add.ph', message: 'Contract address 0x…' })} autoFocus={!initialAddress} testID="add-collection-address" />
+        <Input
+          value={address}
+          onChange={setAddress}
+          placeholder={t({ id: 'token.add.ph', message: 'Contract address 0x…' })}
+          autoFocus={!initialAddress}
+          testID="add-collection-address"
+        />
         {looking ? (
           <Body tone="mute" size="caption">
             {t({ id: 'token.add.looking', message: 'Reading the contract…' })}
@@ -80,7 +123,15 @@ export function AddCollectionSheet({ open, onClose, onAdded, initialAddress, red
           <Plate role="raised" gap={2} testID="add-collection-preview">
             <Body size="title">{preview.name}</Body>
             <Body tone="mute" size="caption">
-              {[preview.symbol || null, preview.standard === 'ERC1155' ? 'ERC-1155' : 'ERC-721', preview.enumerable ? t({ id: 'collection.add.enumerable', message: 'lists its pieces' }) : t({ id: 'collection.add.scan', message: 'pieces found from transfers' })].filter(Boolean).join(' · ')}
+              {[
+                preview.symbol || null,
+                preview.standard === 'ERC1155' ? 'ERC-1155' : 'ERC-721',
+                preview.enumerable
+                  ? t({ id: 'collection.add.enumerable', message: 'lists its pieces' })
+                  : t({ id: 'collection.add.scan', message: 'pieces found from transfers' }),
+              ]
+                .filter(Boolean)
+                .join(' · ')}
             </Body>
           </Plate>
         ) : null}

@@ -369,10 +369,7 @@ export class HardwareService {
   // ---- Keystone ------------------------------------------------------------------
 
   /** Parse the device's account QR (crypto-hdkey / crypto-account) into the picker's rows. */
-  async keystoneImport(input: {
-    parts: string[]
-    count?: number
-  }): Promise<{
+  async keystoneImport(input: { parts: string[]; count?: number }): Promise<{
     xfp: string
     name: string | null
     addresses: Array<{ path: string; address: string; index: number }>

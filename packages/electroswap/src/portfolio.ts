@@ -102,7 +102,15 @@ export function buildEtnPortfolio(
   let hasFiat = false
 
   for (const r of rows) {
-    const base: Omit<BusBarToken, 'denominatedValue' | 'price' | 'pricePercentChangeDay' | 'share' | 'hidden' | 'priceUnavailable'> = {
+    const base: Omit<
+      BusBarToken,
+      | 'denominatedValue'
+      | 'price'
+      | 'pricePercentChangeDay'
+      | 'share'
+      | 'hidden'
+      | 'priceUnavailable'
+    > = {
       address: r.address,
       symbol: r.symbol,
       name: r.name,

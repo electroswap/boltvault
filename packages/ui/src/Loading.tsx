@@ -75,11 +75,20 @@ function Halo({ size, reduced }: { size: number; reduced: boolean }) {
     <Animated.View
       pointerEvents="none"
       style={[
-        { position: 'absolute', width: box, height: box, alignItems: 'center', justifyContent: 'center' },
+        {
+          position: 'absolute',
+          width: box,
+          height: box,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
         reduced
           ? { opacity: 0.5 }
           : {
-              animationName: { from: { transform: [{ rotate: '0deg' }] }, to: { transform: [{ rotate: '360deg' }] } },
+              animationName: {
+                from: { transform: [{ rotate: '0deg' }] },
+                to: { transform: [{ rotate: '360deg' }] },
+              },
               animationDuration: '2600ms',
               animationTimingFunction: 'linear',
               animationIterationCount: 'infinite',
@@ -96,13 +105,28 @@ function Halo({ size, reduced }: { size: number; reduced: boolean }) {
         </Defs>
         {/* The track keeps the ring's shape whether or not the arc is over it. */}
         <Circle cx={box / 2} cy={box / 2} r={r} stroke={edge} strokeWidth={2} fill="none" />
-        <Circle cx={box / 2} cy={box / 2} r={r} stroke={`url(#${id})`} strokeWidth={2} strokeLinecap="round" fill="none" strokeDasharray={`${circumference * 0.28} ${circumference}`} />
+        <Circle
+          cx={box / 2}
+          cy={box / 2}
+          r={r}
+          stroke={`url(#${id})`}
+          strokeWidth={2}
+          strokeLinecap="round"
+          fill="none"
+          strokeDasharray={`${circumference * 0.28} ${circumference}`}
+        />
       </Svg>
     </Animated.View>
   )
 }
 
-export function PageLoader({ label = null, size = 130, overlay = false, reducedMotion, testID }: PageLoaderProps) {
+export function PageLoader({
+  label = null,
+  size = 130,
+  overlay = false,
+  reducedMotion,
+  testID,
+}: PageLoaderProps) {
   const reduced = useReducedMotionPref() || reducedMotion === true
   // 477 x 296 in the source; keep the ratio.
   const height = Math.round((size * 296.07) / 477.78)
@@ -119,12 +143,26 @@ export function PageLoader({ label = null, size = 130, overlay = false, reducedM
               borderRadius: size,
               backgroundColor: glow.plate,
             },
-            reduced ? { opacity: 0.5 } : { animationName: { from: { opacity: 0.28 }, to: { opacity: 0.7 } }, animationDuration: '1800ms', animationDirection: 'alternate', animationIterationCount: 'infinite', animationTimingFunction: 'ease-in-out' },
+            reduced
+              ? { opacity: 0.5 }
+              : {
+                  animationName: { from: { opacity: 0.28 }, to: { opacity: 0.7 } },
+                  animationDuration: '1800ms',
+                  animationDirection: 'alternate',
+                  animationIterationCount: 'infinite',
+                  animationTimingFunction: 'ease-in-out',
+                },
           ]}
         />
         <Halo size={size} reduced={reduced} />
         {/* The mark itself never blinks; only the light around it moves. */}
-        <SvgImage xml={ES_MARK_SVG} uri={ES_MARK_URI} width={size} height={height} label="ElectroSwap" />
+        <SvgImage
+          xml={ES_MARK_SVG}
+          uri={ES_MARK_URI}
+          width={size}
+          height={height}
+          label="ElectroSwap"
+        />
       </View>
       {label !== null && label !== '' ? (
         <Body tone="mute" size="caption">
@@ -135,13 +173,31 @@ export function PageLoader({ label = null, size = 130, overlay = false, reducedM
   )
   if (!overlay) {
     return (
-      <Column flex={1} alignItems="center" justifyContent="center" testID={testID ?? 'page-loading'}>
+      <Column
+        flex={1}
+        alignItems="center"
+        justifyContent="center"
+        testID={testID ?? 'page-loading'}
+      >
         {body}
       </Column>
     )
   }
   return (
-    <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: paint.void, zIndex: 20 }} testID={testID ?? 'page-loading'}>
+    <View
+      style={{
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: paint.void,
+        zIndex: 20,
+      }}
+      testID={testID ?? 'page-loading'}
+    >
       {body}
     </View>
   )
@@ -162,7 +218,13 @@ export function EsWordmark({ width = 202, opacity = 0.9, testID }: EsWordmarkPro
   const height = Math.round((width * 155.5) / 629.64)
   return (
     <View style={{ opacity }} testID={testID}>
-      <SvgImage xml={ES_WORDMARK_SVG} uri={ES_WORDMARK_URI} width={width} height={height} label="ElectroSwap" />
+      <SvgImage
+        xml={ES_WORDMARK_SVG}
+        uri={ES_WORDMARK_URI}
+        width={width}
+        height={height}
+        label="ElectroSwap"
+      />
     </View>
   )
 }
@@ -182,13 +244,30 @@ export interface BarLoaderProps {
 export function BarLoader({ active = true, reducedMotion, testID }: BarLoaderProps) {
   const reduced = useReducedMotionPref() || reducedMotion === true
   return (
-    <View style={{ height: metrics.filament, borderRadius: 1, backgroundColor: active ? edge : 'transparent', overflow: 'hidden' }} testID={testID ?? 'bar-loading'} accessibilityElementsHidden>
+    <View
+      style={{
+        height: metrics.filament,
+        borderRadius: 1,
+        backgroundColor: active ? edge : 'transparent',
+        overflow: 'hidden',
+      }}
+      testID={testID ?? 'bar-loading'}
+      accessibilityElementsHidden
+    >
       {active ? (
         <Animated.View
           pointerEvents="none"
           style={
             reduced
-              ? { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: paint.arc, opacity: 0.35 }
+              ? {
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  backgroundColor: paint.arc,
+                  opacity: 0.35,
+                }
               : {
                   position: 'absolute',
                   top: 0,

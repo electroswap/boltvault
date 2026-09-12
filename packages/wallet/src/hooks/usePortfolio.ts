@@ -40,9 +40,17 @@ function sameScope(a: readonly number[], b: readonly number[]): boolean {
  * caller that guesses while its preference is still loading does not show
  * nothing — it shows a different chain's money. Holding is the honest state.
  */
-export function usePortfolio(accountId: string | null, _intervalMs = 5_000, chainIds?: readonly number[] | null): PortfolioState {
+export function usePortfolio(
+  accountId: string | null,
+  _intervalMs = 5_000,
+  chainIds?: readonly number[] | null,
+): PortfolioState {
   const engine = useEngine()
-  const [state, setState] = useState<PortfolioState>({ snapshot: null, unavailable: false, error: null })
+  const [state, setState] = useState<PortfolioState>({
+    snapshot: null,
+    unavailable: false,
+    error: null,
+  })
   // Always explicit, so the scope this hook waits for is the scope it asked
   // for — an unscoped call still means "the home chain", which is what the
   // engine defaults to.
@@ -76,12 +84,18 @@ export function usePortfolio(accountId: string | null, _intervalMs = 5_000, chai
           if (cancelled || !sameScope(snapshot.chainIds, wanted)) return
           // Within one scope a stale re-read never displaces a fresh answer;
           // that is what stops a background refresh blanking the hero.
-          setState((prev) => (prev.snapshot && snapshot.stale ? prev : { snapshot, unavailable: false, error: null }))
+          setState((prev) =>
+            prev.snapshot && snapshot.stale ? prev : { snapshot, unavailable: false, error: null },
+          )
         },
         (err: unknown) => {
           if (cancelled) return
           const e = err instanceof EngineError ? err : null
-          setState({ snapshot: null, unavailable: e?.code === 'not_implemented', error: e && e.code !== 'not_implemented' ? e.message : null })
+          setState({
+            snapshot: null,
+            unavailable: e?.code === 'not_implemented',
+            error: e && e.code !== 'not_implemented' ? e.message : null,
+          })
         },
       )
     }
@@ -96,7 +110,11 @@ export function usePortfolio(accountId: string | null, _intervalMs = 5_000, chai
         which is the other half of "switching between chains causes some really
         weird behaviors".
       */
-      if (e.type === 'portfolio.snapshot' && e.snapshot.accountId === accountId && sameScope(e.snapshot.chainIds, wanted)) {
+      if (
+        e.type === 'portfolio.snapshot' &&
+        e.snapshot.accountId === accountId &&
+        sameScope(e.snapshot.chainIds, wanted)
+      ) {
         setState({ snapshot: e.snapshot, unavailable: false, error: null })
         return
       }
@@ -117,6 +135,9 @@ export function usePortfolio(accountId: string | null, _intervalMs = 5_000, chai
 
   // Scoped by account and chain selection, so switching either still starts
   // clean rather than showing the previous account's total.
-  const remembered = useLastGood(accountId === null || held ? null : `portfolio:${accountId}:${scope}`, state.snapshot)
+  const remembered = useLastGood(
+    accountId === null || held ? null : `portfolio:${accountId}:${scope}`,
+    state.snapshot,
+  )
   return remembered === state.snapshot ? state : { ...state, snapshot: remembered }
 }

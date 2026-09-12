@@ -63,9 +63,10 @@ export class DefiLlamaMarketData {
 
     const at = this.now()
     const res = await this.fetchJson(`${this.apiBase}/protocol/${encodeURIComponent(slug)}`)
-    const data = res !== null && typeof res.tvl === 'number' && Number.isFinite(res.tvl)
-      ? { slug, name: res.name ?? slug, tvl: res.tvl, at }
-      : null
+    const data =
+      res !== null && typeof res.tvl === 'number' && Number.isFinite(res.tvl)
+        ? { slug, name: res.name ?? slug, tvl: res.tvl, at }
+        : null
     this.cache.set(key, { data, at })
     return data
   }

@@ -26,14 +26,22 @@ function boltPath(w: number, h: number, seed: number): string {
   for (let i = 0; i <= n; i++) {
     const t = i / n
     const x = w * (0.12 + 0.76 * t)
-    const jitter = i === 0 || i === n ? 0 : (((seed * 9301 + i * 49297) % 233280) / 233280 - 0.5) * h * 0.18
+    const jitter =
+      i === 0 || i === n ? 0 : (((seed * 9301 + i * 49297) % 233280) / 233280 - 0.5) * h * 0.18
     const y = h * (0.85 - 0.7 * t) + jitter
     pts.push([x, y])
   }
   return pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ')
 }
 
-export function Discharge({ fire, kind = 'confirm', width, height, reducedMotion = false, testID }: DischargeProps) {
+export function Discharge({
+  fire,
+  kind = 'confirm',
+  width,
+  height,
+  reducedMotion = false,
+  testID,
+}: DischargeProps) {
   const [visible, setVisible] = useState(false)
   useEffect(() => {
     if (fire <= 0) return
@@ -54,7 +62,9 @@ export function Discharge({ fire, kind = 'confirm', width, height, reducedMotion
         top: 0,
         width,
         height,
-        animationName: reducedMotion ? { from: { opacity: 0.6 }, to: { opacity: 0 } } : { '0%': { opacity: 0 }, '20%': { opacity: 1 }, '100%': { opacity: 0 } },
+        animationName: reducedMotion
+          ? { from: { opacity: 0.6 }, to: { opacity: 0 } }
+          : { '0%': { opacity: 0 }, '20%': { opacity: 1 }, '100%': { opacity: 0 } },
         animationDuration: `${reducedMotion ? 120 : motion.discharge + 200}ms`,
         animationFillMode: 'forwards',
       }}
@@ -62,8 +72,23 @@ export function Discharge({ fire, kind = 'confirm', width, height, reducedMotion
       <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
         {kind === 'confirm' ? (
           <>
-            <Path d={boltPath(width, height, fire)} stroke={halo} strokeWidth={6} strokeOpacity={0.25} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-            <Path d={boltPath(width, height, fire)} stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            <Path
+              d={boltPath(width, height, fire)}
+              stroke={halo}
+              strokeWidth={6}
+              strokeOpacity={0.25}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+            <Path
+              d={boltPath(width, height, fire)}
+              stroke={color}
+              strokeWidth={1.75}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
           </>
         ) : (
           <Path d={`M0 ${height - 1} H${width}`} stroke={color} strokeWidth={2} />

@@ -10,7 +10,8 @@ import { join, relative } from 'node:path'
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'packages', 'wallet', 'src')
 const OUT_DIR = join(ROOT, 'packages', 'wallet', 'locales', 'en')
-const RE = /t\(\s*\{\s*id:\s*'([^']+)'\s*,\s*message:\s*(?:'((?:[^'\\]|\\.)*)'|`((?:[^`\\]|\\.)*)`)/g
+const RE =
+  /t\(\s*\{\s*id:\s*'([^']+)'\s*,\s*message:\s*(?:'((?:[^'\\]|\\.)*)'|`((?:[^`\\]|\\.)*)`)/g
 
 function* walk(dir) {
   for (const name of readdirSync(dir)) {
@@ -28,7 +29,9 @@ for (const file of walk(SRC)) {
     const message = (m[2] ?? m[3] ?? '').replace(/\\'/g, "'")
     const prev = messages.get(id)
     if (prev && prev.message !== message) {
-      console.error(`i18n: id "${id}" has two different source messages (${prev.file} vs ${relative(ROOT, file)})`)
+      console.error(
+        `i18n: id "${id}" has two different source messages (${prev.file} vs ${relative(ROOT, file)})`,
+      )
       process.exit(1)
     }
     messages.set(id, { message, file: relative(ROOT, file) })
@@ -36,10 +39,24 @@ for (const file of walk(SRC)) {
 }
 
 mkdirSync(OUT_DIR, { recursive: true })
-const po = ['msgid ""', 'msgstr ""', '"Language: en\\n"', '"Content-Type: text/plain; charset=utf-8\\n"', '']
+const po = [
+  'msgid ""',
+  'msgstr ""',
+  '"Language: en\\n"',
+  '"Content-Type: text/plain; charset=utf-8\\n"',
+  '',
+]
 const compiled = {}
-for (const [id, { message, file }] of [...messages.entries()].sort(([a], [b]) => a.localeCompare(b))) {
-  po.push(`#: ${file}`, `msgctxt "${id}"`, `msgid "${message.replace(/"/g, '\\"')}"`, `msgstr "${message.replace(/"/g, '\\"')}"`, '')
+for (const [id, { message, file }] of [...messages.entries()].sort(([a], [b]) =>
+  a.localeCompare(b),
+)) {
+  po.push(
+    `#: ${file}`,
+    `msgctxt "${id}"`,
+    `msgid "${message.replace(/"/g, '\\"')}"`,
+    `msgstr "${message.replace(/"/g, '\\"')}"`,
+    '',
+  )
   compiled[id] = message
 }
 writeFileSync(join(OUT_DIR, 'messages.po'), `${po.join('\n')}\n`)

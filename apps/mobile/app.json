@@ -182,7 +182,8 @@
       "./plugins/withTaskIsolation.js",
       "./plugins/withNativeSplash.js",
       "./plugins/withBuildTuning.js",
-      "./plugins/withReleaseSigning.js"
+      "./plugins/withReleaseSigning.js",
+      "./plugins/withDataExtractionRules.js"
     ],
     "extra": {
       "eas": {

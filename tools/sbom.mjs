@@ -28,9 +28,19 @@ for (const [, key, body] of entries) {
   const hashes = []
   if (integrity) {
     const [alg, b64] = integrity.split('-')
-    hashes.push({ alg: alg.toUpperCase().replace('SHA', 'SHA-'), content: Buffer.from(b64, 'base64').toString('hex') })
+    hashes.push({
+      alg: alg.toUpperCase().replace('SHA', 'SHA-'),
+      content: Buffer.from(b64, 'base64').toString('hex'),
+    })
   }
-  components.push({ type: 'library', name, version, purl: `pkg:npm/${name.startsWith('@') ? name.replace('/', '%2F') : name}@${version}`, hashes, scope: 'required' })
+  components.push({
+    type: 'library',
+    name,
+    version,
+    purl: `pkg:npm/${name.startsWith('@') ? name.replace('/', '%2F') : name}@${version}`,
+    hashes,
+    scope: 'required',
+  })
 }
 components.sort((a, b) => a.purl.localeCompare(b.purl))
 
@@ -42,9 +52,16 @@ const bom = {
   serialNumber: `urn:uuid:${lockHash.slice(0, 8)}-${lockHash.slice(8, 12)}-4${lockHash.slice(13, 16)}-8${lockHash.slice(17, 20)}-${lockHash.slice(20, 32)}`,
   version: 1,
   metadata: {
-    timestamp: new Date(Number(process.env.SOURCE_DATE_EPOCH ?? Math.floor(Date.now() / 1000)) * 1000).toISOString(),
+    timestamp: new Date(
+      Number(process.env.SOURCE_DATE_EPOCH ?? Math.floor(Date.now() / 1000)) * 1000,
+    ).toISOString(),
     tools: [{ vendor: 'ElectroSwap', name: 'boltvault-sbom', version: '1' }],
-    component: { type: 'application', name: pkg.name, version: pkg.version, purl: `pkg:npm/${pkg.name}@${pkg.version}` },
+    component: {
+      type: 'application',
+      name: pkg.name,
+      version: pkg.version,
+      purl: `pkg:npm/${pkg.name}@${pkg.version}`,
+    },
     properties: [{ name: 'boltvault:lockfile-sha256', value: lockHash }],
   },
   components,

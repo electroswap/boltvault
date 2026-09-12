@@ -16,7 +16,15 @@
  *   from the page and never was — see `wire.ts`.
  */
 import { needsUserAttention } from './methods'
-import { CONFIG_EVENT, CONTENT_TARGET, INPAGE_TARGET, isInpageMessage, type InpageMessage, type InpageRequest, type RpcErrorShape } from './wire'
+import {
+  CONFIG_EVENT,
+  CONTENT_TARGET,
+  INPAGE_TARGET,
+  isInpageMessage,
+  type InpageMessage,
+  type InpageRequest,
+  type RpcErrorShape,
+} from './wire'
 
 export interface PageTransport {
   post(message: InpageRequest): void
@@ -27,7 +35,10 @@ export interface WindowLike {
   ethereum?: unknown
   addEventListener(type: string, listener: (ev: unknown) => void): void
   dispatchEvent(ev: unknown): boolean
-  readonly document: { readonly hidden: boolean; addEventListener(type: string, listener: () => void, opts?: { once: boolean }): void }
+  readonly document: {
+    readonly hidden: boolean
+    addEventListener(type: string, listener: () => void, opts?: { once: boolean }): void
+  }
   readonly CustomEvent: new (type: string, init?: { detail?: unknown }) => unknown
   readonly Event: new (type: string) => unknown
 }
@@ -69,7 +80,22 @@ export class ProviderRpcError extends Error {
 }
 
 /** Every method a dApp may pull off the provider; bound in the constructor (§3.5). */
-const BOUND_METHODS = ['request', 'send', 'sendAsync', 'enable', 'isConnected', 'on', 'once', 'removeListener', 'off', 'removeAllListeners', 'listenerCount', 'applyConfig', 'prime', 'primeOnce'] as const
+const BOUND_METHODS = [
+  'request',
+  'send',
+  'sendAsync',
+  'enable',
+  'isConnected',
+  'on',
+  'once',
+  'removeListener',
+  'off',
+  'removeAllListeners',
+  'listenerCount',
+  'applyConfig',
+  'prime',
+  'primeOnce',
+] as const
 
 type Listener = (...args: unknown[]) => void
 
@@ -145,7 +171,15 @@ interface ProviderState {
   selectedAddress: string | null
   connected: boolean
   nextId: number
-  readonly pending: Map<number, { resolve: (v: unknown) => void; reject: (e: ProviderRpcError) => void; method: string; epoch: number }>
+  readonly pending: Map<
+    number,
+    {
+      resolve: (v: unknown) => void
+      reject: (e: ProviderRpcError) => void
+      method: string
+      epoch: number
+    }
+  >
 }
 
 export class BoltVaultProvider extends Emitter {
@@ -267,15 +301,28 @@ export class BoltVaultProvider extends Emitter {
   }
 
   async request(args: RequestArguments): Promise<unknown> {
-    if (!args || typeof args !== 'object') throw new ProviderRpcError(-32600, 'Expected a single, non-array, object argument.')
+    if (!args || typeof args !== 'object')
+      throw new ProviderRpcError(-32600, 'Expected a single, non-array, object argument.')
     const { method, params } = args
-    if (typeof method !== 'string' || method.length === 0) throw new ProviderRpcError(-32600, "'args.method' must be a non-empty string.")
-    if (params !== undefined && !Array.isArray(params) && (typeof params !== 'object' || params === null)) throw new ProviderRpcError(-32600, "'args.params' must be an object or array if provided.")
+    if (typeof method !== 'string' || method.length === 0)
+      throw new ProviderRpcError(-32600, "'args.method' must be a non-empty string.")
+    if (
+      params !== undefined &&
+      !Array.isArray(params) &&
+      (typeof params !== 'object' || params === null)
+    )
+      throw new ProviderRpcError(-32600, "'args.params' must be an object or array if provided.")
     if (needsUserAttention(method) && this.#win.document.hidden) await this.untilVisible()
     return new Promise<unknown>((resolve, reject) => {
       const id = this.#state.nextId++
       this.#state.pending.set(id, { resolve, reject, method, epoch: this.#epoch })
-      const msg: InpageRequest = { target: INPAGE_TARGET, channel: this.#channel, id, method, ...(params === undefined ? {} : { params }) }
+      const msg: InpageRequest = {
+        target: INPAGE_TARGET,
+        channel: this.#channel,
+        id,
+        method,
+        ...(params === undefined ? {} : { params }),
+      }
       try {
         this.#transport.post(msg)
       } catch (err) {
@@ -286,36 +333,75 @@ export class BoltVaultProvider extends Emitter {
   }
 
   /** web3 v1 / ethers v5 legacy surface. */
-  send(methodOrPayload: string | JsonRpcPayload | JsonRpcPayload[], paramsOrCallback?: unknown): unknown {
+  send(
+    methodOrPayload: string | JsonRpcPayload | JsonRpcPayload[],
+    paramsOrCallback?: unknown,
+  ): unknown {
     if (typeof methodOrPayload === 'string') {
-      return this.request({ method: methodOrPayload, params: Array.isArray(paramsOrCallback) ? paramsOrCallback : [] })
+      return this.request({
+        method: methodOrPayload,
+        params: Array.isArray(paramsOrCallback) ? paramsOrCallback : [],
+      })
     }
     if (typeof paramsOrCallback === 'function') {
-      this.sendAsync(methodOrPayload, paramsOrCallback as (err: unknown, res?: JsonRpcResult | JsonRpcResult[]) => void)
+      this.sendAsync(
+        methodOrPayload,
+        paramsOrCallback as (err: unknown, res?: JsonRpcResult | JsonRpcResult[]) => void,
+      )
       return undefined
     }
     if (!Array.isArray(methodOrPayload) && SYNC_LEGACY.has(methodOrPayload.method)) {
-      const result = methodOrPayload.method === 'eth_accounts' ? (this.selectedAddress ? [this.selectedAddress] : []) : methodOrPayload.method === 'eth_coinbase' ? this.selectedAddress : methodOrPayload.method === 'net_version' ? this.networkVersion : true
+      const result =
+        methodOrPayload.method === 'eth_accounts'
+          ? this.selectedAddress
+            ? [this.selectedAddress]
+            : []
+          : methodOrPayload.method === 'eth_coinbase'
+            ? this.selectedAddress
+            : methodOrPayload.method === 'net_version'
+              ? this.networkVersion
+              : true
       return { id: methodOrPayload.id ?? null, jsonrpc: '2.0', result }
     }
-    throw new ProviderRpcError(-32600, 'Synchronous send is only supported for eth_accounts, eth_coinbase, eth_uninstallFilter and net_version. Use request().')
+    throw new ProviderRpcError(
+      -32600,
+      'Synchronous send is only supported for eth_accounts, eth_coinbase, eth_uninstallFilter and net_version. Use request().',
+    )
   }
 
-  sendAsync(payload: JsonRpcPayload | JsonRpcPayload[], callback: (err: unknown, res?: JsonRpcResult | JsonRpcResult[]) => void): void {
+  sendAsync(
+    payload: JsonRpcPayload | JsonRpcPayload[],
+    callback: (err: unknown, res?: JsonRpcResult | JsonRpcResult[]) => void,
+  ): void {
     const one = async (p: JsonRpcPayload): Promise<JsonRpcResult> => {
       try {
-        const result = await this.request({ method: p.method, params: p.params as RequestArguments['params'] })
+        const result = await this.request({
+          method: p.method,
+          params: p.params as RequestArguments['params'],
+        })
         return { id: p.id ?? null, jsonrpc: '2.0', result }
       } catch (err) {
         const e = err instanceof ProviderRpcError ? err : new ProviderRpcError(-32603, String(err))
-        return { id: p.id ?? null, jsonrpc: '2.0', error: { code: e.code, message: e.message, ...(e.data !== undefined ? { data: e.data } : {}) } }
+        return {
+          id: p.id ?? null,
+          jsonrpc: '2.0',
+          error: {
+            code: e.code,
+            message: e.message,
+            ...(e.data !== undefined ? { data: e.data } : {}),
+          },
+        }
       }
     }
     if (Array.isArray(payload)) {
       void Promise.all(payload.map(one)).then((res) => callback(null, res))
       return
     }
-    void one(payload).then((res) => (res.error ? callback(new ProviderRpcError(res.error.code, res.error.message, res.error.data), res) : callback(null, res)))
+    void one(payload).then((res) =>
+      res.error
+        ? callback(new ProviderRpcError(res.error.code, res.error.message, res.error.data), res)
+        : callback(null, res),
+    )
   }
 
   /** The 2018 API. */
@@ -380,7 +466,10 @@ export class BoltVaultProvider extends Emitter {
       }
       case 'connect': {
         const payload = m.payload as { chainId?: string }
-        const chainId = typeof payload?.chainId === 'string' && payload.chainId.length > 0 ? payload.chainId : this.#state.chainId
+        const chainId =
+          typeof payload?.chainId === 'string' && payload.chainId.length > 0
+            ? payload.chainId
+            : this.#state.chainId
         // EIP-1193 says `connect` carries a chain id, and wagmi and viem both call
         // parseInt on it. Emitting null breaks their handlers, so stay quiet until
         // we actually know the chain (§4.3).
@@ -463,7 +552,12 @@ Object.freeze(Emitter.prototype)
 export function installProvider(config: ProviderConfig): InstallResult {
   const win = config.win
   const provider = new BoltVaultProvider(config)
-  const info: Eip6963Info = Object.freeze({ uuid: config.uuid, name: config.name ?? 'BoltVault', icon: config.icon, rdns: config.rdns ?? 'io.electroswap.boltvault' })
+  const info: Eip6963Info = Object.freeze({
+    uuid: config.uuid,
+    name: config.name ?? 'BoltVault',
+    icon: config.icon,
+    rdns: config.rdns ?? 'io.electroswap.boltvault',
+  })
 
   let windowEthereum: InstallResult['windowEthereum'] = 'theirs'
   const existing = win.ethereum
@@ -472,9 +566,19 @@ export function installProvider(config: ProviderConfig): InstallResult {
     Object.freeze(provider)
     try {
       if (config.defaultWallet) {
-        Object.defineProperty(win, 'ethereum', { value: provider, configurable: false, writable: false, enumerable: true })
+        Object.defineProperty(win, 'ethereum', {
+          value: provider,
+          configurable: false,
+          writable: false,
+          enumerable: true,
+        })
       } else {
-        Object.defineProperty(win, 'ethereum', { value: provider, configurable: true, writable: true, enumerable: true })
+        Object.defineProperty(win, 'ethereum', {
+          value: provider,
+          configurable: true,
+          writable: true,
+          enumerable: true,
+        })
       }
       windowEthereum = 'ours'
     } catch {
@@ -488,7 +592,12 @@ export function installProvider(config: ProviderConfig): InstallResult {
       windowEthereum = 'providers'
     } else if (config.defaultWallet) {
       try {
-        Object.defineProperty(win, 'ethereum', { value: provider, configurable: false, writable: false, enumerable: true })
+        Object.defineProperty(win, 'ethereum', {
+          value: provider,
+          configurable: false,
+          writable: false,
+          enumerable: true,
+        })
         windowEthereum = 'ours'
       } catch {
         windowEthereum = 'theirs'
@@ -514,7 +623,12 @@ export function installProvider(config: ProviderConfig): InstallResult {
       // Best effort: pin ourselves so a later wallet cannot replace us. If we are not
       // first any more, the plan's answer is "Reload open sites", never a fight on a timer.
       try {
-        Object.defineProperty(win, 'ethereum', { value: provider, configurable: false, writable: false, enumerable: true })
+        Object.defineProperty(win, 'ethereum', {
+          value: provider,
+          configurable: false,
+          writable: false,
+          enumerable: true,
+        })
       } catch {
         // already non-configurable
       }
@@ -526,7 +640,17 @@ export function installProvider(config: ProviderConfig): InstallResult {
 }
 
 /** A `window.postMessage` transport bound to the per-load channel nonce. */
-export function windowTransport(win: { postMessage(message: unknown, targetOrigin: string): void; addEventListener(type: string, listener: (ev: { source: unknown; origin: string; data: unknown }) => void): void; location: { origin: string } }, channel: string): PageTransport {
+export function windowTransport(
+  win: {
+    postMessage(message: unknown, targetOrigin: string): void
+    addEventListener(
+      type: string,
+      listener: (ev: { source: unknown; origin: string; data: unknown }) => void,
+    ): void
+    location: { origin: string }
+  },
+  channel: string,
+): PageTransport {
   return {
     post: (message) => win.postMessage(message, win.location.origin),
     onMessage: (listener) => {

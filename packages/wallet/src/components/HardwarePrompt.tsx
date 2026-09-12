@@ -28,7 +28,13 @@ export function urPartsDone(parts: readonly string[]): boolean {
   return expected > 0 && total.size >= expected
 }
 
-export function HardwarePrompt({ body, reducedMotion: reducedMotionOverride }: { body: 'extension-popup' | 'extension-tab' | 'mobile'; reducedMotion?: boolean }) {
+export function HardwarePrompt({
+  body,
+  reducedMotion: reducedMotionOverride,
+}: {
+  body: 'extension-popup' | 'extension-tab' | 'mobile'
+  reducedMotion?: boolean
+}) {
   const engine = useEngine()
   const host = useHost()
   const reducedMotion = useReducedMotion(reducedMotionOverride)
@@ -40,7 +46,10 @@ export function HardwarePrompt({ body, reducedMotion: reducedMotionOverride }: {
 
   useEffect(() => {
     engine.hardware.keystonePending().then(setPending, () => undefined)
-    engine.remote.list().then((r) => setOutgoing(r.outgoing), () => undefined)
+    engine.remote.list().then(
+      (r) => setOutgoing(r.outgoing),
+      () => undefined,
+    )
   }, [engine])
   useEngineEvent(
     'hardware.keystone',
@@ -81,28 +90,85 @@ export function HardwarePrompt({ body, reducedMotion: reducedMotionOverride }: {
       setError(err instanceof Error ? err.message : String(err))
     }
   }
-  const kindLabel = (k: KeystonePending['kind']): string => (k === 'transaction' || k === 'typed_transaction' ? t({ id: 'keystone.kind.tx', message: 'a transaction' }) : k === 'personal_message' ? t({ id: 'keystone.kind.msg', message: 'a message' }) : t({ id: 'keystone.kind.typed', message: 'typed data' }))
+  const kindLabel = (k: KeystonePending['kind']): string =>
+    k === 'transaction' || k === 'typed_transaction'
+      ? t({ id: 'keystone.kind.tx', message: 'a transaction' })
+      : k === 'personal_message'
+        ? t({ id: 'keystone.kind.msg', message: 'a message' })
+        : t({ id: 'keystone.kind.typed', message: 'typed data' })
 
   return (
-    <Sheet open onClose={() => (current ? void engine.hardware.keystoneCancel({ id: current.id }) : waiting ? void engine.remote.cancel({ id: waiting.id }) : undefined)} title={current ? t({ id: 'keystone.title', message: 'Sign on your Keystone' }) : t({ id: 'remote.title', message: 'Sign on another device' })} reducedMotion={reducedMotion} testID="hardware-prompt">
+    <Sheet
+      open
+      onClose={() =>
+        current
+          ? void engine.hardware.keystoneCancel({ id: current.id })
+          : waiting
+            ? void engine.remote.cancel({ id: waiting.id })
+            : undefined
+      }
+      title={
+        current
+          ? t({ id: 'keystone.title', message: 'Sign on your Keystone' })
+          : t({ id: 'remote.title', message: 'Sign on another device' })
+      }
+      reducedMotion={reducedMotion}
+      testID="hardware-prompt"
+    >
       {current ? (
         <Column gap="$3" alignItems="stretch">
           <Body tone="mute" size="caption">
-            {t({ id: 'keystone.body', message: 'Scan this with the Keystone, check {what} on its screen, then scan its answer here.', values: { what: kindLabel(current.kind) } })}
+            {t({
+              id: 'keystone.body',
+              message:
+                'Scan this with the Keystone, check {what} on its screen, then scan its answer here.',
+              values: { what: kindLabel(current.kind) },
+            })}
           </Body>
           <Column alignItems="center">
-            <AnimatedQR frames={current.frames} size={body === 'extension-popup' ? 220 : 280} testID="keystone-frames" />
+            <AnimatedQR
+              frames={current.frames}
+              size={body === 'extension-popup' ? 220 : 280}
+              testID="keystone-frames"
+            />
           </Column>
           <Row gap="$2" flexWrap="wrap">
-            {host.scanQr ? <Key label={t({ id: 'keystone.scan', message: 'Scan the answer' })} disabled={busy} onPress={() => void scan()} testID="keystone-scan" /> : null}
-            <Key label={t({ id: 'cancel', message: 'Cancel' })} kind="secondary" disabled={busy} onPress={() => void engine.hardware.keystoneCancel({ id: current.id })} testID="keystone-cancel" />
+            {host.scanQr ? (
+              <Key
+                label={t({ id: 'keystone.scan', message: 'Scan the answer' })}
+                disabled={busy}
+                onPress={() => void scan()}
+                testID="keystone-scan"
+              />
+            ) : null}
+            <Key
+              label={t({ id: 'cancel', message: 'Cancel' })}
+              kind="secondary"
+              disabled={busy}
+              onPress={() => void engine.hardware.keystoneCancel({ id: current.id })}
+              testID="keystone-cancel"
+            />
           </Row>
           <Plate gap="$2">
             <Body tone="mute" size="caption">
-              {t({ id: 'keystone.paste', message: 'No camera here? Paste the UR text of the answer.' })}
+              {t({
+                id: 'keystone.paste',
+                message: 'No camera here? Paste the UR text of the answer.',
+              })}
             </Body>
-            <Input value={pasted} onChange={setPasted} placeholder="UR:ETH-SIGNATURE/…" testID="keystone-paste" />
-            <Key label={t({ id: 'keystone.use', message: 'Use answer' })} kind="secondary" disabled={busy || !pasted.trim()} onPress={() => void submit(pasted.split(/\s+/).filter(Boolean))} testID="keystone-use" />
+            <Input
+              value={pasted}
+              onChange={setPasted}
+              placeholder="UR:ETH-SIGNATURE/…"
+              testID="keystone-paste"
+            />
+            <Key
+              label={t({ id: 'keystone.use', message: 'Use answer' })}
+              kind="secondary"
+              disabled={busy || !pasted.trim()}
+              onPress={() => void submit(pasted.split(/\s+/).filter(Boolean))}
+              testID="keystone-use"
+            />
           </Plate>
           {error ? (
             <Body tone="burn" size="caption" testID="keystone-error">
@@ -113,15 +179,33 @@ export function HardwarePrompt({ body, reducedMotion: reducedMotionOverride }: {
       ) : waiting ? (
         <Column gap="$3">
           <Body tone="mute" size="caption">
-            {t({ id: 'remote.body', message: 'This account signs on a paired device. Open BoltVault there — the request appears as a signing sheet with everything it is about to sign.' })}
+            {t({
+              id: 'remote.body',
+              message:
+                'This account signs on a paired device. Open BoltVault there — the request appears as a signing sheet with everything it is about to sign.',
+            })}
           </Body>
           <Plate gap={2} testID="remote-waiting">
-            <Body>{waiting.kind === 'transaction' ? t({ id: 'remote.kind.tx', message: 'Waiting for the transaction to be signed' }) : waiting.kind === 'message' ? t({ id: 'remote.kind.msg', message: 'Waiting for the message to be signed' }) : t({ id: 'remote.kind.typed', message: 'Waiting for the typed data to be signed' })}</Body>
+            <Body>
+              {waiting.kind === 'transaction'
+                ? t({ id: 'remote.kind.tx', message: 'Waiting for the transaction to be signed' })
+                : waiting.kind === 'message'
+                  ? t({ id: 'remote.kind.msg', message: 'Waiting for the message to be signed' })
+                  : t({
+                      id: 'remote.kind.typed',
+                      message: 'Waiting for the typed data to be signed',
+                    })}
+            </Body>
             <Body tone="mute" size="caption" color={paint.mute}>
               {t({ id: 'remote.timeout', message: 'Gives up after ten minutes.' })}
             </Body>
           </Plate>
-          <Key label={t({ id: 'cancel', message: 'Cancel' })} kind="secondary" onPress={() => void engine.remote.cancel({ id: waiting.id })} testID="remote-cancel" />
+          <Key
+            label={t({ id: 'cancel', message: 'Cancel' })}
+            kind="secondary"
+            onPress={() => void engine.remote.cancel({ id: waiting.id })}
+            testID="remote-cancel"
+          />
         </Column>
       ) : null}
     </Sheet>

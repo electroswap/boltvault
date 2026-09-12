@@ -1262,6 +1262,9 @@ export class ProviderService {
       ...(supplied ? { supplied } : {}),
       originBudget: this.originBudget(origin, activity),
       lastCopiedAddress: this.lastCopiedAddress(),
+      // The chain's own coin, so the primary statement names an asset rather
+      // than the word "native" (§8.14 Networks).
+      nativeSymbol: getChain(chainId)?.nativeCurrency.symbol ?? null,
       originVerified: !this.unverified.has(origin),
       ...(this.verdicts.get(origin)
         ? { originVerify: this.verdicts.get(origin)?.verify ?? null }

@@ -32,7 +32,11 @@ export function clearPrefsSnapshot(): void {
   snapshot = { prefs: DEFAULT_PREFS, loaded: false }
 }
 
-export function usePrefs(): { prefs: Prefs; loaded: boolean; set: (patch: Partial<Prefs>) => void } {
+export function usePrefs(): {
+  prefs: Prefs
+  loaded: boolean
+  set: (patch: Partial<Prefs>) => void
+} {
   const engine = useEngine()
   const [prefs, setPrefs] = useState<Prefs>(snapshot.prefs)
   const [loaded, setLoaded] = useState(snapshot.loaded)

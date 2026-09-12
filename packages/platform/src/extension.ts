@@ -17,7 +17,9 @@ export interface StorageAreaLike {
   get(keys: string | string[] | null): Promise<Record<string, unknown>>
   set(items: Record<string, unknown>): Promise<void>
   remove(keys: string | string[]): Promise<void>
-  setAccessLevel?(opts: { accessLevel: 'TRUSTED_CONTEXTS' | 'TRUSTED_AND_UNTRUSTED_CONTEXTS' }): Promise<void>
+  setAccessLevel?(opts: {
+    accessLevel: 'TRUSTED_CONTEXTS' | 'TRUSTED_AND_UNTRUSTED_CONTEXTS'
+  }): Promise<void>
 }
 
 export interface AlarmsLike {
@@ -34,7 +36,10 @@ export interface ExtensionApi {
   alarms: AlarmsLike
   runtime: { getPlatformInfo(): Promise<unknown> }
   notifications?: {
-    create(id: string, opts: { type: 'basic'; title: string; message: string; iconUrl: string }): Promise<string> | void
+    create(
+      id: string,
+      opts: { type: 'basic'; title: string; message: string; iconUrl: string },
+    ): Promise<string> | void
   }
   tabs?: { create(opts: { url: string }): Promise<unknown> }
 }
@@ -61,7 +66,10 @@ export interface ExtensionPlatformOptions {
   readonly keepAliveIntervalMs?: number
 }
 
-export function createExtensionPlatform(api: ExtensionApi, opts: ExtensionPlatformOptions = {}): Platform {
+export function createExtensionPlatform(
+  api: ExtensionApi,
+  opts: ExtensionPlatformOptions = {},
+): Platform {
   // Session storage must not be readable by content scripts.
   void api.storage.session.setAccessLevel?.({ accessLevel: 'TRUSTED_CONTEXTS' })
 

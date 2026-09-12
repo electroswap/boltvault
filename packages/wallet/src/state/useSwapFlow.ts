@@ -40,7 +40,11 @@ export const swapFlowStore = {
   },
 }
 
-export function useSwapFlow(): { flow: SwapFlow | null; setActive: (id: string | null) => void; dismiss: () => void } {
+export function useSwapFlow(): {
+  flow: SwapFlow | null
+  setActive: (id: string | null) => void
+  dismiss: () => void
+} {
   const s = useSyncExternalStore(swapFlowStore.subscribe, swapFlowStore.get, swapFlowStore.get)
   const flow = s.activeId ? (s.flows[s.activeId] ?? null) : null
   const dismiss = useCallback(() => swapFlowStore.setActive(null), [])

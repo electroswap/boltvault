@@ -10,7 +10,14 @@
 import { EngineError } from './errors'
 import type { EngineHost, SenderClass } from './host'
 import type { EngineEvent } from './schema'
-import { hasRawBytes, parseEngineMessage, refusedRawBytes, WIRE_VERSION, type EngineRequest, type EngineResponse } from './wire'
+import {
+  hasRawBytes,
+  parseEngineMessage,
+  refusedRawBytes,
+  WIRE_VERSION,
+  type EngineRequest,
+  type EngineResponse,
+} from './wire'
 
 export interface EngineTransport {
   call(ns: string, method: string, arg: unknown): Promise<unknown>
@@ -24,7 +31,10 @@ export interface MessageChannelLike {
   onDisconnect(listener: () => void): () => void
 }
 
-export function createInProcessTransport(host: EngineHost, sender: SenderClass = 'internal'): EngineTransport {
+export function createInProcessTransport(
+  host: EngineHost,
+  sender: SenderClass = 'internal',
+): EngineTransport {
   return {
     call: (ns, method, arg) => host.invoke(ns, method, arg, sender),
     subscribe: (listener) => host.events.subscribe(listener),
@@ -40,13 +50,25 @@ export interface ChannelClientOptions {
 let counter = 0
 const defaultNextId = (): string => `${Date.now().toString(36)}-${(++counter).toString(36)}`
 
-export function createChannelClient(channel: MessageChannelLike, opts: ChannelClientOptions = {}): EngineTransport {
+export function createChannelClient(
+  channel: MessageChannelLike,
+  opts: ChannelClientOptions = {},
+): EngineTransport {
   const timeoutMs = opts.timeoutMs ?? 30_000
   const nextId = opts.nextId ?? defaultNextId
-  const pending = new Map<string, { resolve: (v: unknown) => void; reject: (e: EngineError) => void; timer: ReturnType<typeof setTimeout> }>()
+  const pending = new Map<
+    string,
+    {
+      resolve: (v: unknown) => void
+      reject: (e: EngineError) => void
+      timer: ReturnType<typeof setTimeout>
+    }
+  >()
   const listeners = new Set<(event: EngineEvent) => void>()
 
-  const settle = (id: string): { resolve: (v: unknown) => void; reject: (e: EngineError) => void } | undefined => {
+  const settle = (
+    id: string,
+  ): { resolve: (v: unknown) => void; reject: (e: EngineError) => void } | undefined => {
     const p = pending.get(id)
     if (!p) return undefined
     clearTimeout(p.timer)
@@ -61,7 +83,10 @@ export function createChannelClient(channel: MessageChannelLike, opts: ChannelCl
       const p = settle(msg.id)
       if (!p) return
       if (msg.ok) p.resolve(msg.result)
-      else p.reject(new EngineError(msg.error.code as EngineError['code'], msg.error.message, msg.error.data))
+      else
+        p.reject(
+          new EngineError(msg.error.code as EngineError['code'], msg.error.message, msg.error.data),
+        )
     } else if (msg.kind === 'event') {
       for (const l of [...listeners]) l(msg.event)
     }
@@ -76,9 +101,10 @@ export function createChannelClient(channel: MessageChannelLike, opts: ChannelCl
   return {
     call(ns, method, arg) {
       const id = nextId()
-      const req: EngineRequest = arg === undefined
-        ? { v: WIRE_VERSION, kind: 'request', id, ns, method }
-        : { v: WIRE_VERSION, kind: 'request', id, ns, method, arg }
+      const req: EngineRequest =
+        arg === undefined
+          ? { v: WIRE_VERSION, kind: 'request', id, ns, method }
+          : { v: WIRE_VERSION, kind: 'request', id, ns, method, arg }
       return new Promise<unknown>((resolve, reject) => {
         const timer = setTimeout(() => {
           pending.delete(id)
@@ -107,7 +133,11 @@ export function createChannelClient(channel: MessageChannelLike, opts: ChannelCl
  * channel's provenance (e.g. `sender.url` of a chrome Port) — never from the
  * message. Returns a function that stops serving.
  */
-export function serveChannel(host: EngineHost, channel: MessageChannelLike, sender: SenderClass): () => void {
+export function serveChannel(
+  host: EngineHost,
+  channel: MessageChannelLike,
+  sender: SenderClass,
+): () => void {
   const offMessage = channel.onMessage((raw) => {
     const msg = parseEngineMessage(raw)
     if (!msg || msg.kind !== 'request') return

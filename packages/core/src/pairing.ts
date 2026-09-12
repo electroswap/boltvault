@@ -27,9 +27,15 @@ export interface DeviceIdentity {
   readonly signingPublicKey: string
 }
 
-export function createDeviceIdentity(random: (n: number) => Uint8Array = randomBytes): DeviceIdentity {
+export function createDeviceIdentity(
+  random: (n: number) => Uint8Array = randomBytes,
+): DeviceIdentity {
   const priv = random(32)
-  return { deviceId: toHex(random(8)), signingPrivateKey: toHex(priv), signingPublicKey: toHex(ed25519.getPublicKey(priv)) }
+  return {
+    deviceId: toHex(random(8)),
+    signingPrivateKey: toHex(priv),
+    signingPublicKey: toHex(ed25519.getPublicKey(priv)),
+  }
 }
 
 export interface PairingOffer {
@@ -53,15 +59,39 @@ export function createPairingKeys(random: (n: number) => Uint8Array = randomByte
   return { x25519PrivateKey: toHex(priv), x25519PublicKey: toHex(x25519.getPublicKey(priv)) }
 }
 
-export function createPairingOffer(me: DeviceIdentity, keys: PairingKeys, relayUrl: string, ttlMs = 10 * 60_000, now = Date.now(), random: (n: number) => Uint8Array = randomBytes): PairingOffer {
-  return { v: 1, kind: 'boltvault-pair', pairingId: toHex(random(16)), deviceId: me.deviceId, x25519PublicKey: keys.x25519PublicKey, signingPublicKey: me.signingPublicKey, relayUrl, expiresAt: now + ttlMs }
+export function createPairingOffer(
+  me: DeviceIdentity,
+  keys: PairingKeys,
+  relayUrl: string,
+  ttlMs = 10 * 60_000,
+  now = Date.now(),
+  random: (n: number) => Uint8Array = randomBytes,
+): PairingOffer {
+  return {
+    v: 1,
+    kind: 'boltvault-pair',
+    pairingId: toHex(random(16)),
+    deviceId: me.deviceId,
+    x25519PublicKey: keys.x25519PublicKey,
+    signingPublicKey: me.signingPublicKey,
+    relayUrl,
+    expiresAt: now + ttlMs,
+  }
 }
 
 export function parsePairingOffer(raw: string): PairingOffer | null {
   try {
     const o = JSON.parse(raw) as Partial<PairingOffer>
     if (o.v !== 1 || o.kind !== 'boltvault-pair') return null
-    if (typeof o.pairingId !== 'string' || typeof o.deviceId !== 'string' || typeof o.x25519PublicKey !== 'string' || typeof o.signingPublicKey !== 'string' || typeof o.relayUrl !== 'string' || typeof o.expiresAt !== 'number') return null
+    if (
+      typeof o.pairingId !== 'string' ||
+      typeof o.deviceId !== 'string' ||
+      typeof o.x25519PublicKey !== 'string' ||
+      typeof o.signingPublicKey !== 'string' ||
+      typeof o.relayUrl !== 'string' ||
+      typeof o.expiresAt !== 'number'
+    )
+      return null
     return o as PairingOffer
   } catch {
     return null
@@ -77,7 +107,11 @@ export interface Channel {
 }
 
 /** Both sides call this with their own private key and the peer's public key. */
-export function deriveChannel(pairingId: string, myX25519Private: string, peerX25519Public: string): Channel {
+export function deriveChannel(
+  pairingId: string,
+  myX25519Private: string,
+  peerX25519Public: string,
+): Channel {
   const shared = x25519.getSharedSecret(fromHex(myX25519Private), fromHex(peerX25519Public))
   const salt = enc.encode(pairingId)
   const key = hkdf(sha256, shared, salt, enc.encode('bv/sync/channel/v1'), 32)
@@ -154,9 +188,16 @@ function signedBytes(r: Omit<SealedRecord, 'sig' | 'authorSigningPublicKey'>): U
   return enc.encode(`${r.pairingId}|${r.seq}|${r.nonce}|${r.ct}`)
 }
 
-export function sealRecord(channel: Channel, author: DeviceIdentity, record: SyncRecord, random: (n: number) => Uint8Array = randomBytes): SealedRecord {
+export function sealRecord(
+  channel: Channel,
+  author: DeviceIdentity,
+  record: SyncRecord,
+  random: (n: number) => Uint8Array = randomBytes,
+): SealedRecord {
   const nonce = random(24)
-  const ct = xchacha20poly1305(fromHex(channel.key), nonce, enc.encode(channel.pairingId)).encrypt(enc.encode(JSON.stringify(record)))
+  const ct = xchacha20poly1305(fromHex(channel.key), nonce, enc.encode(channel.pairingId)).encrypt(
+    enc.encode(JSON.stringify(record)),
+  )
   const base = { pairingId: channel.pairingId, seq: record.seq, nonce: toHex(nonce), ct: toHex(ct) }
   const sig = ed25519.sign(signedBytes(base), fromHex(author.signingPrivateKey))
   return { ...base, sig: toHex(sig), authorSigningPublicKey: author.signingPublicKey }
@@ -166,13 +207,25 @@ export function sealRecord(channel: Channel, author: DeviceIdentity, record: Syn
  * Verify the signature against the *paired* device's known key (never the
  * key inside the record), then decrypt. Null on any failure.
  */
-export function openRecord(channel: Channel, trustedPeerSigningPublicKey: string, sealed: SealedRecord): SyncRecord | null {
+export function openRecord(
+  channel: Channel,
+  trustedPeerSigningPublicKey: string,
+  sealed: SealedRecord,
+): SyncRecord | null {
   if (sealed.pairingId !== channel.pairingId) return null
   if (sealed.authorSigningPublicKey !== trustedPeerSigningPublicKey) return null
-  const ok = ed25519.verify(fromHex(sealed.sig), signedBytes(sealed), fromHex(trustedPeerSigningPublicKey))
+  const ok = ed25519.verify(
+    fromHex(sealed.sig),
+    signedBytes(sealed),
+    fromHex(trustedPeerSigningPublicKey),
+  )
   if (!ok) return null
   try {
-    const pt = xchacha20poly1305(fromHex(channel.key), fromHex(sealed.nonce), enc.encode(channel.pairingId)).decrypt(fromHex(sealed.ct))
+    const pt = xchacha20poly1305(
+      fromHex(channel.key),
+      fromHex(sealed.nonce),
+      enc.encode(channel.pairingId),
+    ).decrypt(fromHex(sealed.ct))
     const rec = JSON.parse(dec.decode(pt)) as SyncRecord
     return rec.seq === sealed.seq ? rec : null
   } catch {

@@ -22,10 +22,21 @@ export interface ScreenHeaderProps {
   readonly testID?: string
 }
 
-export function ScreenHeader({ title, subtitle, onBack, backLabel = 'Back', backTestID = 'back', leading, right, testID }: ScreenHeaderProps) {
+export function ScreenHeader({
+  title,
+  subtitle,
+  onBack,
+  backLabel = 'Back',
+  backTestID = 'back',
+  leading,
+  right,
+  testID,
+}: ScreenHeaderProps) {
   return (
     <Row minHeight={metrics.header} gap="$2" testID={testID}>
-      {onBack ? <IconButton icon="back" label={backLabel} onPress={onBack} testID={backTestID} /> : null}
+      {onBack ? (
+        <IconButton icon="back" label={backLabel} onPress={onBack} testID={backTestID} />
+      ) : null}
       <Column flex={1} minWidth={0} justifyContent="center">
         {leading ?? (
           <>

@@ -65,7 +65,10 @@ export interface UiHost {
   /** The in-app browser (§5.3): the provider script injected before every page, and where the browser lives. */
   readonly browser?: { readonly providerScript: string }
   /** Deep and universal links (§5.3): the URL the app was opened with, and later ones. */
-  readonly links?: { initial(): Promise<string | null>; subscribe(listener: (url: string) => void): () => void }
+  readonly links?: {
+    initial(): Promise<string | null>
+    subscribe(listener: (url: string) => void): () => void
+  }
   /** Haptics (§7.8): light on confirm and keys, medium on a receipt, heavy on danger/reject. */
   haptic?(kind: 'light' | 'medium' | 'heavy'): void
   /** Three sounds (§7.8), off by default. */
@@ -73,17 +76,36 @@ export interface UiHost {
   /** The native share sheet (the share card, §7.13). */
   share?(input: { title: string; text?: string; url?: string }): Promise<void>
   /** Push registration (§9.3). */
-  readonly push?: { status(): Promise<'unavailable' | 'off' | 'granted' | 'denied'>; enable(): Promise<boolean>; disable(): Promise<void> }
+  readonly push?: {
+    status(): Promise<'unavailable' | 'off' | 'granted' | 'denied'>
+    enable(): Promise<boolean>
+    disable(): Promise<void>
+  }
   /** The body's version and reproducible build hash (Settings › About). */
   readonly version?: string
   readonly buildHash?: string | null
   /** The home-screen widget's snapshot (§7.13): written where the widget extension reads it. */
-  readonly widget?: { publish(snapshot: WidgetSnapshot): Promise<void> }
+  readonly widget?: {
+    publish(snapshot: WidgetSnapshot): Promise<void>
+    /** Take it back: on lock, and when the account it described is removed. */
+    clear?(): Promise<void>
+  }
 }
 
-/** What the home-screen widget shows (§7.13): the Field signature, the name, the tier — and the total the user opted into. */
+/**
+ * What the home-screen widget shows (§7.13): the Field signature, the name,
+ * the tier — and the total the user opted into.
+ *
+ * `seed`, not `address`. The snapshot is a plaintext JSON file in a container
+ * the widget process can open, so everything in it is readable from a stolen
+ * phone or a backup while the wallet is locked — and it carried the account's
+ * address, which ties a real chain identity to a real person and a real
+ * balance. The widget only ever wanted the four numbers the Field is drawn
+ * from, and those come from a 32-bit FNV-1a hash that does not run backwards.
+ */
 export interface WidgetSnapshot {
-  readonly address: string
+  /** `fnv1a32(address)` — for the Field's arcs, and nothing else. */
+  readonly seed: number
   readonly label: string
   readonly tier: number
   readonly total: number | null
@@ -104,7 +126,12 @@ const unsupported: PasskeyProvider = {
 
 export const DEFAULT_RELAY = 'https://electroswap.io/api/wallet/sync'
 
-const HostContext = createContext<UiHost>({ body: 'harness', secretsAllowed: true, passkeys: unsupported, relayUrl: DEFAULT_RELAY })
+const HostContext = createContext<UiHost>({
+  body: 'harness',
+  secretsAllowed: true,
+  passkeys: unsupported,
+  relayUrl: DEFAULT_RELAY,
+})
 
 export function HostProvider({ host, children }: { host: UiHost; children: ReactNode }) {
   return <HostContext.Provider value={host}>{children}</HostContext.Provider>

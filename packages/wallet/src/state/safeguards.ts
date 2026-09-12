@@ -47,7 +47,10 @@ const ERC20_TRANSFER_FROM = '0x23b872dd'
  * call this decoder cannot read is a call whose destination is the only
  * honest answer.
  */
-export function recipientOf(tx: { readonly to: string | null; readonly data: string }): string | null {
+export function recipientOf(tx: {
+  readonly to: string | null
+  readonly data: string
+}): string | null {
   const data = tx.data
   if (data.length <= 2) return tx.to
   const selector = data.slice(0, 10).toLowerCase()

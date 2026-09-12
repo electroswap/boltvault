@@ -7,8 +7,10 @@
  */
 import { recoverTransactionAddress, type Hex } from 'viem'
 
-
-export function yParityFromLedgerV(v: number, input: { readonly chainId: number; readonly legacy: boolean }): 0 | 1 {
+export function yParityFromLedgerV(
+  v: number,
+  input: { readonly chainId: number; readonly legacy: boolean },
+): 0 | 1 {
   if (!Number.isInteger(v) || v < 0 || v > 255) throw new Error(`bad v byte ${v}`)
   if (!input.legacy) return (v >= 27 ? v - 27 : v) & 1 ? 1 : 0
   if (input.chainId === 0) return (v - 27) & 1 ? 1 : 0
@@ -46,7 +48,9 @@ export async function yParityByRecovery(
       // That bit does not produce a recoverable signature; the other one might.
     }
   }
-  throw new Error('The device returned a signature that does not belong to this account. Check that the right device is connected and the right account is chosen.')
+  throw new Error(
+    'The device returned a signature that does not belong to this account. Check that the right device is connected and the right account is chosen.',
+  )
 }
 
 /** The full EIP-155 `v` for a legacy transaction, as a bigint viem serialises. */

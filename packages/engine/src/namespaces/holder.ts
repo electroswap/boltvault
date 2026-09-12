@@ -125,9 +125,7 @@ export class HolderService {
    * behind it. `DynoWeight` does its measuring elsewhere, so this answers the
    * same at sign time as it did on the last screen.
    */
-  private async scheduleFrom(
-    chainId: number,
-  ): Promise<{
+  private async scheduleFrom(chainId: number): Promise<{
     schedule: FeeSchedule
     source: 'config' | 'fallback'
     dynoWeightSource: 'config' | 'average'

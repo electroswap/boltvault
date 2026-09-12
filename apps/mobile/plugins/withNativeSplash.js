@@ -29,7 +29,12 @@
  * edit there vanishes the next time anyone regenerates the project — which is
  * exactly what happened to the first attempt.
  */
-const { withAndroidColors, withAndroidStyles, withDangerousMod, AndroidConfig } = require('expo/config-plugins')
+const {
+  withAndroidColors,
+  withAndroidStyles,
+  withDangerousMod,
+  AndroidConfig,
+} = require('expo/config-plugins')
 const fs = require('node:fs')
 const path = require('node:path')
 
@@ -87,7 +92,10 @@ function withSplashDrawable(config) {
       const nodpi = path.join(res, 'drawable-nodpi')
       fs.mkdirSync(drawable, { recursive: true })
       fs.mkdirSync(nodpi, { recursive: true })
-      fs.copyFileSync(path.join(c.modRequest.projectRoot, 'assets', 'splash-mark.png'), path.join(nodpi, 'boltvault_splash_mark.png'))
+      fs.copyFileSync(
+        path.join(c.modRequest.projectRoot, 'assets', 'splash-mark.png'),
+        path.join(nodpi, 'boltvault_splash_mark.png'),
+      )
       fs.writeFileSync(path.join(drawable, 'boltvault_splash.xml'), DRAWABLE)
       return c
     },

@@ -7,7 +7,26 @@
  * pill in the header. The last visit's shelves paint at once and refresh
  * behind (plan A2); a first visit shows skeleton tiles.
  */
-import { Artwork, Body, Column, Icon, Input, Key, Pill, Plate, Pressable, Row, ScrollView, Segmented, SharedElement, Sheet, StatStrip, TileGrid, metrics, paint } from '@boltvault/ui'
+import {
+  Artwork,
+  Body,
+  Column,
+  Icon,
+  Input,
+  Key,
+  Pill,
+  Plate,
+  Pressable,
+  Row,
+  ScrollView,
+  Segmented,
+  SharedElement,
+  Sheet,
+  StatStrip,
+  TileGrid,
+  metrics,
+  paint,
+} from '@boltvault/ui'
 import { cacheKey, type AssetView, type Inventory } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { AddCollectionSheet } from '../components/AddCollectionSheet'
@@ -51,11 +70,23 @@ function listable(a: AssetView): boolean {
 function sortPieces(list: readonly AssetView[], sort: Sort): AssetView[] {
   const out = [...list]
   if (sort === 'name') out.sort((a, b) => a.name.localeCompare(b.name))
-  else if (sort === 'value') out.sort((a, b) => (b.listing?.priceEtn ?? b.lastPriceEtn ?? 0) - (a.listing?.priceEtn ?? a.lastPriceEtn ?? 0))
+  else if (sort === 'value')
+    out.sort(
+      (a, b) =>
+        (b.listing?.priceEtn ?? b.lastPriceEtn ?? 0) - (a.listing?.priceEtn ?? a.lastPriceEtn ?? 0),
+    )
   return out
 }
 
-export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedded?: boolean; limit?: number }) {
+export function Rack({
+  body,
+  embedded = false,
+  limit,
+}: {
+  body: BodyKind
+  embedded?: boolean
+  limit?: number
+}) {
   const router = useRouter()
   const engine = useEngine()
   const reducedMotion = useReducedMotion()
@@ -99,15 +130,29 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
 
   const inv = useCached<Inventory>({
     key: accountId ? cacheKey('nft', 'inventory', ETN, accountId) : null,
-    cached: (e) => (accountId ? e.nft.cachedInventory({ accountId, chainId: ETN }) : Promise.resolve(null)),
-    fresh: (e) => (accountId ? e.nft.inventory({ accountId, chainId: ETN }) : Promise.reject(new Error('no account'))),
+    cached: (e) =>
+      accountId ? e.nft.cachedInventory({ accountId, chainId: ETN }) : Promise.resolve(null),
+    fresh: (e) =>
+      accountId
+        ? e.nft.inventory({ accountId, chainId: ETN })
+        : Promise.reject(new Error('no account')),
   })
   // The shell draws one loader over the whole screen while this is true.
   useScreenBusy('rack', inv.freshness === 'loading')
   const inventory = inv.value
   const all = inventory?.assets ?? []
   const pieces = sortPieces(
-    all.filter((a) => (filter === 'listed' ? a.listing !== null : filter === 'unlisted' ? a.listing === null : filter === 'offers' ? a.bids.length > 0 : true)).filter((a) => (collection ? a.address.toLowerCase() === collection.toLowerCase() : true)),
+    all
+      .filter((a) =>
+        filter === 'listed'
+          ? a.listing !== null
+          : filter === 'unlisted'
+            ? a.listing === null
+            : filter === 'offers'
+              ? a.bids.length > 0
+              : true,
+      )
+      .filter((a) => (collection ? a.address.toLowerCase() === collection.toLowerCase() : true)),
     sort,
   )
   const shown = limit ? pieces.slice(0, limit) : pieces
@@ -122,7 +167,9 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
   const priceOk = Number(price) > 0
   /** One order signature each, plus the permission transactions the basket drags in. */
   const signatures = chosen.length + (permissions ?? 0)
-  const proceeds = priceOk ? (Number(price) * (1 - MARKETPLACE_FEE)).toFixed(4).replace(/\.?0+$/, '') : null
+  const proceeds = priceOk
+    ? (Number(price) * (1 - MARKETPLACE_FEE)).toFixed(4).replace(/\.?0+$/, '')
+    : null
 
   const toggle = (a: AssetView): void => {
     const k = keyOf(a)
@@ -148,10 +195,16 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
     let alive = true
     setPermissions(null)
     const collections = [...new Set(chosen.map((a) => a.address))]
-    Promise.all(collections.map((address) => engine.nft.collectionApproved({ accountId, chainId: ETN, address }).catch(() => true))).then(
+    Promise.all(
+      collections.map((address) =>
+        engine.nft.collectionApproved({ accountId, chainId: ETN, address }).catch(() => true),
+      ),
+    ).then(
       (flags) => {
         if (!alive) return
-        const unapproved = new Set(collections.filter((_, i) => flags[i] === false).map((a) => a.toLowerCase()))
+        const unapproved = new Set(
+          collections.filter((_, i) => flags[i] === false).map((a) => a.toLowerCase()),
+        )
         setPermissions(chosen.filter((a) => unapproved.has(a.address.toLowerCase())).length)
       },
       () => undefined,
@@ -182,7 +235,14 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
     let first: string | null = null
     for (const a of chosen) {
       try {
-        const res = await engine.nft.list({ accountId, chainId: ETN, address: a.address, tokenId: a.tokenId, priceEtn: price.trim(), days: Number(days) })
+        const res = await engine.nft.list({
+          accountId,
+          chainId: ETN,
+          address: a.address,
+          tokenId: a.tokenId,
+          priceEtn: price.trim(),
+          days: Number(days),
+        })
         first ??= res.requestId
       } catch (err) {
         // One piece the marketplace refuses must not swallow the rest.
@@ -195,9 +255,33 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
     if (first !== null) router.navigate('sign', { requestId: first })
   }
 
-  const collectionName = collection ? (inventory?.collections.find((c) => c.address.toLowerCase() === collection.toLowerCase())?.name ?? t({ id: 'rack.collection', message: 'Collection' })) : t({ id: 'rack.all.collections', message: 'All collections' })
-  const sortLabel = sort === 'recent' ? t({ id: 'rack.sort.recent', message: 'Recent' }) : sort === 'value' ? t({ id: 'rack.sort.value', message: 'Value' }) : t({ id: 'rack.sort.name', message: 'Name' })
-  const offersPill = inventory ? <Pill label={inventory.withOffersCount > 0 ? t({ id: 'rack.offers.n', message: 'Offers · {n}', values: { n: inventory.withOffersCount } }) : t({ id: 'rack.inbox', message: 'Offers' })} tone={inventory.withOffersCount > 0 ? 'ember' : 'mute'} size="sm" onPress={() => router.navigate('offers')} testID="rack-offers" /> : null
+  const collectionName = collection
+    ? (inventory?.collections.find((c) => c.address.toLowerCase() === collection.toLowerCase())
+        ?.name ?? t({ id: 'rack.collection', message: 'Collection' }))
+    : t({ id: 'rack.all.collections', message: 'All collections' })
+  const sortLabel =
+    sort === 'recent'
+      ? t({ id: 'rack.sort.recent', message: 'Recent' })
+      : sort === 'value'
+        ? t({ id: 'rack.sort.value', message: 'Value' })
+        : t({ id: 'rack.sort.name', message: 'Name' })
+  const offersPill = inventory ? (
+    <Pill
+      label={
+        inventory.withOffersCount > 0
+          ? t({
+              id: 'rack.offers.n',
+              message: 'Offers · {n}',
+              values: { n: inventory.withOffersCount },
+            })
+          : t({ id: 'rack.inbox', message: 'Offers' })
+      }
+      tone={inventory.withOffersCount > 0 ? 'ember' : 'mute'}
+      size="sm"
+      onPress={() => router.navigate('offers')}
+      testID="rack-offers"
+    />
+  ) : null
 
   const shelves = (layout: { size: number; cols: number }): React.ReactNode => {
     const rows: AssetView[][] = []
@@ -209,11 +293,35 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
             <Row gap={8} alignItems="flex-end">
               {/* The thumb on the shelf and the artwork on the piece's page are one object (§7.7, §7.12 "the Rack"). */}
               {row.map((a) => {
-                const art = <Artwork uri={a.smallImageUrl} label={a.name} size={layout.size} badge={a.listing?.priceEtn !== null && a.listing?.priceEtn !== undefined ? { text: `${a.listing.priceEtn} ETN`, tone: 'arc' } : a.bids.length ? { text: t({ id: 'rack.offer', message: 'Offer' }), tone: 'ember' } : null} />
+                const art = (
+                  <Artwork
+                    uri={a.smallImageUrl}
+                    label={a.name}
+                    size={layout.size}
+                    badge={
+                      a.listing?.priceEtn !== null && a.listing?.priceEtn !== undefined
+                        ? { text: `${a.listing.priceEtn} ETN`, tone: 'arc' }
+                        : a.bids.length
+                          ? { text: t({ id: 'rack.offer', message: 'Offer' }), tone: 'ember' }
+                          : null
+                    }
+                  />
+                )
                 if (!selecting)
                   return (
                     <SharedElement key={keyOf(a)} id={pieceSharedId(ETN, a.address, a.tokenId)}>
-                      <Pressable onPress={() => router.navigate('nft', { chainId: ETN, address: a.address, tokenId: a.tokenId })} accessibilityRole="button" accessibilityLabel={a.name} testID={`rack-piece-${a.tokenId}`}>
+                      <Pressable
+                        onPress={() =>
+                          router.navigate('nft', {
+                            chainId: ETN,
+                            address: a.address,
+                            tokenId: a.tokenId,
+                          })
+                        }
+                        accessibilityRole="button"
+                        accessibilityLabel={a.name}
+                        testID={`rack-piece-${a.tokenId}`}
+                      >
                         {art}
                       </Pressable>
                     </SharedElement>
@@ -239,7 +347,20 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
                       {art}
                     </Pressable>
                     {can ? (
-                      <Column position="absolute" top={6} left={6} width={22} height={22} borderRadius={6} borderWidth={1} borderColor={on ? paint.arc : paint.mute} backgroundColor="rgba(2,3,8,0.65)" alignItems="center" justifyContent="center" pointerEvents="none">
+                      <Column
+                        position="absolute"
+                        top={6}
+                        left={6}
+                        width={22}
+                        height={22}
+                        borderRadius={6}
+                        borderWidth={1}
+                        borderColor={on ? paint.arc : paint.mute}
+                        backgroundColor="rgba(2,3,8,0.65)"
+                        alignItems="center"
+                        justifyContent="center"
+                        pointerEvents="none"
+                      >
                         {on ? <Icon name="check" size={14} color={paint.arc} /> : null}
                       </Column>
                     ) : null}
@@ -248,8 +369,18 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
               })}
             </Row>
             {/* The shelf: a lit glass edge with a soft contact shadow beneath. */}
-            <Column height={2} backgroundColor="rgba(238,248,255,0.28)" marginTop={2} borderRadius={1} />
-            <Column height={8} backgroundColor="rgba(2,3,8,0.35)" borderBottomLeftRadius={8} borderBottomRightRadius={8} />
+            <Column
+              height={2}
+              backgroundColor="rgba(238,248,255,0.28)"
+              marginTop={2}
+              borderRadius={1}
+            />
+            <Column
+              height={8}
+              backgroundColor="rgba(2,3,8,0.35)"
+              borderBottomLeftRadius={8}
+              borderBottomRightRadius={8}
+            />
           </Column>
         ))}
       </Column>
@@ -258,16 +389,42 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
 
   const content = (
     <>
-      {!embedded ? <PageHeader title={t({ id: 'rack.title', message: 'Your collection' })} right={offersPill} /> : null}
-      {!embedded ? <FreshnessLine freshness={inv.freshness} observedAt={inv.observedAt} refreshing={inv.refreshing} reducedMotion={reducedMotion} testID="rack-freshness" /> : null}
+      {!embedded ? (
+        <PageHeader
+          title={t({ id: 'rack.title', message: 'Your collection' })}
+          right={offersPill}
+        />
+      ) : null}
+      {!embedded ? (
+        <FreshnessLine
+          freshness={inv.freshness}
+          observedAt={inv.observedAt}
+          refreshing={inv.refreshing}
+          reducedMotion={reducedMotion}
+          testID="rack-freshness"
+        />
+      ) : null}
       {inventory ? (
         <StatStrip
           bare
           small
           cells={[
-            { label: t({ id: 'rack.stat.pieces', message: 'Pieces' }), value: String(inventory.assets.length) },
-            { label: t({ id: 'rack.stat.floor', message: 'At floor' }), value: inventory.floorValueEtn !== null ? `${Math.round(inventory.floorValueEtn)} ETN` : '—' },
-            { label: t({ id: 'rack.stat.listed', message: 'Listed' }), value: String(inventory.listedCount), tone: inventory.listedCount > 0 ? 'arc' : 'ink' },
+            {
+              label: t({ id: 'rack.stat.pieces', message: 'Pieces' }),
+              value: String(inventory.assets.length),
+            },
+            {
+              label: t({ id: 'rack.stat.floor', message: 'At floor' }),
+              value:
+                inventory.floorValueEtn !== null
+                  ? `${Math.round(inventory.floorValueEtn)} ETN`
+                  : '—',
+            },
+            {
+              label: t({ id: 'rack.stat.listed', message: 'Listed' }),
+              value: String(inventory.listedCount),
+              tone: inventory.listedCount > 0 ? 'arc' : 'ink',
+            },
           ]}
           testID="rack-header"
         />
@@ -276,11 +433,30 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
       {!embedded ? (
         <Column gap="$2">
           <Row gap="$2" alignItems="center" flexWrap="wrap">
-            <Pill label={collectionName} icon={<Icon name="grid" size={14} color={paint.mute} />} chevron selected={collection !== null} size="sm" onPress={() => setSheet('collection')} testID="rack-collection-pill" />
-            <Pill label={sortLabel} icon={<Icon name="sort" size={14} color={paint.mute} />} chevron size="sm" onPress={() => setSheet('sort')} testID="rack-sort-pill" />
+            <Pill
+              label={collectionName}
+              icon={<Icon name="grid" size={14} color={paint.mute} />}
+              chevron
+              selected={collection !== null}
+              size="sm"
+              onPress={() => setSheet('collection')}
+              testID="rack-collection-pill"
+            />
+            <Pill
+              label={sortLabel}
+              icon={<Icon name="sort" size={14} color={paint.mute} />}
+              chevron
+              size="sm"
+              onPress={() => setSheet('sort')}
+              testID="rack-sort-pill"
+            />
             {canSelect ? (
               <Pill
-                label={selecting ? t({ id: 'cancel', message: 'Cancel' }) : t({ id: 'rack.select', message: 'Select several' })}
+                label={
+                  selecting
+                    ? t({ id: 'cancel', message: 'Cancel' })
+                    : t({ id: 'rack.select', message: 'Select several' })
+                }
                 selected={selecting}
                 size="sm"
                 onPress={() => (selecting ? leaveSelection() : setSelecting(true))}
@@ -305,10 +481,28 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
       {inv.error && !inventory ? <Body tone="burn">{inv.error}</Body> : null}
       {inventory && inventory.assets.length === 0 ? (
         <Plate gap="$2" testID="rack-empty">
-          <Body tone="mute">{t({ id: 'rack.empty', message: 'Nothing on the shelves yet. Explore collections on Electroneum — buying a piece lands it here — or add a collection by address.' })}</Body>
+          <Body tone="mute">
+            {t({
+              id: 'rack.empty',
+              message:
+                'Nothing on the shelves yet. Explore collections on Electroneum — buying a piece lands it here — or add a collection by address.',
+            })}
+          </Body>
           <Row gap="$2" flexWrap="wrap">
-            <Key label={t({ id: 'rack.explore', message: 'Explore collectibles' })} kind="secondary" size="compact" onPress={() => router.navigate('explore', { segment: 'collectibles' })} testID="rack-explore" />
-            <Key label={t({ id: 'collection.add.pill', message: 'Add a collection' })} kind="secondary" size="compact" onPress={() => setSheet('add')} testID="rack-add-collection" />
+            <Key
+              label={t({ id: 'rack.explore', message: 'Explore collectibles' })}
+              kind="secondary"
+              size="compact"
+              onPress={() => router.navigate('explore', { segment: 'collectibles' })}
+              testID="rack-explore"
+            />
+            <Key
+              label={t({ id: 'collection.add.pill', message: 'Add a collection' })}
+              kind="secondary"
+              size="compact"
+              onPress={() => setSheet('add')}
+              testID="rack-add-collection"
+            />
           </Row>
         </Plate>
       ) : null}
@@ -317,10 +511,42 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
           {t({ id: 'rack.none', message: 'Nothing matches these filters.' })}
         </Body>
       ) : null}
-      {shown.length > 0 ? <TileGrid target={wide ? 150 : 100} gap={8} minCols={2} maxCols={6} fallbackWidth={(wide ? 640 : 400) - inset * 2} testID="rack-grid">{shelves}</TileGrid> : null}
-      {embedded && pieces.length > (limit ?? 0) ? <Key label={t({ id: 'rack.open', message: 'Open the Rack' })} kind="secondary" size="compact" onPress={() => router.navigate('rack')} testID="rack-open" /> : null}
-      {error ? <Body tone="burn" testID="rack-error">{error}</Body> : null}
-      {!embedded && inventory && inventory.assets.length > 0 && !selecting ? <Pill label={t({ id: 'collection.add.pill', message: 'Add a collection' })} icon={<Icon name="plus" size={14} color={paint.arc} />} tone="arc" size="sm" onPress={() => setSheet('add')} testID="rack-add-collection" /> : null}
+      {shown.length > 0 ? (
+        <TileGrid
+          target={wide ? 150 : 100}
+          gap={8}
+          minCols={2}
+          maxCols={6}
+          fallbackWidth={(wide ? 640 : 400) - inset * 2}
+          testID="rack-grid"
+        >
+          {shelves}
+        </TileGrid>
+      ) : null}
+      {embedded && pieces.length > (limit ?? 0) ? (
+        <Key
+          label={t({ id: 'rack.open', message: 'Open the Rack' })}
+          kind="secondary"
+          size="compact"
+          onPress={() => router.navigate('rack')}
+          testID="rack-open"
+        />
+      ) : null}
+      {error ? (
+        <Body tone="burn" testID="rack-error">
+          {error}
+        </Body>
+      ) : null}
+      {!embedded && inventory && inventory.assets.length > 0 && !selecting ? (
+        <Pill
+          label={t({ id: 'collection.add.pill', message: 'Add a collection' })}
+          icon={<Icon name="plus" size={14} color={paint.arc} />}
+          tone="arc"
+          size="sm"
+          onPress={() => setSheet('add')}
+          testID="rack-add-collection"
+        />
+      ) : null}
     </>
   )
   if (embedded) return <Column gap="$3">{content}</Column>
@@ -334,11 +560,23 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
         <ScreenFooter inset={inset} testID="rack-footer">
           <Body tone="mute" size="caption" fontSize={11} lineHeight={14}>
             {queueing
-              ? t({ id: 'rack.bulk.queueing', message: 'Preparing {d} of {n}…', values: { d: queueing.done, n: queueing.total } })
-              : t({ id: 'rack.bulk.note', message: 'Each piece is its own order and its own signature. Pick the ones to sell, then set one price for all of them.' })}
+              ? t({
+                  id: 'rack.bulk.queueing',
+                  message: 'Preparing {d} of {n}…',
+                  values: { d: queueing.done, n: queueing.total },
+                })
+              : t({
+                  id: 'rack.bulk.note',
+                  message:
+                    'Each piece is its own order and its own signature. Pick the ones to sell, then set one price for all of them.',
+                })}
           </Body>
           <Key
-            label={chosen.length ? t({ id: 'rack.bulk.key', message: 'List {n}', values: { n: chosen.length } }) : t({ id: 'rack.bulk.none', message: 'Pick the pieces to sell' })}
+            label={
+              chosen.length
+                ? t({ id: 'rack.bulk.key', message: 'List {n}', values: { n: chosen.length } })
+                : t({ id: 'rack.bulk.none', message: 'Pick the pieces to sell' })
+            }
             disabled={chosen.length === 0 || queueing !== null}
             onPress={() => setConfirm(true)}
             testID="rack-list-selected"
@@ -349,26 +587,58 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
       <Sheet
         open={confirm}
         onClose={() => setConfirm(false)}
-        title={t({ id: 'rack.bulk.title', message: 'List {n} pieces', values: { n: chosen.length } })}
+        title={t({
+          id: 'rack.bulk.title',
+          message: 'List {n} pieces',
+          values: { n: chosen.length },
+        })}
         reducedMotion={reducedMotion}
         footer={
           <Column gap="$2">
-            <Key label={t({ id: 'rack.bulk.start', message: 'Start signing' })} disabled={!priceOk} onPress={() => void listChosen()} testID="rack-bulk-start" />
-            <Key label={t({ id: 'cancel', message: 'Cancel' })} kind="secondary" size="compact" onPress={() => setConfirm(false)} testID="rack-bulk-cancel" />
+            <Key
+              label={t({ id: 'rack.bulk.start', message: 'Start signing' })}
+              disabled={!priceOk}
+              onPress={() => void listChosen()}
+              testID="rack-bulk-start"
+            />
+            <Key
+              label={t({ id: 'cancel', message: 'Cancel' })}
+              kind="secondary"
+              size="compact"
+              onPress={() => setConfirm(false)}
+              testID="rack-bulk-cancel"
+            />
           </Column>
         }
         testID="rack-bulk-sheet"
       >
         <Column gap="$3">
-          <Input value={price} onChange={setPrice} placeholder="0" label={t({ id: 'rack.bulk.price', message: 'Price in ETN, for each piece' })} testID="rack-bulk-price" />
+          <Input
+            value={price}
+            onChange={setPrice}
+            placeholder="0"
+            label={t({ id: 'rack.bulk.price', message: 'Price in ETN, for each piece' })}
+            testID="rack-bulk-price"
+          />
           <Row gap="$2" flexWrap="wrap">
             {DURATIONS.map((d) => (
-              <Pill key={d} label={t({ id: 'piece.days', message: '{d} days', values: { d } })} selected={days === d} onPress={() => setDays(d)} testID={`rack-bulk-days-${d}`} />
+              <Pill
+                key={d}
+                label={t({ id: 'piece.days', message: '{d} days', values: { d } })}
+                selected={days === d}
+                onPress={() => setDays(d)}
+                testID={`rack-bulk-days-${d}`}
+              />
             ))}
           </Row>
           {proceeds ? (
             <Body tone="mute" size="caption" testID="rack-bulk-proceeds">
-              {t({ id: 'rack.bulk.proceeds', message: 'You receive {a} ETN per piece after the 3% marketplace fee, less any creator royalty on that collection.', values: { a: proceeds } })}
+              {t({
+                id: 'rack.bulk.proceeds',
+                message:
+                  'You receive {a} ETN per piece after the 3% marketplace fee, less any creator royalty on that collection.',
+                values: { a: proceeds },
+              })}
             </Body>
           ) : null}
           {/*
@@ -382,37 +652,83 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
               ? t({ id: 'rack.bulk.counting', message: 'Counting what you will be asked to sign…' })
               : permissions === 0
                 ? t({ id: 'rack.bulk.sigs', message: '{n} signatures', values: { n: signatures } })
-                : t({ id: 'rack.bulk.sigs.plus', message: '{n} sheets — {o} listings and {p} permissions', values: { n: signatures, o: chosen.length, p: permissions } })}
+                : t({
+                    id: 'rack.bulk.sigs.plus',
+                    message: '{n} sheets — {o} listings and {p} permissions',
+                    values: { n: signatures, o: chosen.length, p: permissions },
+                  })}
           </Body>
           <Body tone="mute" size="caption">
             {permissions === null || permissions === 0
-              ? t({ id: 'rack.bulk.body', message: 'One signature for each piece. Signing a listing is free; it costs nothing on the network until somebody buys.' })
-              : t({ id: 'rack.bulk.body.permission.v2', message: '{p} of these pieces come from a collection the marketplace has not been allowed to hand over yet, so each of them also asks for a transaction that allows it — and those cost a network fee. Listing fewer of them at a time, or listing one first, costs you less.', values: { p: permissions } })}
+              ? t({
+                  id: 'rack.bulk.body',
+                  message:
+                    'One signature for each piece. Signing a listing is free; it costs nothing on the network until somebody buys.',
+                })
+              : t({
+                  id: 'rack.bulk.body.permission.v2',
+                  message:
+                    '{p} of these pieces come from a collection the marketplace has not been allowed to hand over yet, so each of them also asks for a transaction that allows it — and those cost a network fee. Listing fewer of them at a time, or listing one first, costs you less.',
+                  values: { p: permissions },
+                })}
           </Body>
           <Column gap={2}>
             {chosen.map((a, i) => (
               <Body key={keyOf(a)} tone="mute" size="caption" numberOfLines={1}>
-                {t({ id: 'rack.bulk.row', message: '{i}. {name}', values: { i: i + 1, name: a.name } })}
+                {t({
+                  id: 'rack.bulk.row',
+                  message: '{i}. {name}',
+                  values: { i: i + 1, name: a.name },
+                })}
               </Body>
             ))}
           </Column>
           <Body tone="mute" size="caption">
-            {t({ id: 'rack.bulk.reject', message: 'You will see a sheet for each one in turn. Refusing one leaves that piece unlisted and the rest stay in the queue.' })}
+            {t({
+              id: 'rack.bulk.reject',
+              message:
+                'You will see a sheet for each one in turn. Refusing one leaves that piece unlisted and the rest stay in the queue.',
+            })}
           </Body>
         </Column>
       </Sheet>
-      <Sheet open={sheet === 'collection'} onClose={() => setSheet(null)} title={t({ id: 'rack.pick.collection', message: 'Collection' })} reducedMotion={reducedMotion} testID="rack-collection-sheet">
+      <Sheet
+        open={sheet === 'collection'}
+        onClose={() => setSheet(null)}
+        title={t({ id: 'rack.pick.collection', message: 'Collection' })}
+        reducedMotion={reducedMotion}
+        testID="rack-collection-sheet"
+      >
         <Column gap={2}>
-          <Pressable onPress={() => { setCollection(null); setSheet(null) }} accessibilityRole="button" style={{ minHeight: 52, justifyContent: 'center' }} testID="rack-collection-all">
+          <Pressable
+            onPress={() => {
+              setCollection(null)
+              setSheet(null)
+            }}
+            accessibilityRole="button"
+            style={{ minHeight: 52, justifyContent: 'center' }}
+            testID="rack-collection-all"
+          >
             <Row justifyContent="space-between" alignItems="center">
-              <Body fontWeight={collection === null ? '600' : '400'}>{t({ id: 'rack.all.collections', message: 'All collections' })}</Body>
+              <Body fontWeight={collection === null ? '600' : '400'}>
+                {t({ id: 'rack.all.collections', message: 'All collections' })}
+              </Body>
               <Body tone="mute" size="caption">
                 {String(all.length)}
               </Body>
             </Row>
           </Pressable>
           {(inventory?.collections ?? []).map((c) => (
-            <Pressable key={c.address} onPress={() => { setCollection(c.address); setSheet(null) }} accessibilityRole="button" style={{ minHeight: 52, justifyContent: 'center' }} testID={`rack-collection-${c.address}`}>
+            <Pressable
+              key={c.address}
+              onPress={() => {
+                setCollection(c.address)
+                setSheet(null)
+              }}
+              accessibilityRole="button"
+              style={{ minHeight: 52, justifyContent: 'center' }}
+              testID={`rack-collection-${c.address}`}
+            >
               <Row gap="$3" alignItems="center">
                 <Artwork uri={c.logoUrl} label={c.name} size={32} />
                 <Column flex={1} alignItems="flex-start">
@@ -420,7 +736,18 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
                     {c.name}
                   </Body>
                   <Body tone="mute" size="caption">
-                    {[c.floorEtn !== null ? t({ id: 'rack.pick.floor', message: 'floor {f} ETN', values: { f: c.floorEtn } }) : null, c.custom ? t({ id: 'collection.custom', message: 'Custom' }) : null].filter(Boolean).join(' · ')}
+                    {[
+                      c.floorEtn !== null
+                        ? t({
+                            id: 'rack.pick.floor',
+                            message: 'floor {f} ETN',
+                            values: { f: c.floorEtn },
+                          })
+                        : null,
+                      c.custom ? t({ id: 'collection.custom', message: 'Custom' }) : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
                   </Body>
                 </Column>
                 <Body tone="mute" size="caption">
@@ -431,19 +758,45 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
           ))}
         </Column>
       </Sheet>
-      <Sheet open={sheet === 'sort'} onClose={() => setSheet(null)} title={t({ id: 'rack.sort', message: 'Sort by' })} reducedMotion={reducedMotion} testID="rack-sort-sheet">
+      <Sheet
+        open={sheet === 'sort'}
+        onClose={() => setSheet(null)}
+        title={t({ id: 'rack.sort', message: 'Sort by' })}
+        reducedMotion={reducedMotion}
+        testID="rack-sort-sheet"
+      >
         <Column gap={2}>
           {(['recent', 'value', 'name'] as const).map((s) => (
-            <Pressable key={s} onPress={() => { setSort(s); setSheet(null) }} accessibilityRole="button" style={{ minHeight: 52, justifyContent: 'center' }} testID={`rack-sort-${s}`}>
+            <Pressable
+              key={s}
+              onPress={() => {
+                setSort(s)
+                setSheet(null)
+              }}
+              accessibilityRole="button"
+              style={{ minHeight: 52, justifyContent: 'center' }}
+              testID={`rack-sort-${s}`}
+            >
               <Row justifyContent="space-between" alignItems="center">
-                <Body fontWeight={sort === s ? '600' : '400'}>{s === 'recent' ? t({ id: 'rack.sort.recent', message: 'Recent' }) : s === 'value' ? t({ id: 'rack.sort.value', message: 'Value' }) : t({ id: 'rack.sort.name', message: 'Name' })}</Body>
+                <Body fontWeight={sort === s ? '600' : '400'}>
+                  {s === 'recent'
+                    ? t({ id: 'rack.sort.recent', message: 'Recent' })
+                    : s === 'value'
+                      ? t({ id: 'rack.sort.value', message: 'Value' })
+                      : t({ id: 'rack.sort.name', message: 'Name' })}
+                </Body>
                 {sort === s ? <Icon name="check" size={16} color={paint.arc} /> : null}
               </Row>
             </Pressable>
           ))}
         </Column>
       </Sheet>
-      <AddCollectionSheet open={sheet === 'add'} onClose={() => setSheet(null)} onAdded={() => inv.refresh()} reducedMotion={reducedMotion} />
+      <AddCollectionSheet
+        open={sheet === 'add'}
+        onClose={() => setSheet(null)}
+        onAdded={() => inv.refresh()}
+        reducedMotion={reducedMotion}
+      />
     </Column>
   )
 }

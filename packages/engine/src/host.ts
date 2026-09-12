@@ -84,9 +84,13 @@ export class EngineHost {
     if (spec.input) {
       const res = spec.input.safeParse(arg)
       if (!res.success) {
-        throw new EngineError('invalid_argument', `${ns}.${method}: ${res.error.issues[0]?.message ?? 'invalid argument'}`, {
-          issues: res.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
-        })
+        throw new EngineError(
+          'invalid_argument',
+          `${ns}.${method}: ${res.error.issues[0]?.message ?? 'invalid argument'}`,
+          {
+            issues: res.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+          },
+        )
       }
       parsed = res.data
     } else if (arg !== undefined) {

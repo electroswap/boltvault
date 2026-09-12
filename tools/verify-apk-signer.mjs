@@ -49,10 +49,16 @@ for (const file of files) {
     bad += 1
     continue
   }
-  const subject = out.split('\n').find((l) => l.includes('certificate DN:'))?.trim() ?? '(no DN printed)'
+  const subject =
+    out
+      .split('\n')
+      .find((l) => l.includes('certificate DN:'))
+      ?.trim() ?? '(no DN printed)'
   if (DEBUG_IDENTITY.test(out)) {
     console.error(`✗ ${file}: signed with the Android debug key — ${subject}`)
-    console.error('  Anyone can sign an "update" for this install. Build with BOLTVAULT_RELEASE_KEYSTORE set.')
+    console.error(
+      '  Anyone can sign an "update" for this install. Build with BOLTVAULT_RELEASE_KEYSTORE set.',
+    )
     bad += 1
     continue
   }

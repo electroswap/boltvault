@@ -77,7 +77,10 @@ export class FakeEthApp {
     if (this.locked) return statusWord(0x6b0c)
     switch (ins) {
       case INS.GET_APP_CONFIGURATION:
-        return concatBytes(new Uint8Array([(this.blindSigning ? 1 : 0) | 0x02, ...this.version]), statusWord(0x9000))
+        return concatBytes(
+          new Uint8Array([(this.blindSigning ? 1 : 0) | 0x02, ...this.version]),
+          statusWord(0x9000),
+        )
       case INS.GET_ADDRESS: {
         if (p1 === 1 && this.rejectNext) {
           this.rejectNext = false
@@ -86,7 +89,13 @@ export class FakeEthApp {
         const acct = this.accountFor(data)
         const pub = hexToBytes(acct.publicKey)
         const addr = new TextEncoder().encode(acct.address.slice(2))
-        return concatBytes(new Uint8Array([pub.length]), pub, new Uint8Array([addr.length]), addr, statusWord(0x9000))
+        return concatBytes(
+          new Uint8Array([pub.length]),
+          pub,
+          new Uint8Array([addr.length]),
+          addr,
+          statusWord(0x9000),
+        )
       }
       case INS.SIGN_TRANSACTION: {
         if (p1 === 0x00) {
@@ -114,7 +123,8 @@ export class FakeEthApp {
         if (hasData && !this.blindSigning) return statusWord(0x6a80)
         const pk = pathKey(this.seed, this.txPath)
         const hash = keccak256(bytesToHex(raw))
-        const parity = secp256k1.sign(hexToBytes(hash), hexToBytes(pk), { lowS: true }).recovery ?? 0
+        const parity =
+          secp256k1.sign(hexToBytes(hash), hexToBytes(pk), { lowS: true }).recovery ?? 0
         const legacy = (raw[0] ?? 0) >= 0xc0
         const chainId = parsed.chainId ?? 0
         // The app's exact convention: legacy v is EIP-155 truncated to one byte; typed v is the parity.
@@ -191,11 +201,17 @@ export class FakeLedgerDevice implements HidDeviceLike {
     this.opened = false
   }
 
-  addEventListener(_type: 'inputreport', listener: (event: { readonly data: DataView }) => void): void {
+  addEventListener(
+    _type: 'inputreport',
+    listener: (event: { readonly data: DataView }) => void,
+  ): void {
     this.listeners.add(listener)
   }
 
-  removeEventListener(_type: 'inputreport', listener: (event: { readonly data: DataView }) => void): void {
+  removeEventListener(
+    _type: 'inputreport',
+    listener: (event: { readonly data: DataView }) => void,
+  ): void {
     this.listeners.delete(listener)
   }
 

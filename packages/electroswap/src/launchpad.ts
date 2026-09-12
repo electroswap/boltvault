@@ -24,9 +24,15 @@ export const LAUNCHPAD_POOL_ABI = parseAbi([
   'function claimRefund(address recipient)',
 ])
 
-export const LAUNCHPAD_MANAGER_ABI = parseAbi(['function minContribution() view returns (uint256)', 'function teamWallet() view returns (address)'])
+export const LAUNCHPAD_MANAGER_ABI = parseAbi([
+  'function minContribution() view returns (uint256)',
+  'function teamWallet() view returns (address)',
+])
 
-export const AFFILIATE_ABI = parseAbi(['function getReferrerEarnings(address referrer) view returns (uint256 lifetimeEarnings, uint256 claimedAmount, uint256 claimableAmount)', 'function claimReferralRewards()'])
+export const AFFILIATE_ABI = parseAbi([
+  'function getReferrerEarnings(address referrer) view returns (uint256 lifetimeEarnings, uint256 claimedAmount, uint256 claimableAmount)',
+  'function claimReferralRewards()',
+])
 
 /** EsLaunchpadAbstractPool.Status — the numbers are binding (§8.9 state table). */
 export type PoolStatus = 'ACTIVE' | 'LAUNCHED' | 'FAILED' | 'CANCELLED' | 'PENDING'
@@ -36,10 +42,16 @@ export function poolStatus(code: number): PoolStatus {
   return STATUS[code] ?? 'PENDING'
 }
 
-export type CampaignPhase = 'upcoming' | 'live' | 'awaiting_finalize' | 'launched' | 'failed' | 'cancelled'
+export type CampaignPhase =
+  'upcoming' | 'live' | 'awaiting_finalize' | 'launched' | 'failed' | 'cancelled'
 
 /** The phase a campaign is in from its on-chain status and the clock (the "ended, not finalized" row is derived). */
-export function campaignPhase(status: PoolStatus, nowSeconds: number, startTime: number, endTime: number): CampaignPhase {
+export function campaignPhase(
+  status: PoolStatus,
+  nowSeconds: number,
+  startTime: number,
+  endTime: number,
+): CampaignPhase {
   switch (status) {
     case 'PENDING':
       return 'upcoming'
@@ -58,11 +70,23 @@ export function campaignPhase(status: PoolStatus, nowSeconds: number, startTime:
 export type CampaignKey = 'contribute' | 'claim_tokens' | 'claim_refund' | 'claim_referral'
 
 /** Which keys the campaign page shows for this account (§8.9 table). */
-export function campaignKeys(input: { phase: CampaignPhase; contributedWei: bigint; claimed: boolean; claimableTokens: bigint; referralClaimable: bigint }): CampaignKey[] {
+export function campaignKeys(input: {
+  phase: CampaignPhase
+  contributedWei: bigint
+  claimed: boolean
+  claimableTokens: bigint
+  referralClaimable: bigint
+}): CampaignKey[] {
   const keys: CampaignKey[] = []
   if (input.phase === 'live') keys.push('contribute')
-  if (input.phase === 'launched' && input.claimableTokens > 0n && !input.claimed) keys.push('claim_tokens')
-  if ((input.phase === 'failed' || input.phase === 'cancelled') && input.contributedWei > 0n && !input.claimed) keys.push('claim_refund')
+  if (input.phase === 'launched' && input.claimableTokens > 0n && !input.claimed)
+    keys.push('claim_tokens')
+  if (
+    (input.phase === 'failed' || input.phase === 'cancelled') &&
+    input.contributedWei > 0n &&
+    !input.claimed
+  )
+    keys.push('claim_refund')
   if (input.referralClaimable > 0n) keys.push('claim_referral')
   return keys
 }
@@ -70,15 +94,27 @@ export function campaignKeys(input: { phase: CampaignPhase; contributedWei: bigi
 export const ZERO_REFERRER = '0x0000000000000000000000000000000000000000' as const
 
 export function encodeContribute(referrer: Hex | null): Hex {
-  return encodeFunctionData({ abi: LAUNCHPAD_POOL_ABI, functionName: 'contribute', args: [referrer ?? ZERO_REFERRER] })
+  return encodeFunctionData({
+    abi: LAUNCHPAD_POOL_ABI,
+    functionName: 'contribute',
+    args: [referrer ?? ZERO_REFERRER],
+  })
 }
 
 export function encodeClaimTokens(recipient: Hex): Hex {
-  return encodeFunctionData({ abi: LAUNCHPAD_POOL_ABI, functionName: 'claimTokens', args: [recipient] })
+  return encodeFunctionData({
+    abi: LAUNCHPAD_POOL_ABI,
+    functionName: 'claimTokens',
+    args: [recipient],
+  })
 }
 
 export function encodeClaimRefund(recipient: Hex): Hex {
-  return encodeFunctionData({ abi: LAUNCHPAD_POOL_ABI, functionName: 'claimRefund', args: [recipient] })
+  return encodeFunctionData({
+    abi: LAUNCHPAD_POOL_ABI,
+    functionName: 'claimRefund',
+    args: [recipient],
+  })
 }
 
 export function encodeClaimReferralRewards(): Hex {
@@ -93,7 +129,10 @@ export function referrerFromLink(url: string): { pool: Hex; referrer: Hex | null
     const m = url.match(/launchpad\/(0x[0-9a-fA-F]{40})/)
     if (!m?.[1]) return null
     const ref = u.searchParams.get('ref') ?? u.searchParams.get('refId')
-    return { pool: m[1] as Hex, referrer: ref && /^0x[0-9a-fA-F]{40}$/.test(ref) ? (ref as Hex) : null }
+    return {
+      pool: m[1] as Hex,
+      referrer: ref && /^0x[0-9a-fA-F]{40}$/.test(ref) ? (ref as Hex) : null,
+    }
   } catch {
     return null
   }

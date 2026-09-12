@@ -35,7 +35,34 @@ export function safetyMark(level: TokenSafety): { label: string; tone: 'ember' |
   }
 }
 
-export function TokenPickerSheet({ open, onClose, title, chainId = ETN, tokens, rows, currency, exclude, onPick, safety, reducedMotion = false }: { open: boolean; onClose: () => void; title: string; chainId?: number; tokens: readonly TokenView[]; rows: readonly PortfolioRow[]; currency: 'USD' | 'ETN'; exclude?: string; onPick: (address: string) => void; /** Safety by lower-cased address, where the market has an opinion. */ safety?: ReadonlyMap<string, TokenSafety>; reducedMotion?: boolean }) {
+export function TokenPickerSheet({
+  open,
+  onClose,
+  title,
+  chainId = ETN,
+  tokens,
+  rows,
+  currency,
+  exclude,
+  onPick,
+  safety,
+  reducedMotion = false,
+}: {
+  open: boolean
+  onClose: () => void
+  title: string
+  chainId?: number
+  tokens: readonly TokenView[]
+  rows: readonly PortfolioRow[]
+  currency: 'USD' | 'ETN'
+  exclude?: string
+  onPick: (address: string) => void
+  /** Safety by lower-cased address, where the market has an opinion. */ safety?: ReadonlyMap<
+    string,
+    TokenSafety
+  >
+  reducedMotion?: boolean
+}) {
   const engine = useEngine()
   const [query, setQuery] = useState('')
   const [found, setFound] = useState<TokenView[]>([])
@@ -48,12 +75,19 @@ export function TokenPickerSheet({ open, onClose, title, chainId = ETN, tokens, 
   const listed = useMemo(() => {
     const rank = (x: TokenView): [number, number] => {
       const r = held.get(x.address.toLowerCase())
-      if (r && Number(r.quantity) > 0) return r.fiat !== null ? [0, -r.fiat] : [1, -Number(r.quantity)]
+      if (r && Number(r.quantity) > 0)
+        return r.fiat !== null ? [0, -r.fiat] : [1, -Number(r.quantity)]
       return x.pinned ? [2, 0] : [3, 0]
     }
     return [...tokens]
       .filter((x) => !exclude || x.address.toLowerCase() !== exclude.toLowerCase())
-      .filter((x) => !q || x.symbol.toLowerCase().includes(q) || x.name.toLowerCase().includes(q) || x.address.toLowerCase() === q)
+      .filter(
+        (x) =>
+          !q ||
+          x.symbol.toLowerCase().includes(q) ||
+          x.name.toLowerCase().includes(q) ||
+          x.address.toLowerCase() === q,
+      )
       .sort((a, b) => {
         const [ra, sa] = rank(a)
         const [rb, sb] = rank(b)
@@ -68,7 +102,10 @@ export function TokenPickerSheet({ open, onClose, title, chainId = ETN, tokens, 
       return
     }
     let alive = true
-    engine.tokens.search({ chainId, query: q }).then((r) => alive && setFound(r), () => alive && setFound([]))
+    engine.tokens.search({ chainId, query: q }).then(
+      (r) => alive && setFound(r),
+      () => alive && setFound([]),
+    )
     return () => {
       alive = false
     }
@@ -76,14 +113,36 @@ export function TokenPickerSheet({ open, onClose, title, chainId = ETN, tokens, 
 
   const shown = listed.length > 0 ? listed : found
   return (
-    <Sheet open={open} onClose={onClose} title={title} reducedMotion={reducedMotion} header={<Input value={query} onChange={setQuery} placeholder={t({ id: 'swap.pick.search', message: 'Search by name or paste an address' })} autoFocus testID="swap-pick-search" />} testID="swap-picker">
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={title}
+      reducedMotion={reducedMotion}
+      header={
+        <Input
+          value={query}
+          onChange={setQuery}
+          placeholder={t({ id: 'swap.pick.search', message: 'Search by name or paste an address' })}
+          autoFocus
+          testID="swap-pick-search"
+        />
+      }
+      testID="swap-picker"
+    >
       <Column gap={2}>
         {shown.map((x) => {
           const r = held.get(x.address.toLowerCase())
           const level = safety?.get(x.address.toLowerCase()) ?? null
           const mark = level ? safetyMark(level) : null
           return (
-            <Pressable key={x.address} onPress={() => onPick(x.address)} accessibilityRole="button" accessibilityLabel={x.symbol} style={{ minHeight: 52, justifyContent: 'center' }} testID={`swap-pick-${x.symbol}`}>
+            <Pressable
+              key={x.address}
+              onPress={() => onPick(x.address)}
+              accessibilityRole="button"
+              accessibilityLabel={x.symbol}
+              style={{ minHeight: 52, justifyContent: 'center' }}
+              testID={`swap-pick-${x.symbol}`}
+            >
               <Row gap="$3" alignItems="center" paddingVertical={6}>
                 {/*
                   The sheet's own chain, not Electroneum. Send picks a chain
@@ -93,7 +152,13 @@ export function TokenPickerSheet({ open, onClose, title, chainId = ETN, tokens, 
                   held row's logo is the fallback: it carries what the price
                   source knew for a token the list has no mark for.
                 */}
-                <TokenAvatar chainId={chainId} address={x.address} symbol={x.symbol} logoUri={x.logoUri ?? r?.logoUri ?? null} size={32} />
+                <TokenAvatar
+                  chainId={chainId}
+                  address={x.address}
+                  symbol={x.symbol}
+                  logoUri={x.logoUri ?? r?.logoUri ?? null}
+                  size={32}
+                />
                 <Column flex={1} minWidth={0} alignItems="flex-start">
                   <Row gap="$2" alignItems="center">
                     <Body fontWeight="700">{x.symbol}</Body>
@@ -104,7 +169,11 @@ export function TokenPickerSheet({ open, onClose, title, chainId = ETN, tokens, 
                     ) : null}
                     {mark ? (
                       <Row gap={4} alignItems="center" testID={`swap-pick-safety-${x.symbol}`}>
-                        <Icon name="warn" size={12} color={mark.tone === 'burn' ? paint.burn : paint.ember} />
+                        <Icon
+                          name="warn"
+                          size={12}
+                          color={mark.tone === 'burn' ? paint.burn : paint.ember}
+                        />
                         <Body tone={mark.tone} size="caption">
                           {mark.label}
                         </Body>
@@ -131,7 +200,12 @@ export function TokenPickerSheet({ open, onClose, title, chainId = ETN, tokens, 
         })}
         {shown.length === 0 ? (
           <Body tone="mute" size="caption" testID="swap-pick-empty">
-            {/^0x[0-9a-f]{40}$/.test(q) ? t({ id: 'swap.pick.lookup', message: 'Looking that address up…' }) : t({ id: 'swap.pick.none', message: 'Nothing matches. Paste a token address to add it.' })}
+            {/^0x[0-9a-f]{40}$/.test(q)
+              ? t({ id: 'swap.pick.lookup', message: 'Looking that address up…' })
+              : t({
+                  id: 'swap.pick.none',
+                  message: 'Nothing matches. Paste a token address to add it.',
+                })}
           </Body>
         ) : null}
       </Column>

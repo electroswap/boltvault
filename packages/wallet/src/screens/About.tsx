@@ -4,7 +4,17 @@
  * addresses, the signed-flags state, crash reports (off by default), and
  * where the audit, the SBOM and the security policy live.
  */
-import { Body, Column, Key, Plate, ScrollView, Toggle, metrics, paint, shortAddress } from '@boltvault/ui'
+import {
+  Body,
+  Column,
+  Key,
+  Plate,
+  ScrollView,
+  Toggle,
+  metrics,
+  paint,
+  shortAddress,
+} from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
 import type { AboutView, FlagsView, Settings } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
@@ -27,7 +37,9 @@ export function About({ body }: { body: 'extension-popup' | 'extension-tab' | 'm
     engine.settings.get().then(setSettings, () => undefined)
     engine.flags.get().then(setFlags, () => undefined)
     engine.about.get().then(setAbout, () => undefined)
-    engine.holder.addresses({ chainId: ETN }).then(setFee, () => setFee({ sink: null, schedule: null }))
+    engine.holder
+      .addresses({ chainId: ETN })
+      .then(setFee, () => setFee({ sink: null, schedule: null }))
     return engine.events.subscribe((e) => {
       if (e.type === 'flags.changed') setFlags(e.flags)
     })
@@ -42,7 +54,13 @@ export function About({ body }: { body: 'extension-popup' | 'extension-tab' | 'm
       <Plate gap={4} testID="about-version">
         <Body size="title">BoltVault {host.version ?? '0.1.0'}</Body>
         <Body tone="mute" size="caption">
-          {host.buildHash ? t({ id: 'about.build', message: 'Build {h} — reproducible; the hash is published with every release.', values: { h: host.buildHash.slice(0, 12) } }) : t({ id: 'about.build.dev', message: 'Development build.' })}
+          {host.buildHash
+            ? t({
+                id: 'about.build',
+                message: 'Build {h} — reproducible; the hash is published with every release.',
+                values: { h: host.buildHash.slice(0, 12) },
+              })
+            : t({ id: 'about.build.dev', message: 'Development build.' })}
         </Body>
       </Plate>
 
@@ -50,7 +68,12 @@ export function About({ body }: { body: 'extension-popup' | 'extension-tab' | 'm
         <Plate gap={4} borderColor={paint.ember} testID="about-dev-api">
           <Body size="title">{t({ id: 'about.dev', message: 'Development build' })}</Body>
           <Body tone="ember" size="caption">
-            {t({ id: 'about.dev.body', message: 'This build talks to {o} instead of ElectroSwap’s servers. Prices, activity, the marketplace and the launchpad come from there.', values: { o: about.apiOrigin } })}
+            {t({
+              id: 'about.dev.body',
+              message:
+                'This build talks to {o} instead of ElectroSwap’s servers. Prices, activity, the marketplace and the launchpad come from there.',
+              values: { o: about.apiOrigin },
+            })}
           </Body>
         </Plate>
       ) : null}
@@ -65,17 +88,37 @@ export function About({ body }: { body: 'extension-popup' | 'extension-tab' | 'm
       <Plate gap={4} testID="about-fee">
         <Body size="title">{t({ id: 'about.fee', message: 'Wallet fee' })}</Body>
         <Body tone="mute" size="caption">
-          {t({ id: 'about.fee.body.v2', message: 'In-wallet swaps pay 0.5% of the output, less by BOLT/DYNO tier, to the address below on Electroneum. Fees fund the wallet, and every payment is on the explorer.' })}
+          {t({
+            id: 'about.fee.body.v2',
+            message:
+              'In-wallet swaps pay 0.5% of the output, less by BOLT/DYNO tier, to the address below on Electroneum. Fees fund the wallet, and every payment is on the explorer.',
+          })}
         </Body>
         <Body tone="mute" size="caption">
-          {fee?.sink ? `${t({ id: 'about.recipient', message: 'Fees go to' })} ${shortAddress(fee.sink)}` : t({ id: 'about.fee.none', message: 'Not configured in this build — in-wallet swaps stay off until it is.' })}
+          {fee?.sink
+            ? `${t({ id: 'about.recipient', message: 'Fees go to' })} ${shortAddress(fee.sink)}`
+            : t({
+                id: 'about.fee.none',
+                message: 'Not configured in this build — in-wallet swaps stay off until it is.',
+              })}
         </Body>
       </Plate>
 
       <Plate gap={4} testID="about-flags">
         <Body size="title">{t({ id: 'about.flags', message: 'Signed flags' })}</Body>
         <Body tone="mute" size="caption">
-          {flags?.fetchedAt ? t({ id: 'about.flags.ok', message: 'Kill-switches and the scam list are signed by ElectroSwap and checked every six hours ({n} scam origins).', values: { n: flags.scamOriginsCount } }) : t({ id: 'about.flags.none', message: 'No signed flags received yet — nothing is switched off, and the built-in scam rules apply.' })}
+          {flags?.fetchedAt
+            ? t({
+                id: 'about.flags.ok',
+                message:
+                  'Kill-switches and the scam list are signed by ElectroSwap and checked every six hours ({n} scam origins).',
+                values: { n: flags.scamOriginsCount },
+              })
+            : t({
+                id: 'about.flags.none',
+                message:
+                  'No signed flags received yet — nothing is switched off, and the built-in scam rules apply.',
+              })}
           {flags?.problem ? ` ${flags.problem}` : ''}
         </Body>
         {flags?.flags.notice ? (
@@ -96,17 +139,45 @@ export function About({ body }: { body: 'extension-popup' | 'extension-tab' | 'm
           name what is actually sent, so this says so rather than leaving the
           old promise standing over new behaviour.
         */}
-        <Toggle value={settings?.crashReports ?? false} onChange={(v) => set({ crashReports: v })} label={t({ id: 'about.crash', message: 'Send diagnostics' })} hint={t({ id: 'about.crash.hint', message: 'Off by default, and only to ElectroSwap. A crash sends the message and stack, with addresses, secrets and URLs scrubbed. A swap that fails also sends the trade, the route and — so the failure can be reproduced — your address and the balances it involved. Never a signature, and never when you simply decline a sheet.' })} testID="about-crash-toggle" />
+        <Toggle
+          value={settings?.crashReports ?? false}
+          onChange={(v) => set({ crashReports: v })}
+          label={t({ id: 'about.crash', message: 'Send diagnostics' })}
+          hint={t({
+            id: 'about.crash.hint',
+            message:
+              'Off by default, and only to ElectroSwap. A crash sends the message and stack, with addresses, secrets and URLs scrubbed. A swap that fails also sends the trade, the route and — so the failure can be reproduced — your address and the balances it involved. Never a signature, and never when you simply decline a sheet.',
+          })}
+          testID="about-crash-toggle"
+        />
       </Plate>
 
       <Plate gap="$2" testID="about-links">
         <Column gap="$2">
-          <Key label={t({ id: 'about.security', message: 'Security policy & audits' })} kind="secondary" onPress={() => void host.openUrl?.(SECURITY_URL)} testID="about-security" />
-          <Key label={t({ id: 'about.sbom', message: 'Software bill of materials' })} kind="secondary" onPress={() => void host.openUrl?.(`${SECURITY_URL}#sbom`)} testID="about-sbom" />
-          <Key label={t({ id: 'about.report', message: 'Report a problem' })} kind="secondary" onPress={() => void host.openUrl?.('https://github.com/ElectroSwap/boltvault/issues')} testID="about-report" />
+          <Key
+            label={t({ id: 'about.security', message: 'Security policy & audits' })}
+            kind="secondary"
+            onPress={() => void host.openUrl?.(SECURITY_URL)}
+            testID="about-security"
+          />
+          <Key
+            label={t({ id: 'about.sbom', message: 'Software bill of materials' })}
+            kind="secondary"
+            onPress={() => void host.openUrl?.(`${SECURITY_URL}#sbom`)}
+            testID="about-sbom"
+          />
+          <Key
+            label={t({ id: 'about.report', message: 'Report a problem' })}
+            kind="secondary"
+            onPress={() => void host.openUrl?.('https://github.com/ElectroSwap/boltvault/issues')}
+            testID="about-report"
+          />
         </Column>
         <Body tone="mute" size="caption">
-          {t({ id: 'about.privacy', message: 'No analytics. Only ElectroSwap’s API and the chain RPCs ever see an address.' })}
+          {t({
+            id: 'about.privacy',
+            message: 'No analytics. Only ElectroSwap’s API and the chain RPCs ever see an address.',
+          })}
         </Body>
       </Plate>
     </ScrollView>

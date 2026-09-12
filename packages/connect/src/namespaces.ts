@@ -4,10 +4,29 @@
  * the methods the rpcFlow serves, and the two events it emits. A required
  * chain the wallet does not have makes the proposal unsatisfiable.
  */
-import { caipAccount, caipChain, chainIdFromCaip, type ApprovedNamespaces, type SessionProposal } from './walletkit'
+import {
+  caipAccount,
+  caipChain,
+  chainIdFromCaip,
+  type ApprovedNamespaces,
+  type SessionProposal,
+} from './walletkit'
 
 /** Methods the engine's rpcFlow answers over WalletConnect (the APPROVAL and CONNECT classes, plus the SAFE reads dApps ask wallets for). */
-export const WC_METHODS = ['eth_sendTransaction', 'personal_sign', 'eth_signTypedData', 'eth_signTypedData_v4', 'eth_signTypedData_v3', 'wallet_switchEthereumChain', 'wallet_addEthereumChain', 'wallet_watchAsset', 'wallet_getCapabilities', 'eth_accounts', 'eth_chainId', 'eth_requestAccounts'] as const
+export const WC_METHODS = [
+  'eth_sendTransaction',
+  'personal_sign',
+  'eth_signTypedData',
+  'eth_signTypedData_v4',
+  'eth_signTypedData_v3',
+  'wallet_switchEthereumChain',
+  'wallet_addEthereumChain',
+  'wallet_watchAsset',
+  'wallet_getCapabilities',
+  'eth_accounts',
+  'eth_chainId',
+  'eth_requestAccounts',
+] as const
 
 export const WC_EVENTS = ['accountsChanged', 'chainChanged'] as const
 
@@ -20,7 +39,9 @@ export interface NamespaceInput {
   readonly homeChainId: number
 }
 
-export type NamespaceOutcome = { readonly ok: true; readonly namespaces: ApprovedNamespaces; readonly chainIds: number[] } | { readonly ok: false; readonly missing: string[] }
+export type NamespaceOutcome =
+  | { readonly ok: true; readonly namespaces: ApprovedNamespaces; readonly chainIds: number[] }
+  | { readonly ok: false; readonly missing: string[] }
 
 export function buildNamespaces(input: NamespaceInput): NamespaceOutcome {
   const known = new Set(input.knownChainIds)

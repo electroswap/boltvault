@@ -63,9 +63,7 @@ function parseTokenPrice(d: GeckoTokenData, at: number): TokenPrice | null {
   if (!Number.isFinite(usd)) return null
   const raw = d.attributes.price_change_percentage_24h
   const ch = raw !== undefined && raw !== '' ? parseFloat(raw) : NaN
-  return Number.isFinite(ch)
-    ? { usd, change24h: ch, at }
-    : { usd, at }
+  return Number.isFinite(ch) ? { usd, change24h: ch, at } : { usd, at }
 }
 
 export class GeckoTerminalMarketData implements MarketData {

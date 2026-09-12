@@ -31,7 +31,14 @@ export const AccountViewSchema = z.object({
   /** Which seed an HD account belongs to. */
   seedId: z.string().optional(),
   /** Hardware accounts: derivation path and paired device; the scheme and index read off the path (plan C1). */
-  hardware: z.object({ path: z.string(), deviceId: z.string().optional(), scheme: z.enum(['bip44', 'live', 'custom']).optional(), index: z.number().int().nonnegative().optional() }).optional(),
+  hardware: z
+    .object({
+      path: z.string(),
+      deviceId: z.string().optional(),
+      scheme: z.enum(['bip44', 'live', 'custom']).optional(),
+      index: z.number().int().nonnegative().optional(),
+    })
+    .optional(),
   /** True when the engine can sign for this account without a device. */
   hasKey: z.boolean(),
   hidden: z.boolean(),
@@ -128,7 +135,13 @@ export type ApprovalKind = z.infer<typeof ApprovalKindSchema>
  * and a request that is refused there must be retryable rather than dead —
  * `approved` now means "this was signed", not "a button was pressed".
  */
-export const ApprovalStatusSchema = z.enum(['pending', 'signing', 'approved', 'rejected', 'expired'])
+export const ApprovalStatusSchema = z.enum([
+  'pending',
+  'signing',
+  'approved',
+  'rejected',
+  'expired',
+])
 export type ApprovalStatus = z.infer<typeof ApprovalStatusSchema>
 
 /**
@@ -225,6 +238,30 @@ export const SettingsSchema = z.object({
    */
   largeSendPercent: z.number().int().min(1).max(100).default(10),
   autoLock: AutoLockSchema,
+  /**
+   * The password is required to reveal a recovery phrase, whatever else the
+   * vault is wrapped under (§3.2).
+   *
+   * `reveal` accepted any enrolled factor, so a household member who could
+   * pass a registered fingerprint could open Accounts → Back up and read the
+   * words — while Security and Onboarding both told the user the password
+   * "is still required to reveal or export your phrase", and export really did
+   * require it. Code and copy now agree by default. It is a setting rather
+   * than a hard rule because a wallet set up behind a passkey may have a
+   * password nobody has typed in months, and locking somebody out of their own
+   * phrase is its own kind of loss — but the default is on, and turning it off
+   * is a deliberate act on the Security screen.
+   *
+   * `.default(true)` so an existing settings document does not quarantine.
+   */
+  revealNeedsPassword: z.boolean().default(true),
+  /**
+   * The home-screen widget may show the portfolio total (§7.13). Off by
+   * default: the snapshot is a plaintext file the widget process can read, so
+   * anything in it is readable from a stolen phone or a backup of the App
+   * Group container while the wallet is locked.
+   */
+  widgetShowsTotal: z.boolean().default(false),
   displayCurrency: z.enum(['USD', 'ETN']),
   reducedMotion: z.boolean(),
   /**
@@ -412,7 +449,14 @@ export const SyncStatusSchema = z.object({
   deviceLabel: z.string(),
   devices: z.array(PairedDeviceSchema),
   /** A pairing in progress: show this SAS until confirmed on both sides. */
-  pending: z.object({ pairingId: z.string(), sas: z.string(), peerDeviceId: z.string(), role: z.enum(['offer', 'answer']) }).nullable(),
+  pending: z
+    .object({
+      pairingId: z.string(),
+      sas: z.string(),
+      peerDeviceId: z.string(),
+      role: z.enum(['offer', 'answer']),
+    })
+    .nullable(),
 })
 export type SyncStatus = z.infer<typeof SyncStatusSchema>
 
@@ -493,7 +537,28 @@ export type SendQuote = z.infer<typeof SendQuoteSchema>
 // ---- M5: swap, holder tier, limit orders (§8.6, §8.18) ------------------------------
 
 /** One step of an in-wallet swap or limit-order flow; each is one sheet. */
-export const SwapStepSchema = z.enum(['wrap', 'approve', 'permit', 'swap', 'submit', 'cancel', 'approve_collection', 'sign_order', 'post_order', 'buy', 'accept', 'cancel_order', 'transfer', 'mint', 'deposit', 'withdraw', 'collect', 'contribute', 'claim', 'register'])
+export const SwapStepSchema = z.enum([
+  'wrap',
+  'approve',
+  'permit',
+  'swap',
+  'submit',
+  'cancel',
+  'approve_collection',
+  'sign_order',
+  'post_order',
+  'buy',
+  'accept',
+  'cancel_order',
+  'transfer',
+  'mint',
+  'deposit',
+  'withdraw',
+  'collect',
+  'contribute',
+  'claim',
+  'register',
+])
 export type SwapStep = z.infer<typeof SwapStepSchema>
 
 /** The account's BOLT/DYNO tier as the fee schedule sees it (§8.18). Scores are BOLT-eq wei strings. */
@@ -521,7 +586,9 @@ export const FeeScheduleViewSchema = z.object({
   chainId: z.number().int().positive(),
   baseBips: z.number().int().nonnegative(),
   baseName: z.string(),
-  tiers: z.array(z.object({ name: z.string(), minScore: z.string(), bips: z.number().int().nonnegative() })),
+  tiers: z.array(
+    z.object({ name: z.string(), minScore: z.string(), bips: z.number().int().nonnegative() }),
+  ),
   dynoWeight: z.string(),
   /** 'average' when it is the measured week's BOLT/DYNO ratio, 'config' when it is the committed anchor. */
   dynoWeightSource: z.enum(['config', 'average']),
@@ -532,7 +599,12 @@ export const FeeScheduleViewSchema = z.object({
 })
 export type FeeScheduleView = z.infer<typeof FeeScheduleViewSchema>
 
-export const SwapHopSchema = z.object({ kind: z.enum(['v2', 'v3']), tokenIn: z.string(), tokenOut: z.string(), fee: z.number().int().optional() })
+export const SwapHopSchema = z.object({
+  kind: z.enum(['v2', 'v3']),
+  tokenIn: z.string(),
+  tokenOut: z.string(),
+  fee: z.number().int().optional(),
+})
 export type SwapHop = z.infer<typeof SwapHopSchema>
 
 /** What the Swap screen shows before the review (§8.6). Raw amounts are decimal strings. */
@@ -612,13 +684,27 @@ export const SwapQuoteSchema = z.object({
 })
 export type SwapQuote = z.infer<typeof SwapQuoteSchema>
 
-export const FlowStepStatusSchema = z.enum(['pending', 'signing', 'submitted', 'confirmed', 'rejected', 'failed'])
+export const FlowStepStatusSchema = z.enum([
+  'pending',
+  'signing',
+  'submitted',
+  'confirmed',
+  'rejected',
+  'failed',
+])
 export const SwapFlowSchema = z.object({
   id: z.string(),
   kind: z.enum(['swap', 'limit', 'limit_cancel', 'nft', 'farm', 'launchpad', 'legends', 'bridge']),
   accountId: AccountIdSchema,
   chainId: z.number().int().positive(),
-  steps: z.array(z.object({ step: SwapStepSchema, requestId: z.string().nullable(), status: FlowStepStatusSchema, hash: z.string().nullable() })),
+  steps: z.array(
+    z.object({
+      step: SwapStepSchema,
+      requestId: z.string().nullable(),
+      status: FlowStepStatusSchema,
+      hash: z.string().nullable(),
+    }),
+  ),
   status: z.enum(['running', 'done', 'rejected', 'failed']),
   error: z.string().nullable(),
   /** The final transaction's hash once broadcast. */
@@ -835,7 +921,15 @@ export const CollectionViewSchema = z.object({
   /** Added by the user by address (plan A3); not on the indexer. */
   custom: z.boolean().optional(),
   /** Read from the chain on the collection page (plan C1): null when the collection has no minter. */
-  mint: z.object({ mintable: z.boolean(), priceWei: z.string(), mintableCount: z.number().int().nonnegative(), totalSupply: z.number().int().nonnegative() }).nullable().optional(),
+  mint: z
+    .object({
+      mintable: z.boolean(),
+      priceWei: z.string(),
+      mintableCount: z.number().int().nonnegative(),
+      totalSupply: z.number().int().nonnegative(),
+    })
+    .nullable()
+    .optional(),
 })
 export type CollectionView = z.infer<typeof CollectionViewSchema>
 
@@ -891,7 +985,16 @@ export const InventorySchema = z.object({
   accountId: AccountIdSchema,
   chainId: z.number().int().positive(),
   assets: z.array(AssetViewSchema),
-  collections: z.array(z.object({ address: z.string(), name: z.string(), logoUrl: z.string().nullable(), balance: z.number().int(), floorEtn: Fiat, custom: z.boolean().optional() })),
+  collections: z.array(
+    z.object({
+      address: z.string(),
+      name: z.string(),
+      logoUrl: z.string().nullable(),
+      balance: z.number().int(),
+      floorEtn: Fiat,
+      custom: z.boolean().optional(),
+    }),
+  ),
   /** Sum of floors × counts, ETN, where floors exist. */
   floorValueEtn: Fiat,
   listedCount: z.number().int().nonnegative(),
@@ -904,7 +1007,17 @@ export const OffersInboxSchema = z.object({
   /** Offers on the account's pieces. */
   received: z.array(z.object({ asset: AssetViewSchema, offer: OrderViewSchema })),
   /** Offers the account made. */
-  made: z.array(z.object({ address: z.string(), tokenId: z.string(), name: z.string(), imageUrl: z.string().nullable(), collectionName: z.string(), offer: OrderViewSchema, expiresAt: z.number() })),
+  made: z.array(
+    z.object({
+      address: z.string(),
+      tokenId: z.string(),
+      name: z.string(),
+      imageUrl: z.string().nullable(),
+      collectionName: z.string(),
+      offer: OrderViewSchema,
+      expiresAt: z.number(),
+    }),
+  ),
   /** Total WETN the account's open offers commit, wei string. */
   obligationWei: z.string(),
   wetnBalanceWei: z.string(),
@@ -943,7 +1056,14 @@ export const LegendsStatusSchema = z.object({
   /** The account's share of the holders' third of the next fee, 0..1. */
   shareOfNextFee: z.number(),
   dividendsEnabled: z.boolean(),
-  mint: z.object({ mintable: z.boolean(), priceWei: z.string(), mintableCount: z.number().int().nonnegative(), totalSupply: z.number().int().nonnegative() }).nullable(),
+  mint: z
+    .object({
+      mintable: z.boolean(),
+      priceWei: z.string(),
+      mintableCount: z.number().int().nonnegative(),
+      totalSupply: z.number().int().nonnegative(),
+    })
+    .nullable(),
   observedAt: z.number().int().nonnegative(),
 })
 export type LegendsStatus = z.infer<typeof LegendsStatusSchema>
@@ -983,7 +1103,9 @@ export const FarmViewSchema = z.object({
       /** Estimated wall-clock dates (5 s blocks) at which the ring reaches 2.0× and 2.5×; null when reached. */
       at2x: z.number().nullable(),
       at25x: z.number().nullable(),
-      nextStair: z.object({ bolt: z.string(), multiplier: z.number().int(), more: z.string() }).nullable(),
+      nextStair: z
+        .object({ bolt: z.string(), multiplier: z.number().int(), more: z.string() })
+        .nullable(),
       /** Token amounts the position holds right now (for the withdraw preview). */
       amount0: z.string(),
       amount1: z.string(),
@@ -1033,13 +1155,23 @@ export const CampaignViewSchema = z.object({
   pool: z.string(),
   status: z.enum(['ACTIVE', 'LAUNCHED', 'FAILED', 'CANCELLED', 'PENDING']),
   phase: z.enum(['upcoming', 'live', 'awaiting_finalize', 'launched', 'failed', 'cancelled']),
-  token: z.object({ name: z.string(), symbol: z.string(), decimals: z.number().int(), address: z.string().nullable() }),
+  token: z.object({
+    name: z.string(),
+    symbol: z.string(),
+    decimals: z.number().int(),
+    address: z.string().nullable(),
+  }),
   creator: z.string(),
   creatorName: z.string().nullable(),
   logoUrl: z.string().nullable(),
   bannerUrl: z.string().nullable(),
   description: z.string(),
-  links: z.object({ website: z.string().nullable(), twitter: z.string().nullable(), discord: z.string().nullable(), telegram: z.string().nullable() }),
+  links: z.object({
+    website: z.string().nullable(),
+    twitter: z.string().nullable(),
+    discord: z.string().nullable(),
+    telegram: z.string().nullable(),
+  }),
   starts: z.number(),
   ends: z.number(),
   raisedWei: z.string(),
@@ -1093,7 +1225,13 @@ export const PositionsSchema = z.object({
    * never the other. Home's rotor shows them all in turn; the one caller that
    * still wants a single line (the background watch) takes the first.
    */
-  accessories: z.array(z.object({ kind: z.enum(['collect', 'dividends', 'claim_tokens', 'claim_refund']), text: z.string(), target: z.string() })),
+  accessories: z.array(
+    z.object({
+      kind: z.enum(['collect', 'dividends', 'claim_tokens', 'claim_refund']),
+      text: z.string(),
+      target: z.string(),
+    }),
+  ),
   observedAt: z.number().int().nonnegative(),
 })
 export type Positions = z.infer<typeof PositionsSchema>
@@ -1253,26 +1391,58 @@ export const EngineEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('positions.changed'), positions: PositionsSchema }),
   z.object({ type: z.literal('bridge.changed'), transfers: z.array(BridgeStatusSchema) }),
   z.object({ type: z.literal('hardware.keystone'), pending: z.array(KeystonePendingSchema) }),
-  z.object({ type: z.literal('dapp.event'), sessionId: z.string(), origin: z.string(), event: z.string(), payload: z.unknown() }),
-  z.object({ type: z.literal('connect.changed'), proposals: z.array(WcProposalViewSchema), sessions: z.array(WcSessionViewSchema) }),
+  z.object({
+    type: z.literal('dapp.event'),
+    sessionId: z.string(),
+    origin: z.string(),
+    event: z.string(),
+    payload: z.unknown(),
+  }),
+  z.object({
+    type: z.literal('connect.changed'),
+    proposals: z.array(WcProposalViewSchema),
+    sessions: z.array(WcSessionViewSchema),
+  }),
   z.object({ type: z.literal('flags.changed'), flags: FlagsViewSchema }),
-  z.object({ type: z.literal('remote.changed'), outgoing: z.array(RemoteRequestSchema), incoming: z.array(RemoteRequestSchema) }),
+  z.object({
+    type: z.literal('remote.changed'),
+    outgoing: z.array(RemoteRequestSchema),
+    incoming: z.array(RemoteRequestSchema),
+  }),
   z.object({ type: z.literal('watchlist.changed'), items: z.array(WatchItemSchema) }),
-  z.object({ type: z.literal('limit.changed'), accountId: AccountIdSchema, chainId: z.number().int().positive(), orders: z.array(LimitOrderViewSchema) }),
+  z.object({
+    type: z.literal('limit.changed'),
+    accountId: AccountIdSchema,
+    chainId: z.number().int().positive(),
+    orders: z.array(LimitOrderViewSchema),
+  }),
   z.object({ type: z.literal('tokens.changed'), chainId: z.number().int().positive() }),
-  z.object({ type: z.literal('allowances.changed'), accountId: AccountIdSchema, chainId: z.number().int().positive(), rows: z.array(AllowanceViewSchema) }),
+  z.object({
+    type: z.literal('allowances.changed'),
+    accountId: AccountIdSchema,
+    chainId: z.number().int().positive(),
+    rows: z.array(AllowanceViewSchema),
+  }),
   z.object({ type: z.literal('contacts.changed'), contacts: z.array(ContactViewSchema) }),
   z.object({ type: z.literal('portfolio.snapshot'), snapshot: PortfolioSnapshotSchema }),
   z.object({ type: z.literal('activity.changed'), entries: z.array(ActivityEntrySchema) }),
   z.object({ type: z.literal('sync.changed'), status: SyncStatusSchema }),
   z.object({ type: z.literal('vault.status'), status: VaultStatusSchema }),
-  z.object({ type: z.literal('accounts.changed'), accounts: z.array(AccountViewSchema), activeId: AccountIdSchema.nullable() }),
+  z.object({
+    type: z.literal('accounts.changed'),
+    accounts: z.array(AccountViewSchema),
+    activeId: AccountIdSchema.nullable(),
+  }),
   z.object({ type: z.literal('sites.changed'), sites: z.array(SiteViewSchema) }),
   z.object({ type: z.literal('chains.head'), head: ChainHeadSchema }),
   z.object({ type: z.literal('approvals.changed'), pending: z.array(ApprovalRequestSchema) }),
   z.object({ type: z.literal('settings.changed'), settings: SettingsSchema }),
   /** A cached resource was written or dropped; pages re-read `cached…()` for that key (the value never rides the event). */
-  z.object({ type: z.literal('cache.changed'), key: z.string(), observedAt: z.number().int().nonnegative() }),
+  z.object({
+    type: z.literal('cache.changed'),
+    key: z.string(),
+    observedAt: z.number().int().nonnegative(),
+  }),
   z.object({ type: z.literal('notifications.changed'), unread: z.number().int().nonnegative() }),
   z.object({ type: z.literal('prefs.changed'), prefs: PrefsSchema }),
 ])

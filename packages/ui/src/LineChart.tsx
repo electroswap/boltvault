@@ -53,18 +53,44 @@ export function smoothPath(xs: readonly number[], ys: readonly number[]): string
   return d
 }
 
-export function LineChart({ points, width, height, stroke = 'current', area = true, baseline = null, endDot = true, testID }: LineChartProps) {
+export function LineChart({
+  points,
+  width,
+  height,
+  stroke = 'current',
+  area = true,
+  baseline = null,
+  endDot = true,
+  testID,
+}: LineChartProps) {
   const id = useId().replace(/[^a-zA-Z0-9]/g, '')
   const vs = points.map((p) => p.v).filter((v) => Number.isFinite(v))
   const min = Math.min(...vs, baseline ?? Infinity)
   const max = Math.max(...vs, baseline ?? -Infinity)
-  const flat = points.length < 2 || !Number.isFinite(min) || !Number.isFinite(max) || max - min < 1e-12
-  const solid = stroke === 'surge' ? paint.surge : stroke === 'burn' ? paint.burn : stroke === 'mute' ? paint.mute : null
+  const flat =
+    points.length < 2 || !Number.isFinite(min) || !Number.isFinite(max) || max - min < 1e-12
+  const solid =
+    stroke === 'surge'
+      ? paint.surge
+      : stroke === 'burn'
+        ? paint.burn
+        : stroke === 'mute'
+          ? paint.mute
+          : null
   const strokePaint = solid ?? `url(#${id}-line)`
   if (flat) {
     return (
       <Svg width={width} height={height} testID={testID} aria-hidden>
-        <Line x1={PAD} y1={height / 2} x2={width - PAD} y2={height / 2} stroke={paint.mute} strokeWidth={1.5} strokeDasharray="4 4" strokeOpacity={0.6} />
+        <Line
+          x1={PAD}
+          y1={height / 2}
+          x2={width - PAD}
+          y2={height / 2}
+          stroke={paint.mute}
+          strokeWidth={1.5}
+          strokeDasharray="4 4"
+          strokeOpacity={0.6}
+        />
       </Svg>
     )
   }
@@ -89,8 +115,26 @@ export function LineChart({ points, width, height, stroke = 'current', area = tr
         </LinearGradient>
       </Defs>
       {area ? <Path d={areaPath} fill={`url(#${id}-area)`} /> : null}
-      {baseline !== null && Number.isFinite(baseline) ? <Line x1={PAD} y1={y(baseline)} x2={width - PAD} y2={y(baseline)} stroke={paint.mute} strokeWidth={1} strokeDasharray="3 4" strokeOpacity={0.5} /> : null}
-      <Path d={line} fill="none" stroke={strokePaint} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      {baseline !== null && Number.isFinite(baseline) ? (
+        <Line
+          x1={PAD}
+          y1={y(baseline)}
+          x2={width - PAD}
+          y2={y(baseline)}
+          stroke={paint.mute}
+          strokeWidth={1}
+          strokeDasharray="3 4"
+          strokeOpacity={0.5}
+        />
+      ) : null}
+      <Path
+        d={line}
+        fill="none"
+        stroke={strokePaint}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
       {endDot ? (
         <>
           <Circle cx={lastX} cy={lastY} r={8} fill={solid ?? current.to} fillOpacity={0.18} />
@@ -102,6 +146,24 @@ export function LineChart({ points, width, height, stroke = 'current', area = tr
 }
 
 /** A 64×20 line for list rows. */
-export function Sparkline({ points, stroke, testID }: { points: ReadonlyArray<ChartPoint>; stroke?: LineChartProps['stroke']; testID?: string }) {
-  return <LineChart points={points} width={64} height={20} area={false} endDot={false} {...(stroke ? { stroke } : {})} {...(testID ? { testID } : {})} />
+export function Sparkline({
+  points,
+  stroke,
+  testID,
+}: {
+  points: ReadonlyArray<ChartPoint>
+  stroke?: LineChartProps['stroke']
+  testID?: string
+}) {
+  return (
+    <LineChart
+      points={points}
+      width={64}
+      height={20}
+      area={false}
+      endDot={false}
+      {...(stroke ? { stroke } : {})}
+      {...(testID ? { testID } : {})}
+    />
+  )
 }

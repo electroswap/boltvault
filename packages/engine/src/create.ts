@@ -62,7 +62,14 @@ import { NotificationsService, notificationsNamespace } from './namespaces/notif
 import { CustomCollectionsService, customCollectionsNamespace } from './namespaces/nftCustom'
 import { PrefsService, prefsNamespace } from './namespaces/prefs'
 import { SitesService, sitesNamespace } from './namespaces/sites'
-import { createSyncStateStore, HttpRelay, MemoryRelay, SyncService, syncNamespace, type Relay } from './namespaces/sync'
+import {
+  createSyncStateStore,
+  HttpRelay,
+  MemoryRelay,
+  SyncService,
+  syncNamespace,
+  type Relay,
+} from './namespaces/sync'
 import { TokensService, tokensNamespace } from './namespaces/tokens'
 import { accountsNamespace, KEY_DEK, VaultManager, vaultNamespace } from './namespaces/vault'
 import {
@@ -286,7 +293,14 @@ export function createEngine(deps: EngineDeps): Engine {
   const sites = new SitesService(deps.platform, host.events, sealed.sites)
   // The governor is handed over so Settings › Networks can say which host is
   // cooling and which has refused this wallet outright (`hosts()`).
-  const chains = new ChainsService(deps.platform, host.events, deps.heads, rpcFetch, undefined, governor)
+  const chains = new ChainsService(
+    deps.platform,
+    host.events,
+    deps.heads,
+    rpcFetch,
+    undefined,
+    governor,
+  )
   const activity = new ActivityStore(deps.platform, host.events, dek)
   const contacts = new ContactsStore(deps.platform, host.events, dek)
   const relayFor =
@@ -339,7 +353,13 @@ export function createEngine(deps: EngineDeps): Engine {
     contractFacts: async (chainId, address) => {
       if (!electroswap) return null
       const facts = await fetchContractFacts(electroswap, chainId, address, deps.platform.now())
-      return facts ? { deployedAt: facts.deployedAt, verified: facts.verified, newAfterDays: facts.newAfterDays } : null
+      return facts
+        ? {
+            deployedAt: facts.deployedAt,
+            verified: facts.verified,
+            newAfterDays: facts.newAfterDays,
+          }
+        : null
     },
     /*
       Names for the addresses a sheet names (§8.1). `names` is built further
@@ -347,7 +367,8 @@ export function createEngine(deps: EngineDeps): Engine {
       the arrow is the binding, and it only runs once a sheet is being assessed.
       Sanitised there, not here: `ctx.labels` is printed straight by rules.ts.
     */
-    counterpartyNames: (chainId: number, addresses: readonly string[]): Promise<NameLookup[]> => names.lookup(chainId, addresses),
+    counterpartyNames: (chainId: number, addresses: readonly string[]): Promise<NameLookup[]> =>
+      names.lookup(chainId, addresses),
     /*
       One answer for "what does this account pay", read by both the site and
       the sheet (§8.6, §8.18).
@@ -473,7 +494,13 @@ export function createEngine(deps: EngineDeps): Engine {
     snapshots: sealed.portfolio,
     looks: sealed.looks,
   })
-  const names: NamesService = new NamesService({ platform: deps.platform, chains, vault, provider, cache })
+  const names: NamesService = new NamesService({
+    platform: deps.platform,
+    chains,
+    vault,
+    provider,
+    cache,
+  })
   /*
     The pre-assessment reaches the firewall through the provider's own payload
     builder — the function that builds every sheet — rather than through a
@@ -483,7 +510,9 @@ export function createEngine(deps: EngineDeps): Engine {
     same code, which is the property §3.4 cares about. Opening the method up
     properly is a one-line change in provider.ts.
   */
-  const payloadFor = (provider as unknown as { payloadFor(intent: ApprovalIntent): Promise<ApprovalPayload> }).payloadFor.bind(provider)
+  const payloadFor = (
+    provider as unknown as { payloadFor(intent: ApprovalIntent): Promise<ApprovalPayload> }
+  ).payloadFor.bind(provider)
   const security = new SecurityService({ vault, chains, settings, payloadFor })
   const allowances = new AllowancesService({
     platform: deps.platform,
@@ -548,7 +577,11 @@ export function createEngine(deps: EngineDeps): Engine {
     // The engine's `clientVersion` is `BoltVault/1.2.3`; the endpoint wants the
     // version the way `/api/wallet/crash` sends it, which is bare.
     version: (deps.clientVersion ?? 'BoltVault/0.1.0').replace(/^BoltVault\//, ''),
-    enabled: () => settings.get().then((s) => s.crashReports, () => false),
+    enabled: () =>
+      settings.get().then(
+        (s) => s.crashReports,
+        () => false,
+      ),
   })
   /*
     The routing service (§8.6), asked before the on-chain mini-router.
@@ -806,9 +839,18 @@ export function createEngine(deps: EngineDeps): Engine {
           */
           const pending = approvals.get(decision.id)
           if (pending?.chainId != null && !chains.known(pending.chainId))
-            throw new EngineError('invalid_argument', 'That network is no longer available. Ask the site again.')
-          if (pending?.accountId != null && !(await vault.accounts()).some((a) => a.id === pending.accountId))
-            throw new EngineError('invalid_argument', 'That account is no longer in this wallet. Ask the site again.')
+            throw new EngineError(
+              'invalid_argument',
+              'That network is no longer available. Ask the site again.',
+            )
+          if (
+            pending?.accountId != null &&
+            !(await vault.accounts()).some((a) => a.id === pending.accountId)
+          )
+            throw new EngineError(
+              'invalid_argument',
+              'That account is no longer in this wallet. Ask the site again.',
+            )
         }
         const decided = await approvals.decide(decision)
         // A signing decision is activity: the idle timer restarts.
@@ -840,7 +882,8 @@ export function createEngine(deps: EngineDeps): Engine {
     electroswap,
     activity,
     cache,
-    addressOf: async (accountId) => (await vault.accounts()).find((a) => a.id === accountId)?.address ?? null,
+    addressOf: async (accountId) =>
+      (await vault.accounts()).find((a) => a.id === accountId)?.address ?? null,
     isEtn: isElectroneumChainId,
   })
   const tx = new TxService({ platform: deps.platform, chains, vault, provider, activity })

@@ -8,14 +8,23 @@
 import type { WalletEngine } from '@boltvault/engine'
 
 export interface ActivityWindow {
-  addEventListener(type: string, listener: () => void, options?: { capture?: boolean; passive?: boolean }): void
+  addEventListener(
+    type: string,
+    listener: () => void,
+    options?: { capture?: boolean; passive?: boolean },
+  ): void
   removeEventListener(type: string, listener: () => void, options?: { capture?: boolean }): void
 }
 
 const EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const
 export const TOUCH_DEBOUNCE_MS = 30_000
 
-export function installActivityTouch(engine: Pick<WalletEngine, 'vault'>, win: ActivityWindow, now: () => number = Date.now, debounceMs = TOUCH_DEBOUNCE_MS): () => void {
+export function installActivityTouch(
+  engine: Pick<WalletEngine, 'vault'>,
+  win: ActivityWindow,
+  now: () => number = Date.now,
+  debounceMs = TOUCH_DEBOUNCE_MS,
+): () => void {
   let last = -Infinity
   const touch = (): void => {
     const t = now()

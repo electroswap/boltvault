@@ -56,7 +56,11 @@ export interface TaxUnknown {
 const unknown = (reason: TaxUnknown['reason']): TaxUnknown => ({ unavailable: true, reason })
 
 /** `ProbeStatus` from the detector: 0 measured, 1 no pair, 2 pair too thin, 3 the probe itself reverted. */
-const STATUS: Readonly<Record<number, TaxUnknown['reason']>> = { 1: 'no-pair', 2: 'pair-too-thin', 3: 'probe-reverted' }
+const STATUS: Readonly<Record<number, TaxUnknown['reason']>> = {
+  1: 'no-pair',
+  2: 'pair-too-thin',
+  3: 'probe-reverted',
+}
 const MEASURED = 0
 
 /*
@@ -71,14 +75,33 @@ const MEASURED = 0
   input amount is denominated in the token being sold, not the one being
   probed.
 */
-export async function detectTax(detector: Hex | null, token: Hex, baseToken: Hex, read: Reader, amountToBorrow = 1000n): Promise<TaxProbe> {
+export async function detectTax(
+  detector: Hex | null,
+  token: Hex,
+  baseToken: Hex,
+  read: Reader,
+  amountToBorrow = 1000n,
+): Promise<TaxProbe> {
   if (!detector) return null
-  const call: ReadCall = { address: detector, abi: FOT_DETECTOR_ABI, functionName: 'inspect', args: [token, baseToken, amountToBorrow] }
+  const call: ReadCall = {
+    address: detector,
+    abi: FOT_DETECTOR_ABI,
+    functionName: 'inspect',
+    args: [token, baseToken, amountToBorrow],
+  }
   const [r] = await read([call]).catch(() => [undefined])
   // The call itself did not come back: an RPC failure, not a statement about the token.
   if (!r?.ok || !r.value || typeof r.value !== 'object') return unknown('not-answered')
-  const v = r.value as { status: number; buyFeeBps: bigint; sellFeeBps: bigint; sellReverted: boolean; externalTransferFailed: boolean; feeTakenOnTransfer: boolean }
-  if (typeof v.buyFeeBps !== 'bigint' || typeof v.sellFeeBps !== 'bigint') return unknown('not-answered')
+  const v = r.value as {
+    status: number
+    buyFeeBps: bigint
+    sellFeeBps: bigint
+    sellReverted: boolean
+    externalTransferFailed: boolean
+    feeTakenOnTransfer: boolean
+  }
+  if (typeof v.buyFeeBps !== 'bigint' || typeof v.sellFeeBps !== 'bigint')
+    return unknown('not-answered')
   /*
     A status the wallet did not ask for is not a measurement.
 
@@ -141,7 +164,9 @@ export function sellsAreRefused(probe: TaxProbe): boolean {
 export function custodyIsUnsafe(probe: TaxProbe): boolean {
   const tax = taxOf(probe)
   if (tax === null) return false
-  return tax.buyFeeBps > 0 || tax.sellFeeBps > 0 || tax.externalTransferFailed || tax.feeTakenOnTransfer
+  return (
+    tax.buyFeeBps > 0 || tax.sellFeeBps > 0 || tax.externalTransferFailed || tax.feeTakenOnTransfer
+  )
 }
 
 /** Slippage the user must accept to cover the taxes on this pair, in bips. */

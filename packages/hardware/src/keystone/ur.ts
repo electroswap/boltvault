@@ -8,12 +8,26 @@
 import { secp256k1 } from '@noble/curves/secp256k1'
 import { HDKey } from '@scure/bip32'
 import { UR, URDecoder, UREncoder } from '@ngraveio/bc-ur'
-import { CryptoAccount, CryptoHDKey, CryptoKeypath, DataType, ETHSignature, EthSignRequest, PathComponent } from '@keystonehq/bc-ur-registry-eth'
+import {
+  CryptoAccount,
+  CryptoHDKey,
+  CryptoKeypath,
+  DataType,
+  ETHSignature,
+  EthSignRequest,
+  PathComponent,
+} from '@keystonehq/bc-ur-registry-eth'
 import { getAddress, keccak256, type Hex } from 'viem'
 
-export type KeystoneDataType = 'transaction' | 'typed_transaction' | 'personal_message' | 'typed_data'
+export type KeystoneDataType =
+  'transaction' | 'typed_transaction' | 'personal_message' | 'typed_data'
 
-const DATA_TYPES: Record<KeystoneDataType, DataType> = { transaction: DataType.transaction, typed_transaction: DataType.typedTransaction, personal_message: DataType.personalMessage, typed_data: DataType.typedData }
+const DATA_TYPES: Record<KeystoneDataType, DataType> = {
+  transaction: DataType.transaction,
+  typed_transaction: DataType.typedTransaction,
+  personal_message: DataType.personalMessage,
+  typed_data: DataType.typedData,
+}
 
 export interface KeystoneSignRequestInput {
   readonly requestId: Uint8Array
@@ -28,7 +42,8 @@ export interface KeystoneSignRequestInput {
 }
 
 const toBuf = (u: Uint8Array): Buffer => Buffer.from(u.buffer, u.byteOffset, u.byteLength)
-const toHexStr = (u: Uint8Array): string => Array.from(u, (b) => b.toString(16).padStart(2, '0')).join('')
+const toHexStr = (u: Uint8Array): string =>
+  Array.from(u, (b) => b.toString(16).padStart(2, '0')).join('')
 
 /** The registry insists on a real UUID: 16 random bytes with the v4 version and variant bits set. */
 export function asUuidBytes(bytes: Uint8Array): Uint8Array {
@@ -45,8 +60,19 @@ function uuidOf(bytes: Uint8Array): string {
 }
 
 /** The frames of an animated QR for one signing request (a small request is one frame). */
-export function encodeSignRequest(input: KeystoneSignRequestInput, maxFragmentLength = 200): string[] {
-  const req = EthSignRequest.constructETHRequest(toBuf(input.signData), DATA_TYPES[input.dataType], input.path, input.xfp, uuidOf(asUuidBytes(input.requestId)), input.chainId, input.address)
+export function encodeSignRequest(
+  input: KeystoneSignRequestInput,
+  maxFragmentLength = 200,
+): string[] {
+  const req = EthSignRequest.constructETHRequest(
+    toBuf(input.signData),
+    DATA_TYPES[input.dataType],
+    input.path,
+    input.xfp,
+    uuidOf(asUuidBytes(input.requestId)),
+    input.chainId,
+    input.address,
+  )
   const encoder = req.toUREncoder(maxFragmentLength)
   const frames: string[] = []
   for (let i = 0; i < encoder.fragmentsLength; i++) frames.push(encoder.nextPart().toUpperCase())
@@ -67,7 +93,10 @@ export class UrCollector {
 
   /** Progress for the scanner: parts received over the expected count. */
   progress(): { received: number; expected: number } {
-    return { received: this.decoder.receivedPartIndexes().length, expected: this.decoder.expectedPartCount() }
+    return {
+      received: this.decoder.receivedPartIndexes().length,
+      expected: this.decoder.expectedPartCount(),
+    }
   }
 
   reset(): void {
@@ -116,9 +145,14 @@ function addressOf(publicKey: Uint8Array): Hex {
 
 function fromHDKey(key: CryptoHDKey, count: number): KeystoneAccountImport {
   const origin = key.getOrigin()
-  const xfp = toHexStr(new Uint8Array(origin?.getSourceFingerprint() ?? key.getParentFingerprint() ?? Buffer.alloc(4)))
+  const xfp = toHexStr(
+    new Uint8Array(origin?.getSourceFingerprint() ?? key.getParentFingerprint() ?? Buffer.alloc(4)),
+  )
   const basePath = `m/${origin?.getPath() ?? "44'/60'/0'"}`
-  const hd = new HDKey({ publicKey: new Uint8Array(key.getKey()), chainCode: new Uint8Array(key.getChainCode()) })
+  const hd = new HDKey({
+    publicKey: new Uint8Array(key.getKey()),
+    chainCode: new Uint8Array(key.getChainCode()),
+  })
   const addresses: KeystoneAccountImport['addresses'] = []
   const children = key.getChildren()?.getPath() ?? '0/*'
   const [branch] = children.split('/')
@@ -144,9 +178,13 @@ export function decodeAccount(parts: readonly string[], count = 5): KeystoneAcco
       if (!key || addresses.length >= count) return
       const origin = key.getOrigin()
       const basePath = `m/${origin?.getPath() ?? `44'/60'/${i}'`}`
-      const hd = new HDKey({ publicKey: new Uint8Array(key.getKey()), chainCode: new Uint8Array(key.getChainCode()) })
+      const hd = new HDKey({
+        publicKey: new Uint8Array(key.getKey()),
+        chainCode: new Uint8Array(key.getChainCode()),
+      })
       const child = hd.deriveChild(0).deriveChild(0)
-      if (child.publicKey) addresses.push({ path: `${basePath}/0/0`, address: addressOf(child.publicKey), index: i })
+      if (child.publicKey)
+        addresses.push({ path: `${basePath}/0/0`, address: addressOf(child.publicKey), index: i })
     })
     return { xfp, name: null, note: null, addresses }
   }
@@ -154,15 +192,32 @@ export function decodeAccount(parts: readonly string[], count = 5): KeystoneAcco
 }
 
 /** Build a `crypto-hdkey` UR from an xpub-like key (the fake device and fixtures). */
-export function encodeAccount(input: { publicKey: Uint8Array; chainCode: Uint8Array; xfp: string; path?: string; name?: string }): string[] {
+export function encodeAccount(input: {
+  publicKey: Uint8Array
+  chainCode: Uint8Array
+  xfp: string
+  path?: string
+  name?: string
+}): string[] {
   const path = input.path ?? "44'/60'/0'"
-  const components = path.split('/').map((p) => new PathComponent({ index: Number.parseInt(p.replace("'", ''), 10), hardened: p.endsWith("'") }))
+  const components = path
+    .split('/')
+    .map(
+      (p) =>
+        new PathComponent({
+          index: Number.parseInt(p.replace("'", ''), 10),
+          hardened: p.endsWith("'"),
+        }),
+    )
   const key = new CryptoHDKey({
     isMaster: false,
     key: toBuf(input.publicKey),
     chainCode: toBuf(input.chainCode),
     origin: new CryptoKeypath(components, Buffer.from(input.xfp, 'hex'), components.length),
-    children: new CryptoKeypath([new PathComponent({ index: 0, hardened: false }), new PathComponent({ hardened: false })]),
+    children: new CryptoKeypath([
+      new PathComponent({ index: 0, hardened: false }),
+      new PathComponent({ hardened: false }),
+    ]),
     parentFingerprint: Buffer.from(input.xfp, 'hex'),
     name: input.name ?? 'Keystone',
   })
@@ -173,8 +228,14 @@ export function encodeAccount(input: { publicKey: Uint8Array; chainCode: Uint8Ar
 }
 
 /** Build an `eth-signature` UR (the fake device). */
-export function encodeSignature(input: { signature: Uint8Array; requestId: Uint8Array | null }): string[] {
-  const sig = new ETHSignature(toBuf(input.signature), input.requestId ? toBuf(input.requestId) : undefined)
+export function encodeSignature(input: {
+  signature: Uint8Array
+  requestId: Uint8Array | null
+}): string[] {
+  const sig = new ETHSignature(
+    toBuf(input.signature),
+    input.requestId ? toBuf(input.requestId) : undefined,
+  )
   const encoder = sig.toUREncoder(400)
   const frames: string[] = []
   for (let i = 0; i < encoder.fragmentsLength; i++) frames.push(encoder.nextPart().toUpperCase())
@@ -182,14 +243,35 @@ export function encodeSignature(input: { signature: Uint8Array; requestId: Uint8
 }
 
 /** Parse a request the device would see (the fake device, and tests of what we show). */
-export function decodeSignRequest(parts: readonly string[]): { requestId: Uint8Array | null; signData: Uint8Array; dataType: KeystoneDataType; path: string; chainId: number | null; address: Uint8Array | null } {
+export function decodeSignRequest(parts: readonly string[]): {
+  requestId: Uint8Array | null
+  signData: Uint8Array
+  dataType: KeystoneDataType
+  path: string
+  chainId: number | null
+  address: Uint8Array | null
+} {
   const ur = decodeUr(parts)
-  if (ur.type !== 'eth-sign-request') throw new Error(`Expected an eth-sign-request QR, got ${ur.type}.`)
+  if (ur.type !== 'eth-sign-request')
+    throw new Error(`Expected an eth-sign-request QR, got ${ur.type}.`)
   const req = EthSignRequest.fromCBOR(toBuf(ur.cbor))
   const t = req.getDataType()
-  const dataType: KeystoneDataType = t === DataType.transaction ? 'transaction' : t === DataType.typedTransaction ? 'typed_transaction' : t === DataType.personalMessage ? 'personal_message' : 'typed_data'
+  const dataType: KeystoneDataType =
+    t === DataType.transaction
+      ? 'transaction'
+      : t === DataType.typedTransaction
+        ? 'typed_transaction'
+        : t === DataType.personalMessage
+          ? 'personal_message'
+          : 'typed_data'
   const requestId = req.getRequestId()
   const address = req.getSignRequestAddress()
-  return { requestId: requestId ? new Uint8Array(requestId) : null, signData: new Uint8Array(req.getSignData()), dataType, path: `m/${req.getDerivationPath()}`, chainId: req.getChainId() ?? null, address: address ? new Uint8Array(address) : null }
+  return {
+    requestId: requestId ? new Uint8Array(requestId) : null,
+    signData: new Uint8Array(req.getSignData()),
+    dataType,
+    path: `m/${req.getDerivationPath()}`,
+    chainId: req.getChainId() ?? null,
+    address: address ? new Uint8Array(address) : null,
+  }
 }
-

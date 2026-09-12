@@ -60,7 +60,9 @@ export function mainWorldDeclared(manifest: ManifestLike): boolean {
  * the decision answerable from one source.
  */
 export function pageProviderWebAccessible(manifest: ManifestLike, file: string): boolean {
-  return (manifest.web_accessible_resources ?? []).some((entry) => (entry.resources ?? []).includes(file))
+  return (manifest.web_accessible_resources ?? []).some((entry) =>
+    (entry.resources ?? []).includes(file),
+  )
 }
 
 export interface InjectableScript {

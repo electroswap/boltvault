@@ -7,7 +7,18 @@
  */
 import { Buffer } from 'buffer'
 
-const g = globalThis as unknown as { Buffer?: typeof Buffer; process?: { env: Record<string, string | undefined>; browser: boolean; nextTick: (fn: (...a: unknown[]) => void, ...args: unknown[]) => void; pid: number; noDeprecation: boolean; throwDeprecation: boolean; traceDeprecation: boolean } }
+const g = globalThis as unknown as {
+  Buffer?: typeof Buffer
+  process?: {
+    env: Record<string, string | undefined>
+    browser: boolean
+    nextTick: (fn: (...a: unknown[]) => void, ...args: unknown[]) => void
+    pid: number
+    noDeprecation: boolean
+    throwDeprecation: boolean
+    traceDeprecation: boolean
+  }
+}
 if (!g.Buffer) g.Buffer = Buffer
 if (!g.process) {
   g.process = {

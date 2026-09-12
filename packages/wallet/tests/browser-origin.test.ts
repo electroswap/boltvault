@@ -39,8 +39,12 @@ describe('the in-app browser only speaks for a committed origin', () => {
   })
 
   it('carries the channel nonce to the engine on open and on every request', () => {
-    expect(BROWSER).toContain('channel: channel.current')
-    expect(BROWSER).toMatch(/dapps\.open\(\{[^}]*channel: channel\.current/)
-    expect(BROWSER).toMatch(/dapps\.request\(\{[^}]*channel: channel\.current/)
+    // Written against the calls rather than one formatting of them: prettier
+    // wraps these across lines as they grow, and a regex over the whole call
+    // becomes a test of the line breaks.
+    const after = (needle: string): string => BROWSER.slice(BROWSER.indexOf(needle), BROWSER.indexOf(needle) + 400)
+    expect(BROWSER).toContain('engine.dapps')
+    expect(after('.open({')).toContain('channel: channel.current')
+    expect(after('.request({')).toContain('channel: channel.current')
   })
 })

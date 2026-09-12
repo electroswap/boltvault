@@ -37,7 +37,14 @@ import { ChainMark } from './ChainMark'
 import { coinMarkChain } from './coinMarks'
 import { SvgImage } from './SvgImage'
 import { TokenMark } from './TokenMark'
-import { cacheTokenLogo, cachedTokenLogo, normaliseTokenAddress, tokenLogoSources, LOGO_TIMEOUT_MS, type LogoSource } from './tokenLogos'
+import {
+  cacheTokenLogo,
+  cachedTokenLogo,
+  normaliseTokenAddress,
+  tokenLogoSources,
+  LOGO_TIMEOUT_MS,
+  type LogoSource,
+} from './tokenLogos'
 import { paint } from './tokens'
 
 export interface TokenAvatarProps {
@@ -57,9 +64,20 @@ function isLocal(source: LogoSource | undefined): boolean {
   return source !== undefined && source.kind !== 'uri'
 }
 
-export function TokenAvatar({ chainId, address, symbol, logoUri, coingeckoId, size = 32, testID }: TokenAvatarProps) {
+export function TokenAvatar({
+  chainId,
+  address,
+  symbol,
+  logoUri,
+  coingeckoId,
+  size = 32,
+  testID,
+}: TokenAvatarProps) {
   const key = `${chainId}:${normaliseTokenAddress(address)}`
-  const sources = useMemo(() => tokenLogoSources(chainId, address, logoUri, coingeckoId), [chainId, address, logoUri, coingeckoId])
+  const sources = useMemo(
+    () => tokenLogoSources(chainId, address, logoUri, coingeckoId),
+    [chainId, address, logoUri, coingeckoId],
+  )
   const coin = coinMarkChain(chainId, address)
 
   // A previously resolved winner short-circuits the walk entirely. It is kept
@@ -67,7 +85,15 @@ export function TokenAvatar({ chainId, address, symbol, logoUri, coingeckoId, si
   // a logoUri arrives, a CoinGecko id is learned — and an index into last
   // week's list would point at the wrong host.
   const known = cachedTokenLogo(chainId, address)
-  const startAt = known === null ? 0 : known.uri === null ? sources.length : Math.max(0, sources.findIndex((s) => s.kind === 'uri' && s.uri === known.uri))
+  const startAt =
+    known === null
+      ? 0
+      : known.uri === null
+        ? sources.length
+        : Math.max(
+            0,
+            sources.findIndex((s) => s.kind === 'uri' && s.uri === known.uri),
+          )
 
   const [index, setIndex] = useState(startAt)
   const [loaded, setLoaded] = useState(isLocal(sources[startAt]))
@@ -103,14 +129,33 @@ export function TokenAvatar({ chainId, address, symbol, logoUri, coingeckoId, si
   }, [chainId, address, index, loaded, source, sources])
 
   return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: paint.glassRaisedSolid }} testID={testID}>
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        overflow: 'hidden',
+        backgroundColor: paint.glassRaisedSolid,
+      }}
+      testID={testID}
+    >
       {loaded ? null : (
-        <View style={{ position: 'absolute' }}>{coin === null ? <TokenMark symbol={symbol} size={size} /> : <ChainMark chainId={coin} size={size} />}</View>
+        <View style={{ position: 'absolute' }}>
+          {coin === null ? (
+            <TokenMark symbol={symbol} size={size} />
+          ) : (
+            <ChainMark chainId={coin} size={size} />
+          )}
+        </View>
       )}
       {source === undefined ? null : source.kind === 'svg' ? (
         <SvgImage xml={source.xml} uri="" width={size} height={size} />
       ) : source.kind === 'asset' ? (
-        <Image source={source.module} style={{ width: size, height: size }} accessibilityIgnoresInvertColors />
+        <Image
+          source={source.module}
+          style={{ width: size, height: size }}
+          accessibilityIgnoresInvertColors
+        />
       ) : (
         <Image
           source={{ uri: source.uri }}

@@ -25,9 +25,17 @@ export function QR({ value, size = 200, testID }: QRProps) {
   const total = n + quiet * 2
   const cell = size / total
   const rects: Array<{ x: number; y: number }> = []
-  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (cells[y * n + x]) rects.push({ x: (x + quiet) * cell, y: (y + quiet) * cell })
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++)
+      if (cells[y * n + x]) rects.push({ x: (x + quiet) * cell, y: (y + quiet) * cell })
   return (
-    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} testID={testID} accessibilityLabel="QR code">
+    <Svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      testID={testID}
+      accessibilityLabel="QR code"
+    >
       <Defs>
         <LinearGradient id="qr-etch" x1="0" y1="0" x2="1" y2="1">
           <Stop offset="0" stopColor={light.core} />
