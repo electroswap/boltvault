@@ -7,10 +7,11 @@
  * `filterTouchesWhenObscured` — the guard that stops a window drawn over the
  * approval sheet passing taps through to it — and nothing failed.
  */
+import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 
 // The plugin is CommonJS, loaded the way Expo's prebuild loads it.
-const plugin = require('../plugins/withTaskIsolation.js') as {
+const plugin = createRequire(import.meta.url)('../plugins/withTaskIsolation.js') as {
   withObscuredTouchFilter?: unknown
   default?: unknown
 }

@@ -57,8 +57,8 @@ describe('a feed row in words', () => {
   })
 
   it('strips characters that would reorder the sentence around them', () => {
-    const hostile = entryOf(row({ symbol: 'ET‮N', sender: 'Al​ice' }), 52014, 'acct').statements[0]
-    expect(hostile).not.toMatch(/[‮​]/u)
+    const hostile = entryOf(row({ symbol: 'ET\u202eN', sender: 'Al\u200bice' }), 52014, 'acct').statements[0]
+    expect(hostile).not.toMatch(/[\u202e\u200b]/u)
     expect(hostile).toBe('Received 5 ETN from Alice')
   })
 

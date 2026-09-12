@@ -641,17 +641,13 @@ export class VaultManager {
   /** Run something that tests a factor under the throttle, whatever it answers. */
   private async guarded<T>(attempt: () => Promise<T | null>): Promise<T | null> {
     await this.assertNotThrottled()
-    let out: T | null
-    try {
-      out = await attempt()
-    } catch (err) {
-      /*
-        A device that cannot allocate Argon2id's memory is not a wrong
-        password, and must not spend the budget — `unwrap` already separates
-        the two, and this keeps that distinction.
-      */
-      throw err
-    }
+    /*
+      A thrown error spends nothing. A device that cannot allocate Argon2id's
+      memory is not a wrong password, and `unwrap` already separates the two:
+      a wrong factor comes back as null, and everything else comes back as an
+      exception that passes straight through the two lines below.
+    */
+    const out = await attempt()
     if (out === null) await this.recordFailure()
     else await this.clearFailures()
     return out

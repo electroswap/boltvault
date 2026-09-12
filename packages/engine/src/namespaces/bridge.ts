@@ -26,7 +26,7 @@ import {
   type Corridor,
 } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
-import { getAddress, isAddress, maxUint256, parseUnits, type Hex } from 'viem'
+import { getAddress, isAddress, maxUint256, type Hex } from 'viem'
 import { z } from 'zod'
 import { amountOrProblem } from '../amount'
 import { EngineError } from '../errors'

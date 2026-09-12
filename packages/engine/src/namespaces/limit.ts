@@ -8,7 +8,7 @@
 import { ELECTRONEUM_ADDRESSES } from '@boltvault/chains'
 import { ERC20_ABI, LIMIT_PLATFORM_FEE_BIPS, PERMIT2_ABI, PERMIT_EXPIRY_S, bestRoute, encodeApprovePermit2, encodeCloseOrder, encodeSubmitOrder, encodeSubmitOrderWithPermit, openOrders, permitCovers, permitSingleTypedData } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
-import { encodeFunctionData, maxUint256, parseAbi, parseUnits, type Hex } from 'viem'
+import { encodeFunctionData, maxUint256, parseAbi, type Hex } from 'viem'
 import { z } from 'zod'
 import { amountOrProblem } from '../amount'
 import { EngineError } from '../errors'

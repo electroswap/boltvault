@@ -11,7 +11,6 @@ import {
   getAddress,
   isAddress,
   parseAbi,
-  parseUnits,
   type Hex,
 } from 'viem'
 import { z } from 'zod'

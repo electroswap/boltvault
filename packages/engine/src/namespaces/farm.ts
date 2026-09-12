@@ -28,7 +28,7 @@ import {
   type FarmIndexView,
 } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
-import { encodeFunctionData, maxUint256, parseAbi, parseUnits, type Hex } from 'viem'
+import { encodeFunctionData, maxUint256, parseAbi, type Hex } from 'viem'
 import { z } from 'zod'
 import { amountOrThrow } from '../amount'
 import { EngineError } from '../errors'

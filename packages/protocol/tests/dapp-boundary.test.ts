@@ -49,7 +49,6 @@ describe('metering', () => {
     await sites.connect(ORIGIN, { accountId: 'acct-1' })
     let refused = 0
     for (let i = 0; i < 20; i += 1) {
-      // eslint-disable-next-line no-await-in-loop
       await flow.request(ORIGIN, 'eth_requestAccounts', [], `r${i}`).catch((e: unknown) => {
         if ((e as { code?: number }).code === -32005) refused += 1
       })
@@ -65,7 +64,6 @@ describe('subscriptions', () => {
     await sites.connect(ORIGIN, { accountId: 'acct-1' })
     const ids: string[] = []
     for (let i = 0; i < 8; i += 1) {
-      // eslint-disable-next-line no-await-in-loop
       ids.push((await flow.request(ORIGIN, 'eth_subscribe', ['newHeads'], `s${i}`)) as string)
     }
     await expect(flow.request(ORIGIN, 'eth_subscribe', ['newHeads'], 's9')).rejects.toMatchObject({ code: -32005 })

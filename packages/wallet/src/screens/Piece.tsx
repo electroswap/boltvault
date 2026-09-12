@@ -13,7 +13,6 @@ import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
 import { useEngine } from '../engine/EngineProvider'
 import { useLastGood } from '../hooks/useLastGood'
 import { useSafeOpen } from '../hooks/useSafeOpen'
-import { useHost } from '../host'
 import { formatRaw } from '../format'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
@@ -29,7 +28,6 @@ export function Piece({ body, chainId, address, tokenId, reducedMotion = false }
   const openSafely = useSafeOpen()
   const engine = useEngine()
   const router = useRouter()
-  const host = useHost()
   const { active } = useWalletState()
   const { setActive } = useSwapFlow()
   const { flow, dismiss } = useActiveFlow(['nft'])

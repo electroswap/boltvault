@@ -39,7 +39,7 @@ import {
   type OrderView as EsOrder,
 } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
-import { encodeFunctionData, parseAbi, parseUnits, type Hex } from 'viem'
+import { encodeFunctionData, parseAbi, type Hex } from 'viem'
 import { z } from 'zod'
 import { amountOrThrow } from '../amount'
 import { EngineError } from '../errors'

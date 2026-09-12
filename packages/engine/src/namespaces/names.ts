@@ -216,25 +216,17 @@ export const DEFAULT_DURATION_SECONDS = 365 * 24 * 60 * 60
  */
 const PRICE_HEADROOM_PERCENT = 3n
 
-const CommitmentRecordSchema = z.object({
-  id: z.string(),
-  chainId: z.number().int().positive(),
-  accountId: z.string(),
-  owner: z.string(),
-  label: z.string(),
-  name: z.string(),
-  durationSeconds: z.number().int().positive(),
-  /** 32 bytes as hex. Never raw bytes: this crosses the wire and lands in storage. */
-  secret: z.string(),
-  resolver: z.string(),
-  reverseRecord: z.number().int().min(0).max(3),
-  referrer: z.string(),
-  commitment: z.string(),
-  createdAt: z.number(),
-  /** The approval that carries the commit transaction, so a UI can follow it. */
-  commitRequestId: z.string(),
-})
-export type CommitmentRecord = z.infer<typeof CommitmentRecordSchema>
+/**
+ * A pending commitment as the rest of this file wants it: the sealed half
+ * (`NameCommitmentSecret`, validated where it is unsealed) rejoined with the
+ * three fields that may sit in the clear (ES-BV-013). Nothing validates it
+ * again here because neither half arrives unchecked.
+ */
+export type CommitmentRecord = NameCommitmentSecret & {
+  readonly chainId: number
+  readonly commitment: string
+  readonly createdAt: number
+}
 
 /**
  * What a pending commitment may say in the clear (ES-BV-013).
