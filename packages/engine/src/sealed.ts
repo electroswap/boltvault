@@ -143,8 +143,7 @@ export class SealedMap<T> {
       const next = f(await this.load())
       await this.persist(next)
     } catch (err) {
-      if (this.opts.whenLocked === 'skip' && err instanceof EngineError && err.code === 'locked')
-        return false
+      if (this.opts.whenLocked === 'skip' && err instanceof EngineError && err.code === 'locked') return false
       throw err
     }
     this.onChange?.()
@@ -180,9 +179,7 @@ export class SealedMap<T> {
       return this.items
     }
     try {
-      const pt = xchacha20poly1305(key, fromHex(parsed.nonce), this.aadBytes).decrypt(
-        fromHex(parsed.ct),
-      )
+      const pt = xchacha20poly1305(key, fromHex(parsed.nonce), this.aadBytes).decrypt(fromHex(parsed.ct))
       const blob = this.blob.safeParse(JSON.parse(new TextDecoder().decode(pt)))
       this.items = blob.success ? blob.data.items : []
       zeroise(pt)
@@ -241,10 +238,7 @@ export class SealedMap<T> {
     const pt = new TextEncoder().encode(JSON.stringify({ v: 1, items }))
     const ct = xchacha20poly1305(key, nonce, this.aadBytes).encrypt(pt)
     zeroise(key, pt)
-    await this.platform.storage.local.set(
-      this.opts.key,
-      JSON.stringify({ nonce: toHex(nonce), ct: toHex(ct) }),
-    )
+    await this.platform.storage.local.set(this.opts.key, JSON.stringify({ nonce: toHex(nonce), ct: toHex(ct) }))
     this.items = items
   }
 }

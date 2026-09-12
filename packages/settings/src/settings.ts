@@ -11,11 +11,7 @@ import { DEFAULT_SETTINGS } from '@boltvault/core'
 
 const AUTO_LOCKS: readonly AutoLock[] = ['5min', '15min', '60min', 'never']
 /** Pre-idle-timer values (absolute timers, every one shorter than the user meant): one notch up. */
-export const LEGACY_AUTO_LOCK: Readonly<Record<string, AutoLock>> = {
-  immediately: '5min',
-  '1min': '5min',
-  '30min': '60min',
-}
+export const LEGACY_AUTO_LOCK: Readonly<Record<string, AutoLock>> = { immediately: '5min', '1min': '5min', '30min': '60min' }
 const CURRENCIES = ['USD', 'ETN'] as const
 const SCENES = ['circuit', 'grid', 'off'] as const
 
@@ -50,8 +46,7 @@ export function normalizeSettings(
   const autoLock: AutoLock =
     typeof autoLockRaw === 'string' && (AUTO_LOCKS as readonly string[]).includes(autoLockRaw)
       ? (autoLockRaw as AutoLock)
-      : (typeof autoLockRaw === 'string' && LEGACY_AUTO_LOCK[autoLockRaw]) ||
-        DEFAULT_SETTINGS.autoLock
+      : (typeof autoLockRaw === 'string' && LEGACY_AUTO_LOCK[autoLockRaw]) || DEFAULT_SETTINGS.autoLock
 
   const curRaw = obj['displayCurrency']
   const displayCurrency =
@@ -60,10 +55,7 @@ export function normalizeSettings(
       : DEFAULT_SETTINGS.displayCurrency
 
   const sceneRaw = obj['scene']
-  const scene =
-    typeof sceneRaw === 'string' && (SCENES as readonly string[]).includes(sceneRaw)
-      ? (sceneRaw as 'circuit' | 'grid' | 'off')
-      : DEFAULT_SETTINGS.scene
+  const scene = typeof sceneRaw === 'string' && (SCENES as readonly string[]).includes(sceneRaw) ? (sceneRaw as 'circuit' | 'grid' | 'off') : DEFAULT_SETTINGS.scene
 
   return {
     defaultWallet: bool('defaultWallet', DEFAULT_SETTINGS.defaultWallet),
@@ -71,18 +63,8 @@ export function normalizeSettings(
     ethSignEnabled: bool('ethSignEnabled', DEFAULT_SETTINGS.ethSignEnabled),
     txPreview: obj.txPreview === 'off' ? 'off' : DEFAULT_SETTINGS.txPreview,
     exactApprovals: bool('exactApprovals', DEFAULT_SETTINGS.exactApprovals),
-    slippageBips:
-      typeof obj.slippageBips === 'number' &&
-      Number.isInteger(obj.slippageBips) &&
-      obj.slippageBips >= 1 &&
-      obj.slippageBips <= 5_000
-        ? obj.slippageBips
-        : DEFAULT_SETTINGS.slippageBips,
-    enabledChains: Array.isArray(obj.enabledChains)
-      ? obj.enabledChains.filter(
-          (c): c is number => typeof c === 'number' && Number.isInteger(c) && c > 0,
-        )
-      : [...DEFAULT_SETTINGS.enabledChains],
+    slippageBips: typeof obj.slippageBips === 'number' && Number.isInteger(obj.slippageBips) && obj.slippageBips >= 1 && obj.slippageBips <= 5_000 ? obj.slippageBips : DEFAULT_SETTINGS.slippageBips,
+    enabledChains: Array.isArray(obj.enabledChains) ? obj.enabledChains.filter((c): c is number => typeof c === 'number' && Number.isInteger(c) && c > 0) : [...DEFAULT_SETTINGS.enabledChains],
     showTestnet: bool('showTestnet', DEFAULT_SETTINGS.showTestnet),
     haptics: bool('haptics', DEFAULT_SETTINGS.haptics),
     blockTick: bool('blockTick', DEFAULT_SETTINGS.blockTick),
@@ -94,10 +76,7 @@ export function normalizeSettings(
     widgetShowsTotal: bool('widgetShowsTotal', DEFAULT_SETTINGS.widgetShowsTotal),
     autoLock,
     displayCurrency,
-    reducedMotion: bool(
-      'reducedMotion',
-      typeof os.reducedMotion === 'boolean' ? os.reducedMotion : DEFAULT_SETTINGS.reducedMotion,
-    ),
+    reducedMotion: bool('reducedMotion', typeof os.reducedMotion === 'boolean' ? os.reducedMotion : DEFAULT_SETTINGS.reducedMotion),
     scene,
   }
 }
@@ -119,10 +98,7 @@ export interface ChainReseat {
  * Re-seat the `chainId` for ONE origin, leaving every other origin untouched.
  * Unknown origins are appended (a newly-connected site). Pure.
  */
-export function reseatOriginChain(
-  sites: readonly ConnectedSite[],
-  reseat: ChainReseat,
-): ConnectedSite[] {
+export function reseatOriginChain(sites: readonly ConnectedSite[], reseat: ChainReseat): ConnectedSite[] {
   const exists = sites.some((s) => s.origin === reseat.origin)
   if (exists) {
     return sites.map((s) => (s.origin === reseat.origin ? { ...s, chainId: reseat.chainId } : s))

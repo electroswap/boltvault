@@ -43,9 +43,7 @@ function snapshotRoot(): Directory {
   if (Platform.OS !== 'ios') return Paths.document
   const shared = Paths.appleSharedContainers[APP_GROUP]
   if (shared) return shared
-  console.warn(
-    `widget: no App Group container for ${APP_GROUP} — the widget will not see this snapshot. Check ios.entitlements in app.json and that the widget target was prebuilt.`,
-  )
+  console.warn(`widget: no App Group container for ${APP_GROUP} — the widget will not see this snapshot. Check ios.entitlements in app.json and that the widget target was prebuilt.`)
   return Paths.document
 }
 

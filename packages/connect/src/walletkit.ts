@@ -68,21 +68,10 @@ export const ActiveSessionSchema = z.object({
 export type ActiveSession = z.infer<typeof ActiveSessionSchema>
 
 export interface ApprovedNamespaces {
-  readonly eip155: {
-    readonly chains: string[]
-    readonly accounts: string[]
-    readonly methods: string[]
-    readonly events: string[]
-  }
+  readonly eip155: { readonly chains: string[]; readonly accounts: string[]; readonly methods: string[]; readonly events: string[] }
 }
 
-export type JsonRpcResponse =
-  | { readonly id: number; readonly jsonrpc: '2.0'; readonly result: unknown }
-  | {
-      readonly id: number
-      readonly jsonrpc: '2.0'
-      readonly error: { readonly code: number; readonly message: string; readonly data?: unknown }
-    }
+export type JsonRpcResponse = { readonly id: number; readonly jsonrpc: '2.0'; readonly result: unknown } | { readonly id: number; readonly jsonrpc: '2.0'; readonly error: { readonly code: number; readonly message: string; readonly data?: unknown } }
 
 export interface WalletKitLike {
   /** Start the pairing from a `wc:` URI (scanned or deep-linked). */
@@ -90,15 +79,8 @@ export interface WalletKitLike {
   approveSession(input: { id: number; namespaces: ApprovedNamespaces }): Promise<ActiveSession>
   rejectSession(input: { id: number; reason: { code: number; message: string } }): Promise<void>
   respondSessionRequest(input: { topic: string; response: JsonRpcResponse }): Promise<void>
-  disconnectSession(input: {
-    topic: string
-    reason: { code: number; message: string }
-  }): Promise<void>
-  emitSessionEvent(input: {
-    topic: string
-    chainId: string
-    event: { name: string; data: unknown }
-  }): Promise<void>
+  disconnectSession(input: { topic: string; reason: { code: number; message: string } }): Promise<void>
+  emitSessionEvent(input: { topic: string; chainId: string; event: { name: string; data: unknown } }): Promise<void>
   getActiveSessions(): ActiveSession[]
   on(event: 'session_proposal', listener: (proposal: SessionProposal) => void): () => void
   on(event: 'session_request', listener: (request: SessionRequest) => void): () => void

@@ -7,10 +7,7 @@
  */
 import { recoverTransactionAddress, type Hex } from 'viem'
 
-export function yParityFromLedgerV(
-  v: number,
-  input: { readonly chainId: number; readonly legacy: boolean },
-): 0 | 1 {
+export function yParityFromLedgerV(v: number, input: { readonly chainId: number; readonly legacy: boolean }): 0 | 1 {
   if (!Number.isInteger(v) || v < 0 || v > 255) throw new Error(`bad v byte ${v}`)
   if (!input.legacy) return (v >= 27 ? v - 27 : v) & 1 ? 1 : 0
   if (input.chainId === 0) return (v - 27) & 1 ? 1 : 0

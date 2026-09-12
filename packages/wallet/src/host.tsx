@@ -65,10 +65,7 @@ export interface UiHost {
   /** The in-app browser (§5.3): the provider script injected before every page, and where the browser lives. */
   readonly browser?: { readonly providerScript: string }
   /** Deep and universal links (§5.3): the URL the app was opened with, and later ones. */
-  readonly links?: {
-    initial(): Promise<string | null>
-    subscribe(listener: (url: string) => void): () => void
-  }
+  readonly links?: { initial(): Promise<string | null>; subscribe(listener: (url: string) => void): () => void }
   /** Haptics (§7.8): light on confirm and keys, medium on a receipt, heavy on danger/reject. */
   haptic?(kind: 'light' | 'medium' | 'heavy'): void
   /** Three sounds (§7.8), off by default. */
@@ -76,11 +73,7 @@ export interface UiHost {
   /** The native share sheet (the share card, §7.13). */
   share?(input: { title: string; text?: string; url?: string }): Promise<void>
   /** Push registration (§9.3). */
-  readonly push?: {
-    status(): Promise<'unavailable' | 'off' | 'granted' | 'denied'>
-    enable(): Promise<boolean>
-    disable(): Promise<void>
-  }
+  readonly push?: { status(): Promise<'unavailable' | 'off' | 'granted' | 'denied'>; enable(): Promise<boolean>; disable(): Promise<void> }
   /** The body's version and reproducible build hash (Settings › About). */
   readonly version?: string
   readonly buildHash?: string | null
@@ -126,12 +119,7 @@ const unsupported: PasskeyProvider = {
 
 export const DEFAULT_RELAY = 'https://electroswap.io/api/wallet/sync'
 
-const HostContext = createContext<UiHost>({
-  body: 'harness',
-  secretsAllowed: true,
-  passkeys: unsupported,
-  relayUrl: DEFAULT_RELAY,
-})
+const HostContext = createContext<UiHost>({ body: 'harness', secretsAllowed: true, passkeys: unsupported, relayUrl: DEFAULT_RELAY })
 
 export function HostProvider({ host, children }: { host: UiHost; children: ReactNode }) {
   return <HostContext.Provider value={host}>{children}</HostContext.Provider>

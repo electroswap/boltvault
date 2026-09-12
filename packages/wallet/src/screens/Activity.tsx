@@ -5,30 +5,8 @@
  * inbound scan runs debounced in the engine and shows as a sweep, not a
  * blank tab (plan A2).
  */
-import {
-  Body,
-  Chip,
-  Column,
-  Icon,
-  Key,
-  Plate,
-  BarLoader,
-  Row,
-  ScrollView,
-  Segmented,
-  Sheet,
-  metrics,
-  paint,
-  shortAddress,
-  type IconName,
-} from '@boltvault/ui'
-import {
-  cacheKey,
-  type ActivityEntry,
-  type ChainView,
-  type NotificationView,
-  type ScanSummary,
-} from '@boltvault/engine'
+import { Body, Chip, Column, Icon, Key, Plate, BarLoader, Row, ScrollView, Segmented, Sheet, metrics, paint, shortAddress, type IconName } from '@boltvault/ui'
+import { cacheKey, type ActivityEntry, type ChainView, type NotificationView, type ScanSummary } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { HomeKey } from '../components/HomeKey'
 import { useEngine } from '../engine/EngineProvider'
@@ -50,27 +28,12 @@ const RECENT_MAX = 5
 
 function matches(e: ActivityEntry, f: Filter): boolean {
   if (f === 'all') return true
-  if (f === 'sent')
-    return (
-      e.category === 'SEND' ||
-      e.category === 'SWAP' ||
-      e.category === 'DAPP' ||
-      e.category === 'LIMIT' ||
-      e.category === 'FARM_DEPOSIT' ||
-      e.category === 'FARM_WITHDRAW' ||
-      e.category === 'LAUNCHPAD' ||
-      e.category === 'NFT'
-    )
-  if (f === 'received')
-    return (
-      e.category === 'RECEIVE' || e.category === 'FARM_COLLECT' || e.category === 'DIVIDEND_CLAIM'
-    )
+  if (f === 'sent') return e.category === 'SEND' || e.category === 'SWAP' || e.category === 'DAPP' || e.category === 'LIMIT' || e.category === 'FARM_DEPOSIT' || e.category === 'FARM_WITHDRAW' || e.category === 'LAUNCHPAD' || e.category === 'NFT'
+  if (f === 'received') return e.category === 'RECEIVE' || e.category === 'FARM_COLLECT' || e.category === 'DIVIDEND_CLAIM'
   return e.category === 'APPROVE' || e.category === 'REVOKE'
 }
 
-function iconFor(
-  e: ActivityEntry,
-): 'arrowUpRight' | 'arrowDownLeft' | 'approvals' | 'swap' | 'external' | 'farm' | 'star' | 'bolt' {
+function iconFor(e: ActivityEntry): 'arrowUpRight' | 'arrowDownLeft' | 'approvals' | 'swap' | 'external' | 'farm' | 'star' | 'bolt' {
   switch (e.category) {
     case 'RECEIVE':
     case 'FARM_COLLECT':
@@ -97,19 +60,9 @@ function iconFor(
   }
 }
 
-const NOTE_ICON: Record<NotificationView['kind'], IconName> = {
-  alert: 'bell',
-  live: 'launch',
-  offer: 'nft',
-  collect: 'farm',
-  dividends: 'star',
-  arrival: 'arrowDownLeft',
-  system: 'info',
-}
+const NOTE_ICON: Record<NotificationView['kind'], IconName> = { alert: 'bell', live: 'launch', offer: 'nft', collect: 'farm', dividends: 'star', arrival: 'arrowDownLeft', system: 'info' }
 /** Marks that stand for something held, not something to do — drawn solid (owner: the dividends star "should be filled in"). */
-const NOTE_FILLED: ReadonlySet<NotificationView['kind']> = new Set<NotificationView['kind']>([
-  'dividends',
-])
+const NOTE_FILLED: ReadonlySet<NotificationView['kind']> = new Set<NotificationView['kind']>(['dividends'])
 
 export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' | 'mobile' }) {
   const engine = useEngine()
@@ -167,6 +120,7 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const accountId = active?.id ?? null
 
+
   // The shell draws one loader over the whole screen while this is true.
   useScreenBusy('activity', !loaded)
 
@@ -199,8 +153,7 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
     if (!open) return
     setReplaceBusy(true)
     setReplaceError(null)
-    const started =
-      how === 'speedUp' ? engine.tx.speedUp({ id: open.id }) : engine.tx.cancel({ id: open.id })
+    const started = how === 'speedUp' ? engine.tx.speedUp({ id: open.id }) : engine.tx.cancel({ id: open.id })
     started.then(
       (r) => {
         setReplaceBusy(false)
@@ -218,8 +171,7 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
   const scan = useCached<ScanSummary>({
     key: accountId ? cacheKey('activity', 'scan', accountId) : null,
     cached: (e) => (accountId ? e.activityScan.cached({ accountId }) : Promise.resolve(null)),
-    fresh: (e) =>
-      accountId ? e.activityScan.scanAll({ accountId }) : Promise.reject(new Error('no account')),
+    fresh: (e) => (accountId ? e.activityScan.scanAll({ accountId }) : Promise.reject(new Error('no account'))),
     live: false,
   })
 
@@ -235,8 +187,7 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
     const id = rest.join(':')
     if (kind === 'campaign' && id) router.navigate('campaign', { chainId: ETN, pool: id })
     else if (kind === 'token' && id) router.navigate('token', { chainId: ETN, address: id })
-    else if (kind === 'collection' && id)
-      router.navigate('collection', { chainId: ETN, address: id })
+    else if (kind === 'collection' && id) router.navigate('collection', { chainId: ETN, address: id })
     else if (kind === 'legends') router.navigate('legends')
     else if (kind === 'offers') router.navigate('offers')
     else if (kind === 'positions') {
@@ -287,41 +238,23 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
         <Row justifyContent="space-between" alignItems="center" minHeight={metrics.header}>
           {/* A tab root in the full tab has no Back, so it carries the way home. */}
           <HomeKey />
-          <Body size="title" flex={1}>
-            {t({ id: 'activity.title', message: 'Activity' })}
-          </Body>
+          <Body size="title" flex={1}>{t({ id: 'activity.title', message: 'Activity' })}</Body>
           {scan.error && !scan.refreshing ? (
             <Body tone="mute" size="caption" testID="activity-scan-problem">
               {t({ id: 'activity.scan.problem', message: 'Some chains did not answer' })}
             </Body>
           ) : null}
         </Row>
-        <BarLoader
-          active={scan.refreshing}
-          reducedMotion={reducedMotion}
-          testID="activity-refreshing"
-        />
+        <BarLoader active={scan.refreshing} reducedMotion={reducedMotion} testID="activity-refreshing" />
         {recent.length > 0 ? (
           <Column gap="$2" testID="activity-attention">
             <Body tone="mute" size="caption">
               {t({ id: 'activity.attention', message: 'Needs attention' })}
             </Body>
             {recent.map((n) => (
-              <Plate
-                key={n.id}
-                role="card"
-                gap={2}
-                onPress={() => openNote(n)}
-                cursor="pointer"
-                testID={`note-${n.id}`}
-              >
+              <Plate key={n.id} role="card" gap={2} onPress={() => openNote(n)} cursor="pointer" testID={`note-${n.id}`}>
                 <Row gap="$3" alignItems="center">
-                  <Icon
-                    name={NOTE_ICON[n.kind]}
-                    filled={NOTE_FILLED.has(n.kind)}
-                    size={18}
-                    color={n.read ? paint.mute : paint.ember}
-                  />
+                  <Icon name={NOTE_ICON[n.kind]} filled={NOTE_FILLED.has(n.kind)} size={18} color={n.read ? paint.mute : paint.ember} />
                   <Column flex={1}>
                     <Body numberOfLines={1}>{n.title}</Body>
                     <Body tone="mute" size="caption" numberOfLines={1}>
@@ -349,36 +282,13 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
         />
         {loaded && shown.length === 0 ? (
           <Plate gap="$2" testID="activity-empty">
-            <Body tone="mute">
-              {t({
-                id: 'activity.empty',
-                message:
-                  'Nothing yet. Sends, swaps and everything the wallet signs will appear here, with what you were shown when you signed.',
-              })}
-            </Body>
+            <Body tone="mute">{t({ id: 'activity.empty', message: 'Nothing yet. Sends, swaps and everything the wallet signs will appear here, with what you were shown when you signed.' })}</Body>
           </Plate>
         ) : null}
         {shown.map((e) => (
-          <Plate
-            key={e.id}
-            role="card"
-            gap={4}
-            onPress={() => setOpen(e)}
-            cursor="pointer"
-            testID={`activity-${e.id}`}
-          >
+          <Plate key={e.id} role="card" gap={4} onPress={() => setOpen(e)} cursor="pointer" testID={`activity-${e.id}`}>
             <Row gap="$3" alignItems="center">
-              <Icon
-                name={iconFor(e)}
-                size={18}
-                color={
-                  e.status === 'failed'
-                    ? paint.burn
-                    : e.category === 'RECEIVE'
-                      ? paint.arc
-                      : paint.mute
-                }
-              />
+              <Icon name={iconFor(e)} size={18} color={e.status === 'failed' ? paint.burn : e.category === 'RECEIVE' ? paint.arc : paint.mute} />
               {/* minWidth 0 or the text column refuses to shrink and the status
                   chip eats the line — react-native-web's View is flexShrink: 0,
                   so "Received CLUB from …" was cut short by a badge that only
@@ -398,40 +308,9 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
               </Column>
               {/* A status is a state, not a control: small, and never the
                   reason a line of text is cut. */}
-              <Chip
-                flexShrink={0}
-                height={20}
-                paddingHorizontal={7}
-                borderColor={
-                  e.status === 'pending'
-                    ? paint.arc
-                    : e.status === 'failed'
-                      ? paint.burn
-                      : undefined
-                }
-              >
-                <Body
-                  tone={
-                    e.status === 'pending'
-                      ? 'arc'
-                      : e.status === 'failed'
-                        ? 'burn'
-                        : e.status === 'confirmed'
-                          ? 'surge'
-                          : 'mute'
-                  }
-                  size="caption"
-                  fontSize={11}
-                  lineHeight={14}
-                  testID={`activity-status-${e.id}`}
-                >
-                  {e.status === 'pending'
-                    ? t({ id: 'activity.pending', message: 'Pending' })
-                    : e.status === 'failed'
-                      ? t({ id: 'activity.failed', message: 'Failed' })
-                      : e.status === 'replaced'
-                        ? t({ id: 'activity.replaced', message: 'Replaced' })
-                        : t({ id: 'activity.confirmed', message: 'Confirmed' })}
+              <Chip flexShrink={0} height={20} paddingHorizontal={7} borderColor={e.status === 'pending' ? paint.arc : e.status === 'failed' ? paint.burn : undefined}>
+                <Body tone={e.status === 'pending' ? 'arc' : e.status === 'failed' ? 'burn' : e.status === 'confirmed' ? 'surge' : 'mute'} size="caption" fontSize={11} lineHeight={14} testID={`activity-status-${e.id}`}>
+                  {e.status === 'pending' ? t({ id: 'activity.pending', message: 'Pending' }) : e.status === 'failed' ? t({ id: 'activity.failed', message: 'Failed' }) : e.status === 'replaced' ? t({ id: 'activity.replaced', message: 'Replaced' }) : t({ id: 'activity.confirmed', message: 'Confirmed' })}
                 </Body>
               </Chip>
             </Row>
@@ -439,16 +318,7 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
         ))}
         {loaded && entries.length > 0 ? (
           <Row justifyContent="flex-end" paddingTop="$2">
-            <Key
-              label={t({ id: 'activity.clear', message: 'Clear history' })}
-              kind="secondary"
-              size="compact"
-              onPress={() => {
-                setClearError(null)
-                setClearing(true)
-              }}
-              testID="activity-clear"
-            />
+            <Key label={t({ id: 'activity.clear', message: 'Clear history' })} kind="secondary" size="compact" onPress={() => { setClearError(null); setClearing(true) }} testID="activity-clear" />
           </Row>
         ) : null}
       </ScrollView>
@@ -460,39 +330,18 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
         reducedMotion={reducedMotion}
         footer={
           <Column gap="$2">
-            <Key
-              label={t({ id: 'activity.clear.key', message: 'Clear history' })}
-              kind="danger"
-              disabled={clearBusy}
-              onPress={clear}
-              testID="activity-clear-confirm"
-            />
-            <Key
-              label={t({ id: 'cancel', message: 'Cancel' })}
-              kind="secondary"
-              size="compact"
-              disabled={clearBusy}
-              onPress={() => setClearing(false)}
-              testID="activity-clear-cancel"
-            />
+            <Key label={t({ id: 'activity.clear.key', message: 'Clear history' })} kind="danger" disabled={clearBusy} onPress={clear} testID="activity-clear-confirm" />
+            <Key label={t({ id: 'cancel', message: 'Cancel' })} kind="secondary" size="compact" disabled={clearBusy} onPress={() => setClearing(false)} testID="activity-clear-cancel" />
           </Column>
         }
         testID="activity-clear-sheet"
       >
         <Column gap="$3">
           <Body>
-            {t({
-              id: 'activity.clear.body',
-              message:
-                'This erases the record kept on this device — every row, and the statements you were shown when you signed. There is no undo.',
-            })}
+            {t({ id: 'activity.clear.body', message: 'This erases the record kept on this device — every row, and the statements you were shown when you signed. There is no undo.' })}
           </Body>
           <Body tone="mute" size="caption">
-            {t({
-              id: 'activity.clear.scope',
-              message:
-                'Nothing on the chain changes: the transactions themselves stay where they are, and an explorer still shows them. Another device you have paired keeps its own record.',
-            })}
+            {t({ id: 'activity.clear.scope', message: 'Nothing on the chain changes: the transactions themselves stay where they are, and an explorer still shows them. Another device you have paired keeps its own record.' })}
           </Body>
           {clearError ? (
             <Body tone="burn" size="caption" testID="activity-clear-error">
@@ -502,21 +351,7 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
         </Column>
       </Sheet>
 
-      <Sheet
-        open={open !== null}
-        onClose={() => setOpen(null)}
-        title={open?.statements[0] ?? ''}
-        reducedMotion={reducedMotion}
-        footer={
-          <Key
-            label={t({ id: 'close', message: 'Close' })}
-            kind="secondary"
-            size="compact"
-            onPress={() => setOpen(null)}
-          />
-        }
-        testID="activity-detail"
-      >
+      <Sheet open={open !== null} onClose={() => setOpen(null)} title={open?.statements[0] ?? ''} reducedMotion={reducedMotion} footer={<Key label={t({ id: 'close', message: 'Close' })} kind="secondary" size="compact" onPress={() => setOpen(null)} />} testID="activity-detail">
         {open ? (
           <Column gap="$3">
             {open.statements.slice(1).map((s, i) => (
@@ -572,37 +407,18 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
                     <Body tone="mute" size="caption">
                       {t({
                         id: 'activity.stuck.body',
-                        message:
-                          'It has been sent but no block has taken it yet. You can offer the network more to pick it up sooner, or replace it with an empty transaction so it never happens. Each costs its own network fee, and only one of them can win.',
+                        message: 'It has been sent but no block has taken it yet. You can offer the network more to pick it up sooner, or replace it with an empty transaction so it never happens. Each costs its own network fee, and only one of them can win.',
                       })}
                     </Body>
                     <Row gap="$2" flexWrap="wrap">
-                      <Key
-                        label={t({ id: 'activity.speedUp', message: 'Speed up' })}
-                        kind="secondary"
-                        size="compact"
-                        disabled={replaceBusy}
-                        onPress={() => replaceWith('speedUp')}
-                        testID="activity-speed-up"
-                      />
-                      <Key
-                        label={t({ id: 'approval.cancel', message: 'Cancel' })}
-                        kind="danger"
-                        size="compact"
-                        disabled={replaceBusy}
-                        onPress={() => replaceWith('cancel')}
-                        testID="activity-cancel-tx"
-                      />
+                      <Key label={t({ id: 'activity.speedUp', message: 'Speed up' })} kind="secondary" size="compact" disabled={replaceBusy} onPress={() => replaceWith('speedUp')} testID="activity-speed-up" />
+                      <Key label={t({ id: 'approval.cancel', message: 'Cancel' })} kind="danger" size="compact" disabled={replaceBusy} onPress={() => replaceWith('cancel')} testID="activity-cancel-tx" />
                     </Row>
                   </>
                 ) : (
                   // The reason, not an absent control: a missing button explains nothing.
                   <Body tone="mute" size="caption" testID="activity-replace-why">
-                    {replace.why ??
-                      t({
-                        id: 'activity.stuck.no',
-                        message: 'There is nothing to replace on this one.',
-                      })}
+                    {replace.why ?? t({ id: 'activity.stuck.no', message: 'There is nothing to replace on this one.' })}
                   </Body>
                 )}
                 {replaceError ? (
@@ -612,15 +428,7 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
                 ) : null}
               </Plate>
             ) : null}
-            {explorerFor(open) && host.openUrl ? (
-              <Key
-                label={t({ id: 'activity.explorer', message: 'Open in explorer' })}
-                kind="secondary"
-                size="compact"
-                onPress={() => void host.openUrl?.(explorerFor(open) ?? '')}
-                testID="activity-explorer"
-              />
-            ) : null}
+            {explorerFor(open) && host.openUrl ? <Key label={t({ id: 'activity.explorer', message: 'Open in explorer' })} kind="secondary" size="compact" onPress={() => void host.openUrl?.(explorerFor(open) ?? '')} testID="activity-explorer" /> : null}
           </Column>
         ) : null}
       </Sheet>

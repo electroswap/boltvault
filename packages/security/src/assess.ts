@@ -7,15 +7,7 @@ import type { Hex } from 'viem'
 import { decodeCalldata, parseTypedData, type DecodedCall, type ParsedTypedData } from './decode'
 import { explain, explainSimulation } from './explain'
 import { NEW_CONTRACT_DEFAULT_DAYS, runRules, type Rule } from './rules'
-import type {
-  AssessmentContext,
-  Presentation,
-  RiskRule,
-  Severity,
-  SignRequest,
-  Simulation,
-  Statement,
-} from './types'
+import type { AssessmentContext, Presentation, RiskRule, Severity, SignRequest, Simulation, Statement } from './types'
 import { maxSeverity } from './types'
 
 export interface AssessmentInput {
@@ -79,34 +71,11 @@ export function assess(input: AssessmentInput, rules?: readonly Rule[]): Assessm
     it is a token, and the decoder can stop guessing. Anything else falls
     through to `ambiguous_transfer_from`, which says so on the sheet.
   */
-  const hint =
-    input.request.kind === 'transaction' &&
-    input.request.tx.to &&
-    input.context.tokens[input.request.tx.to.toLowerCase()]
-      ? ('erc20' as const)
-      : null
-  const decoded =
-    input.request.kind === 'transaction'
-      ? decodeCalldata({
-          chainId: input.request.tx.chainId,
-          to: input.request.tx.to,
-          data: input.request.tx.data,
-          value: input.request.tx.value,
-          standardHint: hint,
-        })
-      : null
+  const hint = input.request.kind === 'transaction' && input.request.tx.to && input.context.tokens[input.request.tx.to.toLowerCase()] ? ('erc20' as const) : null
+  const decoded = input.request.kind === 'transaction' ? decodeCalldata({ chainId: input.request.tx.chainId, to: input.request.tx.to, data: input.request.tx.data, value: input.request.tx.value, standardHint: hint }) : null
   const typed = input.request.kind === 'typed_data' ? parseTypedData(input.request.typedData) : null
   const simulation = input.simulation ?? null
-  const ruleInput = {
-    origin: input.origin,
-    chainId: input.chainId,
-    account: input.account,
-    request: input.request,
-    decoded,
-    typed,
-    context: input.context,
-    simulation,
-  }
+  const ruleInput = { origin: input.origin, chainId: input.chainId, account: input.account, request: input.request, decoded, typed, context: input.context, simulation }
   const found = [...runRules({ ...ruleInput, simulation: null }, rules)]
   /*
     A batch is assessed by what is inside it.
@@ -120,12 +89,7 @@ export function assess(input: AssessmentInput, rules?: readonly Rule[]): Assessm
   */
   if (decoded?.kind === 'multicall') {
     for (const c of decoded.calls.slice(0, 10)) {
-      const inner = decodeCalldata({
-        chainId: input.chainId,
-        to: c.target,
-        data: c.data,
-        value: 0n,
-      })
+      const inner = decodeCalldata({ chainId: input.chainId, to: c.target, data: c.data, value: 0n })
       if (inner.kind === 'multicall') continue
       for (const r of runRules({ ...ruleInput, decoded: inner, simulation: null }, rules))
         if (!found.some((f) => f.code === r.code)) found.push(r)
@@ -136,9 +100,7 @@ export function assess(input: AssessmentInput, rules?: readonly Rule[]): Assessm
   // Simulation-derived rules can only add.
   const simRules = runRules(ruleInput, rules).filter((r) => !found.some((f) => f.code === r.code))
   for (const r of simRules) severity = maxSeverity(severity, r.severity)
-  const all = [...found, ...simRules].sort(
-    (a, b) => severityRank(b.severity) - severityRank(a.severity),
-  )
+  const all = [...found, ...simRules].sort((a, b) => severityRank(b.severity) - severityRank(a.severity))
   return {
     severity,
     rules: all,

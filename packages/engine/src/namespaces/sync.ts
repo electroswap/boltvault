@@ -785,7 +785,11 @@ export class SyncService {
     return { applied: count }
   }
 
-  private async apply(rec: SyncRecord, from: PairedDeviceRow, state: SyncState): Promise<boolean> {
+  private async apply(
+    rec: SyncRecord,
+    from: PairedDeviceRow,
+    state: SyncState,
+  ): Promise<boolean> {
     const gone = isTombstone(rec)
     switch (rec.collection) {
       case 'settings':
@@ -817,9 +821,7 @@ export class SyncService {
     const current: Record<string, unknown> = { ...(await this.deps.settings.get()) }
     // An echo of what this device already holds is not a change, and refusing
     // to count it keeps "Applied N records" honest.
-    if (
-      Object.entries(patch.data).every(([k, v]) => JSON.stringify(current[k]) === JSON.stringify(v))
-    )
+    if (Object.entries(patch.data).every(([k, v]) => JSON.stringify(current[k]) === JSON.stringify(v)))
       return false
     await this.deps.settings.set(patch.data)
     return true
@@ -925,7 +927,9 @@ export class SyncService {
     state: SyncState,
   ): Promise<boolean> {
     const key = rec.key.toLowerCase()
-    const existing = (await this.deps.contacts.list()).find((c) => c.address.toLowerCase() === key)
+    const existing = (await this.deps.contacts.list()).find(
+      (c) => c.address.toLowerCase() === key,
+    )
     if (gone) {
       if (!existing) return false
       await this.deps.contacts.remove(existing.id)
@@ -1012,9 +1016,7 @@ export class SyncService {
     const prefs = await this.deps.tokens.prefs()
     const here = { pinned: prefs.pinned.includes(rec.key), hidden: prefs.hidden.includes(rec.key) }
     // A tombstone means the token is neither pinned nor hidden there any more.
-    const want = gone
-      ? { pinned: false, hidden: false }
-      : TokenPrefValueSchema.safeParse(rec.value).data
+    const want = gone ? { pinned: false, hidden: false } : TokenPrefValueSchema.safeParse(rec.value).data
     if (!want) return false
     if (here.pinned === want.pinned && here.hidden === want.hidden) return false
     await this.deps.tokens.setPrefs(parts.chainId, parts.address, {
@@ -1060,7 +1062,9 @@ export class SyncService {
     )
     if (!item) throw new EngineError('not_found', 'nothing is waiting for that')
     if (item.collection === 'contact') {
-      const c = (await this.deps.contacts.list()).find((x) => x.address.toLowerCase() === item.key)
+      const c = (await this.deps.contacts.list()).find(
+        (x) => x.address.toLowerCase() === item.key,
+      )
       if (c) await this.deps.contacts.confirm(c.id)
     }
     if (item.collection === 'account') {
@@ -1084,7 +1088,9 @@ export class SyncService {
     )
     if (!item) throw new EngineError('not_found', 'nothing is waiting for that')
     if (item.collection === 'contact') {
-      const c = (await this.deps.contacts.list()).find((x) => x.address.toLowerCase() === item.key)
+      const c = (await this.deps.contacts.list()).find(
+        (x) => x.address.toLowerCase() === item.key,
+      )
       if (c) await this.deps.contacts.remove(c.id)
     } else if (item.collection === 'account') {
       const a = (await this.deps.vault.accounts()).find((x) => x.address.toLowerCase() === item.key)
@@ -1145,8 +1151,7 @@ export function syncNamespace(sync: SyncService): NamespaceSpec {
     incoming: { handler: () => sync.incoming() },
     confirmIncoming: {
       input: IncomingRef,
-      handler: (arg) =>
-        sync.confirmIncoming(arg as { collection: IncomingCollection; key: string }),
+      handler: (arg) => sync.confirmIncoming(arg as { collection: IncomingCollection; key: string }),
     },
     rejectIncoming: {
       input: IncomingRef,

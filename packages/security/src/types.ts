@@ -214,10 +214,7 @@ export interface AssessmentContext {
   /** BOLT's address on this chain, for farm-boost statements; optional. */
   readonly boltToken?: Hex
   /** For `internal:bridge`: whether the recipient is a contract on the origin and on the destination (§8.7). */
-  readonly bridgeRecipient?: {
-    readonly hasCodeOnOrigin: boolean
-    readonly hasCodeOnDestination: boolean | null
-  } | null
+  readonly bridgeRecipient?: { readonly hasCodeOnOrigin: boolean; readonly hasCodeOnDestination: boolean | null } | null
   /**
    * For `internal:swap`: the fee the encoder must have written (T10). `bips: 0`
    * means no `PAY_PORTION` at all.
@@ -231,11 +228,7 @@ export interface AssessmentContext {
    * rather than derived, because the swap command's `amountIn` is already net of
    * it and there is nothing left in the calldata to recompute it from.
    */
-  readonly expectedFee?: {
-    readonly sink: Hex
-    readonly bips: number
-    readonly onInput?: { readonly token: Hex; readonly amount: bigint } | null
-  } | null
+  readonly expectedFee?: { readonly sink: Hex; readonly bips: number; readonly onInput?: { readonly token: Hex; readonly amount: bigint } | null } | null
   /**
    * This account's wallet fee, for a swap ElectroSwap's own site built
    * (master plan §8.6, §8.18).
