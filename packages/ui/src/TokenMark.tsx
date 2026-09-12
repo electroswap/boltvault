@@ -27,15 +27,7 @@ export function TokenMark({ symbol, size = 32, testID }: TokenMarkProps) {
     <Svg width={size} height={size} viewBox="0 0 24 24" testID={testID}>
       <Circle cx={12} cy={12} r={12} fill={paint.glassRaisedSolid} />
       <Circle cx={12} cy={12} r={11.5} stroke={edge} strokeWidth={1} fill="none" />
-      <SvgText
-        x={12}
-        y={12 + fontSize * 0.35}
-        fontSize={fontSize}
-        fontWeight="600"
-        fontFamily={fonts.text}
-        fill={paint.ink}
-        textAnchor="middle"
-      >
+      <SvgText x={12} y={12 + fontSize * 0.35} fontSize={fontSize} fontWeight="600" fontFamily={fonts.text} fill={paint.ink} textAnchor="middle">
         {label}
       </SvgText>
     </Svg>

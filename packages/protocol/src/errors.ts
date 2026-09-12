@@ -38,19 +38,12 @@ export class RpcError extends Error {
   }
 
   toPayload(): RpcErrorPayload {
-    return this.data === undefined
-      ? { code: this.code, message: this.message }
-      : { code: this.code, message: this.message, data: this.data }
+    return this.data === undefined ? { code: this.code, message: this.message } : { code: this.code, message: this.message, data: this.data }
   }
 
   static from(err: unknown): RpcError {
     if (err instanceof RpcError) return err
-    if (
-      err &&
-      typeof err === 'object' &&
-      'code' in err &&
-      typeof (err as { code: unknown }).code === 'number'
-    ) {
+    if (err && typeof err === 'object' && 'code' in err && typeof (err as { code: unknown }).code === 'number') {
       const e = err as { code: number; message?: string; data?: unknown }
       return new RpcError(e.code, e.message ?? 'error', e.data)
     }
@@ -58,14 +51,10 @@ export class RpcError extends Error {
     // counterpart are translated, so a dApp sees a standard code rather than a
     // generic internal error it cannot act on.
     if (err && typeof err === 'object' && (err as { code?: unknown }).code === 'limit_exceeded') {
-      return new RpcError(
-        RPC.LIMIT_EXCEEDED,
-        err instanceof Error ? err.message : 'Too many requests.',
-      )
+      return new RpcError(RPC.LIMIT_EXCEEDED, err instanceof Error ? err.message : 'Too many requests.')
     }
     return new RpcError(RPC.INTERNAL, err instanceof Error ? err.message : String(err))
   }
 }
 
-export const userRejected = (): RpcError =>
-  new RpcError(RPC.USER_REJECTED, 'User rejected the request.')
+export const userRejected = (): RpcError => new RpcError(RPC.USER_REJECTED, 'User rejected the request.')

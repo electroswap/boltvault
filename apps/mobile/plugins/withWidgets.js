@@ -23,28 +23,11 @@ function withAndroidWidget(config) {
     const app = c.modResults.manifest.application?.[0]
     if (!app) return c
     app.receiver = app.receiver ?? []
-    if (
-      !app.receiver.some(
-        (r) => r.$['android:name'] === 'io.electroswap.boltvault.widget.BoltVaultWidgetReceiver',
-      )
-    ) {
+    if (!app.receiver.some((r) => r.$['android:name'] === 'io.electroswap.boltvault.widget.BoltVaultWidgetReceiver')) {
       app.receiver.push({
-        $: {
-          'android:name': 'io.electroswap.boltvault.widget.BoltVaultWidgetReceiver',
-          'android:exported': 'true',
-          'android:label': 'BoltVault',
-        },
-        'intent-filter': [
-          { action: [{ $: { 'android:name': 'android.appwidget.action.APPWIDGET_UPDATE' } }] },
-        ],
-        'meta-data': [
-          {
-            $: {
-              'android:name': 'android.appwidget.provider',
-              'android:resource': '@xml/boltvault_widget_info',
-            },
-          },
-        ],
+        $: { 'android:name': 'io.electroswap.boltvault.widget.BoltVaultWidgetReceiver', 'android:exported': 'true', 'android:label': 'BoltVault' },
+        'intent-filter': [{ action: [{ $: { 'android:name': 'android.appwidget.action.APPWIDGET_UPDATE' } }] }],
+        'meta-data': [{ $: { 'android:name': 'android.appwidget.provider', 'android:resource': '@xml/boltvault_widget_info' } }],
       })
     }
     return c
@@ -54,36 +37,16 @@ function withAndroidWidget(config) {
     (c) => {
       const root = c.modRequest.platformProjectRoot
       const src = path.join(c.modRequest.projectRoot, 'native', 'android', 'widget')
-      const dstKt = path.join(
-        root,
-        'app',
-        'src',
-        'main',
-        'java',
-        'io',
-        'electroswap',
-        'boltvault',
-        'widget',
-      )
+      const dstKt = path.join(root, 'app', 'src', 'main', 'java', 'io', 'electroswap', 'boltvault', 'widget')
       fs.mkdirSync(dstKt, { recursive: true })
       fs.copyFileSync(path.join(src, 'BoltVaultWidget.kt'), path.join(dstKt, 'BoltVaultWidget.kt'))
       const xml = path.join(root, 'app', 'src', 'main', 'res', 'xml')
       fs.mkdirSync(xml, { recursive: true })
-      fs.copyFileSync(
-        path.join(src, 'boltvault_widget_info.xml'),
-        path.join(xml, 'boltvault_widget_info.xml'),
-      )
+      fs.copyFileSync(path.join(src, 'boltvault_widget_info.xml'), path.join(xml, 'boltvault_widget_info.xml'))
       // Glance dependency for the app module.
       const gradle = path.join(root, 'app', 'build.gradle')
       const text = fs.readFileSync(gradle, 'utf8')
-      if (!text.includes('androidx.glance:glance-appwidget'))
-        fs.writeFileSync(
-          gradle,
-          text.replace(
-            /dependencies\s*\{/,
-            'dependencies {\n    implementation("androidx.glance:glance-appwidget:1.1.1")\n    implementation("androidx.glance:glance-material3:1.1.1")',
-          ),
-        )
+      if (!text.includes('androidx.glance:glance-appwidget')) fs.writeFileSync(gradle, text.replace(/dependencies\s*\{/, 'dependencies {\n    implementation("androidx.glance:glance-appwidget:1.1.1")\n    implementation("androidx.glance:glance-material3:1.1.1")'))
       return c
     },
   ])

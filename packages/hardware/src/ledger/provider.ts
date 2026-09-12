@@ -38,15 +38,11 @@ export function hidLedgerProvider(hid: HidProvider): LedgerTransportProvider {
   return {
     kind: 'hid',
     async list() {
-      return (await devices()).map((d) => ({
-        id: hidDeviceId(d),
-        model: ledgerModelName(d.productId, d.productName),
-      }))
+      return (await devices()).map((d) => ({ id: hidDeviceId(d), model: ledgerModelName(d.productId, d.productName) }))
     },
     async open(id) {
       const device = (await devices()).find((d) => hidDeviceId(d) === id)
-      if (!device)
-        throw new Error('No Ledger is connected. Plug it in, unlock it and open the Ethereum app.')
+      if (!device) throw new Error('No Ledger is connected. Plug it in, unlock it and open the Ethereum app.')
       let transport = transports.get(id)
       if (!transport || transport.device !== device) {
         transport = new LedgerHidTransport(device)

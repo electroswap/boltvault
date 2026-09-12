@@ -26,47 +26,25 @@ export const PERMIT_TYPES = {
 } as const
 
 export interface PermitSingleTypedData {
-  readonly domain: {
-    readonly name: 'Permit2'
-    readonly chainId: number
-    readonly verifyingContract: Hex
-  }
+  readonly domain: { readonly name: 'Permit2'; readonly chainId: number; readonly verifyingContract: Hex }
   readonly types: typeof PERMIT_TYPES
   readonly primaryType: 'PermitSingle'
   readonly message: {
-    readonly details: {
-      readonly token: Hex
-      readonly amount: string
-      readonly expiration: string
-      readonly nonce: string
-    }
+    readonly details: { readonly token: Hex; readonly amount: string; readonly expiration: string; readonly nonce: string }
     readonly spender: Hex
     readonly sigDeadline: string
   }
 }
 
 /** The typed data the user signs (JSON-safe: uints as decimal strings, the way dApps send them). */
-export function permitSingleTypedData(input: {
-  chainId: number
-  permit2: Hex
-  token: Hex
-  amount: bigint
-  nonce: number
-  spender: Hex
-  nowSeconds: number
-}): PermitSingleTypedData {
+export function permitSingleTypedData(input: { chainId: number; permit2: Hex; token: Hex; amount: bigint; nonce: number; spender: Hex; nowSeconds: number }): PermitSingleTypedData {
   const expiration = input.nowSeconds + PERMIT_EXPIRY_S
   return {
     domain: { name: 'Permit2', chainId: input.chainId, verifyingContract: input.permit2 },
     types: PERMIT_TYPES,
     primaryType: 'PermitSingle',
     message: {
-      details: {
-        token: input.token,
-        amount: input.amount.toString(),
-        expiration: String(expiration),
-        nonce: String(input.nonce),
-      },
+      details: { token: input.token, amount: input.amount.toString(), expiration: String(expiration), nonce: String(input.nonce) },
       spender: input.spender,
       sigDeadline: String(expiration),
     },

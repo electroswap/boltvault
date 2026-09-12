@@ -53,12 +53,8 @@ export async function buildPageProvider(body) {
   // The M1 gate, and the extension CSP, both forbid runtime code generation —
   // and the injected copy runs under the *page's* CSP, where it would be
   // blocked rather than merely frowned upon.
-  if (/\beval\s*\(|new Function\s*\(/.test(code))
-    throw new Error(`the ${body} provider script must not contain eval or new Function`)
-  if (code.length > BUDGET)
-    throw new Error(
-      `the ${body} page-provider is ${code.length} bytes; the budget is ${BUDGET} (§4.2)`,
-    )
+  if (/\beval\s*\(|new Function\s*\(/.test(code)) throw new Error(`the ${body} provider script must not contain eval or new Function`)
+  if (code.length > BUDGET) throw new Error(`the ${body} page-provider is ${code.length} bytes; the budget is ${BUDGET} (§4.2)`)
   return code
 }
 
@@ -73,9 +69,7 @@ async function main() {
   // Not written anywhere: the extension build emits its own copy. Building it
   // here keeps the budget and the eval gate on one command.
   const extension = await buildPageProvider('extension')
-  console.log(
-    `page-provider (extension): ${extension.length} bytes → emitted by the extension build`,
-  )
+  console.log(`page-provider (extension): ${extension.length} bytes → emitted by the extension build`)
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

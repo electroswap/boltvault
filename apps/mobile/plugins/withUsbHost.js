@@ -28,30 +28,20 @@ function withUsbManifest(config) {
   return withAndroidManifest(config, (c) => {
     const manifest = c.modResults.manifest
     manifest['uses-feature'] = manifest['uses-feature'] ?? []
-    if (
-      !manifest['uses-feature'].some((f) => f.$['android:name'] === 'android.hardware.usb.host')
-    ) {
-      manifest['uses-feature'].push({
-        $: { 'android:name': 'android.hardware.usb.host', 'android:required': 'false' },
-      })
+    if (!manifest['uses-feature'].some((f) => f.$['android:name'] === 'android.hardware.usb.host')) {
+      manifest['uses-feature'].push({ $: { 'android:name': 'android.hardware.usb.host', 'android:required': 'false' } })
     }
     const app = manifest.application?.[0]
     const main = app?.activity?.find((a) => a.$['android:name'] === '.MainActivity')
     if (!main) return c
     main['intent-filter'] = main['intent-filter'] ?? []
     const attached = 'android.hardware.usb.action.USB_DEVICE_ATTACHED'
-    if (
-      !main['intent-filter'].some((f) =>
-        (f.action ?? []).some((a) => a.$['android:name'] === attached),
-      )
-    ) {
+    if (!main['intent-filter'].some((f) => (f.action ?? []).some((a) => a.$['android:name'] === attached))) {
       main['intent-filter'].push({ action: [{ $: { 'android:name': attached } }] })
     }
     main['meta-data'] = main['meta-data'] ?? []
     if (!main['meta-data'].some((m) => m.$['android:name'] === attached)) {
-      main['meta-data'].push({
-        $: { 'android:name': attached, 'android:resource': '@xml/usb_device_filter' },
-      })
+      main['meta-data'].push({ $: { 'android:name': attached, 'android:resource': '@xml/usb_device_filter' } })
     }
     return c
   })
@@ -63,14 +53,7 @@ function withUsbFilterResource(config) {
     (c) => {
       const dir = path.join(c.modRequest.platformProjectRoot, 'app', 'src', 'main', 'res', 'xml')
       fs.mkdirSync(dir, { recursive: true })
-      const xml = [
-        '<?xml version="1.0" encoding="utf-8"?>',
-        '<resources>',
-        '  <!-- Ledger (0x2c97): every model, since the product id encodes the model. -->',
-        `  <usb-device vendor-id="${LEDGER_VENDOR_ID}" />`,
-        '</resources>',
-        '',
-      ].join('\n')
+      const xml = ['<?xml version="1.0" encoding="utf-8"?>', '<resources>', '  <!-- Ledger (0x2c97): every model, since the product id encodes the model. -->', `  <usb-device vendor-id="${LEDGER_VENDOR_ID}" />`, '</resources>', ''].join('\n')
       fs.writeFileSync(path.join(dir, 'usb_device_filter.xml'), xml)
       return c
     },

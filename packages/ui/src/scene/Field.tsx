@@ -34,20 +34,14 @@ function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLSh
 }
 
 function setup(canvas: HTMLCanvasElement, fragment: string): Gl | null {
-  const gl = canvas.getContext('webgl2', {
-    antialias: false,
-    alpha: false,
-    powerPreference: 'low-power',
-    preserveDrawingBuffer: true,
-  })
+  const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, powerPreference: 'low-power', preserveDrawingBuffer: true })
   if (!gl) return null
   const program = gl.createProgram()
   if (!program) return null
   gl.attachShader(program, compile(gl, gl.VERTEX_SHADER, FIELD_VERTEX_GLSL))
   gl.attachShader(program, compile(gl, gl.FRAGMENT_SHADER, fragment))
   gl.linkProgram(program)
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS))
-    throw new Error(`field: link failed: ${gl.getProgramInfoLog(program) ?? ''}`)
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(`field: link failed: ${gl.getProgramInfoLog(program) ?? ''}`)
   gl.useProgram(program)
   return {
     gl,
@@ -72,30 +66,10 @@ interface Live {
   fps: number
 }
 
-export function Field({
-  address,
-  pulse = 0,
-  warmth = 0,
-  intensity = 1,
-  quiet = false,
-  reducedMotion = false,
-  fps = 30,
-  scene = 'grid',
-  width,
-  height,
-  testID,
-}: FieldProps) {
+export function Field({ address, pulse = 0, warmth = 0, intensity = 1, quiet = false, reducedMotion = false, fps = 30, scene = 'grid', width, height, testID }: FieldProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const ctxRef = useRef<Gl | null>(null)
-  const live = useRef<Live>({
-    seed: fieldSeed(address),
-    pulse: 0,
-    touch: [0.5, 0.5, 0],
-    warmth,
-    quiet,
-    reducedMotion,
-    fps,
-  })
+  const live = useRef<Live>({ seed: fieldSeed(address), pulse: 0, touch: [0.5, 0.5, 0], warmth, quiet, reducedMotion, fps })
   const dirty = useRef(true)
 
   // Props → the frame loop, without touching the GL context.
@@ -203,37 +177,9 @@ export function Field({
 
   const opacity = (quiet ? 0.15 : 1) * intensity
   // Off means off: no canvas, no context, no frame loop.
-  if (scene === 'off')
-    return (
-      <View
-        pointerEvents="none"
-        style={{
-          position: 'absolute',
-          left: 0,
-          top: 0,
-          width,
-          height,
-          backgroundColor: paint.void,
-          zIndex: 0,
-        }}
-        testID={testID}
-      />
-    )
+  if (scene === 'off') return <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width, height, backgroundColor: paint.void, zIndex: 0 }} testID={testID} />
   return (
-    <View
-      pointerEvents="none"
-      style={{
-        position: 'absolute',
-        left: 0,
-        top: 0,
-        width,
-        height,
-        backgroundColor: paint.void,
-        opacity,
-        zIndex: 0,
-      }}
-      testID={testID}
-    >
+    <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width, height, backgroundColor: paint.void, opacity, zIndex: 0 }} testID={testID}>
       <canvas ref={canvasRef} style={{ width, height, display: 'block' }} aria-hidden="true" />
     </View>
   )

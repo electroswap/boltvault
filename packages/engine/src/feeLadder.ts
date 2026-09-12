@@ -44,25 +44,14 @@ function parse(body: unknown): ServedFeesJson | null {
   if (typeof body !== 'object' || body === null) return null
   const b = body as Record<string, unknown>
   const tiers = b['tiers']
-  if (
-    typeof b['baseName'] !== 'string' ||
-    typeof b['baseBips'] !== 'number' ||
-    !Array.isArray(tiers)
-  )
-    return null
-  if (typeof b['dynoWeightBolt'] !== 'number' || typeof b['dynoWeightBand'] !== 'number')
-    return null
+  if (typeof b['baseName'] !== 'string' || typeof b['baseBips'] !== 'number' || !Array.isArray(tiers)) return null
+  if (typeof b['dynoWeightBolt'] !== 'number' || typeof b['dynoWeightBand'] !== 'number') return null
   if (typeof b['countFarmBolt'] !== 'boolean') return null
   const parsed: ServedTierJson[] = []
   for (const tier of tiers) {
     if (typeof tier !== 'object' || tier === null) return null
     const t = tier as Record<string, unknown>
-    if (
-      typeof t['name'] !== 'string' ||
-      typeof t['minScoreBolt'] !== 'number' ||
-      typeof t['bips'] !== 'number'
-    )
-      return null
+    if (typeof t['name'] !== 'string' || typeof t['minScoreBolt'] !== 'number' || typeof t['bips'] !== 'number') return null
     parsed.push({ name: t['name'], minScoreBolt: t['minScoreBolt'], bips: t['bips'] })
   }
   return {
@@ -79,11 +68,7 @@ function toLadder(json: ServedFeesJson): ServedLadder {
   return {
     baseName: json.baseName,
     baseBips: json.baseBips,
-    tiers: json.tiers.map((tier) => ({
-      name: tier.name,
-      minScore: toWei(tier.minScoreBolt),
-      bips: tier.bips,
-    })),
+    tiers: json.tiers.map((tier) => ({ name: tier.name, minScore: toWei(tier.minScoreBolt), bips: tier.bips })),
     dynoWeight: toWei(json.dynoWeightBolt),
     dynoWeightBand: json.dynoWeightBand,
     countFarmBolt: json.countFarmBolt,
@@ -144,21 +129,13 @@ export class FeeLadders {
       */
       // The key never travels; a per-request signature does (§9.1, `apiAuth`).
       const response = await this.deps.fetch(url, {
-        headers: {
-          accept: 'application/json',
-          ...(this.deps.key
-            ? authHeaders({ key: this.deps.key, method: 'GET', url, now: this.deps.now() })
-            : {}),
-        },
+        headers: { accept: 'application/json', ...(this.deps.key ? authHeaders({ key: this.deps.key, method: 'GET', url, now: this.deps.now() }) : {}) },
         signal: AbortSignal.timeout(6_000),
       })
       // 404 means this chain has no in-wallet swap, which is an answer, not a
       // failure — do not keep asking.
       if (!response.ok) {
-        this.checked.set(
-          chainId,
-          response.status === 404 ? this.deps.now() : this.deps.now() - REFRESH_MS + RETRY_MS,
-        )
+        this.checked.set(chainId, response.status === 404 ? this.deps.now() : this.deps.now() - REFRESH_MS + RETRY_MS)
         return
       }
       const json = parse(await response.json())

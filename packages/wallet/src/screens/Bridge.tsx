@@ -8,27 +8,7 @@
  * with the token's mark. Only corridors the engine verified on chain are
  * offered; arriving on Electroneum offers "Get ETN".
  */
-import {
-  Body,
-  Cable,
-  ChainMark,
-  Chip,
-  Column,
-  Icon,
-  Input,
-  Key,
-  Pill,
-  Plate,
-  Pressable,
-  Rim,
-  Row,
-  ScrollView,
-  Sheet,
-  TokenAvatar,
-  metrics,
-  paint,
-  shortAddress,
-} from '@boltvault/ui'
+import { Body, Cable, ChainMark, Chip, Column, Icon, Input, Key, Pill, Plate, Pressable, Rim, Row, ScrollView, Sheet, TokenAvatar, metrics, paint, shortAddress } from '@boltvault/ui'
 import type { BridgeQuote, BridgeRoute, BridgeStatus, ChainView } from '@boltvault/engine'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
@@ -63,10 +43,7 @@ function shortHash(h: string): string {
 
 /** "Avalanche C-Chain" → "Avalanche", "BNB Smart Chain" → "BNB": the pills are narrow. */
 function shortName(name: string): string {
-  return name
-    .replace(/ C-Chain$/, '')
-    .replace(/ Smart Chain$/, '')
-    .replace(/ One$/, '')
+  return name.replace(/ C-Chain$/, '').replace(/ Smart Chain$/, '').replace(/ One$/, '')
 }
 
 /**
@@ -77,36 +54,15 @@ function shortName(name: string): string {
  * a smaller selector, and inside an amount well's label row the compact size
  * is the right one anyway.
  */
-function ChainSelect({
-  chainId,
-  label,
-  onPress,
-  testID,
-}: {
-  chainId: number | null
-  label: string
-  onPress: () => void
-  testID: string
-}) {
+function ChainSelect({ chainId, label, onPress, testID }: { chainId: number | null; label: string; onPress: () => void; testID: string }) {
   return (
     <Column marginVertical={-2}>
-      <ChainSelectPill
-        chainId={chainId}
-        label={label}
-        size="sm"
-        onPress={onPress}
-        testID={testID}
-      />
+      <ChainSelectPill chainId={chainId} label={label} size="sm" onPress={onPress} testID={testID} />
     </Column>
   )
 }
 
-export function Bridge({
-  body,
-  reducedMotion = false,
-  chainId: initialChain,
-  token: initialToken,
-}: BridgeProps) {
+export function Bridge({ body, reducedMotion = false, chainId: initialChain, token: initialToken }: BridgeProps) {
   const engine = useEngine()
   const router = useRouter()
   const { active } = useWalletState()
@@ -152,20 +108,13 @@ export function Bridge({
   useEffect(() => {
     let alive = true
     setRoutes([])
-    engine.bridge.routes({ fromChainId: fromChain }).then(
-      (rs) => {
-        if (!alive) return
-        setRoutes(rs)
-        const fromToken = initialToken
-          ? rs.find((r) => r.token.toLowerCase() === initialToken.toLowerCase())?.symbol
-          : undefined
-        const preferred = rs.some((r) => r.symbol === DEFAULT_ASSET)
-          ? DEFAULT_ASSET
-          : (rs[0]?.symbol ?? null)
-        setSymbol((s) => fromToken ?? (s && rs.some((r) => r.symbol === s) ? s : preferred))
-      },
-      () => undefined,
-    )
+    engine.bridge.routes({ fromChainId: fromChain }).then((rs) => {
+      if (!alive) return
+      setRoutes(rs)
+      const fromToken = initialToken ? rs.find((r) => r.token.toLowerCase() === initialToken.toLowerCase())?.symbol : undefined
+      const preferred = rs.some((r) => r.symbol === DEFAULT_ASSET) ? DEFAULT_ASSET : (rs[0]?.symbol ?? null)
+      setSymbol((s) => fromToken ?? (s && rs.some((r) => r.symbol === s) ? s : preferred))
+    }, () => undefined)
     return () => {
       alive = false
     }
@@ -175,13 +124,10 @@ export function Bridge({
   const destinations = useMemo(() => routes.filter((r) => r.symbol === symbol), [routes, symbol])
   useEffect(() => {
     setToChain((c) => {
-      if (preferredTo !== null && destinations.some((d) => d.toChainId === preferredTo))
-        return preferredTo
+      if (preferredTo !== null && destinations.some((d) => d.toChainId === preferredTo)) return preferredTo
       if (c && destinations.some((d) => d.toChainId === c)) return c
       // Electroneum is home: when it is one of the ends, it is the one you meant.
-      return destinations.some((d) => d.toChainId === ETN)
-        ? ETN
-        : (destinations[0]?.toChainId ?? null)
+      return destinations.some((d) => d.toChainId === ETN) ? ETN : (destinations[0]?.toChainId ?? null)
     })
   }, [destinations, preferredTo])
   const route = destinations.find((d) => d.toChainId === toChain) ?? null
@@ -191,15 +137,7 @@ export function Bridge({
     engine.bridge.list({ accountId: active.id }).then(setTransfers, () => undefined)
   }, [engine, active])
   useEffect(load, [load])
-  const onChanged = useCallback(
-    (e: { transfers: BridgeStatus[] }) =>
-      setTransfers(
-        e.transfers
-          .filter((x) => x.accountId === active?.id)
-          .sort((a, b) => b.startedAt - a.startedAt),
-      ),
-    [active],
-  )
+  const onChanged = useCallback((e: { transfers: BridgeStatus[] }) => setTransfers(e.transfers.filter((x) => x.accountId === active?.id).sort((a, b) => b.startedAt - a.startedAt)), [active])
   useEngineEvent('bridge.changed', onChanged)
 
   useEffect(() => {
@@ -209,19 +147,10 @@ export function Bridge({
     }
     let alive = true
     const timer = setTimeout(() => {
-      engine.bridge
-        .quote({
-          accountId: active.id,
-          fromChainId: route.fromChainId,
-          toChainId: route.toChainId,
-          token: route.token,
-          amount: amount || '0',
-          ...(recipient.trim() ? { recipient: recipient.trim() } : {}),
-        })
-        .then(
-          (q) => alive && setQuote(q),
-          (err: unknown) => alive && setError(err instanceof Error ? err.message : String(err)),
-        )
+      engine.bridge.quote({ accountId: active.id, fromChainId: route.fromChainId, toChainId: route.toChainId, token: route.token, amount: amount || '0', ...(recipient.trim() ? { recipient: recipient.trim() } : {}) }).then(
+        (q) => alive && setQuote(q),
+        (err: unknown) => alive && setError(err instanceof Error ? err.message : String(err)),
+      )
     }, 250)
     return () => {
       alive = false
@@ -229,8 +158,7 @@ export function Bridge({
     }
   }, [engine, active, route, amount, recipient])
 
-  const chainName = (id: number): string =>
-    shortName(chains.find((c) => c.chainId === id)?.name ?? `Chain ${id}`)
+  const chainName = (id: number): string => shortName(chains.find((c) => c.chainId === id)?.name ?? `Chain ${id}`)
   const flip = (): void => {
     if (toChain === null) return
     const back = toChain
@@ -244,14 +172,7 @@ export function Bridge({
     setBusy(true)
     setError(null)
     try {
-      const r = await engine.bridge.execute({
-        accountId: active.id,
-        fromChainId: route.fromChainId,
-        toChainId: route.toChainId,
-        token: route.token,
-        amount,
-        ...(recipient.trim() ? { recipient: recipient.trim() } : {}),
-      })
+      const r = await engine.bridge.execute({ accountId: active.id, fromChainId: route.fromChainId, toChainId: route.toChainId, token: route.token, amount, ...(recipient.trim() ? { recipient: recipient.trim() } : {}) })
       const f = await engine.swap.flow({ flowId: r.flowId })
       if (f) swapFlowStore.upsert(f)
       setActive(r.flowId)
@@ -268,98 +189,33 @@ export function Bridge({
   if (flow) {
     return (
       <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="bridge">
-        <FlowPlate
-          flow={flow}
-          titles={{
-            working: t({ id: 'bridge.flow.working', message: 'Bridging' }),
-            done: t({ id: 'bridge.flow.done', message: 'Bridged' }),
-          }}
-          summary={
-            route
-              ? t({
-                  id: 'bridge.flow.summary',
-                  message: '{symbol} from {from} to {to}',
-                  values: {
-                    symbol: route.symbol,
-                    from: chainName(route.fromChainId),
-                    to: chainName(route.toChainId),
-                  },
-                })
-              : null
-          }
-          onDone={dismiss}
-          body={body}
-          reducedMotion={reducedMotion}
-          testID="bridge-flow"
-        />
+        <FlowPlate flow={flow} titles={{ working: t({ id: 'bridge.flow.working', message: 'Bridging' }), done: t({ id: 'bridge.flow.done', message: 'Bridged' }) }} summary={route ? t({ id: 'bridge.flow.summary', message: '{symbol} from {from} to {to}', values: { symbol: route.symbol, from: chainName(route.fromChainId), to: chainName(route.toChainId) } }) : null} onDone={dismiss} body={body} reducedMotion={reducedMotion} testID="bridge-flow" />
       </ScrollView>
     )
   }
 
   const inFlight = transfers.filter((x) => x.state === 'pending' || x.state === 'dispatched')
-  const landed = transfers
-    .filter((x) => x.state === 'delivered' || x.state === 'failed' || x.state === 'timeout')
-    .slice(0, 5)
+  const landed = transfers.filter((x) => x.state === 'delivered' || x.state === 'failed' || x.state === 'timeout').slice(0, 5)
   const feeSymbol = quote?.feeSymbol ?? chains.find((c) => c.chainId === fromChain)?.symbol ?? 'ETN'
   const problem = quote && !quote.ok && amount.trim() ? (quote.problems[0] ?? null) : null
-  const receiveText =
-    quote && quote.ok && amount.trim()
-      ? `≈ ${formatRaw(quote.amountRaw, quote.decimals)} ${quote.symbol}`
-      : '—'
-  const fromOptions = origins.filter(
-    (o) => !symbol || o.symbols.includes(symbol) || o.chainId === fromChain,
-  )
-  const toOptions = origins.filter(
-    (o) => o.chainId !== fromChain && (!symbol || o.symbols.includes(symbol)),
-  )
+  const receiveText = quote && quote.ok && amount.trim() ? `≈ ${formatRaw(quote.amountRaw, quote.decimals)} ${quote.symbol}` : '—'
+  const fromOptions = origins.filter((o) => !symbol || o.symbols.includes(symbol) || o.chainId === fromChain)
+  const toOptions = origins.filter((o) => o.chainId !== fromChain && (!symbol || o.symbols.includes(symbol)))
 
-  const chainRow = (
-    o: Origin,
-    selected: boolean,
-    onPick: () => void,
-    kind: 'from' | 'to',
-  ): React.ReactNode => {
+  const chainRow = (o: Origin, selected: boolean, onPick: () => void, kind: 'from' | 'to'): React.ReactNode => {
     const reachable = kind === 'from' ? true : destinations.some((d) => d.toChainId === o.chainId)
     const off = !o.enabled || !reachable
     return (
-      <Pressable
-        key={o.chainId}
-        onPress={off ? undefined : onPick}
-        accessibilityRole="button"
-        accessibilityState={{ selected, disabled: off }}
-        accessibilityLabel={chainName(o.chainId)}
-        style={{ minHeight: 52, justifyContent: 'center', opacity: off ? 0.6 : 1 }}
-        testID={`bridge-${kind}-${o.chainId}`}
-      >
+      <Pressable key={o.chainId} onPress={off ? undefined : onPick} accessibilityRole="button" accessibilityState={{ selected, disabled: off }} accessibilityLabel={chainName(o.chainId)} style={{ minHeight: 52, justifyContent: 'center', opacity: off ? 0.6 : 1 }} testID={`bridge-${kind}-${o.chainId}`}>
         <Row gap="$3" alignItems="center">
           <ChainMark chainId={o.chainId} size={24} />
           <Column flex={1} alignItems="flex-start">
             <Body fontWeight={selected ? '600' : '400'}>{chainName(o.chainId)}</Body>
             <Body tone="mute" size="caption">
-              {!o.enabled
-                ? t({ id: 'bridge.chain.off', message: 'Turned off in Settings › Networks' })
-                : !reachable
-                  ? t({
-                      id: 'bridge.chain.nocorridor',
-                      message: 'No {s} corridor from {c}',
-                      values: { s: symbol ?? 'USDC', c: chainName(fromChain) },
-                    })
-                  : o.symbols.join(' · ')}
+              {!o.enabled ? t({ id: 'bridge.chain.off', message: 'Turned off in Settings › Networks' }) : !reachable ? t({ id: 'bridge.chain.nocorridor', message: 'No {s} corridor from {c}', values: { s: symbol ?? 'USDC', c: chainName(fromChain) } }) : o.symbols.join(' · ')}
             </Body>
           </Column>
-          {!o.enabled ? (
-            <Pill
-              label={t({ id: 'bridge.chain.networks', message: 'Networks' })}
-              size="sm"
-              onPress={() => {
-                setSheet(null)
-                router.navigate('networks')
-              }}
-              testID={`bridge-networks-${o.chainId}`}
-            />
-          ) : selected ? (
-            <Icon name="check" size={18} color={paint.arc} />
-          ) : null}
+          {!o.enabled ? <Pill label={t({ id: 'bridge.chain.networks', message: 'Networks' })} size="sm" onPress={() => { setSheet(null); router.navigate('networks') }} testID={`bridge-networks-${o.chainId}`} /> : selected ? <Icon name="check" size={18} color={paint.arc} /> : null}
         </Row>
       </Pressable>
     )
@@ -367,72 +223,20 @@ export function Bridge({
 
   return (
     <Column flex={1}>
-      <ScrollView
-        contentContainerStyle={{
-          paddingHorizontal: inset,
-          paddingTop: inset,
-          paddingBottom: 12,
-          gap: 10,
-        }}
-        testID="bridge"
-      >
-        <PageHeader
-          title={t({ id: 'bridge.title', message: 'Bridge' })}
-          subtitle={
-            active.label
-              ? t({
-                  id: 'from.account',
-                  message: 'from {a}',
-                  values: { a: `${active.label} · ${accountName ?? shortAddress(active.address)}` },
-                })
-              : undefined
-          }
-        />
+      <ScrollView contentContainerStyle={{ paddingHorizontal: inset, paddingTop: inset, paddingBottom: 12, gap: 10 }} testID="bridge">
+        <PageHeader title={t({ id: 'bridge.title', message: 'Bridge' })} subtitle={active.label ? t({ id: 'from.account', message: 'from {a}', values: { a: `${active.label} · ${accountName ?? shortAddress(active.address)}` } }) : undefined} />
 
         {/* The console: From and To wells, the flip (or the cable, in flight) on the seam. */}
         <Plate role="console" gap="$1" padding={10} testID="bridge-console">
           <AmountWell
             label={t({ id: 'bridge.from', message: 'From' })}
-            right={
-              <ChainSelect
-                chainId={fromChain}
-                label={chainName(fromChain)}
-                onPress={() => setSheet('from')}
-                testID="bridge-from-select"
-              />
-            }
+            right={<ChainSelect chainId={fromChain} label={chainName(fromChain)} onPress={() => setSheet('from')} testID="bridge-from-select" />}
             value={amount}
             onChange={setAmount}
-            tokenPill={
-              route ? (
-                <Pill
-                  strong
-                  label={route.symbol}
-                  icon={
-                    <TokenAvatar
-                      chainId={fromChain}
-                      address={route.token}
-                      symbol={route.symbol}
-                      size={18}
-                    />
-                  }
-                  chevron={symbols.length > 1}
-                  tone="ink"
-                  size="md"
-                  onPress={symbols.length > 1 ? () => setSheet('asset') : undefined}
-                  testID="bridge-asset-select"
-                />
-              ) : undefined
-            }
+            tokenPill={route ? <Pill strong label={route.symbol} icon={<TokenAvatar chainId={fromChain} address={route.token} symbol={route.symbol} size={18} />} chevron={symbols.length > 1} tone="ink" size="md" onPress={symbols.length > 1 ? () => setSheet('asset') : undefined} testID="bridge-asset-select" /> : undefined}
             fiat={amount.trim() && Number(amount) > 0 ? formatFiat(Number(amount), 'USD') : null}
-            balance={
-              quote ? `${formatRaw(quote.balanceRaw, quote.decimals)} ${quote.symbol}` : null
-            }
-            onMax={
-              quote
-                ? () => setAmount(formatRaw(quote.balanceRaw, quote.decimals).replace(/,/g, ''))
-                : undefined
-            }
+            balance={quote ? `${formatRaw(quote.balanceRaw, quote.decimals)} ${quote.symbol}` : null}
+            onMax={quote ? () => setAmount(formatRaw(quote.balanceRaw, quote.decimals).replace(/,/g, '')) : undefined}
             testID="bridge-from"
             inputTestID="bridge-amount-input"
             maxTestID="bridge-max"
@@ -440,24 +244,8 @@ export function Bridge({
           />
 
           <Row justifyContent="center" marginVertical={-20} zIndex={2}>
-            <Pressable
-              onPress={flip}
-              accessibilityRole="button"
-              accessibilityLabel={t({ id: 'bridge.flip', message: 'Swap direction' })}
-              style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
-              testID="bridge-flip"
-            >
-              <Chip
-                width={36}
-                height={36}
-                borderRadius={18}
-                padding={0}
-                justifyContent="center"
-                alignItems="center"
-                backgroundColor="$glassRaisedSolid"
-                borderWidth={0}
-                overflow="hidden"
-              >
+            <Pressable onPress={flip} accessibilityRole="button" accessibilityLabel={t({ id: 'bridge.flip', message: 'Swap direction' })} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }} testID="bridge-flip">
+              <Chip width={36} height={36} borderRadius={18} padding={0} justifyContent="center" alignItems="center" backgroundColor="$glassRaisedSolid" borderWidth={0} overflow="hidden">
                 <Icon name="swap" color={paint.arc} size={18} />
                 <Rim radius={18} opacity={0.85} />
               </Chip>
@@ -466,37 +254,11 @@ export function Bridge({
 
           <AmountWell
             label={t({ id: 'bridge.to', message: 'To' })}
-            right={
-              <ChainSelect
-                chainId={toChain}
-                label={
-                  toChain !== null
-                    ? chainName(toChain)
-                    : t({ id: 'bridge.pick', message: 'Pick a chain' })
-                }
-                onPress={() => setSheet('to')}
-                testID="bridge-to-select"
-              />
-            }
+            right={<ChainSelect chainId={toChain} label={toChain !== null ? chainName(toChain) : t({ id: 'bridge.pick', message: 'Pick a chain' })} onPress={() => setSheet('to')} testID="bridge-to-select" />}
             value={receiveText}
             readOnly
-            fiat={
-              quote && quote.ok && amount.trim()
-                ? formatFiat(
-                    Number(formatRaw(quote.amountRaw, quote.decimals).replace(/,/g, '')),
-                    'USD',
-                  )
-                : null
-            }
-            balance={
-              quote
-                ? t({
-                    id: 'bridge.eta.short',
-                    message: 'About {m} min via Hyperlane',
-                    values: { m: quote.etaMinutes },
-                  })
-                : null
-            }
+            fiat={quote && quote.ok && amount.trim() ? formatFiat(Number(formatRaw(quote.amountRaw, quote.decimals).replace(/,/g, '')), 'USD') : null}
+            balance={quote ? t({ id: 'bridge.eta.short', message: 'About {m} min via Hyperlane', values: { m: quote.etaMinutes } }) : null}
             balanceIcon="clock"
             testID="bridge-to"
             inputTestID="bridge-receive"
@@ -505,77 +267,29 @@ export function Bridge({
 
         {routes.length === 0 ? (
           <Plate gap="$2" testID="bridge-none">
-            <Body tone="mute">
-              {t({
-                id: 'bridge.none',
-                message:
-                  'No Hyperlane corridor starts on this chain. USDC moves between Electroneum, Ethereum, Base and Avalanche; USDT between Electroneum and Ethereum.',
-              })}
-            </Body>
+            <Body tone="mute">{t({ id: 'bridge.none', message: 'No Hyperlane corridor starts on this chain. USDC moves between Electroneum, Ethereum, Base and Avalanche; USDT between Electroneum and Ethereum.' })}</Body>
           </Plate>
         ) : null}
         {route && !route.verified ? (
           <Plate gap="$2" testID="bridge-off">
             <Row gap="$2" alignItems="center">
               <Icon name="warn" size={16} color={paint.burn} />
-              <Body size="caption">
-                {t({
-                  id: 'bridge.off',
-                  message: 'This corridor is switched off: {reason}.',
-                  values: { reason: route.reason ?? 'verification failed' },
-                })}
-              </Body>
+              <Body size="caption">{t({ id: 'bridge.off', message: 'This corridor is switched off: {reason}.', values: { reason: route.reason ?? 'verification failed' } })}</Body>
             </Row>
           </Plate>
         ) : null}
 
-        <Plate
-          role="recessed"
-          gap={2}
-          paddingVertical={6}
-          paddingHorizontal="$3"
-          testID="bridge-recipient"
-        >
+        <Plate role="recessed" gap={2} paddingVertical={6} paddingHorizontal="$3" testID="bridge-recipient">
           <Row justifyContent="space-between" alignItems="center" minHeight={22}>
             <Body tone="mute" size="caption">
               {t({ id: 'bridge.recipient', message: 'Arrives at' })}
             </Body>
-            {!editingRecipient ? (
-              <Pill
-                label={t({ id: 'bridge.recipient.other', message: 'Someone else' })}
-                size="sm"
-                onPress={() => setEditingRecipient(true)}
-                testID="bridge-recipient-edit"
-              />
-            ) : null}
+            {!editingRecipient ? <Pill label={t({ id: 'bridge.recipient.other', message: 'Someone else' })} size="sm" onPress={() => setEditingRecipient(true)} testID="bridge-recipient-edit" /> : null}
           </Row>
-          {editingRecipient ? (
-            <Input
-              value={recipient}
-              onChange={setRecipient}
-              placeholder="0x…"
-              autoFocus
-              testID="bridge-recipient-input"
-            />
-          ) : (
-            <Body size="caption">
-              {active.label
-                ? `${active.label} · ${shortAddress(active.address)}`
-                : shortAddress(active.address)}
-            </Body>
-          )}
+          {editingRecipient ? <Input value={recipient} onChange={setRecipient} placeholder="0x…" autoFocus testID="bridge-recipient-input" /> : <Body size="caption">{active.label ? `${active.label} · ${shortAddress(active.address)}` : shortAddress(active.address)}</Body>}
           {quote?.recipientCode.origin ? (
             <Body tone={quote.recipientCode.destination === false ? 'burn' : 'mute'} size="caption">
-              {quote.recipientCode.destination === false
-                ? t({
-                    id: 'bridge.recipient.nocode',
-                    message:
-                      'A contract here, nothing on the destination — the tokens would be stuck.',
-                  })
-                : t({
-                    id: 'bridge.recipient.contract',
-                    message: 'This address is a contract on both chains.',
-                  })}
+              {quote.recipientCode.destination === false ? t({ id: 'bridge.recipient.nocode', message: 'A contract here, nothing on the destination — the tokens would be stuck.' }) : t({ id: 'bridge.recipient.contract', message: 'This address is a contract on both chains.' })}
             </Body>
           ) : null}
           <Column height={1} backgroundColor="rgba(95,216,255,0.10)" marginVertical={2} />
@@ -583,33 +297,13 @@ export function Bridge({
             <Body tone="mute" size="caption">
               {t({ id: 'bridge.fees', message: 'Fees' })}
             </Body>
-            <Body
-              size="caption"
-              textAlign="right"
-              flexShrink={1}
-              numberOfLines={1}
-              testID="bridge-fee-gas"
-            >
-              {quote
-                ? t({
-                    id: 'bridge.fees.value',
-                    message: '{g} {s} gas · ≈ {n} {s} network',
-                    values: {
-                      g: formatRaw(quote.gasQuoteWei, 18),
-                      n: formatRaw(quote.txFeeWei, 18),
-                      s: feeSymbol,
-                    },
-                  })
-                : '—'}
+            <Body size="caption" textAlign="right" flexShrink={1} numberOfLines={1} testID="bridge-fee-gas">
+              {quote ? t({ id: 'bridge.fees.value', message: '{g} {s} gas · ≈ {n} {s} network', values: { g: formatRaw(quote.gasQuoteWei, 18), n: formatRaw(quote.txFeeWei, 18), s: feeSymbol } }) : '—'}
             </Body>
           </Row>
           {quote?.steps.includes('approve') ? (
             <Body tone="mute" size="caption">
-              {t({
-                id: 'bridge.approve',
-                message:
-                  'Two signatures: allow the Hyperlane router to take the tokens, then bridge.',
-              })}
+              {t({ id: 'bridge.approve', message: 'Two signatures: allow the Hyperlane router to take the tokens, then bridge.' })}
             </Body>
           ) : null}
         </Plate>
@@ -636,48 +330,27 @@ export function Bridge({
               {t({ id: 'bridge.landed', message: 'Recent' })}
             </Body>
             {landed.map((x) => (
-              <TransferCard
-                key={x.id}
-                x={x}
-                chainName={chainName}
-                reducedMotion={reducedMotion}
-                onGetEtn={
-                  x.state === 'delivered' && x.toChainId === ETN
-                    ? () => router.navigate('receive')
-                    : undefined
-                }
-              />
+              <TransferCard key={x.id} x={x} chainName={chainName} reducedMotion={reducedMotion} onGetEtn={x.state === 'delivered' && x.toChainId === ETN ? () => router.navigate('receive') : undefined} />
             ))}
           </Column>
         ) : null}
       </ScrollView>
 
       <ScreenFooter inset={inset} testID="bridge-footer">
-        {problem ? (
-          <Body tone="burn" size="caption" testID="bridge-problem">
-            {problem}
-          </Body>
-        ) : null}
-        {error ? (
-          <Body tone="burn" size="caption" testID="bridge-error">
-            {error}
-          </Body>
-        ) : null}
-        <Key
-          label={t({ id: 'key.bridge', message: 'Bridge' })}
-          disabled={busy || !quote?.ok || active.kind === 'watch'}
-          onPress={() => void submit()}
-          testID="bridge-key"
-        />
+          {problem ? (
+            <Body tone="burn" size="caption" testID="bridge-problem">
+              {problem}
+            </Body>
+          ) : null}
+          {error ? (
+            <Body tone="burn" size="caption" testID="bridge-error">
+              {error}
+            </Body>
+          ) : null}
+          <Key label={t({ id: 'key.bridge', message: 'Bridge' })} disabled={busy || !quote?.ok || active.kind === 'watch'} onPress={() => void submit()} testID="bridge-key" />
       </ScreenFooter>
 
-      <Sheet
-        open={sheet === 'from'}
-        onClose={() => setSheet(null)}
-        title={t({ id: 'bridge.from.title', message: 'From' })}
-        reducedMotion={reducedMotion}
-        testID="bridge-from-sheet"
-      >
+      <Sheet open={sheet === 'from'} onClose={() => setSheet(null)} title={t({ id: 'bridge.from.title', message: 'From' })} reducedMotion={reducedMotion} testID="bridge-from-sheet">
         <Column gap={2}>
           {fromOptions.map((o) =>
             chainRow(
@@ -693,13 +366,7 @@ export function Bridge({
           )}
         </Column>
       </Sheet>
-      <Sheet
-        open={sheet === 'to'}
-        onClose={() => setSheet(null)}
-        title={t({ id: 'bridge.to.title', message: 'To' })}
-        reducedMotion={reducedMotion}
-        testID="bridge-to-sheet"
-      >
+      <Sheet open={sheet === 'to'} onClose={() => setSheet(null)} title={t({ id: 'bridge.to.title', message: 'To' })} reducedMotion={reducedMotion} testID="bridge-to-sheet">
         <Column gap={2}>
           {toOptions.map((o) =>
             chainRow(
@@ -715,47 +382,19 @@ export function Bridge({
           )}
         </Column>
       </Sheet>
-      <Sheet
-        open={sheet === 'asset'}
-        onClose={() => setSheet(null)}
-        title={t({ id: 'bridge.asset.title', message: 'Asset' })}
-        reducedMotion={reducedMotion}
-        testID="bridge-asset-sheet"
-      >
+      <Sheet open={sheet === 'asset'} onClose={() => setSheet(null)} title={t({ id: 'bridge.asset.title', message: 'Asset' })} reducedMotion={reducedMotion} testID="bridge-asset-sheet">
         <Column gap={2}>
           {symbols.map((sym) => {
             const r = routes.find((x) => x.symbol === sym)
             const selected = symbol === sym
             return (
-              <Pressable
-                key={sym}
-                onPress={() => {
-                  setSymbol(sym)
-                  setSheet(null)
-                }}
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-                accessibilityLabel={sym}
-                style={{ minHeight: 52, justifyContent: 'center' }}
-                testID={`bridge-asset-${sym}`}
-              >
+              <Pressable key={sym} onPress={() => { setSymbol(sym); setSheet(null) }} accessibilityRole="button" accessibilityState={{ selected }} accessibilityLabel={sym} style={{ minHeight: 52, justifyContent: 'center' }} testID={`bridge-asset-${sym}`}>
                 <Row gap="$3" alignItems="center">
-                  {r ? (
-                    <TokenAvatar
-                      chainId={fromChain}
-                      address={r.token}
-                      symbol={r.symbol}
-                      size={24}
-                    />
-                  ) : null}
+                  {r ? <TokenAvatar chainId={fromChain} address={r.token} symbol={r.symbol} size={24} /> : null}
                   <Column flex={1} alignItems="flex-start">
                     <Body fontWeight={selected ? '600' : '400'}>{sym}</Body>
                     <Body tone="mute" size="caption">
-                      {t({
-                        id: 'bridge.asset.hyperlane',
-                        message: 'Hyperlane {s} — the same asset on both chains',
-                        values: { s: sym },
-                      })}
+                      {t({ id: 'bridge.asset.hyperlane', message: 'Hyperlane {s} — the same asset on both chains', values: { s: sym } })}
                     </Body>
                   </Column>
                   {selected ? <Icon name="check" size={18} color={paint.arc} /> : null}
@@ -769,17 +408,7 @@ export function Bridge({
   )
 }
 
-function TransferCard({
-  x,
-  chainName,
-  reducedMotion,
-  onGetEtn,
-}: {
-  x: BridgeStatus
-  chainName: (id: number) => string
-  reducedMotion: boolean
-  onGetEtn?: () => void
-}) {
+function TransferCard({ x, chainName, reducedMotion, onGetEtn }: { x: BridgeStatus; chainName: (id: number) => string; reducedMotion: boolean; onGetEtn?: () => void }) {
   const inFlight = x.state === 'pending' || x.state === 'dispatched'
   return (
     <Plate role="card" gap={4} testID={`bridge-transfer-${x.id}`}>
@@ -789,56 +418,29 @@ function TransferCard({
           <Icon name="chevronRight" size={12} color={paint.mute} />
           <ChainMark chainId={x.toChainId} size={18} />
           <Body numberOfLines={1} flexShrink={1}>
-            {t({
-              id: 'bridge.transfer.short',
-              message: '{a} {s}',
-              values: { a: formatRaw(x.amountRaw, x.decimals), s: x.symbol },
-            })}
+            {t({ id: 'bridge.transfer.short', message: '{a} {s}', values: { a: formatRaw(x.amountRaw, x.decimals), s: x.symbol } })}
           </Body>
         </Row>
         {inFlight ? (
           <Cable state={x.state} width={56} reducedMotion={reducedMotion} />
         ) : (
           <Body tone={x.state === 'delivered' ? 'surge' : 'burn'} size="caption">
-            {x.state === 'delivered'
-              ? t({ id: 'bridge.state.delivered', message: 'Delivered' })
-              : x.state === 'failed'
-                ? t({ id: 'bridge.state.failed', message: 'Failed' })
-                : t({ id: 'bridge.state.timeout', message: 'Taking longer than 30 minutes' })}
+            {x.state === 'delivered' ? t({ id: 'bridge.state.delivered', message: 'Delivered' }) : x.state === 'failed' ? t({ id: 'bridge.state.failed', message: 'Failed' }) : t({ id: 'bridge.state.timeout', message: 'Taking longer than 30 minutes' })}
           </Body>
         )}
       </Row>
       <Body tone="mute" size="caption" numberOfLines={1}>
-        {inFlight
-          ? x.state === 'pending'
-            ? t({ id: 'bridge.state.pending', message: 'Waiting for the origin block' })
-            : t({
-                id: 'bridge.state.dispatched',
-                message: 'Dispatched — watching the destination for delivery',
-              })
-          : `${chainName(x.fromChainId)} → ${chainName(x.toChainId)}`}
+        {inFlight ? (x.state === 'pending' ? t({ id: 'bridge.state.pending', message: 'Waiting for the origin block' }) : t({ id: 'bridge.state.dispatched', message: 'Dispatched — watching the destination for delivery' })) : `${chainName(x.fromChainId)} → ${chainName(x.toChainId)}`}
         {' · '}
         {shortHash(x.originHash)}
         {x.destinationHash ? ` → ${shortHash(x.destinationHash)}` : ''}
       </Body>
       {x.state === 'timeout' && x.messageId ? (
         <Body tone="mute" size="caption">
-          {t({
-            id: 'bridge.explorer',
-            message: 'Look it up on explorer.hyperlane.xyz with message {id}',
-            values: { id: shortHash(x.messageId) },
-          })}
+          {t({ id: 'bridge.explorer', message: 'Look it up on explorer.hyperlane.xyz with message {id}', values: { id: shortHash(x.messageId) } })}
         </Body>
       ) : null}
-      {onGetEtn ? (
-        <Key
-          label={t({ id: 'bridge.getEtn', message: 'Get ETN for fees' })}
-          kind="secondary"
-          size="compact"
-          onPress={onGetEtn}
-          testID="bridge-get-etn"
-        />
-      ) : null}
+      {onGetEtn ? <Key label={t({ id: 'bridge.getEtn', message: 'Get ETN for fees' })} kind="secondary" size="compact" onPress={onGetEtn} testID="bridge-get-etn" /> : null}
     </Plate>
   )
 }

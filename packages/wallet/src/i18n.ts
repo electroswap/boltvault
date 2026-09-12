@@ -9,10 +9,7 @@ export const SOURCE_LOCALE = 'en'
 
 let activated = false
 
-export function setupI18n(
-  locale: string = SOURCE_LOCALE,
-  messages: Record<string, string> = {},
-): void {
+export function setupI18n(locale: string = SOURCE_LOCALE, messages: Record<string, string> = {}): void {
   i18n.load(locale, messages)
   i18n.activate(locale)
   activated = true

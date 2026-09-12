@@ -14,14 +14,7 @@ export const INS = {
   SIGN_EIP712_HASHED: 0x0c,
 } as const
 
-export type LedgerErrorCode =
-  | 'rejected'
-  | 'locked'
-  | 'wrong_app'
-  | 'blind_signing_off'
-  | 'invalid_data'
-  | 'unsupported'
-  | 'device'
+export type LedgerErrorCode = 'rejected' | 'locked' | 'wrong_app' | 'blind_signing_off' | 'invalid_data' | 'unsupported' | 'device'
 
 export class LedgerError extends Error {
   override readonly name = 'LedgerError'
@@ -50,23 +43,11 @@ export function errorForStatus(sw: number): LedgerError {
       return new LedgerError('wrong_app', sw, 'Open the Ethereum app on your Ledger.')
     case 0x6a80:
     case 0x6d02:
-      return new LedgerError(
-        'blind_signing_off',
-        sw,
-        'This transaction needs blind signing. Turn it on in the Ethereum app’s settings on the device, then try again.',
-      )
+      return new LedgerError('blind_signing_off', sw, 'This transaction needs blind signing. Turn it on in the Ethereum app’s settings on the device, then try again.')
     case 0x6d05:
-      return new LedgerError(
-        'unsupported',
-        sw,
-        'Your Ethereum app is too old for this. Update it in Ledger Live.',
-      )
+      return new LedgerError('unsupported', sw, 'Your Ethereum app is too old for this. Update it in Ledger Live.')
     default:
-      return new LedgerError(
-        'device',
-        sw,
-        `The device answered with an error (0x${sw.toString(16)}).`,
-      )
+      return new LedgerError('device', sw, `The device answered with an error (0x${sw.toString(16)}).`)
   }
 }
 

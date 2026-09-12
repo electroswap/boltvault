@@ -63,11 +63,7 @@ export function ScanHost() {
           }}
         />
       ) : (
-        <Text style={styles.text}>
-          {permission?.canAskAgain === false
-            ? 'Allow the camera in Settings to scan.'
-            : 'Waiting for camera permission…'}
-        </Text>
+        <Text style={styles.text}>{permission?.canAskAgain === false ? 'Allow the camera in Settings to scan.' : 'Waiting for camera permission…'}</Text>
       )}
       <Pressable onPress={() => finish(null)} style={styles.cancel} accessibilityRole="button">
         <Text style={styles.text}>Cancel</Text>
@@ -77,15 +73,7 @@ export function ScanHost() {
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#060913',
-    justifyContent: 'center',
-  },
+  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#060913', justifyContent: 'center' },
   camera: { flex: 1 },
   cancel: { padding: 20, alignItems: 'center', minHeight: 56, justifyContent: 'center' },
   text: { color: '#DCE5F5', fontSize: 16, textAlign: 'center', padding: 16 },

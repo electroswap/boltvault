@@ -15,8 +15,7 @@ export interface WordGridProps {
 
 export function WordGrid({ words, blanks = [], testID }: WordGridProps) {
   const rows: Array<Array<{ n: number; w: string }>> = []
-  for (let i = 0; i < words.length; i += 3)
-    rows.push(words.slice(i, i + 3).map((w, j) => ({ n: i + j + 1, w })))
+  for (let i = 0; i < words.length; i += 3) rows.push(words.slice(i, i + 3).map((w, j) => ({ n: i + j + 1, w })))
   return (
     <Column gap="$2" testID={testID}>
       {rows.map((row, r) => (
@@ -24,17 +23,7 @@ export function WordGrid({ words, blanks = [], testID }: WordGridProps) {
           {row.map(({ n, w }) => {
             const blank = blanks.includes(n)
             return (
-              <Row
-                key={n}
-                flex={1}
-                minHeight={44}
-                paddingHorizontal="$3"
-                borderRadius={10}
-                borderWidth={1}
-                borderColor={blank ? paint.arc : edgeStrong}
-                backgroundColor={paint.glassSolid}
-                gap="$2"
-              >
+              <Row key={n} flex={1} minHeight={44} paddingHorizontal="$3" borderRadius={10} borderWidth={1} borderColor={blank ? paint.arc : edgeStrong} backgroundColor={paint.glassSolid} gap="$2">
                 <Body tone="mute" size="caption">
                   {n}
                 </Body>

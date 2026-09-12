@@ -9,15 +9,7 @@
  *
  * Pure over small interfaces so it is unit-tested without a browser.
  */
-import {
-  CHANNEL_EVENT,
-  CHANNEL_REQUEST_EVENT,
-  CONTENT_TARGET,
-  isInpageRequest,
-  isProviderPortMessage,
-  type InpageMessage,
-  type ProviderPortMessage,
-} from './wire'
+import { CHANNEL_EVENT, CHANNEL_REQUEST_EVENT, CONTENT_TARGET, isInpageRequest, isProviderPortMessage, type InpageMessage, type ProviderPortMessage } from './wire'
 
 export interface BridgePort {
   postMessage(message: ProviderPortMessage): void
@@ -29,10 +21,7 @@ export interface BridgePort {
 export interface BridgeWindow {
   readonly location: { readonly origin: string }
   postMessage(message: InpageMessage, targetOrigin: string): void
-  addEventListener(
-    type: string,
-    listener: (ev: { source: unknown; origin: string; data: unknown }) => void,
-  ): void
+  addEventListener(type: string, listener: (ev: { source: unknown; origin: string; data: unknown }) => void): void
   dispatchEvent(ev: unknown): boolean
   readonly CustomEvent: new (type: string, init?: { detail?: unknown }) => unknown
 }
@@ -88,21 +77,9 @@ export function startBridge(deps: BridgeDeps): Bridge {
       if (!isProviderPortMessage(raw)) return
       if (raw.kind === 'response') {
         pending.delete(raw.id)
-        toPage({
-          target: CONTENT_TARGET,
-          channel: nonce,
-          kind: 'response',
-          id: raw.id,
-          ...(raw.error ? { error: raw.error } : { result: raw.result }),
-        })
+        toPage({ target: CONTENT_TARGET, channel: nonce, kind: 'response', id: raw.id, ...(raw.error ? { error: raw.error } : { result: raw.result }) })
       } else if (raw.kind === 'event') {
-        toPage({
-          target: CONTENT_TARGET,
-          channel: nonce,
-          kind: 'event',
-          event: raw.event,
-          payload: raw.payload,
-        })
+        toPage({ target: CONTENT_TARGET, channel: nonce, kind: 'event', event: raw.event, payload: raw.payload })
       }
     })
     p.onDisconnect(() => {
@@ -127,25 +104,13 @@ export function startBridge(deps: BridgeDeps): Bridge {
     if (ev.source !== win) return
     if (ev.origin !== win.location.origin) return
     if (!isInpageRequest(ev.data, nonce)) return
-    const req: ProviderPortMessage & { kind: 'request' } = {
-      kind: 'request',
-      id: ev.data.id,
-      method: ev.data.method,
-      session: nonce,
-      ...(ev.data.params === undefined ? {} : { params: ev.data.params }),
-    }
+    const req: ProviderPortMessage & { kind: 'request' } = { kind: 'request', id: ev.data.id, method: ev.data.method, session: nonce, ...(ev.data.params === undefined ? {} : { params: ev.data.params }) }
     pending.set(req.id, req)
     try {
       ensurePort().postMessage(req)
     } catch {
       pending.delete(req.id)
-      toPage({
-        target: CONTENT_TARGET,
-        channel: nonce,
-        kind: 'response',
-        id: req.id,
-        error: { code: 4900, message: 'BoltVault is not available on this page.' },
-      })
+      toPage({ target: CONTENT_TARGET, channel: nonce, kind: 'response', id: req.id, error: { code: 4900, message: 'BoltVault is not available on this page.' } })
     }
   })
 

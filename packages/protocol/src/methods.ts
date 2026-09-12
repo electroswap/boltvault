@@ -95,25 +95,11 @@ export const SESSION_METHODS: ReadonlySet<string> = new Set([
   'eth_unsubscribe',
 ])
 
-export const CONNECT_METHODS: ReadonlySet<string> = new Set([
-  'eth_requestAccounts',
-  'wallet_requestPermissions',
-])
+export const CONNECT_METHODS: ReadonlySet<string> = new Set(['eth_requestAccounts', 'wallet_requestPermissions'])
 
-export const APPROVAL_METHODS: ReadonlySet<string> = new Set([
-  'eth_sendTransaction',
-  'personal_sign',
-  'eth_signTypedData_v3',
-  'eth_signTypedData_v4',
-  'eth_sign',
-  'wallet_watchAsset',
-])
+export const APPROVAL_METHODS: ReadonlySet<string> = new Set(['eth_sendTransaction', 'personal_sign', 'eth_signTypedData_v3', 'eth_signTypedData_v4', 'eth_sign', 'wallet_watchAsset'])
 
-export const CHAIN_METHODS: ReadonlySet<string> = new Set([
-  'wallet_switchEthereumChain',
-  'wallet_addEthereumChain',
-  'wallet_revokePermissions',
-])
+export const CHAIN_METHODS: ReadonlySet<string> = new Set(['wallet_switchEthereumChain', 'wallet_addEthereumChain', 'wallet_revokePermissions'])
 
 export const REJECTED_METHODS: ReadonlySet<string> = new Set([
   'eth_signTransaction',

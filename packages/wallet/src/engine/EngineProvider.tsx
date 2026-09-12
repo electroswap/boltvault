@@ -8,13 +8,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 
 const EngineContext = createContext<WalletEngine | null>(null)
 
-export function EngineProvider({
-  engine,
-  children,
-}: {
-  engine: WalletEngine
-  children: ReactNode
-}) {
+export function EngineProvider({ engine, children }: { engine: WalletEngine; children: ReactNode }) {
   return <EngineContext.Provider value={engine}>{children}</EngineContext.Provider>
 }
 
@@ -25,10 +19,7 @@ export function useEngine(): WalletEngine {
 }
 
 /** Subscribe to one engine event type for the lifetime of the component. */
-export function useEngineEvent<T extends EngineEvent['type']>(
-  type: T,
-  listener: (event: Extract<EngineEvent, { type: T }>) => void,
-): void {
+export function useEngineEvent<T extends EngineEvent['type']>(type: T, listener: (event: Extract<EngineEvent, { type: T }>) => void): void {
   const engine = useEngine()
   useEffect(
     () =>
@@ -46,10 +37,7 @@ export interface AsyncState<T> {
 }
 
 /** Load once, then refresh whenever `deps` change. Errors are strings for the UI. */
-export function useEngineQuery<T>(
-  load: (engine: WalletEngine) => Promise<T>,
-  deps: readonly unknown[],
-): AsyncState<T> & { refresh: () => void } {
+export function useEngineQuery<T>(load: (engine: WalletEngine) => Promise<T>, deps: readonly unknown[]): AsyncState<T> & { refresh: () => void } {
   const engine = useEngine()
   const [state, setState] = useState<AsyncState<T>>({ value: null, error: null, loading: true })
   const [tick, setTick] = useState(0)
@@ -61,12 +49,7 @@ export function useEngineQuery<T>(
         if (!cancelled) setState({ value, error: null, loading: false })
       },
       (err: unknown) => {
-        if (!cancelled)
-          setState({
-            value: null,
-            error: err instanceof Error ? err.message : String(err),
-            loading: false,
-          })
+        if (!cancelled) setState({ value: null, error: err instanceof Error ? err.message : String(err), loading: false })
       },
     )
     return () => {

@@ -48,35 +48,10 @@ export interface AmountWellProps {
   readonly balanceTestID?: string
 }
 
-export function AmountWell({
-  label,
-  value,
-  onChange,
-  readOnly = false,
-  tokenPill,
-  right,
-  fiat,
-  balance,
-  balanceIcon = 'wallet',
-  onMax,
-  error,
-  accent,
-  autoFocus,
-  testID,
-  inputTestID,
-  maxTestID,
-  balanceTestID,
-}: AmountWellProps) {
+export function AmountWell({ label, value, onChange, readOnly = false, tokenPill, right, fiat, balance, balanceIcon = 'wallet', onMax, error, accent, autoFocus, testID, inputTestID, maxTestID, balanceTestID }: AmountWellProps) {
   const empty = !value || value === '0' || value === '—'
   return (
-    <Plate
-      role="well"
-      gap={2}
-      paddingVertical={8}
-      paddingHorizontal={12}
-      {...(accent ? { borderColor: accent, borderWidth: 2 } : {})}
-      testID={testID}
-    >
+    <Plate role="well" gap={2} paddingVertical={8} paddingHorizontal={12} {...(accent ? { borderColor: accent, borderWidth: 2 } : {})} testID={testID}>
       <Row justifyContent="space-between" alignItems="center" minHeight={right ? 32 : 18}>
         <Body tone="mute" size="caption">
           {label}
@@ -86,29 +61,11 @@ export function AmountWell({
       <Row gap="$2" alignItems="center" minHeight={40}>
         <Column flex={1} minWidth={0}>
           {readOnly || !onChange ? (
-            <Body
-              fontFamily="$readout"
-              fontSize={28}
-              lineHeight={34}
-              fontWeight="600"
-              letterSpacing={-0.85}
-              numberOfLines={1}
-              color={empty ? '$mute' : '$ink'}
-              testID={inputTestID}
-            >
+            <Body fontFamily="$readout" fontSize={28} lineHeight={34} fontWeight="600" letterSpacing={-0.85} numberOfLines={1} color={empty ? '$mute' : '$ink'} testID={inputTestID}>
               {value || '0'}
             </Body>
           ) : (
-            <Input
-              value={value}
-              onChange={onChange}
-              placeholder="0"
-              bare
-              big
-              numeric
-              autoFocus={autoFocus}
-              testID={inputTestID}
-            />
+            <Input value={value} onChange={onChange} placeholder="0" bare big numeric autoFocus={autoFocus} testID={inputTestID} />
           )}
         </Column>
         {tokenPill ?? null}
@@ -126,13 +83,7 @@ export function AmountWell({
               </Body>
             </Row>
           ) : null}
-          {onMax ? (
-            <MaxKey
-              label={t({ id: 'max.caps', message: 'MAX' })}
-              onPress={onMax}
-              testID={maxTestID}
-            />
-          ) : null}
+          {onMax ? <MaxKey label={t({ id: 'max.caps', message: 'MAX' })} onPress={onMax} testID={maxTestID} /> : null}
         </Row>
       </Row>
       {error ? (

@@ -75,8 +75,7 @@ function idFor(d: HidDescriptor): string {
 export function hidLedgerProvider(): LedgerTransportProvider {
   const open = new Map<string, ApduTransport & { readonly model: string }>()
   const seen = new Map<string, HidDescriptor>()
-  const load = (): Promise<HidModule> =>
-    import('@ledgerhq/react-native-hid') as unknown as Promise<HidModule>
+  const load = (): Promise<HidModule> => import('@ledgerhq/react-native-hid') as unknown as Promise<HidModule>
   return {
     kind: 'usb',
     async list() {
@@ -84,10 +83,7 @@ export function hidLedgerProvider(): LedgerTransportProvider {
       const devices = await m.default.list()
       seen.clear()
       for (const d of devices) seen.set(idFor(d), d)
-      return devices.map((d) => ({
-        id: idFor(d),
-        model: modelFromProduct(d.productId, d.deviceName ?? d.name),
-      }))
+      return devices.map((d) => ({ id: idFor(d), model: modelFromProduct(d.productId, d.deviceName ?? d.name) }))
     },
     async open(id) {
       const existing = open.get(id)
@@ -103,11 +99,7 @@ export function hidLedgerProvider(): LedgerTransportProvider {
         second run inherited the permission granted by the first. A bounded
         wait turns a hang into a sentence the user can act on.
       */
-      const t = await withTimeout(
-        m.default.open(descriptor),
-        OPEN_TIMEOUT_MS,
-        'The Ledger did not respond. Allow the USB permission when Android asks, then try again.',
-      )
+      const t = await withTimeout(m.default.open(descriptor), OPEN_TIMEOUT_MS, 'The Ledger did not respond. Allow the USB permission when Android asks, then try again.')
       // Ledger's Transport allows one exchange at a time and throws
       // TransportRaceCondition otherwise; callers are legitimately concurrent,
       // so the queue lives here. See ledger-queue.ts.

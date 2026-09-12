@@ -68,17 +68,7 @@ export class SiteRegistry {
     return this.sites[origin]?.connectedAt === undefined
   }
 
-  async connect(
-    origin: string,
-    params: {
-      accountId: string
-      chainId?: number
-      accounts?: string[]
-      now?: number
-      title?: string
-      icon?: string
-    },
-  ): Promise<ConnectedSite> {
+  async connect(origin: string, params: { accountId: string; chainId?: number; accounts?: string[]; now?: number; title?: string; icon?: string }): Promise<ConnectedSite> {
     const prev = this.sites[origin]
     const row: ConnectedSite = {
       origin,
@@ -90,8 +80,8 @@ export class SiteRegistry {
       lastUsed: params.now ?? Date.now(),
       // A reconnect is not a reason to forget a limit the user set.
       ...(prev?.budget !== undefined ? { budget: prev.budget } : {}),
-      ...((params.title ?? prev?.title) ? { title: params.title ?? prev?.title } : {}),
-      ...((params.icon ?? prev?.icon) ? { icon: params.icon ?? prev?.icon } : {}),
+      ...(params.title ?? prev?.title ? { title: params.title ?? prev?.title } : {}),
+      ...(params.icon ?? prev?.icon ? { icon: params.icon ?? prev?.icon } : {}),
     }
     this.sites[origin] = row
     await this.persist()
@@ -121,11 +111,7 @@ export class SiteRegistry {
    * re-seat, and inventing a disconnected row here would put an account id
    * beside an origin the user never linked it to.
    */
-  async setAccount(
-    origin: string,
-    accountId: string,
-    accounts?: readonly string[],
-  ): Promise<boolean> {
+  async setAccount(origin: string, accountId: string, accounts?: readonly string[]): Promise<boolean> {
     const row = this.sites[origin]
     if (!row) return false
     row.accountId = accountId
@@ -161,12 +147,7 @@ export class SiteRegistry {
    * created disconnected, exactly as a chain preference is.
    */
   async setBudget(origin: string, budget: string | null): Promise<void> {
-    const row = this.sites[origin] ?? {
-      origin,
-      chainId: this._homeChainId,
-      accountId: '',
-      connected: false,
-    }
+    const row = this.sites[origin] ?? { origin, chainId: this._homeChainId, accountId: '', connected: false }
     if (budget === null) delete row.budget
     else row.budget = budget
     this.sites[origin] = row

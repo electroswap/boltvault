@@ -36,31 +36,13 @@ export function Seat({ address, label, name, onPress, onCopy, copied = false, te
   const title = name ?? label
   // The icon now lives in its own control beside this, so the line is text only.
   const addressLine = (
-    <Body
-      tone={copied ? 'arc' : 'mute'}
-      size="caption"
-      fontVariant={['tabular-nums']}
-      numberOfLines={1}
-    >
+    <Body tone={copied ? 'arc' : 'mute'} size="caption" fontVariant={['tabular-nums']} numberOfLines={1}>
       {copied ? 'Copied' : shortAddress(address)}
     </Body>
   )
   return (
     <Row gap="$3" alignItems="center" flexShrink={1} minWidth={0}>
-      <Pressable
-        onPress={onPress}
-        accessibilityRole="button"
-        accessibilityLabel={`Account ${title}`}
-        testID={testID}
-        style={{
-          minHeight: metrics.hit,
-          minWidth: metrics.hit,
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginHorizontal: -2,
-          flexShrink: 0,
-        }}
-      >
+      <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`Account ${title}`} testID={testID} style={{ minHeight: metrics.hit, minWidth: metrics.hit, alignItems: 'center', justifyContent: 'center', marginHorizontal: -2, flexShrink: 0 }}>
         {/* `metrics.disc`, not 40: the same circle the header's IconButtons draw. */}
         <Signature address={address} size={metrics.disc} />
       </Pressable>
@@ -75,13 +57,7 @@ export function Seat({ address, label, name, onPress, onCopy, copied = false, te
       */}
       <Column alignItems="flex-start" flexShrink={1} minWidth={0}>
         <Row gap={4} alignItems="center" flexShrink={1} minWidth={0}>
-          <Pressable
-            onPress={onPress}
-            accessibilityRole="button"
-            accessibilityLabel={`Account ${title}`}
-            testID={testID ? `${testID}-name` : undefined}
-            style={{ minHeight: metrics.hit, justifyContent: 'center', flexShrink: 1, minWidth: 0 }}
-          >
+          <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`Account ${title}`} testID={testID ? `${testID}-name` : undefined} style={{ minHeight: metrics.hit, justifyContent: 'center', flexShrink: 1, minWidth: 0 }}>
             <Column alignItems="flex-start" gap={1}>
               <Row gap={6} alignItems="center">
                 <Body size="title" numberOfLines={1} flexShrink={1}>
@@ -93,28 +69,11 @@ export function Seat({ address, label, name, onPress, onCopy, copied = false, te
             </Column>
           </Pressable>
           {onCopy ? (
-            <Pressable
-              onPress={onCopy}
-              accessibilityRole="button"
-              accessibilityLabel={`Copy address ${address}`}
-              testID={testID ? `${testID}-copy` : undefined}
-              style={{
-                minHeight: metrics.hit,
-                minWidth: metrics.hit,
-                alignItems: 'flex-start',
-                justifyContent: 'flex-end',
-                paddingBottom: 4,
-                flexShrink: 0,
-              }}
-            >
+            <Pressable onPress={onCopy} accessibilityRole="button" accessibilityLabel={`Copy address ${address}`} testID={testID ? `${testID}-copy` : undefined} style={{ minHeight: metrics.hit, minWidth: metrics.hit, alignItems: 'flex-start', justifyContent: 'flex-end', paddingBottom: 4, flexShrink: 0 }}>
               {/* 44×44 to satisfy the hit-target law (§7.5); the glyph hugs the
                 left so the slack falls into the header's empty middle and copy
                 still reads as sitting beside the address. */}
-              <Icon
-                name={copied ? 'check' : 'copy'}
-                size={14}
-                color={copied ? paint.arc : paint.mute}
-              />
+            <Icon name={copied ? 'check' : 'copy'} size={14} color={copied ? paint.arc : paint.mute} />
             </Pressable>
           ) : null}
         </Row>

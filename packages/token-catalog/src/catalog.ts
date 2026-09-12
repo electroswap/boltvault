@@ -84,12 +84,7 @@ export function parseTokenList(raw: RawTokenList, chainId: number): TokenEntry[]
     const addr = t.address
     if (!addr) continue
     if (!isAddress(addr, { strict: true })) continue
-    if (
-      t.decimals === undefined ||
-      !Number.isInteger(t.decimals) ||
-      t.decimals < 0 ||
-      t.decimals > 36
-    )
+    if (t.decimals === undefined || !Number.isInteger(t.decimals) || t.decimals < 0 || t.decimals > 36)
       continue
     if (!t.name || !t.symbol) continue
     out.push({

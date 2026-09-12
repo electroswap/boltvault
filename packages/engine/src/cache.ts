@@ -25,10 +25,7 @@ export interface Cached<T> {
 }
 
 export function cachedSchema<T>(inner: ZodType<T>): ZodType<Cached<T>> {
-  return z.object({
-    value: inner,
-    observedAt: z.number().int().nonnegative(),
-  }) as unknown as ZodType<Cached<T>>
+  return z.object({ value: inner, observedAt: z.number().int().nonnegative() }) as unknown as ZodType<Cached<T>>
 }
 
 export interface CacheSpec<T> {
@@ -131,9 +128,7 @@ export class DocCache {
 
   async write<T>(spec: CacheSpec<T>, value: T): Promise<Cached<T>> {
     const cached: Cached<T> = { value, observedAt: this.now() }
-    await this.shards
-      .for(cacheShardOf(spec.key))
-      .set(spec.key, { value, observedAt: cached.observedAt })
+    await this.shards.for(cacheShardOf(spec.key)).set(spec.key, { value, observedAt: cached.observedAt })
     this.bus.emit({ type: 'cache.changed', key: spec.key, observedAt: cached.observedAt })
     return cached
   }

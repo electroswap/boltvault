@@ -4,22 +4,7 @@
  * Positions, and "since you last looked". Reached from the Home console; the
  * dock stays underneath.
  */
-import {
-  Body,
-  BusBar,
-  Column,
-  Icon,
-  LiveFilament,
-  Pill,
-  Plate,
-  Row,
-  RollingReadout,
-  ScrollView,
-  Segmented,
-  SharedElement,
-  metrics,
-  paint,
-} from '@boltvault/ui'
+import { Body, BusBar, Column, Icon, LiveFilament, Pill, Plate, Row, RollingReadout, ScrollView, Segmented, SharedElement, metrics, paint } from '@boltvault/ui'
 import { useEffect, useState } from 'react'
 import { AddTokenSheet } from '../components/AddTokenSheet'
 import { ChainScopeSheet, ScopePill, useHomeScope } from '../components/ChainScope'
@@ -65,12 +50,7 @@ export function Portfolio({ body }: { body: BodyKind }) {
     if (!active) return
     setCollecting(farmId)
     try {
-      const r = await engine.farm.collect({
-        accountId: active.id,
-        chainId: ETN,
-        farmId,
-        asNative: true,
-      })
+      const r = await engine.farm.collect({ accountId: active.id, chainId: ETN, farmId, asNative: true })
       setFlow(r.flowId)
     } catch {
       // The farm page shows the reason; the card stays quiet.
@@ -85,13 +65,9 @@ export function Portfolio({ body }: { body: BodyKind }) {
   useEffect(() => {
     if (!accountId || !vault?.unlocked) return
     let alive = true
-    engine.portfolio.lastLook({ accountId }).then(
-      (r) => {
-        if (alive && r.previous && Date.now() - r.previous.at > 60 * 60_000)
-          setSinceLook(r.previous)
-      },
-      () => undefined,
-    )
+    engine.portfolio.lastLook({ accountId }).then((r) => {
+      if (alive && r.previous && Date.now() - r.previous.at > 60 * 60_000) setSinceLook(r.previous)
+    }, () => undefined)
     return () => {
       alive = false
     }
@@ -104,12 +80,7 @@ export function Portfolio({ body }: { body: BodyKind }) {
   const change = formatChange(snapshot?.change24h ?? null)
   const rows = (snapshot?.rows ?? []).filter((r) => !r.hidden)
   const hidden = (snapshot?.rows ?? []).length - rows.length
-  const hasPositions =
-    !!positions &&
-    (positions.farms.length > 0 ||
-      (positions.legends !== null && positions.legends.ownedTokenIds.length > 0) ||
-      positions.orders.length > 0 ||
-      positions.campaigns.length > 0)
+  const hasPositions = !!positions && (positions.farms.length > 0 || (positions.legends !== null && positions.legends.ownedTokenIds.length > 0) || positions.orders.length > 0 || positions.campaigns.length > 0)
 
   return (
     <Column flex={1} testID="portfolio">
@@ -125,38 +96,18 @@ export function Portfolio({ body }: { body: BodyKind }) {
           is the size the bible gives it beside a title; the header's right slot
           already holds controls, so it needs no variant of its own.
         */}
-        <PageHeader
-          title={t({ id: 'portfolio.title', message: 'Portfolio' })}
-          right={
-            <ScopePill
-              scope={scope.scope}
-              label={scope.label}
-              onPress={() => setScopeOpen(true)}
-              size="sm"
-              testID="home-scope"
-            />
-          }
-        />
+        <PageHeader title={t({ id: 'portfolio.title', message: 'Portfolio' })} right={<ScopePill scope={scope.scope} label={scope.label} onPress={() => setScopeOpen(true)} size="sm" testID="home-scope" />} />
         <Column gap="$2">
           <RollingReadout value={totalText} hero reducedMotion={reducedMotion} testID="total" />
           <Row gap="$3" flexWrap="wrap">
             {change ? (
-              <Body
-                tone={change.startsWith('+') ? 'surge' : change.startsWith('−') ? 'burn' : 'mute'}
-                size="caption"
-              >
+              <Body tone={change.startsWith('+') ? 'surge' : change.startsWith('−') ? 'burn' : 'mute'} size="caption">
                 {change} {t({ id: 'home.today', message: 'today' })}
               </Body>
             ) : null}
             {snapshot ? (
               <Body tone="mute" size="caption">
-                {rows.length === 1
-                  ? t({ id: 'home.tokens.one', message: '1 token' })
-                  : t({
-                      id: 'home.tokens.many',
-                      message: '{n} tokens',
-                      values: { n: rows.length },
-                    })}
+                {rows.length === 1 ? t({ id: 'home.tokens.one', message: '1 token' }) : t({ id: 'home.tokens.many', message: '{n} tokens', values: { n: rows.length } })}
               </Body>
             ) : (
               <Body tone="mute" size="caption">
@@ -165,29 +116,17 @@ export function Portfolio({ body }: { body: BodyKind }) {
             )}
             {snapshot && snapshot.unpricedCount > 0 ? (
               <Body tone="mute" size="caption">
-                {t({
-                  id: 'home.unpriced',
-                  message: '{n} without price',
-                  values: { n: snapshot.unpricedCount },
-                })}
+                {t({ id: 'home.unpriced', message: '{n} without price', values: { n: snapshot.unpricedCount } })}
               </Body>
             ) : null}
           </Row>
-          <LiveFilament
-            tick={head?.blockNumber ?? null}
-            live={head?.live ?? false}
-            reducedMotion={reducedMotion}
-            testID="filament"
-          />
+          <LiveFilament tick={head?.blockNumber ?? null} live={head?.live ?? false} reducedMotion={reducedMotion} testID="filament" />
         </Column>
 
         <Segmented
           options={[
             { id: 'tokens', label: t({ id: 'home.seg.tokens', message: 'Tokens' }) },
-            {
-              id: 'collectibles',
-              label: t({ id: 'home.seg.collectibles', message: 'Collectibles' }),
-            },
+            { id: 'collectibles', label: t({ id: 'home.seg.collectibles', message: 'Collectibles' }) },
             { id: 'positions', label: t({ id: 'home.seg.positions', message: 'Positions' }) },
           ]}
           value={segment}
@@ -200,18 +139,11 @@ export function Portfolio({ body }: { body: BodyKind }) {
             <Column gap="$2" testID="bus-bars">
               {/* The bus bar is the token dossier's header, seen from further away (§7.7). */}
               {rows.map((r) => (
-                <SharedElement
-                  key={`${r.chainId}:${r.address}`}
-                  id={tokenSharedId(r.chainId, r.address)}
-                >
+                <SharedElement key={`${r.chainId}:${r.address}`} id={tokenSharedId(r.chainId, r.address)}>
                   <BusBar
                     variant="card"
                     chainId={r.chainId}
-                    address={
-                      r.address === 'native'
-                        ? '0x0000000000000000000000000000000000000000'
-                        : r.address
-                    }
+                    address={r.address === 'native' ? '0x0000000000000000000000000000000000000000' : r.address}
                     symbol={r.symbol}
                     amount={formatQuantity(r.quantity)}
                     value={r.fiat === null ? null : formatFiat(r.fiat, currency)}
@@ -220,155 +152,62 @@ export function Portfolio({ body }: { body: BodyKind }) {
                     logoUri={r.logoUri}
                     chainBadge={scope.chainIds.length > 1}
                     mark={r.custom ? t({ id: 'home.mark.custom', message: 'Custom' }) : null}
-                    onPress={() =>
-                      router.navigate('token', { chainId: r.chainId, address: r.address })
-                    }
+                    onPress={() => router.navigate('token', { chainId: r.chainId, address: r.address })}
                   />
                 </SharedElement>
               ))}
               <Row justifyContent="space-between" alignItems="center" gap="$2">
                 <Body tone="mute" size="caption" testID="portfolio-hidden">
-                  {hidden === 0
-                    ? ''
-                    : hidden === 1
-                      ? t({ id: 'portfolio.hidden.one', message: '1 hidden token' })
-                      : t({
-                          id: 'portfolio.hidden.many',
-                          message: '{n} hidden tokens',
-                          values: { n: hidden },
-                        })}
+                  {hidden === 0 ? '' : hidden === 1 ? t({ id: 'portfolio.hidden.one', message: '1 hidden token' }) : t({ id: 'portfolio.hidden.many', message: '{n} hidden tokens', values: { n: hidden } })}
                 </Body>
-                <Pill
-                  label={t({ id: 'token.add.pill', message: 'Add token' })}
-                  icon={<Icon name="plus" size={14} color={paint.arc} />}
-                  tone="arc"
-                  size="sm"
-                  onPress={() => setAddOpen(true)}
-                  testID="portfolio-add-token"
-                />
+                <Pill label={t({ id: 'token.add.pill', message: 'Add token' })} icon={<Icon name="plus" size={14} color={paint.arc} />} tone="arc" size="sm" onPress={() => setAddOpen(true)} testID="portfolio-add-token" />
               </Row>
             </Column>
           ) : (
             <Plate gap="$2" testID="funding-plate">
-              <Body size="title">
-                {t({ id: 'home.fund.title', message: 'Receive ETN to get started' })}
-              </Body>
+              <Body size="title">{t({ id: 'home.fund.title', message: 'Receive ETN to get started' })}</Body>
               <Body tone="mute">
                 {t({
                   id: 'home.fund.body',
-                  message:
-                    'This is Electroneum Smart Chain (52014). Send ETN here from an exchange that supports the smart chain, or bridge USDC from Ethereum — you will need a little ETN for fees.',
+                  message: 'This is Electroneum Smart Chain (52014). Send ETN here from an exchange that supports the smart chain, or bridge USDC from Ethereum — you will need a little ETN for fees.',
                 })}
               </Body>
-              <Pill
-                label={t({ id: 'token.add.pill', message: 'Add token' })}
-                icon={<Icon name="plus" size={14} color={paint.arc} />}
-                tone="arc"
-                size="sm"
-                onPress={() => setAddOpen(true)}
-                testID="portfolio-add-token"
-              />
+              <Pill label={t({ id: 'token.add.pill', message: 'Add token' })} icon={<Icon name="plus" size={14} color={paint.arc} />} tone="arc" size="sm" onPress={() => setAddOpen(true)} testID="portfolio-add-token" />
             </Plate>
           )
         ) : segment === 'collectibles' ? (
           <Rack body={body} embedded limit={6} />
         ) : hasPositions && positions ? (
           <Column gap="$2" testID="positions">
-            {positions.legends && positions.legends.ownedTokenIds.length > 0 ? (
-              <DividendsCard
-                status={positions.legends}
-                compact
-                reducedMotion={reducedMotion}
-                onOpen={() => router.navigate('legends')}
-                testID="home-legends"
-              />
-            ) : null}
+            {positions.legends && positions.legends.ownedTokenIds.length > 0 ? <DividendsCard status={positions.legends} compact reducedMotion={reducedMotion} onOpen={() => router.navigate('legends')} testID="home-legends" /> : null}
             {positions.farms.map((f) => (
-              <FarmCard
-                key={f.id}
-                farm={f}
-                onPress={() => router.navigate('farm', { chainId: ETN, farmId: f.id })}
-                onCollect={active && f.position ? () => void collect(f.id) : undefined}
-                busy={collecting === f.id}
-              />
+              <FarmCard key={f.id} farm={f} onPress={() => router.navigate('farm', { chainId: ETN, farmId: f.id })} onCollect={active && f.position ? () => void collect(f.id) : undefined} busy={collecting === f.id} />
             ))}
             {positions.orders.map((o) => (
-              <Plate
-                key={o.orderId}
-                role="card"
-                gap={2}
-                onPress={() => router.setTab('swap')}
-                cursor="pointer"
-                testID={`position-order-${o.orderId}`}
-              >
-                <Body size="caption">
-                  {t({
-                    id: 'home.pos.order',
-                    message: 'Open order: {a} {s} → at least {b} {u}',
-                    values: {
-                      a: formatRaw(o.amountInExact, o.decimalsIn),
-                      s: o.symbolIn,
-                      b: formatRaw(o.amountOutMin, o.decimalsOut),
-                      u: o.symbolOut,
-                    },
-                  })}
-                </Body>
+              <Plate key={o.orderId} role="card" gap={2} onPress={() => router.setTab('swap')} cursor="pointer" testID={`position-order-${o.orderId}`}>
+                <Body size="caption">{t({ id: 'home.pos.order', message: 'Open order: {a} {s} → at least {b} {u}', values: { a: formatRaw(o.amountInExact, o.decimalsIn), s: o.symbolIn, b: formatRaw(o.amountOutMin, o.decimalsOut), u: o.symbolOut } })}</Body>
               </Plate>
             ))}
             {positions.campaigns.map((c) => (
-              <Plate
-                key={c.pool}
-                role="card"
-                gap={2}
-                onPress={() => router.navigate('campaign', { chainId: ETN, pool: c.pool })}
-                cursor="pointer"
-                testID={`position-campaign-${c.pool}`}
-              >
-                <Body size="caption">
-                  {t({
-                    id: 'home.pos.campaign',
-                    message: '{s}: {a} ETN contributed{k}',
-                    values: {
-                      s: c.token.symbol,
-                      a: formatRaw(c.contributedWei, 18),
-                      k: c.keys.includes('claim_tokens')
-                        ? ' · tokens ready'
-                        : c.keys.includes('claim_refund')
-                          ? ' · refund waiting'
-                          : '',
-                    },
-                  })}
-                </Body>
+              <Plate key={c.pool} role="card" gap={2} onPress={() => router.navigate('campaign', { chainId: ETN, pool: c.pool })} cursor="pointer" testID={`position-campaign-${c.pool}`}>
+                <Body size="caption">{t({ id: 'home.pos.campaign', message: '{s}: {a} ETN contributed{k}', values: { s: c.token.symbol, a: formatRaw(c.contributedWei, 18), k: c.keys.includes('claim_tokens') ? ' · tokens ready' : c.keys.includes('claim_refund') ? ' · refund waiting' : '' } })}</Body>
               </Plate>
             ))}
           </Column>
         ) : (
           <Plate gap="$2">
-            <Body tone="mute">
-              {t({
-                id: 'home.positions.empty',
-                message: 'No farm positions, open orders or bridges in flight.',
-              })}
-            </Body>
+            <Body tone="mute">{t({ id: 'home.positions.empty', message: 'No farm positions, open orders or bridges in flight.' })}</Body>
           </Plate>
         )}
 
         {sinceLook ? (
           <Plate gap={2} testID="since-look">
             <Body tone="mute" size="caption">
-              {t({
-                id: 'home.since',
-                message: 'Since {d}',
-                values: { d: new Date(sinceLook.at).toLocaleDateString() },
-              })}
+              {t({ id: 'home.since', message: 'Since {d}', values: { d: new Date(sinceLook.at).toLocaleDateString() } })}
             </Body>
             <Body size="caption">
               {sinceLook.total !== null && total !== null
-                ? t({
-                    id: 'home.since.change',
-                    message: '{from} → {to}',
-                    values: { from: formatFiat(sinceLook.total, currency), to: totalText },
-                  })
+                ? t({ id: 'home.since.change', message: '{from} → {to}', values: { from: formatFiat(sinceLook.total, currency), to: totalText } })
                 : t({ id: 'home.since.none', message: 'No priced change to report.' })}
             </Body>
           </Plate>
@@ -390,12 +229,7 @@ export function Portfolio({ body }: { body: BodyKind }) {
         }}
         reducedMotion={reducedMotion}
       />
-      <AddTokenSheet
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
-        initialChainId={scope.scope === 'all' ? ETN : scope.scope}
-        reducedMotion={reducedMotion}
-      />
+      <AddTokenSheet open={addOpen} onClose={() => setAddOpen(false)} initialChainId={scope.scope === 'all' ? ETN : scope.scope} reducedMotion={reducedMotion} />
     </Column>
   )
 }

@@ -306,9 +306,7 @@ export class ElectroSwapClient {
     for (let i = 0; i < tokenAddresses.length; i += CHUNK) {
       const chunk = tokenAddresses.slice(i, i + CHUNK)
       const contracts = chunk.map((addr) => ({ chain, address: resolveTokenAddress(addr) }))
-      const data = await this.query<{ tokens: (TokenMarketData | null)[] | null }>(BOLT_BATCH, {
-        contracts,
-      })
+      const data = await this.query<{ tokens: (TokenMarketData | null)[] | null }>(BOLT_BATCH, { contracts })
       // Positional by contract: the nth answer is the nth address we asked for,
       // and a null means that one is unknown rather than that the list shifted.
       const rows = data.tokens ?? []

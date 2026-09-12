@@ -35,18 +35,12 @@ export function useLinks(): void {
           return
         }
         case 'pay':
-          router.navigate('send', {
-            to: action.to,
-            ...(action.token ? { token: action.token } : {}),
-            ...(action.chainId ? { chainId: action.chainId } : {}),
-          })
+          router.navigate('send', { to: action.to, ...(action.token ? { token: action.token } : {}), ...(action.chainId ? { chainId: action.chainId } : {}) })
           return
         case 'screen':
-          if (action.screen === 'home' || action.screen === 'swap' || action.screen === 'activity')
-            router.setTab(action.screen)
+          if (action.screen === 'home' || action.screen === 'swap' || action.screen === 'activity') router.setTab(action.screen)
           else if (action.screen === 'explore') router.navigate('explore')
-          else if (action.screen === 'browser')
-            router.navigate('browser', action.url ? { url: action.url } : undefined)
+          else if (action.screen === 'browser') router.navigate('browser', action.url ? { url: action.url } : undefined)
           else router.navigate(action.screen)
           return
       }

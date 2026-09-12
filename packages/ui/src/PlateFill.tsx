@@ -37,42 +37,12 @@ const FILL = { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zInde
 
 /** The bible's plate ramps, verbatim. `sheen` is the 1px lip along the top edge. */
 const RAMPS = {
-  raised: {
-    deg: 165,
-    from: 'rgba(24,33,86,0.72)',
-    mid: null,
-    to: 'rgba(13,18,52,0.78)',
-    sheen: 0.07,
-  },
-  console: {
-    deg: 165,
-    from: 'rgba(26,36,92,0.78)',
-    mid: 'rgba(13,18,52,0.82)',
-    to: 'rgba(8,11,36,0.86)',
-    sheen: 0.08,
-  },
+  raised: { deg: 165, from: 'rgba(24,33,86,0.72)', mid: null, to: 'rgba(13,18,52,0.78)', sheen: 0.07 },
+  console: { deg: 165, from: 'rgba(26,36,92,0.78)', mid: 'rgba(13,18,52,0.82)', to: 'rgba(8,11,36,0.86)', sheen: 0.08 },
   well: { deg: 160, from: 'rgba(20,28,74,0.72)', mid: null, to: 'rgba(6,9,30,0.86)', sheen: 0.06 },
-  recessed: {
-    deg: 160,
-    from: 'rgba(18,25,68,0.6)',
-    mid: null,
-    to: 'rgba(10,14,42,0.7)',
-    sheen: 0.06,
-  },
-  card: {
-    deg: 160,
-    from: 'rgba(18,25,68,0.55)',
-    mid: null,
-    to: 'rgba(10,14,42,0.66)',
-    sheen: 0.06,
-  },
-  tile: {
-    deg: 165,
-    from: 'rgba(24,33,86,0.72)',
-    mid: null,
-    to: 'rgba(13,18,52,0.78)',
-    sheen: 0.07,
-  },
+  recessed: { deg: 160, from: 'rgba(18,25,68,0.6)', mid: null, to: 'rgba(10,14,42,0.7)', sheen: 0.06 },
+  card: { deg: 160, from: 'rgba(18,25,68,0.55)', mid: null, to: 'rgba(10,14,42,0.66)', sheen: 0.06 },
+  tile: { deg: 165, from: 'rgba(24,33,86,0.72)', mid: null, to: 'rgba(13,18,52,0.78)', sheen: 0.07 },
 } as const
 
 export type PlateFillRole = keyof typeof RAMPS
@@ -91,51 +61,25 @@ export function PlateFill({ role, radius }: { role: PlateFillRole; radius: numbe
   const [box, setBox] = useState<{ width: number; height: number } | null>(null)
   const onLayout = (e: LayoutChangeEvent): void => {
     const { width, height } = e.nativeEvent.layout
-    setBox((prev) =>
-      prev !== null && Math.abs(prev.width - width) < 0.5 && Math.abs(prev.height - height) < 0.5
-        ? prev
-        : { width, height },
-    )
+    setBox((prev) => (prev !== null && Math.abs(prev.width - width) < 0.5 && Math.abs(prev.height - height) < 0.5 ? prev : { width, height }))
   }
   const v = vector(ramp.deg)
   return (
     <View style={FILL} pointerEvents="none" onLayout={onLayout} aria-hidden>
       {box === null ? null : (
-        <Svg
-          width={box.width}
-          height={box.height}
-          viewBox={`0 0 ${box.width} ${box.height}`}
-          pointerEvents="none"
-        >
+        <Svg width={box.width} height={box.height} viewBox={`0 0 ${box.width} ${box.height}`} pointerEvents="none">
           <Defs>
             <LinearGradient id={`pf-${id}`} x1={v.x1} y1={v.y1} x2={v.x2} y2={v.y2}>
               {[
                 <Stop key="from" offset="0" stopColor={ramp.from} />,
-                ...(ramp.mid === null
-                  ? []
-                  : [<Stop key="mid" offset="0.55" stopColor={ramp.mid} />]),
+                ...(ramp.mid === null ? [] : [<Stop key="mid" offset="0.55" stopColor={ramp.mid} />]),
                 <Stop key="to" offset="1" stopColor={ramp.to} />,
               ]}
             </LinearGradient>
           </Defs>
-          <Rect
-            x={0}
-            y={0}
-            width={box.width}
-            height={box.height}
-            rx={radius}
-            ry={radius}
-            fill={`url(#pf-${id})`}
-          />
+          <Rect x={0} y={0} width={box.width} height={box.height} rx={radius} ry={radius} fill={`url(#pf-${id})`} />
           {/* The lip: one pixel of white along the top, inside the radius. */}
-          <Rect
-            x={radius * 0.6}
-            y={0}
-            width={Math.max(0, box.width - radius * 1.2)}
-            height={1}
-            fill="#FFFFFF"
-            fillOpacity={ramp.sheen}
-          />
+          <Rect x={radius * 0.6} y={0} width={Math.max(0, box.width - radius * 1.2)} height={1} fill="#FFFFFF" fillOpacity={ramp.sheen} />
         </Svg>
       )}
     </View>

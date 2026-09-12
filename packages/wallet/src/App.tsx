@@ -31,52 +31,33 @@ export interface AppProps {
 }
 
 /** The shared root for every body. */
-export function App({
-  engine,
-  body,
-  initialTab,
-  initialScreen,
-  initialParams,
-  reducedMotion,
-  host,
-  insets,
-}: AppProps) {
+export function App({ engine, body, initialTab, initialScreen, initialParams, reducedMotion, host, insets }: AppProps) {
   const router = useMemo(() => {
     setupI18n()
     const store = new RouterStore({ tab: initialTab ?? 'home' })
     if (initialScreen && isTabId(initialScreen)) {
       if (initialParams !== undefined) store.setTab(initialScreen, initialParams)
     } else if (initialScreen) {
-      store.navigate(
-        initialParams === undefined
-          ? { screen: initialScreen }
-          : ({ screen: initialScreen, params: initialParams } as Route),
-      )
+      store.navigate(initialParams === undefined ? { screen: initialScreen } : ({ screen: initialScreen, params: initialParams } as Route))
     }
     return store
   }, [initialTab, initialScreen, initialParams])
   const uiHost = useMemo<UiHost>(
-    () => ({
-      body: body === 'mobile' ? 'mobile' : body,
-      secretsAllowed: body !== 'extension-popup',
-      passkeys: null,
-      relayUrl: DEFAULT_RELAY,
-      ...host,
-    }),
+    () => ({ body: body === 'mobile' ? 'mobile' : body, secretsAllowed: body !== 'extension-popup', passkeys: null, relayUrl: DEFAULT_RELAY, ...host }),
     [body, host],
   )
   return (
     <TamaguiProvider config={tamaguiConfig} defaultTheme="dark">
       <InsetsProvider insets={insets}>
-        <I18nProvider i18n={i18n}>
-          <EngineProvider engine={engine}>
-            <HostProvider host={uiHost}>
-              <RouterProvider store={router}>
-                <TabShell body={body} reducedMotionOverride={reducedMotion} />
-              </RouterProvider>
-            </HostProvider>
-          </EngineProvider>
-        </I18nProvider>
+      <I18nProvider i18n={i18n}>
+        <EngineProvider engine={engine}>
+          <HostProvider host={uiHost}>
+            <RouterProvider store={router}>
+              <TabShell body={body} reducedMotionOverride={reducedMotion} />
+            </RouterProvider>
+          </HostProvider>
+        </EngineProvider>
+      </I18nProvider>
       </InsetsProvider>
     </TamaguiProvider>
   )

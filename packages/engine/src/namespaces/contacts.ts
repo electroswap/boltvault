@@ -72,23 +72,13 @@ export class ContactsStore {
   private async persist(entries: ContactView[]): Promise<void> {
     const key = await this.key()
     const nonce = this.platform.random(24)
-    const ct = xchacha20poly1305(key, nonce, AAD).encrypt(
-      new TextEncoder().encode(JSON.stringify({ v: 1, entries })),
-    )
-    await this.platform.storage.local.set(
-      KEY_BLOB,
-      JSON.stringify({ nonce: toHex(nonce), ct: toHex(ct) }),
-    )
+    const ct = xchacha20poly1305(key, nonce, AAD).encrypt(new TextEncoder().encode(JSON.stringify({ v: 1, entries })))
+    await this.platform.storage.local.set(KEY_BLOB, JSON.stringify({ nonce: toHex(nonce), ct: toHex(ct) }))
     this.cache = entries
     this.bus.emit({ type: 'contacts.changed', contacts: await this.list() })
   }
 
-  async add(input: {
-    address: string
-    label: string
-    chainId?: number | null
-    confirmed?: boolean
-  }): Promise<ContactView> {
+  async add(input: { address: string; label: string; chainId?: number | null; confirmed?: boolean }): Promise<ContactView> {
     if (!isAddress(input.address)) throw new EngineError('invalid_argument', 'not an address')
     const address = getAddress(input.address)
     const entries = await this.load()
@@ -110,9 +100,7 @@ export class ContactsStore {
   }
 
   async confirm(id: string): Promise<void> {
-    await this.persist(
-      (await this.load()).map((c) => (c.id === id ? { ...c, confirmed: true } : c)),
-    )
+    await this.persist((await this.load()).map((c) => (c.id === id ? { ...c, confirmed: true } : c)))
   }
 
   forget(): void {
@@ -124,21 +112,10 @@ export function contactsNamespace(contacts: ContactsStore): NamespaceSpec {
   return {
     list: { handler: () => contacts.list() },
     add: {
-      input: z.object({
-        address: z.string(),
-        label: z.string().min(1).max(64),
-        chainId: z.number().int().positive().nullable().optional(),
-      }),
-      handler: (arg) =>
-        contacts.add(arg as { address: string; label: string; chainId?: number | null }),
+      input: z.object({ address: z.string(), label: z.string().min(1).max(64), chainId: z.number().int().positive().nullable().optional() }),
+      handler: (arg) => contacts.add(arg as { address: string; label: string; chainId?: number | null }),
     },
-    remove: {
-      input: z.object({ id: z.string() }),
-      handler: (arg) => contacts.remove((arg as { id: string }).id),
-    },
-    confirm: {
-      input: z.object({ id: z.string() }),
-      handler: (arg) => contacts.confirm((arg as { id: string }).id),
-    },
+    remove: { input: z.object({ id: z.string() }), handler: (arg) => contacts.remove((arg as { id: string }).id) },
+    confirm: { input: z.object({ id: z.string() }), handler: (arg) => contacts.confirm((arg as { id: string }).id) },
   }
 }

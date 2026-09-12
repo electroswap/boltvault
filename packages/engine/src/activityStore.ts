@@ -37,9 +37,7 @@ export class ActivityStore {
   }
 
   /** Empty when locked (never throws for a read). */
-  async list(
-    filter: { accountId?: string; chainId?: number; limit?: number } = {},
-  ): Promise<ActivityEntry[]> {
+  async list(filter: { accountId?: string; chainId?: number; limit?: number } = {}): Promise<ActivityEntry[]> {
     let entries: ActivityEntry[]
     try {
       entries = await this.load()
@@ -83,25 +81,16 @@ export class ActivityStore {
   private async persist(entries: ActivityEntry[]): Promise<void> {
     const key = await this.key()
     const nonce = this.platform.random(24)
-    const ct = xchacha20poly1305(key, nonce, AAD).encrypt(
-      new TextEncoder().encode(JSON.stringify({ v: 1, entries })),
-    )
-    await this.platform.storage.local.set(
-      KEY_BLOB,
-      JSON.stringify({ nonce: toHex(nonce), ct: toHex(ct) }),
-    )
+    const ct = xchacha20poly1305(key, nonce, AAD).encrypt(new TextEncoder().encode(JSON.stringify({ v: 1, entries })))
+    await this.platform.storage.local.set(KEY_BLOB, JSON.stringify({ nonce: toHex(nonce), ct: toHex(ct) }))
     this.cache = entries
-    this.bus.emit({
-      type: 'activity.changed',
-      entries: [...entries].sort((a, b) => b.submittedAt - a.submittedAt),
-    })
+    this.bus.emit({ type: 'activity.changed', entries: [...entries].sort((a, b) => b.submittedAt - a.submittedAt) })
   }
 
   /** Write-ahead: append before broadcast. Requires the vault to be unlocked. */
   async append(entry: ActivityEntry): Promise<void> {
     const entries = await this.load()
-    if (entries.some((e) => e.id === entry.id))
-      throw new EngineError('invalid_argument', `duplicate activity id ${entry.id}`)
+    if (entries.some((e) => e.id === entry.id)) throw new EngineError('invalid_argument', `duplicate activity id ${entry.id}`)
     await this.persist([...entries, entry])
   }
 

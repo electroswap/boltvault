@@ -78,11 +78,7 @@ export function createMemoryPlatform(opts: { now?: number } = {}): MemoryPlatfor
 
   return {
     kind: 'memory',
-    storage: {
-      local: createMemoryStore(),
-      session: createMemoryStore(),
-      secret: createMemoryStore(),
-    },
+    storage: { local: createMemoryStore(), session: createMemoryStore(), secret: createMemoryStore() },
     kdf: {
       argon2id: (input) =>
         hashWasmArgon2id({

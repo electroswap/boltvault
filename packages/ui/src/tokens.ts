@@ -191,9 +191,7 @@ export const space = {
  */
 export const fonts = {
   /** Readouts ≥ 24 px: Oxanium 600, tabular numerals, tracking −0.03em. */
-  readout: native
-    ? 'Oxanium'
-    : "'Oxanium', 'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+  readout: native ? 'Oxanium' : "'Oxanium', 'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
   /** Everything a human reads — addresses and hashes included, tabular: Sora 400/600, 13–17 px, sentence case. */
   text: native ? 'Sora' : "'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
 } as const

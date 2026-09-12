@@ -56,11 +56,7 @@ function useBox(): readonly [Box | null, (event: LayoutChangeEvent) => void] {
   const [box, setBox] = useState<Box | null>(null)
   const onLayout = (event: LayoutChangeEvent): void => {
     const { width, height } = event.nativeEvent.layout
-    setBox((prev) =>
-      prev !== null && Math.abs(prev.width - width) < 0.5 && Math.abs(prev.height - height) < 0.5
-        ? prev
-        : { width, height },
-    )
+    setBox((prev) => (prev !== null && Math.abs(prev.width - width) < 0.5 && Math.abs(prev.height - height) < 0.5 ? prev : { width, height }))
   }
   return [box, onLayout] as const
 }
@@ -90,12 +86,7 @@ export function Rim({ radius, opacity = 0.5, strokeWidth = 1, topOnly = false }:
   return (
     <View style={FILL} pointerEvents="none" onLayout={onLayout} aria-hidden>
       {box === null ? null : (
-        <Svg
-          width={box.width}
-          height={box.height}
-          viewBox={`0 0 ${box.width} ${box.height}`}
-          pointerEvents="none"
-        >
+        <Svg width={box.width} height={box.height} viewBox={`0 0 ${box.width} ${box.height}`} pointerEvents="none">
           <Defs>
             <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
               <Stop offset="0" stopColor={rim.from} stopOpacity={opacity} />
@@ -136,33 +127,14 @@ export function CurrentFill({ radius = 0, opacity = 1, vertical = false }: Curre
   return (
     <View style={BLEED} pointerEvents="none" onLayout={onLayout} aria-hidden>
       {box === null ? null : (
-        <Svg
-          width={box.width}
-          height={box.height}
-          viewBox={`0 0 ${box.width} ${box.height}`}
-          pointerEvents="none"
-        >
+        <Svg width={box.width} height={box.height} viewBox={`0 0 ${box.width} ${box.height}`} pointerEvents="none">
           <Defs>
-            <LinearGradient
-              id={id}
-              x1="0"
-              y1="0"
-              x2={vertical ? '0' : '1'}
-              y2={vertical ? '1' : '0'}
-            >
+            <LinearGradient id={id} x1="0" y1="0" x2={vertical ? '0' : '1'} y2={vertical ? '1' : '0'}>
               <Stop offset="0" stopColor={current.from} stopOpacity={opacity} />
               <Stop offset="1" stopColor={current.to} stopOpacity={opacity} />
             </LinearGradient>
           </Defs>
-          <Rect
-            x={0}
-            y={0}
-            width={box.width}
-            height={box.height}
-            rx={radius + 1}
-            ry={radius + 1}
-            fill={`url(#${id})`}
-          />
+          <Rect x={0} y={0} width={box.width} height={box.height} rx={radius + 1} ry={radius + 1} fill={`url(#${id})`} />
         </Svg>
       )}
     </View>

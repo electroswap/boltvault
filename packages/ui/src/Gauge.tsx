@@ -41,33 +41,17 @@ export function Gauge({ value, from, to, height = 6, testID }: GaugeProps) {
           Nothing to draw is nothing drawn.
         */}
         {pct > 0 ? (
-          <View
-            style={{ width: `${pct * 100}%`, height, borderRadius: height / 2, overflow: 'hidden' }}
-          >
+          <View style={{ width: `${pct * 100}%`, height, borderRadius: height / 2, overflow: 'hidden' }}>
             <CurrentFill radius={height / 2} />
           </View>
         ) : null}
       </View>
       {from || to ? (
         <Row justifyContent="space-between" gap="$2">
-          <Body
-            tone="mute"
-            size="caption"
-            fontSize={11}
-            lineHeight={13}
-            numberOfLines={1}
-            flexShrink={1}
-          >
+          <Body tone="mute" size="caption" fontSize={11} lineHeight={13} numberOfLines={1} flexShrink={1}>
             {from ?? ''}
           </Body>
-          <Body
-            tone="mute"
-            size="caption"
-            fontSize={11}
-            lineHeight={13}
-            numberOfLines={1}
-            flexShrink={1}
-          >
+          <Body tone="mute" size="caption" fontSize={11} lineHeight={13} numberOfLines={1} flexShrink={1}>
             {to ?? ''}
           </Body>
         </Row>

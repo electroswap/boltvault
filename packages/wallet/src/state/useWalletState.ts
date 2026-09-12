@@ -24,12 +24,7 @@ export interface WalletState {
  * The data is identical for every caller, so one snapshot is the honest shape
  * for it. The refresh still runs; it just happens behind what is on screen.
  */
-let snapshot: {
-  vault: VaultStatus | null
-  accounts: readonly AccountView[]
-  activeId: string | null
-  loaded: boolean
-} = {
+let snapshot: { vault: VaultStatus | null; accounts: readonly AccountView[]; activeId: string | null; loaded: boolean } = {
   vault: null,
   accounts: [],
   activeId: null,
@@ -53,11 +48,7 @@ let snapshot: {
  * to prevent. Events are the newer truth; a reply older than the last event is
  * discarded rather than trusted.
  */
-export function createGeneration(): {
-  begin(): number
-  bump(): void
-  stillCurrent(token: number): boolean
-} {
+export function createGeneration(): { begin(): number; bump(): void; stillCurrent(token: number): boolean } {
   let n = 0
   return {
     begin: () => n,

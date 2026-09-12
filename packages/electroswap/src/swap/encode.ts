@@ -11,14 +11,7 @@
  * with `minOut` reduced by the fee after PAY_PORTION exactly as the SDK does.
  * Command bytes are pinned from `sdks/universal-router-sdk/src/utils/routerCommands.ts`.
  */
-import {
-  concatHex,
-  encodeAbiParameters,
-  encodeFunctionData,
-  encodePacked,
-  parseAbiParameters,
-  type Hex,
-} from 'viem'
+import { concatHex, encodeAbiParameters, encodeFunctionData, encodePacked, parseAbiParameters, type Hex } from 'viem'
 import { UNIVERSAL_ROUTER_ABI } from './abis'
 import { BIPS, feeAmount, grossOutForExactOut } from './fee'
 
@@ -45,9 +38,7 @@ export const CONTRACT_BALANCE = (1n << 255n) as bigint
 /** The MixedRouteQuoter/UR fee sentinel that marks a V2 hop inside a mixed path. */
 export const V2_FEE_FLAG = 0x800000
 
-export type Hop =
-  | { readonly kind: 'v3'; readonly tokenIn: Hex; readonly tokenOut: Hex; readonly fee: number }
-  | { readonly kind: 'v2'; readonly tokenIn: Hex; readonly tokenOut: Hex }
+export type Hop = { readonly kind: 'v3'; readonly tokenIn: Hex; readonly tokenOut: Hex; readonly fee: number } | { readonly kind: 'v2'; readonly tokenIn: Hex; readonly tokenOut: Hex }
 
 export interface SwapRoute {
   /** 'v2' | 'v3' | 'mixed' by the hops' kinds. */
@@ -175,31 +166,10 @@ export function encodeSwap(input: EncodeSwapInput): EncodedSwap {
 
   if (input.permit) {
     const p = input.permit
-    push(
-      COMMAND.PERMIT2_PERMIT,
-      encodeAbiParameters(
-        parseAbiParameters(
-          '((address token, uint160 amount, uint48 expiration, uint48 nonce) details, address spender, uint256 sigDeadline) permit, bytes signature',
-        ),
-        [
-          {
-            details: { token: p.token, amount: p.amount, expiration: p.expiration, nonce: p.nonce },
-            spender: p.spender,
-            sigDeadline: p.sigDeadline,
-          },
-          p.signature,
-        ],
-      ),
-    )
+    push(COMMAND.PERMIT2_PERMIT, encodeAbiParameters(parseAbiParameters('((address token, uint160 amount, uint48 expiration, uint48 nonce) details, address spender, uint256 sigDeadline) permit, bytes signature'), [{ details: { token: p.token, amount: p.amount, expiration: p.expiration, nonce: p.nonce }, spender: p.spender, sigDeadline: p.sigDeadline }, p.signature]))
   }
   if (input.nativeIn) {
-    push(
-      COMMAND.WRAP_ETH,
-      encodeAbiParameters(parseAbiParameters('address recipient, uint256 amount'), [
-        ROUTER_AS_RECIPIENT,
-        input.amountIn,
-      ]),
-    )
+    push(COMMAND.WRAP_ETH, encodeAbiParameters(parseAbiParameters('address recipient, uint256 amount'), [ROUTER_AS_RECIPIENT, input.amountIn]))
     payerIsUser = false
   }
 
@@ -212,23 +182,8 @@ export function encodeSwap(input: EncodeSwapInput): EncodedSwap {
   const inputFee = feeOnInput && input.fee ? feeAmount(input.amountIn, input.fee.bips) : 0n
   if (feeOnInput && input.fee) {
     const token = input.nativeIn ? input.wrappedNative : (input.route.hops[0]?.tokenIn as Hex)
-    if (input.nativeIn)
-      push(
-        COMMAND.TRANSFER,
-        encodeAbiParameters(parseAbiParameters('address token, address recipient, uint256 value'), [
-          token,
-          input.fee.sink,
-          inputFee,
-        ]),
-      )
-    else
-      push(
-        COMMAND.PERMIT2_TRANSFER_FROM,
-        encodeAbiParameters(
-          parseAbiParameters('address token, address recipient, uint160 amount'),
-          [token, input.fee.sink, inputFee],
-        ),
-      )
+    if (input.nativeIn) push(COMMAND.TRANSFER, encodeAbiParameters(parseAbiParameters('address token, address recipient, uint256 value'), [token, input.fee.sink, inputFee]))
+    else push(COMMAND.PERMIT2_TRANSFER_FROM, encodeAbiParameters(parseAbiParameters('address token, address recipient, uint160 amount'), [token, input.fee.sink, inputFee]))
   }
   const swapAmountIn = input.amountIn - inputFee
 
@@ -247,10 +202,7 @@ export function encodeSwap(input: EncodeSwapInput): EncodedSwap {
     swap that was never going to be bad. Scaling it keeps the user's slippage
     theirs, which is what it was for.
   */
-  const quotedOut =
-    feeOnInput && input.amountIn > 0n
-      ? (input.quotedOut * swapAmountIn) / input.amountIn
-      : input.quotedOut
+  const quotedOut = feeOnInput && input.amountIn > 0n ? (input.quotedOut * swapAmountIn) / input.amountIn : input.quotedOut
   const routerMinOut = quotedOut - (quotedOut * BigInt(input.slippageBips)) / BIPS
 
   /*
@@ -290,25 +242,9 @@ export function encodeSwap(input: EncodeSwapInput): EncodedSwap {
     const payer = payerIsUser && i === 0
     if (hops[0]?.kind === 'v2') {
       const path = [hops[0].tokenIn, ...hops.map((h) => h.tokenOut)]
-      push(
-        COMMAND.V2_SWAP_EXACT_IN,
-        encodeAbiParameters(
-          parseAbiParameters(
-            'address recipient, uint256 amountIn, uint256 amountOutMin, address[] path, bool payerIsUser',
-          ),
-          [recipient, amountIn, amountOutMin, path, payer],
-        ),
-      )
+      push(COMMAND.V2_SWAP_EXACT_IN, encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountIn, uint256 amountOutMin, address[] path, bool payerIsUser'), [recipient, amountIn, amountOutMin, path, payer]))
     } else {
-      push(
-        COMMAND.V3_SWAP_EXACT_IN,
-        encodeAbiParameters(
-          parseAbiParameters(
-            'address recipient, uint256 amountIn, uint256 amountOutMin, bytes path, bool payerIsUser',
-          ),
-          [recipient, amountIn, amountOutMin, v3Path(hops), payer],
-        ),
-      )
+      push(COMMAND.V3_SWAP_EXACT_IN, encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountIn, uint256 amountOutMin, bytes path, bool payerIsUser'), [recipient, amountIn, amountOutMin, v3Path(hops), payer]))
     }
   })
 
@@ -316,47 +252,16 @@ export function encodeSwap(input: EncodeSwapInput): EncodedSwap {
   let minimumOut = routerMinOut
   if (routerMustCustody) {
     if (input.fee && !feeOnInput) {
-      push(
-        COMMAND.PAY_PORTION,
-        encodeAbiParameters(parseAbiParameters('address token, address recipient, uint256 bips'), [
-          outputToken,
-          input.fee.sink,
-          BigInt(input.fee.bips),
-        ]),
-      )
+      push(COMMAND.PAY_PORTION, encodeAbiParameters(parseAbiParameters('address token, address recipient, uint256 bips'), [outputToken, input.fee.sink, BigInt(input.fee.bips)]))
       minimumOut = minimumOut - feeAmount(minimumOut, input.fee.bips)
     }
-    if (input.nativeOut)
-      push(
-        COMMAND.UNWRAP_WETH,
-        encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountMin'), [
-          input.recipient,
-          minimumOut,
-        ]),
-      )
-    else
-      push(
-        COMMAND.SWEEP,
-        encodeAbiParameters(
-          parseAbiParameters('address token, address recipient, uint256 amountMin'),
-          [outputToken, input.recipient, minimumOut],
-        ),
-      )
+    if (input.nativeOut) push(COMMAND.UNWRAP_WETH, encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountMin'), [input.recipient, minimumOut]))
+    else push(COMMAND.SWEEP, encodeAbiParameters(parseAbiParameters('address token, address recipient, uint256 amountMin'), [outputToken, input.recipient, minimumOut]))
   }
 
   const commandBytes = concatHex(commands.map((c) => `0x${c.toString(16).padStart(2, '0')}` as Hex))
-  const data = encodeFunctionData({
-    abi: UNIVERSAL_ROUTER_ABI,
-    functionName: 'execute',
-    args: [commandBytes, inputs, input.deadline],
-  })
-  return {
-    to: input.universalRouter,
-    data,
-    value: input.nativeIn ? input.amountIn : 0n,
-    commands,
-    minimumOut,
-  }
+  const data = encodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commandBytes, inputs, input.deadline] })
+  return { to: input.universalRouter, data, value: input.nativeIn ? input.amountIn : 0n, commands, minimumOut }
 }
 
 export interface EncodeSwapExactOutInput {
@@ -451,31 +356,10 @@ export function encodeSwapExactOut(input: EncodeSwapExactOutInput): EncodedSwapE
 
   if (input.permit) {
     const p = input.permit
-    push(
-      COMMAND.PERMIT2_PERMIT,
-      encodeAbiParameters(
-        parseAbiParameters(
-          '((address token, uint160 amount, uint48 expiration, uint48 nonce) details, address spender, uint256 sigDeadline) permit, bytes signature',
-        ),
-        [
-          {
-            details: { token: p.token, amount: p.amount, expiration: p.expiration, nonce: p.nonce },
-            spender: p.spender,
-            sigDeadline: p.sigDeadline,
-          },
-          p.signature,
-        ],
-      ),
-    )
+    push(COMMAND.PERMIT2_PERMIT, encodeAbiParameters(parseAbiParameters('((address token, uint160 amount, uint48 expiration, uint48 nonce) details, address spender, uint256 sigDeadline) permit, bytes signature'), [{ details: { token: p.token, amount: p.amount, expiration: p.expiration, nonce: p.nonce }, spender: p.spender, sigDeadline: p.sigDeadline }, p.signature]))
   }
   if (input.nativeIn) {
-    push(
-      COMMAND.WRAP_ETH,
-      encodeAbiParameters(parseAbiParameters('address recipient, uint256 amount'), [
-        ROUTER_AS_RECIPIENT,
-        maxIn,
-      ]),
-    )
+    push(COMMAND.WRAP_ETH, encodeAbiParameters(parseAbiParameters('address recipient, uint256 amount'), [ROUTER_AS_RECIPIENT, maxIn]))
     payerIsUser = false
   }
 
@@ -484,100 +368,26 @@ export function encodeSwapExactOut(input: EncodeSwapExactOutInput): EncodedSwapE
   const kind = classify(input.route)
   if (kind === 'v2') {
     const path = [input.route.hops[0]?.tokenIn as Hex, ...input.route.hops.map((h) => h.tokenOut)]
-    push(
-      COMMAND.V2_SWAP_EXACT_OUT,
-      encodeAbiParameters(
-        parseAbiParameters(
-          'address recipient, uint256 amountOut, uint256 amountInMax, address[] path, bool payerIsUser',
-        ),
-        [swapRecipient, grossOut, maxIn, path, payerIsUser],
-      ),
-    )
+    push(COMMAND.V2_SWAP_EXACT_OUT, encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountOut, uint256 amountInMax, address[] path, bool payerIsUser'), [swapRecipient, grossOut, maxIn, path, payerIsUser]))
   } else {
-    push(
-      COMMAND.V3_SWAP_EXACT_OUT,
-      encodeAbiParameters(
-        parseAbiParameters(
-          'address recipient, uint256 amountOut, uint256 amountInMax, bytes path, bool payerIsUser',
-        ),
-        [swapRecipient, grossOut, maxIn, v3PackedPathExactOut(input.route.hops), payerIsUser],
-      ),
-    )
+    push(COMMAND.V3_SWAP_EXACT_OUT, encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountOut, uint256 amountInMax, bytes path, bool payerIsUser'), [swapRecipient, grossOut, maxIn, v3PackedPathExactOut(input.route.hops), payerIsUser]))
   }
 
   const outputToken = input.route.hops[input.route.hops.length - 1]?.tokenOut as Hex
   if (routerMustCustody) {
-    if (input.fee)
-      push(
-        COMMAND.PAY_PORTION,
-        encodeAbiParameters(parseAbiParameters('address token, address recipient, uint256 bips'), [
-          outputToken,
-          input.fee.sink,
-          BigInt(input.fee.bips),
-        ]),
-      )
+    if (input.fee) push(COMMAND.PAY_PORTION, encodeAbiParameters(parseAbiParameters('address token, address recipient, uint256 bips'), [outputToken, input.fee.sink, BigInt(input.fee.bips)]))
     // The floor is the exact amount itself — grossing up is what makes that safe.
-    if (input.nativeOut)
-      push(
-        COMMAND.UNWRAP_WETH,
-        encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountMin'), [
-          input.recipient,
-          input.amountOut,
-        ]),
-      )
-    else
-      push(
-        COMMAND.SWEEP,
-        encodeAbiParameters(
-          parseAbiParameters('address token, address recipient, uint256 amountMin'),
-          [outputToken, input.recipient, input.amountOut],
-        ),
-      )
+    if (input.nativeOut) push(COMMAND.UNWRAP_WETH, encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountMin'), [input.recipient, input.amountOut]))
+    else push(COMMAND.SWEEP, encodeAbiParameters(parseAbiParameters('address token, address recipient, uint256 amountMin'), [outputToken, input.recipient, input.amountOut]))
   }
-  if (input.nativeIn)
-    push(
-      COMMAND.UNWRAP_WETH,
-      encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountMin'), [
-        input.recipient,
-        0n,
-      ]),
-    )
+  if (input.nativeIn) push(COMMAND.UNWRAP_WETH, encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountMin'), [input.recipient, 0n]))
 
   const commandBytes = concatHex(commands.map((c) => `0x${c.toString(16).padStart(2, '0')}` as Hex))
-  const data = encodeFunctionData({
-    abi: UNIVERSAL_ROUTER_ABI,
-    functionName: 'execute',
-    args: [commandBytes, inputs, input.deadline],
-  })
-  return {
-    to: input.universalRouter,
-    data,
-    value: input.nativeIn ? maxIn : 0n,
-    commands,
-    exactOut: input.amountOut,
-    maximumIn: maxIn,
-    grossOut,
-  }
+  const data = encodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commandBytes, inputs, input.deadline] })
+  return { to: input.universalRouter, data, value: input.nativeIn ? maxIn : 0n, commands, exactOut: input.amountOut, maximumIn: maxIn, grossOut }
 }
 
 /** ERC-20 approve(Permit2, amount) — the one-time step before permits (§8.6). */
 export function encodeApprovePermit2(permit2: Hex, amount: bigint): { readonly data: Hex } {
-  return {
-    data: encodeFunctionData({
-      abi: [
-        {
-          type: 'function',
-          name: 'approve',
-          stateMutability: 'nonpayable',
-          inputs: [
-            { name: 'spender', type: 'address' },
-            { name: 'amount', type: 'uint256' },
-          ],
-          outputs: [{ type: 'bool' }],
-        },
-      ],
-      functionName: 'approve',
-      args: [permit2, amount],
-    }),
-  }
+  return { data: encodeFunctionData({ abi: [{ type: 'function', name: 'approve', stateMutability: 'nonpayable', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }] }], functionName: 'approve', args: [permit2, amount] }) }
 }

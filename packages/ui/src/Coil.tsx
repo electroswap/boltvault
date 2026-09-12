@@ -31,15 +31,7 @@ function arcLength(r: number, fraction: number): number {
   return TAU * r * Math.max(0, Math.min(1, fraction))
 }
 
-export function Coil({
-  durationMultiplier,
-  boltMultiplier,
-  glow,
-  size = 200,
-  at2x = null,
-  at25x = null,
-  testID,
-}: CoilProps) {
+export function Coil({ durationMultiplier, boltMultiplier, glow, size = 200, at2x = null, at25x = null, testID }: CoilProps) {
   const cx = size / 2
   const cy = size / 2
   const outerR = size * 0.42
@@ -69,78 +61,22 @@ export function Coil({
         </Defs>
         <Circle cx={cx} cy={cy} r={outerR + 10} fill="url(#coilGlow)" />
         {/* Outer ring: track then the duration travel. */}
-        <Circle
-          cx={cx}
-          cy={cy}
-          r={outerR}
-          stroke="rgba(95,216,255,0.14)"
-          strokeWidth={6}
-          fill="none"
-        />
-        <Circle
-          cx={cx}
-          cy={cy}
-          r={outerR}
-          stroke={light.arc}
-          strokeWidth={6}
-          fill="none"
-          strokeLinecap="round"
-          strokeDasharray={`${arcLength(outerR, travel)} ${outerC}`}
-          transform={`rotate(-90 ${cx} ${cy})`}
-        />
+        <Circle cx={cx} cy={cy} r={outerR} stroke="rgba(95,216,255,0.14)" strokeWidth={6} fill="none" />
+        <Circle cx={cx} cy={cy} r={outerR} stroke={light.arc} strokeWidth={6} fill="none" strokeLinecap="round" strokeDasharray={`${arcLength(outerR, travel)} ${outerC}`} transform={`rotate(-90 ${cx} ${cy})`} />
         {/* Engraved marks at 2.0× and 2.5×. */}
         <Circle cx={t2.x} cy={t2.y} r={2.2} fill={travel >= 2 / 3 ? light.arc : paint.mute} />
         <Circle cx={t25.x} cy={t25.y} r={2.2} fill={travel >= 1 ? light.arc : paint.mute} />
         {/* Inner ring: the BOLT stair, three steps. */}
-        <Circle
-          cx={cx}
-          cy={cy}
-          r={innerR}
-          stroke="rgba(167,139,255,0.16)"
-          strokeWidth={4}
-          fill="none"
-        />
-        <Circle
-          cx={cx}
-          cy={cy}
-          r={innerR}
-          stroke={light.plasma}
-          strokeWidth={4}
-          fill="none"
-          strokeLinecap="round"
-          strokeDasharray={`${arcLength(innerR, stair)} ${innerC}`}
-          transform={`rotate(-90 ${cx} ${cy})`}
-        />
-        <SvgText
-          x={cx}
-          y={cy + 8}
-          fill={paint.ink}
-          fontSize={size * 0.16}
-          fontWeight="600"
-          textAnchor="middle"
-          fontFamily={fonts.readout}
-        >
+        <Circle cx={cx} cy={cy} r={innerR} stroke="rgba(167,139,255,0.16)" strokeWidth={4} fill="none" />
+        <Circle cx={cx} cy={cy} r={innerR} stroke={light.plasma} strokeWidth={4} fill="none" strokeLinecap="round" strokeDasharray={`${arcLength(innerR, stair)} ${innerC}`} transform={`rotate(-90 ${cx} ${cy})`} />
+        <SvgText x={cx} y={cy + 8} fill={paint.ink} fontSize={size * 0.16} fontWeight="600" textAnchor="middle" fontFamily={fonts.readout}>
           {multiplierText}
         </SvgText>
-        <SvgText
-          x={cx}
-          y={cy + 8 + size * 0.11}
-          fill={paint.mute}
-          fontSize={size * 0.06}
-          textAnchor="middle"
-          fontFamily={fonts.text}
-        >
+        <SvgText x={cx} y={cy + 8 + size * 0.11} fill={paint.mute} fontSize={size * 0.06} textAnchor="middle" fontFamily={fonts.text}>
           {`BOLT ${(boltMultiplier / 10_000).toFixed(2)}×`}
         </SvgText>
         {at2x ? (
-          <SvgText
-            x={t2.x + 6}
-            y={t2.y + 4}
-            fill={paint.mute}
-            fontSize={size * 0.05}
-            textAnchor="start"
-            fontFamily={fonts.text}
-          >
+          <SvgText x={t2.x + 6} y={t2.y + 4} fill={paint.mute} fontSize={size * 0.05} textAnchor="start" fontFamily={fonts.text}>
             {`2.0× ${at2x}`}
           </SvgText>
         ) : null}
@@ -155,14 +91,7 @@ export function Coil({
           same face as the multiplier, with room at every size.
         */}
         {at25x ? (
-          <SvgText
-            x={cx}
-            y={cy - outerR + size * 0.085}
-            fill={paint.mute}
-            fontSize={size * 0.05}
-            textAnchor="middle"
-            fontFamily={fonts.text}
-          >
+          <SvgText x={cx} y={cy - outerR + size * 0.085} fill={paint.mute} fontSize={size * 0.05} textAnchor="middle" fontFamily={fonts.text}>
             {`2.5× ${at25x}`}
           </SvgText>
         ) : null}

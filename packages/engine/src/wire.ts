@@ -52,11 +52,7 @@ export const EngineEventMessageSchema = z.object({
 })
 export type EngineEventMessage = z.infer<typeof EngineEventMessageSchema>
 
-export const EngineMessageSchema = z.union([
-  EngineRequestSchema,
-  EngineResponseSchema,
-  EngineEventMessageSchema,
-])
+export const EngineMessageSchema = z.union([EngineRequestSchema, EngineResponseSchema, EngineEventMessageSchema])
 export type EngineMessage = z.infer<typeof EngineMessageSchema>
 
 /** Parse an untrusted inbound message; returns null for anything that is not ours. */
@@ -75,20 +71,10 @@ export function hasRawBytes(value: unknown, depth = 0): boolean {
   if (depth > 32 || value === null || typeof value !== 'object') return false
   if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) return true
   if (Array.isArray(value)) return value.some((v) => hasRawBytes(v, depth + 1))
-  for (const v of Object.values(value as Record<string, unknown>))
-    if (hasRawBytes(v, depth + 1)) return true
+  for (const v of Object.values(value as Record<string, unknown>)) if (hasRawBytes(v, depth + 1)) return true
   return false
 }
 
 export function refusedRawBytes(id: string): EngineResponse {
-  return {
-    v: WIRE_VERSION,
-    kind: 'response',
-    id,
-    ok: false,
-    error: {
-      code: 'internal',
-      message: 'The engine refused to send raw bytes to the UI (master plan §3.3).',
-    },
-  }
+  return { v: WIRE_VERSION, kind: 'response', id, ok: false, error: { code: 'internal', message: 'The engine refused to send raw bytes to the UI (master plan §3.3).' } }
 }

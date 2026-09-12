@@ -10,36 +10,8 @@
  * Confirming runs a flow of sheets (approve → permit → swap) and the
  * Discharge lands the result here.
  */
-import {
-  Body,
-  Chip,
-  Column,
-  Discharge,
-  Icon,
-  Key,
-  Pill,
-  Plate,
-  Pressable,
-  Rim,
-  Row,
-  ScrollView,
-  Segmented,
-  TokenAvatar,
-  metrics,
-  paint,
-  shortAddress,
-  useWindowDimensions,
-} from '@boltvault/ui'
-import {
-  cacheKey,
-  type ExploreToken,
-  type LimitOrderView,
-  type LimitQuote,
-  type LiquidityView,
-  type SwapArgs,
-  type SwapQuote,
-  type TokenView,
-} from '@boltvault/engine'
+import { Body, Chip, Column, Discharge, Icon, Key, Pill, Plate, Pressable, Rim, Row, ScrollView, Segmented, TokenAvatar, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
+import { cacheKey, type ExploreToken, type LimitOrderView, type LimitQuote, type LiquidityView, type SwapArgs, type SwapQuote, type TokenView } from '@boltvault/engine'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { SlippageSheet } from '../components/SlippageSheet'
 import { SwapCoachSheet } from '../components/SwapCoachSheet'
@@ -52,14 +24,7 @@ import { useChainHead } from '../hooks/useChainHead'
 import { useName } from '../hooks/useNames'
 import { usePortfolio } from '../hooks/usePortfolio'
 import { usePrefs } from '../hooks/usePrefs'
-import {
-  formatAmountFiat,
-  formatFloor,
-  formatPct,
-  formatQuantity,
-  formatRate,
-  formatRaw,
-} from '../format'
+import { formatAmountFiat, formatFloor, formatPct, formatQuantity, formatRate, formatRaw } from '../format'
 import { t } from '../i18n'
 import { swapFlowStore, useSwapFlow } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
@@ -85,10 +50,7 @@ const ETN = 52014
  *  - `maximumInRaw`   the promise: the most that can leave the account.
  *  - `receiveRaw`     exactly what the user typed.
  */
-type Quote = SwapQuote & {
-  readonly tradeType?: 'exactIn' | 'exactOut'
-  readonly maximumInRaw?: string
-}
+type Quote = SwapQuote & { readonly tradeType?: 'exactIn' | 'exactOut'; readonly maximumInRaw?: string }
 
 /** The air above and below every line of the details card. */
 const ROW_PAD = 9
@@ -108,12 +70,7 @@ export interface SwapProps {
   readonly reducedMotion?: boolean
 }
 
-export function Swap({
-  body,
-  tokenIn: initialIn,
-  tokenOut: initialOut,
-  reducedMotion = false,
-}: SwapProps) {
+export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMotion = false }: SwapProps) {
   const engine = useEngine()
   const { active } = useWalletState()
   /*
@@ -133,20 +90,13 @@ export function Swap({
   const head = useChainHead(ETN)
   const { prefs, loaded: prefsLoaded, set: setPrefs } = usePrefs()
   const { flow: anyFlow, setActive, dismiss } = useSwapFlow()
-  const flow =
-    anyFlow &&
-    (anyFlow.kind === 'swap' || anyFlow.kind === 'limit' || anyFlow.kind === 'limit_cancel')
-      ? anyFlow
-      : null
+  const flow = anyFlow && (anyFlow.kind === 'swap' || anyFlow.kind === 'limit' || anyFlow.kind === 'limit_cancel') ? anyFlow : null
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const [mode, setMode] = useState<'swap' | 'limit'>('swap')
   // Limit orders are a build feature (off by default); without it the screen is Swap only.
   const [limitOn, setLimitOn] = useState(false)
   useEffect(() => {
-    engine.about.get().then(
-      (a) => setLimitOn(a.features.limitOrders),
-      () => undefined,
-    )
+    engine.about.get().then((a) => setLimitOn(a.features.limitOrders), () => undefined)
   }, [engine])
   const [tokens, setTokens] = useState<TokenView[]>([])
   const [tokenIn, setTokenIn] = useState(initialIn ?? 'native')
@@ -184,23 +134,16 @@ export function Swap({
   const [fire, setFire] = useState(0)
 
   useEffect(() => {
-    engine.tokens.universe({ chainId: ETN }).then(
-      (u) => {
-        const visible = u.filter((x) => !x.hidden)
-        setTokens(visible)
-        // ETN → BOLT by default (plan B4, owner item W5); a token page prefills its own pair.
-        if (!initialOut) {
-          const bolt =
-            visible.find((x) => x.symbol === 'BOLT') ?? visible.find((x) => x.address !== 'native')
-          if (bolt) setTokenOut((cur) => cur || bolt.address)
-        }
-      },
-      () => undefined,
-    )
-    engine.settings.get().then(
-      (s) => setSlippage((cur) => cur ?? s.slippageBips),
-      () => undefined,
-    )
+    engine.tokens.universe({ chainId: ETN }).then((u) => {
+      const visible = u.filter((x) => !x.hidden)
+      setTokens(visible)
+      // ETN → BOLT by default (plan B4, owner item W5); a token page prefills its own pair.
+      if (!initialOut) {
+        const bolt = visible.find((x) => x.symbol === 'BOLT') ?? visible.find((x) => x.address !== 'native')
+        if (bolt) setTokenOut((cur) => cur || bolt.address)
+      }
+    }, () => undefined)
+    engine.settings.get().then((s) => setSlippage((cur) => cur ?? s.slippageBips), () => undefined)
   }, [engine, initialOut])
 
   useEffect(() => {
@@ -254,41 +197,16 @@ export function Swap({
     }
     let alive = true
     const id = setTimeout(() => {
-      engine.limit
-        .quote({
-          accountId: active.id,
-          chainId: ETN,
-          tokenIn,
-          tokenOut,
-          amountIn: amount || '0',
-          minOut: minOut || '0',
-          durationSeconds: Number(duration),
-        })
-        .then(
-          (q) => alive && setLimitQuote(q),
-          (err: unknown) => alive && setError(err instanceof Error ? err.message : String(err)),
-        )
+      engine.limit.quote({ accountId: active.id, chainId: ETN, tokenIn, tokenOut, amountIn: amount || '0', minOut: minOut || '0', durationSeconds: Number(duration) }).then(
+        (q) => alive && setLimitQuote(q),
+        (err: unknown) => alive && setError(err instanceof Error ? err.message : String(err)),
+      )
     }, 250)
     return () => {
       alive = false
       clearTimeout(id)
     }
-  }, [
-    engine,
-    active,
-    mode,
-    tokenIn,
-    tokenOut,
-    amount,
-    want,
-    exactOut,
-    swapArgs,
-    minOut,
-    duration,
-    effectiveSlippage,
-    slippage,
-    head?.blockNumber,
-  ])
+  }, [engine, active, mode, tokenIn, tokenOut, amount, want, exactOut, swapArgs, minOut, duration, effectiveSlippage, slippage, head?.blockNumber])
 
   useEffect(() => {
     if (flow?.status === 'done') setFire((n) => n + 1)
@@ -315,20 +233,15 @@ export function Swap({
   })
   const safety = useMemo(() => {
     const m = new Map<string, TokenSafety>()
-    for (const x of exploreTokens.value ?? [])
-      if (x.safety) m.set(x.address.toLowerCase(), x.safety)
+    for (const x of exploreTokens.value ?? []) if (x.safety) m.set(x.address.toLowerCase(), x.safety)
     return m
   }, [exploreTokens.value])
 
   // Locked liquidity behind the pair (owner item W3): the token side, never ETN itself.
-  const lockToken =
-    tokenOut && tokenOut !== 'native' ? tokenOut : tokenIn !== 'native' ? tokenIn : null
+  const lockToken = tokenOut && tokenOut !== 'native' ? tokenOut : tokenIn !== 'native' ? tokenIn : null
   const liquidity = useCached<LiquidityView>({
     key: lockToken ? cacheKey('explore', 'liquidity', ETN, lockToken) : null,
-    cached: (e) =>
-      lockToken
-        ? e.explore.cachedLiquidity({ chainId: ETN, address: lockToken })
-        : Promise.resolve(null),
+    cached: (e) => (lockToken ? e.explore.cachedLiquidity({ chainId: ETN, address: lockToken }) : Promise.resolve(null)),
     fresh: (e) =>
       lockToken
         ? e.explore.liquidity({ chainId: ETN, address: lockToken }).then((v) => {
@@ -347,16 +260,8 @@ export function Swap({
   const rowOut = rows.find((r) => r.address.toLowerCase() === tokenOut.toLowerCase())
   const hasSwapped = useMemo(() => entries.some((e) => e.category === 'SWAP'), [entries])
   const fresh = quote ? now - quote.quotedAt <= QUOTE_STALE_MS : false
-  const impactTone: 'mute' | 'ember' | 'burn' =
-    quote?.priceImpactPct === null || quote?.priceImpactPct === undefined
-      ? 'mute'
-      : quote.priceImpactPct > 15
-        ? 'burn'
-        : quote.priceImpactPct > 5
-          ? 'ember'
-          : 'mute'
-  const coachOpen =
-    mode === 'swap' && prefsLoaded && activityLoaded && !hasSwapped && !prefs.swapCoachDismissed
+  const impactTone: 'mute' | 'ember' | 'burn' = quote?.priceImpactPct === null || quote?.priceImpactPct === undefined ? 'mute' : quote.priceImpactPct > 15 ? 'burn' : quote.priceImpactPct > 5 ? 'ember' : 'mute'
+  const coachOpen = mode === 'swap' && prefsLoaded && activityLoaded && !hasSwapped && !prefs.swapCoachDismissed
 
   /*
     An amount is an amount OF something, so changing what the trade is made of
@@ -395,15 +300,7 @@ export function Swap({
       const r =
         mode === 'swap'
           ? await engine.swap.execute(swapArgs())
-          : await engine.limit.place({
-              accountId: active.id,
-              chainId: ETN,
-              tokenIn,
-              tokenOut,
-              amountIn: amount,
-              minOut,
-              durationSeconds: Number(duration),
-            })
+          : await engine.limit.place({ accountId: active.id, chainId: ETN, tokenIn, tokenOut, amountIn: amount, minOut, durationSeconds: Number(duration) })
       const f = await engine.swap.flow({ flowId: r.flowId })
       if (f) swapFlowStore.upsert(f)
       setActive(r.flowId)
@@ -431,19 +328,8 @@ export function Swap({
     const q = flow.quote
     return (
       <Column flex={1} testID="swap-flow">
-        {finished ? (
-          <Discharge
-            fire={fire}
-            kind={flow.status === 'done' ? 'confirm' : 'reject'}
-            width={width}
-            height={height}
-            reducedMotion={reducedMotion}
-          />
-        ) : null}
-        <ScrollView
-          contentContainerStyle={{ padding: inset, gap: 14, flexGrow: 1, justifyContent: 'center' }}
-          style={{ zIndex: 1 }}
-        >
+        {finished ? <Discharge fire={fire} kind={flow.status === 'done' ? 'confirm' : 'reject'} width={width} height={height} reducedMotion={reducedMotion} /> : null}
+        <ScrollView contentContainerStyle={{ padding: inset, gap: 14, flexGrow: 1, justifyContent: 'center' }} style={{ zIndex: 1 }}>
           <Body size="title" testID="swap-flow-title">
             {flow.status === 'done'
               ? flow.kind === 'swap'
@@ -463,67 +349,18 @@ export function Swap({
             <Body tone="mute" testID="swap-flow-summary">
               {/* The guarantee reads from whichever side was held still. */}
               {(q as Quote).tradeType === 'exactOut'
-                ? t({
-                    id: 'swap.summary.exactOut',
-                    message: 'at most {a} {s} → {b} {u}',
-                    values: {
-                      a: formatRaw((q as Quote).maximumInRaw ?? q.amountInRaw, q.decimalsIn),
-                      s: q.symbolIn,
-                      b: formatRaw(q.receiveRaw, q.decimalsOut),
-                      u: q.symbolOut,
-                    },
-                  })
-                : t({
-                    id: 'swap.summary',
-                    message: '{a} {s} → at least {b} {u}',
-                    values: {
-                      a: formatRaw(q.amountInRaw, q.decimalsIn),
-                      s: q.symbolIn,
-                      b: formatFloor(q.minimumOutRaw, q.decimalsOut),
-                      u: q.symbolOut,
-                    },
-                  })}
+                ? t({ id: 'swap.summary.exactOut', message: 'at most {a} {s} → {b} {u}', values: { a: formatRaw((q as Quote).maximumInRaw ?? q.amountInRaw, q.decimalsIn), s: q.symbolIn, b: formatRaw(q.receiveRaw, q.decimalsOut), u: q.symbolOut } })
+                : t({ id: 'swap.summary', message: '{a} {s} → at least {b} {u}', values: { a: formatRaw(q.amountInRaw, q.decimalsIn), s: q.symbolIn, b: formatFloor(q.minimumOutRaw, q.decimalsOut), u: q.symbolOut } })}
             </Body>
           ) : null}
           <Plate gap="$2" testID="swap-steps">
             {flow.steps.map((s, i) => (
-              <Row
-                key={`${s.step}-${i}`}
-                justifyContent="space-between"
-                alignItems="center"
-                minHeight={28}
-              >
+              <Row key={`${s.step}-${i}`} justifyContent="space-between" alignItems="center" minHeight={28}>
                 <Row gap="$2" alignItems="center">
-                  <Icon
-                    name={
-                      s.status === 'confirmed'
-                        ? 'check'
-                        : s.status === 'rejected' || s.status === 'failed'
-                          ? 'close'
-                          : 'chevronRight'
-                    }
-                    size={16}
-                    color={
-                      s.status === 'confirmed'
-                        ? paint.arc
-                        : s.status === 'rejected' || s.status === 'failed'
-                          ? paint.burn
-                          : paint.mute
-                    }
-                  />
+                  <Icon name={s.status === 'confirmed' ? 'check' : s.status === 'rejected' || s.status === 'failed' ? 'close' : 'chevronRight'} size={16} color={s.status === 'confirmed' ? paint.arc : s.status === 'rejected' || s.status === 'failed' ? paint.burn : paint.mute} />
                   <Body tone={s.status === 'signing' ? 'ink' : 'mute'}>{stepLabel(s.step)}</Body>
                 </Row>
-                <Body
-                  tone={
-                    s.status === 'confirmed'
-                      ? 'arc'
-                      : s.status === 'rejected' || s.status === 'failed'
-                        ? 'burn'
-                        : 'mute'
-                  }
-                  size="caption"
-                  testID={`swap-step-${s.step}`}
-                >
+                <Body tone={s.status === 'confirmed' ? 'arc' : s.status === 'rejected' || s.status === 'failed' ? 'burn' : 'mute'} size="caption" testID={`swap-step-${s.step}`}>
                   {statusLabel(s.status)}
                 </Body>
               </Row>
@@ -535,55 +372,15 @@ export function Swap({
               {flow.hash}
             </Body>
           ) : null}
-          {finished ? (
-            <Key
-              label={
-                flow.status === 'done'
-                  ? t({ id: 'flow.again', message: 'Back to Swap' })
-                  : t({ id: 'flow.tryAgain', message: 'Try again' })
-              }
-              onPress={dismiss}
-              testID="swap-flow-done"
-            />
-          ) : null}
+          {finished ? <Key label={flow.status === 'done' ? t({ id: 'flow.again', message: 'Back to Swap' }) : t({ id: 'flow.tryAgain', message: 'Try again' })} onPress={dismiss} testID="swap-flow-done" /> : null}
         </ScrollView>
       </Column>
     )
   }
 
-  const feeMain = quote
-    ? quote.fee.bips === 0
-      ? t({
-          id: 'swap.fee.zero.v2',
-          message: 'No wallet fee · {name}',
-          values: { name: quote.fee.name },
-        })
-      : t({
-          id: 'swap.fee.main.v2',
-          message: '{p} · {name}',
-          values: { p: formatPct(quote.fee.bips), name: quote.fee.name },
-        })
-    : t({ id: 'swap.fee.idle', message: '0.50% · hold BOLT for less' })
-  const feeDetail =
-    quote && quote.fee.bips > 0 && quote.amountOutRaw !== '0'
-      ? t({
-          id: 'swap.fee.detail',
-          message: '{a} {s} to {to}',
-          values: {
-            a: formatRaw(quote.fee.amountRaw, quote.decimalsOut),
-            s: quote.symbolOut,
-            to: quote.fee.sink ? shortAddress(quote.fee.sink) : '—',
-          },
-        })
-      : null
-  const nextLine =
-    quote?.fee.nextTierAt && quote.fee.nextTierBips !== null
-      ? t({
-          id: 'swap.fee.next',
-          message: 'hold {n} BOLT-eq for {p}',
-          values: { n: formatRaw(quote.fee.nextTierAt, 18), p: formatPct(quote.fee.nextTierBips) },
-        })
-      : null
+  const feeMain = quote ? (quote.fee.bips === 0 ? t({ id: 'swap.fee.zero.v2', message: 'No wallet fee · {name}', values: { name: quote.fee.name } }) : t({ id: 'swap.fee.main.v2', message: '{p} · {name}', values: { p: formatPct(quote.fee.bips), name: quote.fee.name } })) : t({ id: 'swap.fee.idle', message: '0.50% · hold BOLT for less' })
+  const feeDetail = quote && quote.fee.bips > 0 && quote.amountOutRaw !== '0' ? t({ id: 'swap.fee.detail', message: '{a} {s} to {to}', values: { a: formatRaw(quote.fee.amountRaw, quote.decimalsOut), s: quote.symbolOut, to: quote.fee.sink ? shortAddress(quote.fee.sink) : '—' } }) : null
+  const nextLine = quote?.fee.nextTierAt && quote.fee.nextTierBips !== null ? t({ id: 'swap.fee.next', message: 'hold {n} BOLT-eq for {p}', values: { n: formatRaw(quote.fee.nextTierAt, 18), p: formatPct(quote.fee.nextTierBips) } }) : null
   /*
     §7.10 forbids hiding a fee, and fixing the output moves where this one is
     felt: it is still taken from the output on chain, but the order is bought
@@ -591,41 +388,15 @@ export function Swap({
     bigger bill. Saying so is the difference between "the fee" and "why does
     this cost more than the rate says".
   */
-  const feeOnTop =
-    exactOut && quote && quote.fee.bips > 0
-      ? t({
-          id: 'swap.fee.onTop',
-          message: 'added to what you pay, so you receive the full amount',
-        })
-      : null
+  const feeOnTop = exactOut && quote && quote.fee.bips > 0 ? t({ id: 'swap.fee.onTop', message: 'added to what you pay, so you receive the full amount' }) : null
   const lockText = liquidity.value
     ? liquidity.value.lockedPct > 0
-      ? t({
-          id: 'swap.locks',
-          message: '{p}% locked · {n}',
-          values: {
-            p: Math.round(liquidity.value.lockedPct),
-            n:
-              liquidity.value.lockCount === 1
-                ? t({ id: 'swap.locks.one', message: '1 lock' })
-                : t({
-                    id: 'swap.locks.many',
-                    message: '{n} locks',
-                    values: { n: liquidity.value.lockCount },
-                  }),
-          },
-        })
+      ? t({ id: 'swap.locks', message: '{p}% locked · {n}', values: { p: Math.round(liquidity.value.lockedPct), n: liquidity.value.lockCount === 1 ? t({ id: 'swap.locks.one', message: '1 lock' }) : t({ id: 'swap.locks.many', message: '{n} locks', values: { n: liquidity.value.lockCount } }) } })
       : t({ id: 'swap.locks.none', message: 'No locks' })
     : lockToken && liquidity.freshness === 'loading'
       ? '…'
       : t({ id: 'swap.locks.unknown', message: 'No lock data' })
-  const lockTone: 'surge' | 'ember' | 'mute' = liquidity.value
-    ? liquidity.value.lockedPct >= 50
-      ? 'surge'
-      : liquidity.value.lockedPct > 0
-        ? 'ember'
-        : 'mute'
-    : 'mute'
+  const lockTone: 'surge' | 'ember' | 'mute' = liquidity.value ? (liquidity.value.lockedPct >= 50 ? 'surge' : liquidity.value.lockedPct > 0 ? 'ember' : 'mute') : 'mute'
   /*
     The lock treatment, taken from the interface as closely as it goes.
 
@@ -652,23 +423,9 @@ export function Swap({
     and selling into one are the same transaction from the router's point of
     view, and both are how the loss happens.
   */
-  const blockedSide =
-    safety.get(tokenOut.toLowerCase()) === 'BLOCKED'
-      ? outView
-      : safety.get(tokenIn.toLowerCase()) === 'BLOCKED'
-        ? inView
-        : null
-  const warnedSide =
-    blockedSide !== null
-      ? null
-      : safety.get(tokenOut.toLowerCase()) === 'STRONG_WARNING'
-        ? outView
-        : safety.get(tokenIn.toLowerCase()) === 'STRONG_WARNING'
-          ? inView
-          : null
-  const canSwap =
-    blockedSide === null &&
-    (mode === 'swap' ? !!quote?.ok && fresh && !busy : !!limitQuote?.ok && !busy)
+  const blockedSide = safety.get(tokenOut.toLowerCase()) === 'BLOCKED' ? outView : safety.get(tokenIn.toLowerCase()) === 'BLOCKED' ? inView : null
+  const warnedSide = blockedSide !== null ? null : safety.get(tokenOut.toLowerCase()) === 'STRONG_WARNING' ? outView : safety.get(tokenIn.toLowerCase()) === 'STRONG_WARNING' ? inView : null
+  const canSwap = blockedSide === null && (mode === 'swap' ? !!quote?.ok && fresh && !busy : !!limitQuote?.ok && !busy)
   const priced = quote && quote.amountOutRaw !== '0'
   const receiveText = priced ? formatRaw(quote.receiveRaw, quote.decimalsOut) : '—'
   /*
@@ -677,21 +434,9 @@ export function Swap({
     the ceiling, and that gets its own line in the details — the same place the
     other direction's guarantee lives.
   */
-  const payText = exactOut
-    ? priced
-      ? formatRaw(quote.amountInRaw, quote.decimalsIn)
-      : '—'
-    : amount
-  const ceilingText =
-    quote?.maximumInRaw && quote.maximumInRaw !== '0'
-      ? `${formatRaw(quote.maximumInRaw, quote.decimalsIn)} ${quote.symbolIn}`
-      : '—'
-  const keyLabel =
-    mode === 'swap'
-      ? quote && quote.priceImpactPct !== null && quote.priceImpactPct > 15
-        ? t({ id: 'swap.key.anyway', message: 'Swap anyway' })
-        : t({ id: 'swap.key', message: 'Swap' })
-      : t({ id: 'swap.limit.key', message: 'Place order' })
+  const payText = exactOut ? (priced ? formatRaw(quote.amountInRaw, quote.decimalsIn) : '—') : amount
+  const ceilingText = quote?.maximumInRaw && quote.maximumInRaw !== '0' ? `${formatRaw(quote.maximumInRaw, quote.decimalsIn)} ${quote.symbolIn}` : '—'
+  const keyLabel = mode === 'swap' ? (quote && quote.priceImpactPct !== null && quote.priceImpactPct > 15 ? t({ id: 'swap.key.anyway', message: 'Swap anyway' }) : t({ id: 'swap.key', message: 'Swap' })) : t({ id: 'swap.limit.key', message: 'Place order' })
 
   return (
     <Column flex={1}>
@@ -718,47 +463,22 @@ export function Swap({
               <Body size="title">{t({ id: 'swap.title', message: 'Swap' })}</Body>
               {active ? (
                 <Body tone="mute" size="caption" numberOfLines={1} testID="swap-account">
-                  {t({
-                    id: 'from.account',
-                    message: 'from {a}',
-                    values: {
-                      a: `${active.label} · ${accountName ?? shortAddress(active.address)}`,
-                    },
-                  })}
+                  {t({ id: 'from.account', message: 'from {a}', values: { a: `${active.label} · ${accountName ?? shortAddress(active.address)}` } })}
                 </Body>
               ) : null}
               <ChainCaption chainId={ETN} name="Electroneum" testID="swap-chain" />
             </Column>
           )}
-          {mode === 'swap' ? (
-            <Pill
-              icon={<Icon name="tune" size={14} color={paint.mute} />}
-              label={formatPct(effectiveSlippage)}
-              size="sm"
-              onPress={() => setSlippageOpen(true)}
-              accessibilityLabel={t({
-                id: 'swap.slippage',
-                message: 'Slippage {p}',
-                values: { p: formatPct(effectiveSlippage) },
-              })}
-              testID="swap-slippage"
-            />
-          ) : null}
+          {mode === 'swap' ? <Pill icon={<Icon name="tune" size={14} color={paint.mute} />} label={formatPct(effectiveSlippage)} size="sm" onPress={() => setSlippageOpen(true)} accessibilityLabel={t({ id: 'swap.slippage', message: 'Slippage {p}', values: { p: formatPct(effectiveSlippage) } })} testID="swap-slippage" /> : null}
         </Row>
 
         {/* The console: two wells in one panel, the flip control on their seam (style bible › layout). */}
         <Plate role="console" gap="$1" padding={10} testID="swap-console">
           <AmountWell
-            label={
-              exactOut
-                ? t({ id: 'swap.pay.estimated', message: 'You pay about' })
-                : t({ id: 'swap.pay', message: 'You pay' })
-            }
+            label={exactOut ? t({ id: 'swap.pay.estimated', message: 'You pay about' }) : t({ id: 'swap.pay', message: 'You pay' })}
             value={payText}
             {...(exactOut ? { readOnly: true } : { onChange: setAmount })}
-            tokenPill={
-              <TokenPill token={inView} onPress={() => setPicker('in')} testID="swap-token-in" />
-            }
+            tokenPill={<TokenPill token={inView} onPress={() => setPicker('in')} testID="swap-token-in" />}
             fiat={formatAmountFiat(exactOut ? payText.replace(/,/g, '') : amount, rowIn, currency)}
             balance={rowIn ? `${formatQuantity(rowIn.quantity)} ${rowIn.symbol}` : null}
             onMax={rowIn && !exactOut ? () => setAmount(rowIn.quantity) : undefined}
@@ -787,61 +507,20 @@ export function Swap({
               <Pressable
                 onPress={() => setDetails(true)}
                 accessibilityRole="button"
-                accessibilityLabel={t({
-                  id: 'swap.locked.a11y',
-                  message: 'Liquidity locked: {v}',
-                  values: { v: lockText },
-                })}
+                accessibilityLabel={t({ id: 'swap.locked.a11y', message: 'Liquidity locked: {v}', values: { v: lockText } })}
                 style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
                 testID="swap-lock-badge"
               >
-                <Column
-                  width={40}
-                  height={40}
-                  borderRadius={20}
-                  alignItems="center"
-                  justifyContent="center"
-                  backgroundColor="$glassRaisedSolid"
-                >
-                  <Column
-                    width={32}
-                    height={32}
-                    borderRadius={16}
-                    alignItems="center"
-                    justifyContent="center"
-                    backgroundColor={lockPaint}
-                  >
+                <Column width={40} height={40} borderRadius={20} alignItems="center" justifyContent="center" backgroundColor="$glassRaisedSolid">
+                  <Column width={32} height={32} borderRadius={16} alignItems="center" justifyContent="center" backgroundColor={lockPaint}>
                     <Icon name="lock" size={15} color={paint.void} />
                   </Column>
                 </Column>
               </Pressable>
             ) : null}
-            <Pressable
-              onPress={flip}
-              accessibilityRole="button"
-              accessibilityLabel={t({ id: 'swap.flip', message: 'Swap direction' })}
-              style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
-              testID="swap-flip"
-            >
-              <Column
-                width={40}
-                height={40}
-                borderRadius={20}
-                alignItems="center"
-                justifyContent="center"
-                backgroundColor="$glassRaisedSolid"
-              >
-                <Chip
-                  width={32}
-                  height={32}
-                  borderRadius={16}
-                  padding={0}
-                  justifyContent="center"
-                  alignItems="center"
-                  backgroundColor="$glassRaisedSolid"
-                  borderWidth={0}
-                  overflow="hidden"
-                >
+            <Pressable onPress={flip} accessibilityRole="button" accessibilityLabel={t({ id: 'swap.flip', message: 'Swap direction' })} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }} testID="swap-flip">
+              <Column width={40} height={40} borderRadius={20} alignItems="center" justifyContent="center" backgroundColor="$glassRaisedSolid">
+                <Chip width={32} height={32} borderRadius={16} padding={0} justifyContent="center" alignItems="center" backgroundColor="$glassRaisedSolid" borderWidth={0} overflow="hidden">
                   <Icon name="swap" color={paint.arc} size={16} />
                   <Rim radius={16} opacity={0.85} />
                 </Chip>
@@ -860,11 +539,7 @@ export function Swap({
               well takes a value perfectly well.
             */
             <AmountWell
-              label={
-                exactOut
-                  ? t({ id: 'swap.receive.exact', message: 'You receive exactly' })
-                  : t({ id: 'swap.receive', message: 'You receive' })
-              }
+              label={exactOut ? t({ id: 'swap.receive.exact', message: 'You receive exactly' }) : t({ id: 'swap.receive', message: 'You receive' })}
               value={exactOut ? want : receiveText}
               {...(exactOut ? { onChange: setWant } : { readOnly: true })}
               right={
@@ -880,47 +555,20 @@ export function Swap({
                       whatever the quote said it would cost.
                     */
                     if (exactOut) {
-                      setAmount(
-                        priced
-                          ? formatRaw(quote.amountInRaw, quote.decimalsIn).replace(/,/g, '')
-                          : amount,
-                      )
+                      setAmount(priced ? formatRaw(quote.amountInRaw, quote.decimalsIn).replace(/,/g, '') : amount)
                       setWant('')
                     } else {
-                      setWant(
-                        priced
-                          ? formatRaw(quote.receiveRaw, quote.decimalsOut).replace(/,/g, '')
-                          : '',
-                      )
+                      setWant(priced ? formatRaw(quote.receiveRaw, quote.decimalsOut).replace(/,/g, '') : '')
                     }
                     setExactOut((v) => !v)
                     setQuote(null)
                   }}
-                  accessibilityLabel={t({
-                    id: 'swap.exactOut.a11y',
-                    message: 'Set the exact amount you receive',
-                  })}
+                  accessibilityLabel={t({ id: 'swap.exactOut.a11y', message: 'Set the exact amount you receive' })}
                   testID="swap-exact-out"
                 />
               }
-              tokenPill={
-                <TokenPill
-                  token={outView}
-                  onPress={() => setPicker('out')}
-                  testID="swap-token-out"
-                />
-              }
-              fiat={
-                exactOut
-                  ? formatAmountFiat(want, rowOut, currency)
-                  : priced
-                    ? formatAmountFiat(
-                        formatRaw(quote.receiveRaw, quote.decimalsOut).replace(/,/g, ''),
-                        rowOut,
-                        currency,
-                      )
-                    : null
-              }
+              tokenPill={<TokenPill token={outView} onPress={() => setPicker('out')} testID="swap-token-out" />}
+              fiat={exactOut ? formatAmountFiat(want, rowOut, currency) : priced ? formatAmountFiat(formatRaw(quote.receiveRaw, quote.decimalsOut).replace(/,/g, ''), rowOut, currency) : null}
               balance={rowOut ? `${formatQuantity(rowOut.quantity)} ${rowOut.symbol}` : null}
               accent={lockRim}
               testID="terminal-out"
@@ -932,13 +580,7 @@ export function Swap({
               label={t({ id: 'limit.receive', message: 'You receive at least' })}
               value={minOut}
               onChange={setMinOut}
-              tokenPill={
-                <TokenPill
-                  token={outView}
-                  onPress={() => setPicker('out')}
-                  testID="swap-token-out"
-                />
-              }
+              tokenPill={<TokenPill token={outView} onPress={() => setPicker('out')} testID="swap-token-out" />}
               fiat={formatAmountFiat(minOut, rowOut, currency)}
               balance={rowOut ? `${formatQuantity(rowOut.quantity)} ${rowOut.symbol}` : null}
               testID="terminal-out"
@@ -951,48 +593,16 @@ export function Swap({
         {mode === 'limit' && limitQuote ? (
           <Plate gap="$1" testID="limit-distance">
             <Body tone="mute" size="caption">
-              {limitQuote.marketRate
-                ? t({
-                    id: 'limit.market',
-                    message: 'Market: {r}',
-                    values: {
-                      r:
-                        formatRate(
-                          limitQuote.marketRate,
-                          limitQuote.symbolIn,
-                          limitQuote.symbolOut,
-                        ) ?? '—',
-                    },
-                  })
-                : t({
-                    id: 'limit.market.none',
-                    message: 'No market rate for this pair right now.',
-                  })}
+              {limitQuote.marketRate ? t({ id: 'limit.market', message: 'Market: {r}', values: { r: formatRate(limitQuote.marketRate, limitQuote.symbolIn, limitQuote.symbolOut) ?? '—' } }) : t({ id: 'limit.market.none', message: 'No market rate for this pair right now.' })}
             </Body>
             {limitQuote.distancePct !== null ? (
               <Body tone={limitQuote.distancePct >= 0 ? 'arc' : 'ember'} size="caption">
-                {limitQuote.distancePct >= 0
-                  ? t({
-                      id: 'limit.above',
-                      message: '{p}% above market — fills when the price gets there',
-                      values: { p: limitQuote.distancePct.toFixed(2) },
-                    })
-                  : t({
-                      id: 'limit.below',
-                      message: '{p}% below market — a swap would pay more right now',
-                      values: { p: Math.abs(limitQuote.distancePct).toFixed(2) },
-                    })}
+                {limitQuote.distancePct >= 0 ? t({ id: 'limit.above', message: '{p}% above market — fills when the price gets there', values: { p: limitQuote.distancePct.toFixed(2) } }) : t({ id: 'limit.below', message: '{p}% below market — a swap would pay more right now', values: { p: Math.abs(limitQuote.distancePct).toFixed(2) } })}
               </Body>
             ) : null}
             <Row gap="$2" flexWrap="wrap">
               {DURATIONS.map((d) => (
-                <Pill
-                  key={d.id}
-                  label={d.label}
-                  selected={duration === d.id}
-                  onPress={() => setDuration(d.id)}
-                  testID={`limit-duration-${d.id}`}
-                />
+                <Pill key={d.id} label={d.label} selected={duration === d.id} onPress={() => setDuration(d.id)} testID={`limit-duration-${d.id}`} />
               ))}
             </Row>
           </Plate>
@@ -1010,14 +620,7 @@ export function Swap({
           slippage, network cost, order routing.
         */}
         {mode === 'swap' ? (
-          <Plate
-            role="recessed"
-            rim={0.7}
-            gap={0}
-            paddingVertical={2}
-            paddingHorizontal="$3"
-            testID="fee-stack"
-          >
+          <Plate role="recessed" rim={0.7} gap={0} paddingVertical={2} paddingHorizontal="$3" testID="fee-stack">
             <Pressable
               onPress={() => setDetails((d) => !d)}
               accessibilityRole="button"
@@ -1026,17 +629,8 @@ export function Swap({
               testID="swap-details-toggle"
             >
               <Row justifyContent="space-between" alignItems="center" gap="$2" minHeight={40}>
-                <Body
-                  tone={fresh ? 'ink' : 'mute'}
-                  size="caption"
-                  fontWeight="600"
-                  flexShrink={1}
-                  numberOfLines={1}
-                  testID="swap-rate"
-                >
-                  {quote && quote.amountOutRaw !== '0'
-                    ? (formatRate(quote.rate, quote.symbolIn, quote.symbolOut) ?? '')
-                    : t({ id: 'swap.details', message: 'Details' })}
+                <Body tone={fresh ? 'ink' : 'mute'} size="caption" fontWeight="600" flexShrink={1} numberOfLines={1} testID="swap-rate">
+                  {quote && quote.amountOutRaw !== '0' ? (formatRate(quote.rate, quote.symbolIn, quote.symbolOut) ?? '') : t({ id: 'swap.details', message: 'Details' })}
                 </Body>
                 <Row gap="$1" alignItems="center" flexShrink={0}>
                   <Row gap="$1" alignItems="center" testID="swap-route">
@@ -1045,9 +639,7 @@ export function Swap({
                         {i > 0 ? <Icon name="chevronRight" size={12} color={paint.mute} /> : null}
                         <Chip paddingVertical={2}>
                           <Body tone="mute" size="caption">
-                            {h.kind === 'v3'
-                              ? `V3 ${((h.fee ?? 0) / 10_000).toFixed(2).replace(/0$/, '')}%`
-                              : 'V2'}
+                            {h.kind === 'v3' ? `V3 ${((h.fee ?? 0) / 10_000).toFixed(2).replace(/0$/, '')}%` : 'V2'}
                           </Body>
                         </Chip>
                       </Row>
@@ -1059,18 +651,9 @@ export function Swap({
             </Pressable>
             {details ? <Column height={1} backgroundColor="$edge" marginVertical={4} /> : null}
             {details ? (
-              <>
-                <FeeRow
-                  label={t({ id: 'swap.impact', message: 'Price impact' })}
-                  value={
-                    quote?.priceImpactPct !== null && quote?.priceImpactPct !== undefined
-                      ? `${quote.priceImpactPct.toFixed(2)}%`
-                      : '—'
-                  }
-                  tone={impactTone}
-                  testID="swap-impact"
-                />
-                {/*
+            <>
+            <FeeRow label={t({ id: 'swap.impact', message: 'Price impact' })} value={quote?.priceImpactPct !== null && quote?.priceImpactPct !== undefined ? `${quote.priceImpactPct.toFixed(2)}%` : '—'} tone={impactTone} testID="swap-impact" />
+            {/*
               No negative margin. It was `marginVertical: -8` to keep a 44 px
               target from spacing the rows out, and the price it paid was that
               the fee's second and third lines rendered OUTSIDE the row's box —
@@ -1078,104 +661,57 @@ export function Swap({
               "Minimum received". A tap target may overlap its neighbours; text
               may not.
             */}
-                <Pressable
-                  onPress={() => setFeeSheet(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel={t({ id: 'swap.fee.a11y', message: 'Wallet fee schedule' })}
-                  style={{ minHeight: 44, justifyContent: 'center', paddingVertical: ROW_PAD }}
-                  testID="swap-fee-line"
-                >
-                  <Row justifyContent="space-between" alignItems="flex-start" gap="$2">
-                    <Row gap={4} alignItems="center">
-                      <Body tone="mute" size="caption">
-                        {t({ id: 'swap.fee', message: 'Wallet fee' })}
-                      </Body>
-                      <Icon name="info" size={12} color={paint.mute} />
-                    </Row>
-                    <Column alignItems="flex-end" flexShrink={1} testID="swap-fee">
-                      <Body
-                        tone={quote?.fee.source === 'fallback' ? 'ember' : 'ink'}
-                        size="caption"
-                        textAlign="right"
-                      >
-                        {feeMain}
-                      </Body>
-                      {feeDetail ? (
-                        <Body tone="mute" size="caption" textAlign="right">
-                          {feeDetail}
-                        </Body>
-                      ) : null}
-                      {feeOnTop ? (
-                        <Body tone="mute" size="caption" textAlign="right" testID="swap-fee-on-top">
-                          {feeOnTop}
-                        </Body>
-                      ) : null}
-                      {nextLine ? (
-                        <Body tone="ember" size="caption" textAlign="right" testID="swap-fee-next">
-                          {nextLine}
-                        </Body>
-                      ) : null}
-                    </Column>
-                  </Row>
-                </Pressable>
-                {/*
+            <Pressable onPress={() => setFeeSheet(true)} accessibilityRole="button" accessibilityLabel={t({ id: 'swap.fee.a11y', message: 'Wallet fee schedule' })} style={{ minHeight: 44, justifyContent: 'center', paddingVertical: ROW_PAD }} testID="swap-fee-line">
+              <Row justifyContent="space-between" alignItems="flex-start" gap="$2">
+                <Row gap={4} alignItems="center">
+                  <Body tone="mute" size="caption">
+                    {t({ id: 'swap.fee', message: 'Wallet fee' })}
+                  </Body>
+                  <Icon name="info" size={12} color={paint.mute} />
+                </Row>
+                <Column alignItems="flex-end" flexShrink={1} testID="swap-fee">
+                  <Body tone={quote?.fee.source === 'fallback' ? 'ember' : 'ink'} size="caption" textAlign="right">
+                    {feeMain}
+                  </Body>
+                  {feeDetail ? (
+                    <Body tone="mute" size="caption" textAlign="right">
+                      {feeDetail}
+                    </Body>
+                  ) : null}
+                  {feeOnTop ? (
+                    <Body tone="mute" size="caption" textAlign="right" testID="swap-fee-on-top">
+                      {feeOnTop}
+                    </Body>
+                  ) : null}
+                  {nextLine ? (
+                    <Body tone="ember" size="caption" textAlign="right" testID="swap-fee-next">
+                      {nextLine}
+                    </Body>
+                  ) : null}
+                </Column>
+              </Row>
+            </Pressable>
+            {/*
               The guarantee, whichever side it is on. Fixing the output leaves
               nothing to floor — the minimum received IS the amount asked for —
               so the figure worth stating is the ceiling on what leaves the
               account, which is the number slippage actually protects now.
             */}
-                {exactOut ? (
-                  <FeeRow
-                    label={t({ id: 'swap.max', message: 'Most you will pay' })}
-                    value={ceilingText}
-                    tone="mute"
-                    testID="swap-max-in"
-                  />
-                ) : (
-                  <FeeRow
-                    label={t({ id: 'swap.min', message: 'Minimum received' })}
-                    value={
-                      priced
-                        ? `${formatRaw(quote.minimumOutRaw, quote.decimalsOut)} ${quote.symbolOut}`
-                        : '—'
-                    }
-                    tone="mute"
-                    testID="swap-min"
-                  />
-                )}
-                <FeeRow
-                  label={t({ id: 'swap.locked', message: 'Liquidity locked' })}
-                  value={lockText}
-                  tone={lockTone}
-                  testID="swap-locks"
-                />
-                {quote && quote.taxBips > 0 ? (
-                  <FeeRow
-                    label={t({ id: 'swap.tax.label', message: 'Token tax' })}
-                    value={t({
-                      id: 'swap.tax',
-                      message: '+{p} token tax',
-                      values: { p: formatPct(quote.taxBips) },
-                    })}
-                    tone="ember"
-                    testID="swap-tax"
-                  />
-                ) : null}
-                {/*
+            {exactOut ? (
+              <FeeRow label={t({ id: 'swap.max', message: 'Most you will pay' })} value={ceilingText} tone="mute" testID="swap-max-in" />
+            ) : (
+              <FeeRow label={t({ id: 'swap.min', message: 'Minimum received' })} value={priced ? `${formatRaw(quote.minimumOutRaw, quote.decimalsOut)} ${quote.symbolOut}` : '—'} tone="mute" testID="swap-min" />
+            )}
+            <FeeRow label={t({ id: 'swap.locked', message: 'Liquidity locked' })} value={lockText} tone={lockTone} testID="swap-locks" />
+            {quote && quote.taxBips > 0 ? <FeeRow label={t({ id: 'swap.tax.label', message: 'Token tax' })} value={t({ id: 'swap.tax', message: '+{p} token tax', values: { p: formatPct(quote.taxBips) } })} tone="ember" testID="swap-tax" /> : null}
+            {/*
               Said, not assumed and not fatal. The detector reverts for any
               token with no V2 pair against WETN, which is an ordinary thing for
               a token to be — but a tax that could not be measured is still a
               tax the figures above do not account for.
             */}
-                {quote?.taxUnknown ? (
-                  <FeeRow
-                    label={t({ id: 'swap.tax.label', message: 'Token tax' })}
-                    value={t({ id: 'swap.tax.unknown', message: 'could not be checked' })}
-                    tone="ember"
-                    testID="swap-tax-unknown"
-                  />
-                ) : null}
-              </>
+            {quote?.taxUnknown ? <FeeRow label={t({ id: 'swap.tax.label', message: 'Token tax' })} value={t({ id: 'swap.tax.unknown', message: 'could not be checked' })} tone="ember" testID="swap-tax-unknown" /> : null}
+            </>
             ) : null}
           </Plate>
         ) : (
@@ -1184,55 +720,29 @@ export function Swap({
           </Body>
         )}
 
+
         {/* Open orders */}
         {mode === 'limit' ? (
           <Column gap="$2" testID="limit-orders">
             <Body size="title">{t({ id: 'limit.open', message: 'Open orders' })}</Body>
             {orders.length === 0 ? (
               <Body tone="mute" size="caption">
-                {t({
-                  id: 'limit.none',
-                  message:
-                    'No open orders. An order waits on chain until the price reaches your target or it expires.',
-                })}
+                {t({ id: 'limit.none', message: 'No open orders. An order waits on chain until the price reaches your target or it expires.' })}
               </Body>
             ) : (
               orders.map((o) => (
                 <Plate key={o.orderId} role="card" gap="$1" testID={`limit-order-${o.orderId}`}>
                   <Row justifyContent="space-between">
-                    <Body size="caption">
-                      {t({
-                        id: 'limit.row',
-                        message: '{a} {s} → at least {b} {u}',
-                        values: {
-                          a: formatRaw(o.amountInExact, o.decimalsIn),
-                          s: o.symbolIn,
-                          b: formatRaw(o.amountOutMin, o.decimalsOut),
-                          u: o.symbolOut,
-                        },
-                      })}
-                    </Body>
+                    <Body size="caption">{t({ id: 'limit.row', message: '{a} {s} → at least {b} {u}', values: { a: formatRaw(o.amountInExact, o.decimalsIn), s: o.symbolIn, b: formatRaw(o.amountOutMin, o.decimalsOut), u: o.symbolOut } })}</Body>
                     <Body tone="mute" size="caption">
                       {o.status}
                     </Body>
                   </Row>
                   <Row justifyContent="space-between" alignItems="center">
                     <Body tone="mute" size="caption">
-                      {t({
-                        id: 'limit.expires',
-                        message: 'Expires {d}',
-                        values: { d: new Date(o.expiresAt * 1000).toLocaleDateString('en-GB') },
-                      })}
+                      {t({ id: 'limit.expires', message: 'Expires {d}', values: { d: new Date(o.expiresAt * 1000).toLocaleDateString('en-GB') } })}
                     </Body>
-                    {o.status === 'open' ? (
-                      <Key
-                        label={t({ id: 'approval.cancel', message: 'Cancel' })}
-                        kind="secondary"
-                        size="compact"
-                        onPress={() => void cancelOrder(o.orderId)}
-                        testID={`limit-cancel-${o.orderId}`}
-                      />
-                    ) : null}
+                    {o.status === 'open' ? <Key label={t({ id: 'approval.cancel', message: 'Cancel' })} kind="secondary" size="compact" onPress={() => void cancelOrder(o.orderId)} testID={`limit-cancel-${o.orderId}`} /> : null}
                   </Row>
                 </Plate>
               ))
@@ -1246,8 +756,7 @@ export function Swap({
           <Body tone="burn" size="caption" testID="swap-blocked">
             {t({
               id: 'swap.blocked',
-              message:
-                '{s} is marked unsafe to trade. Its contract behaves in a way that takes money from the people who hold it — BoltVault will not swap it. Pick another token.',
+              message: '{s} is marked unsafe to trade. Its contract behaves in a way that takes money from the people who hold it — BoltVault will not swap it. Pick another token.',
               values: { s: blockedSide.symbol },
             })}
           </Body>
@@ -1256,8 +765,7 @@ export function Swap({
           <Body tone="ember" size="caption" testID="swap-warned">
             {t({
               id: 'swap.warned',
-              message:
-                'Strong warning on {s}. The market flags this token as risky to hold; read its page before you trade it.',
+              message: 'Strong warning on {s}. The market flags this token as risky to hold; read its page before you trade it.',
               values: { s: warnedSide.symbol },
             })}
           </Body>
@@ -1292,33 +800,9 @@ export function Swap({
           setFeeSheet(false)
         }}
       />
-      <TokenPickerSheet
-        open={picker !== null}
-        onClose={() => setPicker(null)}
-        title={
-          picker === 'in'
-            ? t({ id: 'swap.pick.in', message: 'You pay' })
-            : t({ id: 'swap.pick.out', message: 'You receive' })
-        }
-        tokens={tokens}
-        rows={rows}
-        currency={currency}
-        onPick={pick}
-        safety={safety}
-        reducedMotion={reducedMotion}
-      />
-      <SlippageSheet
-        open={slippageOpen}
-        onClose={() => setSlippageOpen(false)}
-        value={effectiveSlippage}
-        onChange={setSlippage}
-        reducedMotion={reducedMotion}
-      />
-      <SwapCoachSheet
-        open={coachOpen}
-        onDismiss={() => setPrefs({ swapCoachDismissed: true })}
-        reducedMotion={reducedMotion}
-      />
+      <TokenPickerSheet open={picker !== null} onClose={() => setPicker(null)} title={picker === 'in' ? t({ id: 'swap.pick.in', message: 'You pay' }) : t({ id: 'swap.pick.out', message: 'You receive' })} tokens={tokens} rows={rows} currency={currency} onPick={pick} safety={safety} reducedMotion={reducedMotion} />
+      <SlippageSheet open={slippageOpen} onClose={() => setSlippageOpen(false)} value={effectiveSlippage} onChange={setSlippage} reducedMotion={reducedMotion} />
+      <SwapCoachSheet open={coachOpen} onDismiss={() => setPrefs({ swapCoachDismissed: true })} reducedMotion={reducedMotion} />
     </Column>
   )
 }
@@ -1333,17 +817,7 @@ export function Swap({
  * height that follows the content puts the same air above and below every line
  * whatever is in it.
  */
-function FeeRow({
-  label,
-  value,
-  tone,
-  testID,
-}: {
-  label: string
-  value: string
-  tone: 'mute' | 'ink' | 'ember' | 'burn' | 'surge'
-  testID: string
-}) {
+function FeeRow({ label, value, tone, testID }: { label: string; value: string; tone: 'mute' | 'ink' | 'ember' | 'burn' | 'surge'; testID: string }) {
   return (
     <Row justifyContent="space-between" alignItems="center" paddingVertical={ROW_PAD} gap="$2">
       <Body tone="mute" size="caption">
@@ -1356,35 +830,6 @@ function FeeRow({
   )
 }
 
-function TokenPill({
-  token,
-  onPress,
-  testID,
-}: {
-  token: TokenView | null
-  onPress: () => void
-  testID: string
-}) {
-  return (
-    <Pill
-      strong
-      label={token?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })}
-      icon={
-        token ? (
-          <TokenAvatar
-            chainId={ETN}
-            address={token.address}
-            symbol={token.symbol}
-            logoUri={token.logoUri}
-            size={18}
-          />
-        ) : undefined
-      }
-      chevron
-      tone="ink"
-      onPress={onPress}
-      accessibilityLabel={token?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })}
-      testID={testID}
-    />
-  )
+function TokenPill({ token, onPress, testID }: { token: TokenView | null; onPress: () => void; testID: string }) {
+  return <Pill strong label={token?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} icon={token ? <TokenAvatar chainId={ETN} address={token.address} symbol={token.symbol} logoUri={token.logoUri} size={18} /> : undefined} chevron tone="ink" onPress={onPress} accessibilityLabel={token?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} testID={testID} />
 }

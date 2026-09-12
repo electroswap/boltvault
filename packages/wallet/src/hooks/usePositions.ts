@@ -9,10 +9,7 @@ import { useLastGood } from './useLastGood'
 
 const ETN = 52014
 
-export function usePositions(
-  accountId: string | null,
-  enabled = true,
-): { positions: Positions | null; refresh: () => void; loading: boolean } {
+export function usePositions(accountId: string | null, enabled = true): { positions: Positions | null; refresh: () => void; loading: boolean } {
   const engine = useEngine()
   const [loaded, setPositions] = useState<Positions | null>(null)
   // Home is a tab, so the shell unmounts it on every switch and this hook
@@ -42,12 +39,9 @@ export function usePositions(
   useEffect(() => {
     if (!accountId || !enabled) return
     let alive = true
-    engine.positions.cached({ accountId, chainId: ETN }).then(
-      (p) => {
-        if (alive && p) setPositions((cur) => cur ?? p)
-      },
-      () => undefined,
-    )
+    engine.positions.cached({ accountId, chainId: ETN }).then((p) => {
+      if (alive && p) setPositions((cur) => cur ?? p)
+    }, () => undefined)
     refresh()
     return () => {
       alive = false

@@ -14,8 +14,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const args = process.argv.slice(2)
-const dir =
-  args.find((a) => !a.startsWith('--')) ?? join(root, 'apps', 'extension', '.output', 'chrome-mv3')
+const dir = args.find((a) => !a.startsWith('--')) ?? join(root, 'apps', 'extension', '.output', 'chrome-mv3')
 const checkIndex = args.indexOf('--check')
 const expected = checkIndex >= 0 ? args[checkIndex + 1] : null
 
@@ -32,17 +31,9 @@ async function walk(d) {
 
 const files = (await walk(dir)).filter((f) => !f.endsWith('.manifest.json')).sort()
 const rows = []
-for (const f of files)
-  rows.push({
-    path: relative(dir, f).split('\\').join('/'),
-    sha256: createHash('sha256')
-      .update(await readFile(f))
-      .digest('hex'),
-  })
+for (const f of files) rows.push({ path: relative(dir, f).split('\\').join('/'), sha256: createHash('sha256').update(await readFile(f)).digest('hex') })
 rows.sort((a, b) => a.path.localeCompare(b.path))
-const top = createHash('sha256')
-  .update(rows.map((r) => `${r.sha256}  ${r.path}\n`).join(''))
-  .digest('hex')
+const top = createHash('sha256').update(rows.map((r) => `${r.sha256}  ${r.path}\n`).join('')).digest('hex')
 const manifest = { dir: relative(root, dir), files: rows, sha256: top }
 await writeFile(`${dir}.manifest.json`, JSON.stringify(manifest, null, 2) + '\n')
 console.log(`${top}  ${relative(root, dir)} (${rows.length} files)`)

@@ -7,15 +7,7 @@
 import { Column } from '@boltvault/ui'
 import type { ReactNode } from 'react'
 
-export function ScreenFooter({
-  inset,
-  children,
-  testID,
-}: {
-  inset: number
-  children: ReactNode
-  testID?: string
-}) {
+export function ScreenFooter({ inset, children, testID }: { inset: number; children: ReactNode; testID?: string }) {
   /*
     Even above and below, and no inset of its own.
 

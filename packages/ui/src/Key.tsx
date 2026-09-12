@@ -24,16 +24,7 @@ export interface KeyProps {
  * the current (blue into violet) with a glow; the secondary is glass with a
  * lit rim; danger is copper.
  */
-export function Key({
-  label,
-  onPress,
-  kind = 'primary',
-  size = 'regular',
-  disabled = false,
-  testID,
-  icon,
-  stacked = false,
-}: KeyProps) {
+export function Key({ label, onPress, kind = 'primary', size = 'regular', disabled = false, testID, icon, stacked = false }: KeyProps) {
   const compact = size === 'compact'
   const r = compact ? 12 : radius.key
   const reduced = useReducedMotionPref()
@@ -50,9 +41,7 @@ export function Key({
       // tint or scale either — that half lives in `KeyFrame`'s disabled
       // variant, because `pressStyle` is CSS `:active` and fires with no
       // handler attached at all.
-      onPressIn={
-        disabled || reduced || kind !== 'primary' ? undefined : () => setCharge((c) => c + 1)
-      }
+      onPressIn={disabled || reduced || kind !== 'primary' ? undefined : () => setCharge((c) => c + 1)}
       onLayout={(e: LayoutChangeEvent) => setWidth(Math.round(e.nativeEvent.layout.width))}
       testID={testID}
       role="button"
@@ -68,13 +57,7 @@ export function Key({
       {charge > 0 && width > 0 ? <Charge key={charge} width={width} radius={r} /> : null}
       {kind === 'secondary' ? <Rim radius={r} opacity={0.35} /> : null}
       {/* A positioned layer: on the web an absolute SVG paints above in-flow text whatever the order. */}
-      <Row
-        flexDirection={stacked ? 'column' : 'row'}
-        alignItems="center"
-        justifyContent="center"
-        gap={stacked ? 2 : compact ? 6 : 8}
-        zIndex={1}
-      >
+      <Row flexDirection={stacked ? 'column' : 'row'} alignItems="center" justifyContent="center" gap={stacked ? 2 : compact ? 6 : 8} zIndex={1}>
         {icon}
         <KeyLabel fontSize={stacked || compact ? '$2' : '$3'}>{label}</KeyLabel>
       </Row>

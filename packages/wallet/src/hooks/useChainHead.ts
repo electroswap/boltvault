@@ -18,11 +18,7 @@ import { useEngine, useEngineEvent } from '../engine/EngineProvider'
  * `mode` says whether this chain is the one on screen or one of the others
  * making up a total; a background chain is asked at a walking pace.
  */
-export function useChainHead(
-  chainId: number,
-  mode: 'foreground' | 'background' = 'foreground',
-  intervalMsOverride?: number,
-): ChainHead | null {
+export function useChainHead(chainId: number, mode: 'foreground' | 'background' = 'foreground', intervalMsOverride?: number): ChainHead | null {
   const engine = useEngine()
   const [head, setHead] = useState<ChainHead | null>(null)
   const intervalMs = intervalMsOverride ?? pollMs(chainId, mode)

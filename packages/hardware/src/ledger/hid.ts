@@ -15,14 +15,8 @@ export interface HidDeviceLike {
   open(): Promise<void>
   close(): Promise<void>
   sendReport(reportId: number, data: Uint8Array): Promise<void>
-  addEventListener(
-    type: 'inputreport',
-    listener: (event: { readonly data: DataView }) => void,
-  ): void
-  removeEventListener(
-    type: 'inputreport',
-    listener: (event: { readonly data: DataView }) => void,
-  ): void
+  addEventListener(type: 'inputreport', listener: (event: { readonly data: DataView }) => void): void
+  removeEventListener(type: 'inputreport', listener: (event: { readonly data: DataView }) => void): void
 }
 
 export const LEDGER_VENDOR_ID = 0x2c97
@@ -30,14 +24,7 @@ export const HID_CHANNEL = 0x0101
 export const HID_TAG = 0x05
 export const HID_PACKET_SIZE = 64
 /** Model names by USB product id high byte (Ledger's `productId >> 8`). */
-export const LEDGER_MODELS: Readonly<Record<number, string>> = {
-  0x00: 'Ledger Blue',
-  0x10: 'Ledger Nano S',
-  0x40: 'Ledger Nano X',
-  0x50: 'Ledger Nano S Plus',
-  0x60: 'Ledger Stax',
-  0x70: 'Ledger Flex',
-}
+export const LEDGER_MODELS: Readonly<Record<number, string>> = { 0x00: 'Ledger Blue', 0x10: 'Ledger Nano S', 0x40: 'Ledger Nano X', 0x50: 'Ledger Nano S Plus', 0x60: 'Ledger Stax', 0x70: 'Ledger Flex' }
 
 export function ledgerModelName(productId: number, productName?: string): string {
   return LEDGER_MODELS[productId >> 8] ?? productName ?? 'Ledger'
@@ -87,11 +74,9 @@ export class ApduAssembler {
 
   push(report: Uint8Array): Uint8Array | null {
     const view = new DataView(report.buffer, report.byteOffset, report.byteLength)
-    if (report.length < 5 || view.getUint16(0) !== HID_CHANNEL || report[2] !== HID_TAG)
-      throw new LedgerTransportError('framing', 'unexpected HID report')
+    if (report.length < 5 || view.getUint16(0) !== HID_CHANNEL || report[2] !== HID_TAG) throw new LedgerTransportError('framing', 'unexpected HID report')
     const seq = view.getUint16(3)
-    if (seq !== this.seq)
-      throw new LedgerTransportError('framing', `HID sequence ${seq}, expected ${this.seq}`)
+    if (seq !== this.seq) throw new LedgerTransportError('framing', `HID sequence ${seq}, expected ${this.seq}`)
     let head = 5
     if (seq === 0) {
       this.expected = view.getUint16(5)
@@ -160,20 +145,11 @@ export class LedgerHidTransport {
     return new Promise<Uint8Array>((resolve, reject) => {
       const timer = setTimeout(() => {
         cleanup()
-        reject(
-          new LedgerTransportError(
-            'timeout',
-            'The device did not answer. Unlock it and open the Ethereum app.',
-          ),
-        )
+        reject(new LedgerTransportError('timeout', 'The device did not answer. Unlock it and open the Ethereum app.'))
       }, timeoutMs)
       const onReport = (event: { readonly data: DataView }): void => {
         try {
-          const bytes = new Uint8Array(
-            event.data.buffer,
-            event.data.byteOffset,
-            event.data.byteLength,
-          )
+          const bytes = new Uint8Array(event.data.buffer, event.data.byteOffset, event.data.byteLength)
           const done = assembler.push(bytes)
           if (done) {
             cleanup()
@@ -194,12 +170,7 @@ export class LedgerHidTransport {
           for (const packet of frameApdu(apdu)) await this.device.sendReport(0, packet)
         } catch (err) {
           cleanup()
-          reject(
-            new LedgerTransportError(
-              'disconnected',
-              err instanceof Error ? err.message : 'The device went away.',
-            ),
-          )
+          reject(new LedgerTransportError('disconnected', err instanceof Error ? err.message : 'The device went away.'))
         }
       })()
     })

@@ -11,11 +11,7 @@ import { WEBVIEW_CHANNEL_GLOBAL, webviewTransport, type WebViewWindowLike } from
 declare const window: WindowLike & WebViewWindowLike & Record<string, unknown>
 
 const channel = window[WEBVIEW_CHANNEL_GLOBAL]
-if (
-  typeof channel === 'string' &&
-  channel &&
-  !(window.ethereum as { isBoltVault?: boolean } | undefined)?.isBoltVault
-) {
+if (typeof channel === 'string' && channel && !(window.ethereum as { isBoltVault?: boolean } | undefined)?.isBoltVault) {
   installProvider({
     transport: webviewTransport(window, channel),
     channel,

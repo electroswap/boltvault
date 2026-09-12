@@ -25,13 +25,7 @@ const NONE: Insets = { top: 0, bottom: 0, left: 0, right: 0 }
 
 const InsetsContext = createContext<Insets>(NONE)
 
-export function InsetsProvider({
-  insets,
-  children,
-}: {
-  insets?: Insets | null
-  children: ReactNode
-}) {
+export function InsetsProvider({ insets, children }: { insets?: Insets | null; children: ReactNode }) {
   return <InsetsContext.Provider value={insets ?? NONE}>{children}</InsetsContext.Provider>
 }
 

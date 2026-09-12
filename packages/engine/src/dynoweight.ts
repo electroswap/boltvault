@@ -34,12 +34,7 @@
  * which is exactly the behaviour this file replaced.
  */
 import { ELECTRONEUM_ADDRESSES, walletFeeConfig } from '@boltvault/chains'
-import {
-  DYNO_WEIGHT_ONE,
-  fetchPriceHistory,
-  type ElectroSwapClient,
-  type HistoryDuration,
-} from '@boltvault/electroswap'
+import { DYNO_WEIGHT_ONE, fetchPriceHistory, type ElectroSwapClient, type HistoryDuration } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
 import { cacheKey, type DocCache } from './cache'
@@ -71,10 +66,7 @@ const RETRY_MS = 30 * 60 * 1000
 const RATIO_SCALE = 1_000_000
 const RATIO_ONE = 1_000_000n
 
-const weightSpec = (chainId: number) => ({
-  key: cacheKey('holder', 'weight', chainId),
-  schema: z.string().regex(/^\d+$/),
-})
+const weightSpec = (chainId: number) => ({ key: cacheKey('holder', 'weight', chainId), schema: z.string().regex(/^\d+$/) })
 
 /** What one DYNO is worth in BOLT, and whether that is a measurement or the committed constant. */
 export interface DynoWeightValue {
@@ -99,14 +91,8 @@ export interface DynoWeightDeps {
  * `coverage` reports how much of the window that left uncovered so the caller
  * can refuse a series that only exists for the last afternoon.
  */
-export function twap(
-  points: ReadonlyArray<{ t: number; v: number }>,
-  from: number,
-  to: number,
-): { value: number; coverage: number } | null {
-  const pts = points
-    .filter((p) => Number.isFinite(p.v) && p.v > 0 && p.t <= to)
-    .sort((a, b) => a.t - b.t)
+export function twap(points: ReadonlyArray<{ t: number; v: number }>, from: number, to: number): { value: number; coverage: number } | null {
+  const pts = points.filter((p) => Number.isFinite(p.v) && p.v > 0 && p.t <= to).sort((a, b) => a.t - b.t)
   if (pts.length < MIN_POINTS || to <= from) return null
   let held = 0
   let sum = 0
@@ -183,8 +169,7 @@ export class DynoWeight {
     this.hydrated.add(chainId)
     const last = await this.deps.cache?.read(weightSpec(chainId)).catch(() => null)
     // Only if nothing newer landed while the (sealed, therefore async) read ran.
-    if (last && !this.live.has(chainId))
-      this.live.set(chainId, { at: last.observedAt, weight: BigInt(last.value) })
+    if (last && !this.live.has(chainId)) this.live.set(chainId, { at: last.observedAt, weight: BigInt(last.value) })
   }
 
   private refresh(chainId: number): Promise<void> {
@@ -222,17 +207,13 @@ export class DynoWeight {
     const config = walletFeeConfig(chainId)
     const tokens = pair(chainId)
     if (!client || !config || !tokens) return null
-    const [bolt, dyno] = await Promise.all([
-      fetchPriceHistory(client, chainId, tokens.bolt, WINDOW),
-      fetchPriceHistory(client, chainId, tokens.dyno, WINDOW),
-    ])
+    const [bolt, dyno] = await Promise.all([fetchPriceHistory(client, chainId, tokens.bolt, WINDOW), fetchPriceHistory(client, chainId, tokens.dyno, WINDOW)])
     if (!bolt || !dyno) return null
     const to = Math.floor(this.deps.platform.now() / 1000)
     const from = to - WINDOW_SEC
     const b = twap(bolt.points, from, to)
     const d = twap(dyno.points, from, to)
-    if (!b || !d || b.coverage < MIN_COVERAGE || d.coverage < MIN_COVERAGE || b.value <= 0)
-      return null
+    if (!b || !d || b.coverage < MIN_COVERAGE || d.coverage < MIN_COVERAGE || b.value <= 0) return null
     const ratio = d.value / b.value
     if (!Number.isFinite(ratio) || ratio <= 0) return null
     const weight = (BigInt(Math.round(ratio * RATIO_SCALE)) * DYNO_WEIGHT_ONE) / RATIO_ONE

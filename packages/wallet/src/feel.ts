@@ -24,10 +24,7 @@ export function useFeel(): Feel {
   const host = useHost()
   const settings = useRef<Pick<Settings, 'haptics' | 'blockTick' | 'sound'> | null>(null)
   useEffect(() => {
-    engine.settings.get().then(
-      (s) => (settings.current = s),
-      () => undefined,
-    )
+    engine.settings.get().then((s) => (settings.current = s), () => undefined)
     return engine.events.subscribe((e) => {
       if (e.type === 'settings.changed') settings.current = e.settings
     })
@@ -74,8 +71,7 @@ export function useFeelEvents(): void {
     () =>
       engine.events.subscribe((e) => {
         if (e.type === 'activity.changed') {
-          for (const a of e.entries)
-            if (a.status === 'confirmed' && a.category === 'RECEIVE') feel.receive()
+          for (const a of e.entries) if (a.status === 'confirmed' && a.category === 'RECEIVE') feel.receive()
         }
         if (e.type === 'chains.head' && e.head.chainId === 52014) feel.block()
       }),

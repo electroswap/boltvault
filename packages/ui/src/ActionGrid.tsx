@@ -38,13 +38,7 @@ export interface ActionGridProps {
  */
 const ROW_LAYOUT_MIN_CELL = 160
 
-export function ActionGrid({
-  items,
-  columns = 3,
-  layout = 'stacked',
-  cellHeight,
-  testID,
-}: ActionGridProps) {
+export function ActionGrid({ items, columns = 3, layout = 'stacked', cellHeight, testID }: ActionGridProps) {
   const rows: ActionGridItem[][] = []
   for (let i = 0; i < items.length; i += columns) rows.push(items.slice(i, i + columns))
   const reduced = useReducedMotionPref()
@@ -54,8 +48,7 @@ export function ActionGrid({
   const [width, setWidth] = useState(0)
   const fits = width === 0 || width / columns >= ROW_LAYOUT_MIN_CELL
   const effective = layout === 'row' && !fits ? 'stacked' : layout
-  const height =
-    cellHeight ?? (effective === 'stacked' ? metrics.actionCell : metrics.actionCellRow)
+  const height = cellHeight ?? (effective === 'stacked' ? metrics.actionCell : metrics.actionCellRow)
   return (
     <Plate
       role="recessed"
@@ -84,62 +77,32 @@ export function ActionGrid({
               }}
             >
               {({ pressed }) => (
-                <Animated.View
-                  style={{
-                    flex: 1,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: pressed ? paint.glassRaised : 'rgba(22, 30, 78, 0)',
-                    transitionProperty: 'backgroundColor',
-                    transitionDuration: reduced ? 0 : motion.micro,
-                    transitionTimingFunction: 'ease-out',
-                  }}
-                >
-                  {effective === 'stacked' ? (
-                    <View
-                      style={{
-                        flex: 1,
-                        width: '100%',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 7,
-                        position: 'relative',
-                      }}
-                    >
-                      {it.badge ? <Badge badge={it.badge} corner /> : null}
-                      <Glyph icon={it.icon} size={38} />
-                      <Body
-                        size="caption"
-                        fontWeight="600"
-                        fontSize={typeScale.caption.size}
-                        lineHeight={typeScale.caption.size + 3}
-                        numberOfLines={1}
-                        textAlign="center"
-                      >
-                        {it.label}
-                      </Body>
-                    </View>
-                  ) : (
-                    <Row gap="$3" alignItems="center" paddingHorizontal={14} width="100%">
-                      <Glyph icon={it.icon} size={40} />
-                      <Column flex={1} gap={3} alignItems="flex-start">
-                        <Body fontWeight="600" numberOfLines={1} textAlign="left">
-                          {it.label}
-                        </Body>
-                        {it.badge ? <Badge badge={it.badge} /> : null}
-                      </Column>
-                    </Row>
-                  )}
-                </Animated.View>
+              <Animated.View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? paint.glassRaised : 'rgba(22, 30, 78, 0)', transitionProperty: 'backgroundColor', transitionDuration: reduced ? 0 : motion.micro, transitionTimingFunction: 'ease-out' }}>
+              {effective === 'stacked' ? (
+                <View style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', gap: 7, position: 'relative' }}>
+                  {it.badge ? <Badge badge={it.badge} corner /> : null}
+                  <Glyph icon={it.icon} size={38} />
+                  <Body size="caption" fontWeight="600" fontSize={typeScale.caption.size} lineHeight={typeScale.caption.size + 3} numberOfLines={1} textAlign="center">
+                    {it.label}
+                  </Body>
+                </View>
+              ) : (
+                <Row gap="$3" alignItems="center" paddingHorizontal={14} width="100%">
+                  <Glyph icon={it.icon} size={40} />
+                  <Column flex={1} gap={3} alignItems="flex-start">
+                    <Body fontWeight="600" numberOfLines={1} textAlign="left">
+                      {it.label}
+                    </Body>
+                    {it.badge ? <Badge badge={it.badge} /> : null}
+                  </Column>
+                </Row>
+              )}
+              </Animated.View>
               )}
             </Pressable>
           ))}
           {/* Pad a short last row so its cells keep the grid's width. */}
-          {row.length < columns
-            ? Array.from({ length: columns - row.length }, (_, i) => (
-                <View key={`pad-${i}`} style={{ flex: 1 }} />
-              ))
-            : null}
+          {row.length < columns ? Array.from({ length: columns - row.length }, (_, i) => <View key={`pad-${i}`} style={{ flex: 1 }} />) : null}
         </Row>
       ))}
     </Plate>

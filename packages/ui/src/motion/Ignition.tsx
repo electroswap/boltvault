@@ -22,13 +22,7 @@ export interface IgnitionProps {
   readonly testID?: string
 }
 
-export function Ignition({
-  children,
-  reducedMotion = false,
-  order = 0,
-  active = true,
-  testID,
-}: IgnitionProps) {
+export function Ignition({ children, reducedMotion = false, order = 0, active = true, testID }: IgnitionProps) {
   if (reducedMotion || !active) return <>{children}</>
   const delay = order * 70
   return (

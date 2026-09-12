@@ -30,10 +30,7 @@ export interface HostHealthSource {
 const RPC_DOC: DocSpec<Record<string, { url: string; trace?: string }>> = {
   key: 'chains.rpc',
   version: 1,
-  schema: z.record(
-    z.string(),
-    z.object({ url: z.string().url(), trace: z.string().url().optional() }),
-  ),
+  schema: z.record(z.string(), z.object({ url: z.string().url(), trace: z.string().url().optional() })),
   defaultValue: () => ({}),
 }
 
@@ -63,10 +60,7 @@ export function assertUsableRpcUrl(url: string): void {
   }
   if (parsed.protocol === 'https:') return
   if (parsed.protocol === 'http:' && LOOPBACK.test(parsed.hostname)) return
-  throw new EngineError(
-    'invalid_argument',
-    'A custom RPC must use https:// — over plain http anyone on the network can change the balances and fees this wallet shows you.',
-  )
+  throw new EngineError('invalid_argument', 'A custom RPC must use https:// — over plain http anyone on the network can change the balances and fees this wallet shows you.')
 }
 
 export class ChainsService implements HeadSource {
@@ -138,11 +132,9 @@ export class ChainsService implements HeadSource {
 
   private async load(): Promise<void> {
     if (!this.loaded) {
-      this.loaded = readDoc(this.platform.storage.local, RPC_DOC, () => this.platform.now()).then(
-        ({ value }) => {
-          this.overrides = value
-        },
-      )
+      this.loaded = readDoc(this.platform.storage.local, RPC_DOC, () => this.platform.now()).then(({ value }) => {
+        this.overrides = value
+      })
     }
     return this.loaded
   }
@@ -196,13 +188,7 @@ export class ChainsService implements HeadSource {
     */
     const client = createPublicClient({
       transport: fallback(
-        urls.map((u) =>
-          http(u, {
-            timeout: 10_000,
-            batch: true,
-            ...(this.fetchImpl ? { fetchFn: this.fetchImpl } : {}),
-          }),
-        ),
+        urls.map((u) => http(u, { timeout: 10_000, batch: true, ...(this.fetchImpl ? { fetchFn: this.fetchImpl } : {}) })),
         { retryCount: 0 },
       ),
     })
@@ -246,18 +232,9 @@ export class ChainsService implements HeadSource {
       */
       assertUsableRpcUrl(url)
       if (trace) assertUsableRpcUrl(trace)
-      const probe = createPublicClient({
-        transport: http(url, {
-          timeout: 8_000,
-          ...(this.fetchImpl ? { fetchFn: this.fetchImpl } : {}),
-        }),
-      })
+      const probe = createPublicClient({ transport: http(url, { timeout: 8_000, ...(this.fetchImpl ? { fetchFn: this.fetchImpl } : {}) }) })
       const answered = await probe.getChainId().catch(() => null)
-      if (answered !== chainId)
-        throw new EngineError(
-          'invalid_argument',
-          `${url} answers chain ${answered ?? 'nothing'}, not ${chainId}`,
-        )
+      if (answered !== chainId) throw new EngineError('invalid_argument', `${url} answers chain ${answered ?? 'nothing'}, not ${chainId}`)
       this.overrides[String(chainId)] = { url, ...(trace ? { trace } : {}) }
     }
     await writeDoc(this.platform.storage.local, RPC_DOC, this.overrides)
@@ -318,9 +295,7 @@ export class ChainsService implements HeadSource {
         this.bus.emit({ type: 'chains.head', head })
         return head
       }
-      throw new EngineError('internal', `${def.name} RPC did not answer`, {
-        cause: err instanceof Error ? err.message : String(err),
-      })
+      throw new EngineError('internal', `${def.name} RPC did not answer`, { cause: err instanceof Error ? err.message : String(err) })
     }
   }
 }
@@ -335,17 +310,9 @@ export function chainsNamespace(chains: ChainsService): NamespaceSpec {
     rpcs: { handler: () => chains.rpcs() },
     hosts: { handler: async () => chains.hosts() },
     setRpc: {
-      input: z.object({
-        chainId: z.number().int().positive(),
-        url: z.string().url().nullable(),
-        trace: z.string().url().nullable().optional(),
-      }),
+      input: z.object({ chainId: z.number().int().positive(), url: z.string().url().nullable(), trace: z.string().url().nullable().optional() }),
       handler: async (arg) => {
-        const { chainId, url, trace } = arg as {
-          chainId: number
-          url: string | null
-          trace?: string | null
-        }
+        const { chainId, url, trace } = arg as { chainId: number; url: string | null; trace?: string | null }
         await chains.setRpc(chainId, url, trace)
       },
     },

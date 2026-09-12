@@ -22,11 +22,7 @@ export function SharedElement({ id, active = true, style, children, testID }: Sh
   const reduced = useReducedMotionPref()
   const on = active && !reduced
   return (
-    <Animated.View
-      style={style}
-      testID={testID}
-      {...(on ? { sharedTransitionTag: sharedElementTag(id) } : {})}
-    >
+    <Animated.View style={style} testID={testID} {...(on ? { sharedTransitionTag: sharedElementTag(id) } : {})}>
       {children}
     </Animated.View>
   )

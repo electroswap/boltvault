@@ -23,14 +23,7 @@ import { xchacha20poly1305 } from '@noble/ciphers/chacha'
 import { hkdf } from '@noble/hashes/hkdf'
 import { sha256 } from '@noble/hashes/sha256'
 import type { AccountId, AccountKind, VaultFileV1 } from './types.js'
-import {
-  fromHex,
-  kdfArgon2id,
-  openVault,
-  randomBytes,
-  toHex,
-  type Argon2idParams,
-} from './vault.js'
+import { fromHex, kdfArgon2id, openVault, randomBytes, toHex, type Argon2idParams } from './vault.js'
 
 export const VAULT2_VERSION = 2 as const
 
@@ -52,11 +45,7 @@ export interface VaultCrypto {
 /** Defaults that match v1 (hash-wasm in the extension). */
 export const defaultVaultCrypto: VaultCrypto = {
   argon2id: (i) =>
-    kdfArgon2id(new TextDecoder().decode(i.password), i.salt, {
-      m: i.memoryKiB,
-      t: i.iterations,
-      p: i.parallelism,
-    }).then((k) => k.slice(0, i.hashLength)),
+    kdfArgon2id(new TextDecoder().decode(i.password), i.salt, { m: i.memoryKiB, t: i.iterations, p: i.parallelism }).then((k) => k.slice(0, i.hashLength)),
   random: randomBytes,
 }
 
@@ -109,13 +98,7 @@ export interface VaultWrap {
   /** 'password' for the password wrap; credential id for prf; key id for device. */
   readonly id: string
   /** Password wraps only. */
-  readonly kdf?: {
-    readonly alg: 'argon2id'
-    readonly salt: string
-    readonly m: number
-    readonly t: number
-    readonly p: number
-  }
+  readonly kdf?: { readonly alg: 'argon2id'; readonly salt: string; readonly m: number; readonly t: number; readonly p: number }
   /** HKDF salt for prf/device wraps (hex). */
   readonly salt?: string
   readonly nonce: string
@@ -137,10 +120,7 @@ const enc = new TextEncoder()
 const dec = new TextDecoder()
 
 const b64 = {
-  encode: (u8: Uint8Array): string =>
-    typeof btoa === 'function'
-      ? btoa(String.fromCharCode(...u8))
-      : Buffer.from(u8).toString('base64'),
+  encode: (u8: Uint8Array): string => (typeof btoa === 'function' ? btoa(String.fromCharCode(...u8)) : Buffer.from(u8).toString('base64')),
   decode: (s: string): Uint8Array => {
     const b = typeof atob === 'function' ? atob(s) : Buffer.from(s, 'base64').toString('binary')
     const u8 = new Uint8Array(b.length)
@@ -167,26 +147,12 @@ function open(key: Uint8Array, nonce: Uint8Array, aad: Uint8Array, ct: string): 
   }
 }
 
-export type UnlockWith =
-  | { readonly password: string }
-  | { readonly prfSecret: Uint8Array; readonly credentialId: string }
-  | { readonly deviceKey: Uint8Array; readonly keyId: string }
+export type UnlockWith = { readonly password: string } | { readonly prfSecret: Uint8Array; readonly credentialId: string } | { readonly deviceKey: Uint8Array; readonly keyId: string }
 
-async function kekFor(
-  crypto: VaultCrypto,
-  wrap: VaultWrap,
-  unlock: UnlockWith,
-): Promise<Uint8Array | null> {
+async function kekFor(crypto: VaultCrypto, wrap: VaultWrap, unlock: UnlockWith): Promise<Uint8Array | null> {
   if ('password' in unlock) {
     if (wrap.by !== 'password' || !wrap.kdf) return null
-    return crypto.argon2id({
-      password: enc.encode(unlock.password),
-      salt: fromHex(wrap.kdf.salt),
-      memoryKiB: wrap.kdf.m,
-      iterations: wrap.kdf.t,
-      parallelism: wrap.kdf.p,
-      hashLength: 32,
-    })
+    return crypto.argon2id({ password: enc.encode(unlock.password), salt: fromHex(wrap.kdf.salt), memoryKiB: wrap.kdf.m, iterations: wrap.kdf.t, parallelism: wrap.kdf.p, hashLength: 32 })
   }
   if ('prfSecret' in unlock) {
     if (wrap.by !== 'prf' || wrap.id !== unlock.credentialId || !wrap.salt) return null
@@ -203,47 +169,20 @@ export type WrapSpec =
 
 export const DEFAULT_KDF_V2: Argon2idParams = { m: 64 * 1024, t: 3, p: 1 }
 
-async function makeWrap(
-  crypto: VaultCrypto,
-  vaultId: string,
-  dek: Uint8Array,
-  spec: WrapSpec,
-  now: number,
-): Promise<VaultWrap> {
+async function makeWrap(crypto: VaultCrypto, vaultId: string, dek: Uint8Array, spec: WrapSpec, now: number): Promise<VaultWrap> {
   const nonce = crypto.random(24)
   if (spec.by === 'password') {
     const params = spec.kdf ?? DEFAULT_KDF_V2
     const salt = crypto.random(16)
-    const kek = await crypto.argon2id({
-      password: enc.encode(spec.password),
-      salt,
-      memoryKiB: params.m,
-      iterations: params.t,
-      parallelism: params.p,
-      hashLength: 32,
-    })
-    return {
-      by: 'password',
-      id: 'password',
-      kdf: { alg: 'argon2id', salt: toHex(salt), m: params.m, t: params.t, p: params.p },
-      nonce: toHex(nonce),
-      ct: seal(kek, nonce, aadWrap(vaultId, 'password'), dek),
-      createdAt: now,
-    }
+    const kek = await crypto.argon2id({ password: enc.encode(spec.password), salt, memoryKiB: params.m, iterations: params.t, parallelism: params.p, hashLength: 32 })
+    return { by: 'password', id: 'password', kdf: { alg: 'argon2id', salt: toHex(salt), m: params.m, t: params.t, p: params.p }, nonce: toHex(nonce), ct: seal(kek, nonce, aadWrap(vaultId, 'password'), dek), createdAt: now }
   }
   const salt = crypto.random(16)
   const id = spec.by === 'prf' ? spec.credentialId : spec.keyId
   const info = spec.by === 'prf' ? 'bv/kek/prf/v2' : 'bv/kek/dev/v2'
   const secret = spec.by === 'prf' ? spec.prfSecret : spec.deviceKey
   const kek = hkdf(sha256, secret, salt, enc.encode(info), 32)
-  return {
-    by: spec.by,
-    id,
-    salt: toHex(salt),
-    nonce: toHex(nonce),
-    ct: seal(kek, nonce, aadWrap(vaultId, id), dek),
-    createdAt: now,
-  }
+  return { by: spec.by, id, salt: toHex(salt), nonce: toHex(nonce), ct: seal(kek, nonce, aadWrap(vaultId, id), dek), createdAt: now }
 }
 
 export interface CreatedVaultV2 {
@@ -252,20 +191,11 @@ export interface CreatedVaultV2 {
 }
 
 /** Create a vault sealed by a fresh DEK with one password wrap. */
-export async function createVaultV2(
-  crypto: VaultCrypto,
-  input: { password: string; plaintext: VaultPlaintextV2; kdf?: Argon2idParams; now?: number },
-): Promise<CreatedVaultV2> {
+export async function createVaultV2(crypto: VaultCrypto, input: { password: string; plaintext: VaultPlaintextV2; kdf?: Argon2idParams; now?: number }): Promise<CreatedVaultV2> {
   const now = input.now ?? Date.now()
   const id = toHex(crypto.random(16))
   const dek = crypto.random(32)
-  const wrap = await makeWrap(
-    crypto,
-    id,
-    dek,
-    { by: 'password', password: input.password, ...(input.kdf ? { kdf: input.kdf } : {}) },
-    now,
-  )
+  const wrap = await makeWrap(crypto, id, dek, { by: 'password', password: input.password, ...(input.kdf ? { kdf: input.kdf } : {}) }, now)
   const nonce = crypto.random(24)
   const file: VaultFileV2 = {
     v: 2,
@@ -281,11 +211,7 @@ export async function createVaultV2(
 }
 
 /** Try every compatible wrap; the DEK or null on a wrong factor / tamper. */
-export async function unwrapDek(
-  crypto: VaultCrypto,
-  file: VaultFileV2,
-  unlock: UnlockWith,
-): Promise<Uint8Array | null> {
+export async function unwrapDek(crypto: VaultCrypto, file: VaultFileV2, unlock: UnlockWith): Promise<Uint8Array | null> {
   for (const wrap of file.wraps) {
     const kek = await kekFor(crypto, wrap, unlock)
     if (!kek) continue
@@ -308,90 +234,36 @@ export function openVaultV2(file: VaultFileV2, dek: Uint8Array): VaultPlaintextV
 }
 
 /** Reseal the plaintext under the same DEK — no KDF, microseconds. */
-export function resealVaultV2(
-  crypto: VaultCrypto,
-  file: VaultFileV2,
-  dek: Uint8Array,
-  plaintext: VaultPlaintextV2,
-  now: number = Date.now(),
-): VaultFileV2 {
+export function resealVaultV2(crypto: VaultCrypto, file: VaultFileV2, dek: Uint8Array, plaintext: VaultPlaintextV2, now: number = Date.now()): VaultFileV2 {
   const nonce = crypto.random(24)
-  return {
-    ...file,
-    nonce: toHex(nonce),
-    ct: seal(dek, nonce, aadFile(file.id), enc.encode(JSON.stringify(plaintext))),
-    updatedAt: now,
-  }
+  return { ...file, nonce: toHex(nonce), ct: seal(dek, nonce, aadFile(file.id), enc.encode(JSON.stringify(plaintext))), updatedAt: now }
 }
 
-export async function addWrap(
-  crypto: VaultCrypto,
-  file: VaultFileV2,
-  dek: Uint8Array,
-  spec: WrapSpec,
-  now: number = Date.now(),
-): Promise<VaultFileV2> {
+export async function addWrap(crypto: VaultCrypto, file: VaultFileV2, dek: Uint8Array, spec: WrapSpec, now: number = Date.now()): Promise<VaultFileV2> {
   const wrap = await makeWrap(crypto, file.id, dek, spec, now)
   const wraps = file.wraps.filter((w) => !(w.by === wrap.by && w.id === wrap.id))
   return { ...file, wraps: [...wraps, wrap], updatedAt: now }
 }
 
-export function removeWrap(
-  file: VaultFileV2,
-  by: WrapKind,
-  id: string,
-  now: number = Date.now(),
-): VaultFileV2 {
+export function removeWrap(file: VaultFileV2, by: WrapKind, id: string, now: number = Date.now()): VaultFileV2 {
   const wraps = file.wraps.filter((w) => !(w.by === by && w.id === id))
   if (wraps.length === 0) throw new Error('a vault must keep at least one unlock factor')
-  if (!wraps.some((w) => w.by === 'password'))
-    throw new Error('a vault must keep its password wrap')
+  if (!wraps.some((w) => w.by === 'password')) throw new Error('a vault must keep its password wrap')
   return { ...file, wraps, updatedAt: now }
 }
 
 /** Replace the password wrap. The caller has already verified the old password. */
-export async function changePassword(
-  crypto: VaultCrypto,
-  file: VaultFileV2,
-  dek: Uint8Array,
-  newPassword: string,
-  kdf?: Argon2idParams,
-  now: number = Date.now(),
-): Promise<VaultFileV2> {
-  return addWrap(
-    crypto,
-    file,
-    dek,
-    { by: 'password', password: newPassword, ...(kdf ? { kdf } : {}) },
-    now,
-  )
+export async function changePassword(crypto: VaultCrypto, file: VaultFileV2, dek: Uint8Array, newPassword: string, kdf?: Argon2idParams, now: number = Date.now()): Promise<VaultFileV2> {
+  return addWrap(crypto, file, dek, { by: 'password', password: newPassword, ...(kdf ? { kdf } : {}) }, now)
 }
 
 // ---- v1 → v2 ------------------------------------------------------------------
 
-export async function migrateV1(
-  crypto: VaultCrypto,
-  v1: VaultFileV1,
-  password: string,
-  kdf?: Argon2idParams,
-  now: number = Date.now(),
-): Promise<CreatedVaultV2 | null> {
+export async function migrateV1(crypto: VaultCrypto, v1: VaultFileV1, password: string, kdf?: Argon2idParams, now: number = Date.now()): Promise<CreatedVaultV2 | null> {
   const pt = await openVault(v1, password)
   if (!pt) return null
   const seedId = pt.seedHex ? toHex(crypto.random(8)) : null
-  const seeds: VaultSeed[] =
-    pt.seedHex && pt.mnemonic
-      ? [
-          {
-            id: seedId as string,
-            label: 'Seed 1',
-            mnemonic: pt.mnemonic,
-            seedHex: pt.seedHex,
-            backedUpAt: null,
-            createdAt: now,
-          },
-        ]
-      : []
+  const seeds: VaultSeed[] = pt.seedHex && pt.mnemonic ? [{ id: seedId as string, label: 'Seed 1', mnemonic: pt.mnemonic, seedHex: pt.seedHex, backedUpAt: null, createdAt: now }] : []
   const accounts: VaultAccountV2[] = pt.accounts.map((a, i) => ({
     id: a.id,
     kind: a.kind,
@@ -405,23 +277,14 @@ export async function migrateV1(
     createdAt: now,
   }))
   const importedKeys: Record<string, `0x${string}`> = {}
-  for (const [id, key] of Object.entries(pt.importedKeys))
-    importedKeys[id] = (key.startsWith('0x') ? key : `0x${key}`) as `0x${string}`
-  return createVaultV2(crypto, {
-    password,
-    plaintext: { v: 2, seeds, importedKeys, accounts },
-    ...(kdf ? { kdf } : {}),
-    now,
-  })
+  for (const [id, key] of Object.entries(pt.importedKeys)) importedKeys[id] = (key.startsWith('0x') ? key : `0x${key}`) as `0x${string}`
+  return createVaultV2(crypto, { password, plaintext: { v: 2, seeds, importedKeys, accounts }, ...(kdf ? { kdf } : {}), now })
 }
 
 // ---- calibration ----------------------------------------------------------------
 
 /** Pick Argon2id memory so one derivation takes ~targetMs on this device (§3.2). */
-export async function calibrateArgon2(
-  crypto: VaultCrypto,
-  opts: { targetMs?: number; floorKiB?: number; ceilKiB?: number; now?: () => number } = {},
-): Promise<Argon2idParams> {
+export async function calibrateArgon2(crypto: VaultCrypto, opts: { targetMs?: number; floorKiB?: number; ceilKiB?: number; now?: () => number } = {}): Promise<Argon2idParams> {
   const target = opts.targetMs ?? 600
   const floor = opts.floorKiB ?? 64 * 1024
   /*
@@ -439,14 +302,7 @@ export async function calibrateArgon2(
   const salt = crypto.random(16)
   const probe = async (m: number): Promise<number> => {
     const t0 = now()
-    await crypto.argon2id({
-      password: enc.encode('calibrate'),
-      salt,
-      memoryKiB: m,
-      iterations: 3,
-      parallelism: 1,
-      hashLength: 32,
-    })
+    await crypto.argon2id({ password: enc.encode('calibrate'), salt, memoryKiB: m, iterations: 3, parallelism: 1, hashLength: 32 })
     return now() - t0
   }
   const ms = await probe(floor)
@@ -460,13 +316,7 @@ export async function calibrateArgon2(
 export interface VaultExportEnvelope {
   readonly v: 2
   readonly kind: 'boltvault-export'
-  readonly kdf: {
-    readonly alg: 'argon2id'
-    readonly salt: string
-    readonly m: number
-    readonly t: number
-    readonly p: number
-  }
+  readonly kdf: { readonly alg: 'argon2id'; readonly salt: string; readonly m: number; readonly t: number; readonly p: number }
   readonly nonce: string
   readonly ct: string
   readonly createdAt: number
@@ -501,47 +351,16 @@ export function mintExportCode(random: (n: number) => Uint8Array): string {
 }
 
 /** Seal the plaintext under a one-time code (typed on the destination, never displayed there). */
-export async function exportVaultV2(
-  crypto: VaultCrypto,
-  plaintext: VaultPlaintextV2,
-  code: string,
-  kdf: Argon2idParams = DEFAULT_KDF_V2,
-  now: number = Date.now(),
-): Promise<VaultExportEnvelope> {
+export async function exportVaultV2(crypto: VaultCrypto, plaintext: VaultPlaintextV2, code: string, kdf: Argon2idParams = DEFAULT_KDF_V2, now: number = Date.now()): Promise<VaultExportEnvelope> {
   const salt = crypto.random(16)
   const nonce = crypto.random(24)
-  const key = await crypto.argon2id({
-    password: enc.encode(code.trim().toLowerCase()),
-    salt,
-    memoryKiB: kdf.m,
-    iterations: kdf.t,
-    parallelism: kdf.p,
-    hashLength: 32,
-  })
-  return {
-    v: 2,
-    kind: 'boltvault-export',
-    kdf: { alg: 'argon2id', salt: toHex(salt), m: kdf.m, t: kdf.t, p: kdf.p },
-    nonce: toHex(nonce),
-    ct: seal(key, nonce, enc.encode('boltvault.export.v2'), enc.encode(JSON.stringify(plaintext))),
-    createdAt: now,
-  }
+  const key = await crypto.argon2id({ password: enc.encode(code.trim().toLowerCase()), salt, memoryKiB: kdf.m, iterations: kdf.t, parallelism: kdf.p, hashLength: 32 })
+  return { v: 2, kind: 'boltvault-export', kdf: { alg: 'argon2id', salt: toHex(salt), m: kdf.m, t: kdf.t, p: kdf.p }, nonce: toHex(nonce), ct: seal(key, nonce, enc.encode('boltvault.export.v2'), enc.encode(JSON.stringify(plaintext))), createdAt: now }
 }
 
-export async function openVaultExport(
-  crypto: VaultCrypto,
-  env: VaultExportEnvelope,
-  code: string,
-): Promise<VaultPlaintextV2 | null> {
+export async function openVaultExport(crypto: VaultCrypto, env: VaultExportEnvelope, code: string): Promise<VaultPlaintextV2 | null> {
   if (env.v !== 2 || env.kind !== 'boltvault-export') return null
-  const key = await crypto.argon2id({
-    password: enc.encode(code.trim().toLowerCase()),
-    salt: fromHex(env.kdf.salt),
-    memoryKiB: env.kdf.m,
-    iterations: env.kdf.t,
-    parallelism: env.kdf.p,
-    hashLength: 32,
-  })
+  const key = await crypto.argon2id({ password: enc.encode(code.trim().toLowerCase()), salt: fromHex(env.kdf.salt), memoryKiB: env.kdf.m, iterations: env.kdf.t, parallelism: env.kdf.p, hashLength: 32 })
   const pt = open(key, fromHex(env.nonce), enc.encode('boltvault.export.v2'), env.ct)
   if (!pt) return null
   try {
@@ -556,8 +375,7 @@ export async function openVaultExport(
 export function chunkForQr(payload: string, chunkSize = 700): string[] {
   const frames: string[] = []
   const n = Math.max(1, Math.ceil(payload.length / chunkSize))
-  for (let i = 0; i < n; i++)
-    frames.push(`bv:x/${i + 1}/${n}:${payload.slice(i * chunkSize, (i + 1) * chunkSize)}`)
+  for (let i = 0; i < n; i++) frames.push(`bv:x/${i + 1}/${n}:${payload.slice(i * chunkSize, (i + 1) * chunkSize)}`)
   return frames
 }
 

@@ -11,8 +11,7 @@ import { readDoc, writeDoc, type DocSpec } from './storage'
 
 /** The v1 default network set; a user still on it moves to the v2 default, a custom set is kept. */
 const V1_DEFAULT_CHAINS = [1, 56, 8453, 42161, 10, 137, 43114]
-const sameSet = (a: readonly unknown[], b: readonly number[]): boolean =>
-  a.length === b.length && b.every((x) => a.includes(x))
+const sameSet = (a: readonly unknown[], b: readonly number[]): boolean => a.length === b.length && b.every((x) => a.includes(x))
 
 /** A send allow-list entry as it is stored: one lowercase EVM address. */
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/
@@ -32,9 +31,7 @@ const MAX_ALLOW_LIST = 64
  * is a plain comparison, and capped so the list stays something a person can
  * read through before trusting it.
  */
-function spendPolicy(
-  raw: Partial<Settings> | null | undefined,
-): Pick<Settings, 'sendAllowList' | 'largeSendPercent'> {
+function spendPolicy(raw: Partial<Settings> | null | undefined): Pick<Settings, 'sendAllowList' | 'largeSendPercent'> {
   const percent = raw?.largeSendPercent
   const list = Array.isArray(raw?.sendAllowList) ? raw.sendAllowList : []
   const seen = new Set<string>()
@@ -45,10 +42,7 @@ function spendPolicy(
   }
   return {
     sendAllowList: [...seen],
-    largeSendPercent:
-      typeof percent === 'number' && Number.isInteger(percent) && percent >= 1 && percent <= 100
-        ? percent
-        : DEFAULT_LARGE_SEND_PERCENT,
+    largeSendPercent: typeof percent === 'number' && Number.isInteger(percent) && percent >= 1 && percent <= 100 ? percent : DEFAULT_LARGE_SEND_PERCENT,
   }
 }
 
@@ -62,14 +56,8 @@ const SETTINGS_DOC: DocSpec<Settings> = {
     const d: Record<string, unknown> = { ...(data as Record<string, unknown>) }
     // v1 timers were absolute, not idle: every v1 choice was shorter than the user meant. One notch up.
     const v1 = d['autoLock']
-    d['autoLock'] =
-      typeof v1 === 'string'
-        ? (LEGACY_AUTO_LOCK[v1] ??
-          ({ '5min': '15min', never: 'never' } as Record<string, string>)[v1] ??
-          '15min')
-        : '15min'
-    if (Array.isArray(d['enabledChains']) && sameSet(d['enabledChains'], V1_DEFAULT_CHAINS))
-      d['enabledChains'] = [1, 56, 8453]
+    d['autoLock'] = typeof v1 === 'string' ? (LEGACY_AUTO_LOCK[v1] ?? ({ '5min': '15min', never: 'never' } as Record<string, string>)[v1] ?? '15min') : '15min'
+    if (Array.isArray(d['enabledChains']) && sameSet(d['enabledChains'], V1_DEFAULT_CHAINS)) d['enabledChains'] = [1, 56, 8453]
     // v1 never let the user set reducedMotion (it was re-derived on every write): start v2 from off; the UI also honours the system preference.
     d['reducedMotion'] = false
     return d
@@ -87,9 +75,7 @@ export class SettingsStore {
 
   async get(): Promise<Settings> {
     if (this.cached) return this.cached
-    const { value, migrated } = await readDoc(this.platform.storage.local, SETTINGS_DOC, () =>
-      this.platform.now(),
-    )
+    const { value, migrated } = await readDoc(this.platform.storage.local, SETTINGS_DOC, () => this.platform.now())
     const normalized = { ...normalizeSettings(value, this.os), ...spendPolicy(value) }
     this.cached = normalized
     if (migrated) await writeDoc(this.platform.storage.local, SETTINGS_DOC, normalized)

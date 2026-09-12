@@ -34,14 +34,7 @@ export interface VesselProps {
   readonly testID?: string
 }
 
-export function Vessel({
-  level,
-  width = 72,
-  height = 120,
-  reducedMotion,
-  accessibilityLabel,
-  testID,
-}: VesselProps) {
+export function Vessel({ level, width = 72, height = 120, reducedMotion, accessibilityLabel, testID }: VesselProps) {
   const pref = useReducedMotionPref()
   const reduced = reducedMotion ?? pref
   const fill = vesselFill(level, height)
@@ -68,48 +61,17 @@ export function Vessel({
           { height: fill, backgroundColor: light.plasma, opacity: 0.9 },
           // Twice the sheet duration: liquid is heavy, and the eye should be
           // able to follow the level rather than notice it has jumped.
-          reduced
-            ? null
-            : {
-                transitionProperty: 'height',
-                transitionDuration: `${motion.sheet * 2}ms`,
-                transitionTimingFunction: 'ease-out',
-              },
+          reduced ? null : { transitionProperty: 'height', transitionDuration: `${motion.sheet * 2}ms`, transitionTimingFunction: 'ease-out' },
         ]}
         testID={testID ? `${testID}-liquid` : undefined}
       >
         {/* Light collects near the surface: blue at the top of the violet. */}
         <Column height={Math.min(fill, slim ? 8 : 14)} backgroundColor={light.arc} opacity={0.45} />
-        <Column
-          position="absolute"
-          top={0}
-          left={0}
-          right={0}
-          height={meniscus}
-          backgroundColor={light.core}
-          opacity={0.9}
-        />
+        <Column position="absolute" top={0} left={0} right={0} height={meniscus} backgroundColor={light.core} opacity={0.9} />
       </Animated.View>
       {/* The glass: one specular streak down the left wall, and a floor line. */}
-      <Column
-        position="absolute"
-        top={slim ? 4 : 8}
-        left={slim ? 3 : 8}
-        width={slim ? 2 : 5}
-        height={height * 0.5}
-        borderRadius={3}
-        backgroundColor={light.core}
-        opacity={0.14}
-      />
-      <Column
-        position="absolute"
-        bottom={0}
-        left={0}
-        right={0}
-        height={1}
-        backgroundColor={paint.arc}
-        opacity={0.2}
-      />
+      <Column position="absolute" top={slim ? 4 : 8} left={slim ? 3 : 8} width={slim ? 2 : 5} height={height * 0.5} borderRadius={3} backgroundColor={light.core} opacity={0.14} />
+      <Column position="absolute" bottom={0} left={0} right={0} height={1} backgroundColor={paint.arc} opacity={0.2} />
     </Column>
   )
 }

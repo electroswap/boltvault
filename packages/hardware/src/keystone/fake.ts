@@ -30,12 +30,7 @@ export class FakeKeystone {
   /** The QR the device shows under "Connect software wallet". */
   accountFrames(): string[] {
     if (!this.account.publicKey || !this.account.chainCode) throw new Error('no account key')
-    return encodeAccount({
-      publicKey: this.account.publicKey,
-      chainCode: this.account.chainCode,
-      xfp: this.xfp,
-      name: 'Keystone',
-    })
+    return encodeAccount({ publicKey: this.account.publicKey, chainCode: this.account.chainCode, xfp: this.xfp, name: 'Keystone' })
   }
 
   addressAt(index: number): Hex {
@@ -61,22 +56,13 @@ export class FakeKeystone {
     }
     const privateKey = this.keyFor(req.path)
     let hash: Hex
-    if (req.dataType === 'transaction' || req.dataType === 'typed_transaction')
-      hash = keccak256(req.signData)
+    if (req.dataType === 'transaction' || req.dataType === 'typed_transaction') hash = keccak256(req.signData)
     else if (req.dataType === 'personal_message') hash = hashMessage({ raw: req.signData })
-    else
-      hash = hashTypedData(
-        JSON.parse(new TextDecoder().decode(req.signData)) as Parameters<typeof hashTypedData>[0],
-      )
+    else hash = hashTypedData(JSON.parse(new TextDecoder().decode(req.signData)) as Parameters<typeof hashTypedData>[0])
     const sig = await sign({ hash, privateKey })
     const yParity = Number(sig.yParity ?? 0)
     // Keystone reports legacy transactions with the EIP-155 v, typed transactions with the bare parity, messages with 27/28.
-    const v =
-      req.dataType === 'transaction' && req.chainId
-        ? req.chainId * 2 + 35 + yParity
-        : req.dataType === 'typed_transaction'
-          ? yParity
-          : 27 + yParity
+    const v = req.dataType === 'transaction' && req.chainId ? req.chainId * 2 + 35 + yParity : req.dataType === 'typed_transaction' ? yParity : 27 + yParity
     const bytes = new Uint8Array(65)
     bytes.set(hexToBytes(sig.r), 0)
     bytes.set(hexToBytes(sig.s), 32)

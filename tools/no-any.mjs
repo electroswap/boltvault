@@ -7,20 +7,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 const ROOT = process.cwd()
-const SKIP_DIRS = new Set([
-  'node_modules',
-  'dist',
-  '.output',
-  '.wxt',
-  '.expo',
-  'coverage',
-  'screenshots',
-  'fixtures',
-  
-  
-  'docs',
-  '.git',
-])
+const SKIP_DIRS = new Set(['node_modules', 'dist', '.output', '.wxt', '.expo', 'coverage', 'screenshots', 'fixtures', 'docs', '.git'])
 const ALLOW = [/\.d\.ts$/]
 const PATTERN = /(:\s*any\b|\bas\s+any\b|<any>|\bany\[\])/
 
@@ -30,9 +17,7 @@ const debt = JSON.parse(readFileSync(join(ROOT, 'tools', 'lint-debt.json'), 'utf
 const DEBT = debt.entries.map((e) => join(ROOT, e.path))
 for (const p of DEBT) {
   if (!existsSync(p)) {
-    console.error(
-      `no-any: lint-debt entry no longer exists — remove it from tools/lint-debt.json: ${relative(ROOT, p)}`,
-    )
+    console.error(`no-any: lint-debt entry no longer exists — remove it from tools/lint-debt.json: ${relative(ROOT, p)}`)
     process.exit(1)
   }
 }

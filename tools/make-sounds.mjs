@@ -10,14 +10,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const RATE = 22050
-const out = join(
-  dirname(fileURLToPath(import.meta.url)),
-  '..',
-  'apps',
-  'mobile',
-  'assets',
-  'sounds',
-)
+const out = join(dirname(fileURLToPath(import.meta.url)), '..', 'apps', 'mobile', 'assets', 'sounds')
 
 function wav(samples) {
   const data = Buffer.alloc(samples.length * 2)
@@ -54,10 +47,7 @@ function tone(ms, f, opts = {}) {
 }
 
 const confirm = tone(80, 1320, { decay: 28, slide: 2.5, gain: 0.45 })
-const receive = [
-  ...tone(110, 880, { decay: 14, gain: 0.4 }),
-  ...tone(160, 1174.7, { decay: 10, gain: 0.4 }),
-]
+const receive = [...tone(110, 880, { decay: 14, gain: 0.4 }), ...tone(160, 1174.7, { decay: 10, gain: 0.4 })]
 const error = tone(140, 110, { decay: 16, square: true, gain: 0.35 })
 
 await mkdir(out, { recursive: true })

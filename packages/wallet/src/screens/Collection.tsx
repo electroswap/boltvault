@@ -419,9 +419,7 @@ export function Collection({
                   label: t({ id: 'collection.listed', message: 'Listed' }),
                   value: formatCompact(collection.listed),
                   ...(collection.listed !== null && collection.totalSupply
-                    ? {
-                        caption: `${Math.max(1, Math.round((collection.listed / collection.totalSupply) * 100))}%`,
-                      }
+                    ? { caption: `${Math.max(1, Math.round((collection.listed / collection.totalSupply) * 100))}%` }
                     : collection.percentListed !== null
                       ? { caption: `${Math.round(collection.percentListed)}%` }
                       : {}),
@@ -461,9 +459,7 @@ export function Collection({
         pieces still gets it because that is a thing to do (owner: "do not show
         the '{n} ETN to claim' card ... if the amount to claim == 0").
       */}
-      {legends &&
-      active &&
-      (BigInt(legends.claimableWei) > 0n || legends.unregisteredTokenIds.length > 0) ? (
+      {legends && active && (BigInt(legends.claimableWei) > 0n || legends.unregisteredTokenIds.length > 0) ? (
         <DividendsCard
           status={legends}
           collapsed={!dividendsOpen}

@@ -54,11 +54,7 @@ export interface ReadDocResult<T> {
   readonly migrated: boolean
 }
 
-export async function readDoc<T>(
-  store: KeyValueStore,
-  spec: DocSpec<T>,
-  now: () => number = Date.now,
-): Promise<ReadDocResult<T>> {
+export async function readDoc<T>(store: KeyValueStore, spec: DocSpec<T>, now: () => number = Date.now): Promise<ReadDocResult<T>> {
   const raw = await store.get(spec.key)
   if (raw === null) return { value: spec.defaultValue(), quarantined: false, migrated: false }
   const env = parseEnvelope(raw)

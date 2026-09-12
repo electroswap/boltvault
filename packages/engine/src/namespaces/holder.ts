@@ -22,14 +22,7 @@
  * touches the network exactly as much as it did before.
  */
 import { ELECTRONEUM_ADDRESSES, feeRecipient, tierName, walletFeeConfig } from '@boltvault/chains'
-import {
-  DYNO_WEIGHT_ONE,
-  ERC20_ABI,
-  FALLBACK_SCHEDULE,
-  nextTier,
-  tierFor,
-  type FeeSchedule,
-} from '@boltvault/electroswap'
+import { DYNO_WEIGHT_ONE, ERC20_ABI, FALLBACK_SCHEDULE, nextTier, tierFor, type FeeSchedule } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
 import { getAddress, isAddress, type Hex } from 'viem'
 import { z } from 'zod'
@@ -61,10 +54,7 @@ export interface HolderDeps {
 
 /** A tier read is good for one block (§8.18: "cached per block"). */
 const TIER_CACHE_MS = 5_000
-const tierSpec = (chainId: number, accountId: string) => ({
-  key: cacheKey('holder', 'tier', chainId, accountId),
-  schema: HolderTierSchema,
-})
+const tierSpec = (chainId: number, accountId: string) => ({ key: cacheKey('holder', 'tier', chainId, accountId), schema: HolderTierSchema })
 
 function isEtn(chainId: number): chainId is 52014 | 5201420 {
   return chainId === 52014 || chainId === 5201420
@@ -86,10 +76,7 @@ export class HolderService {
    * is the honest answer rather than a missing field.
    */
   addresses(chainId: number): FeeAddresses {
-    const configured: FeeAddresses = {
-      sink: (feeRecipient(chainId) as Hex | null) ?? null,
-      schedule: null,
-    }
+    const configured: FeeAddresses = { sink: (feeRecipient(chainId) as Hex | null) ?? null, schedule: null }
     const o = this.overrides.get(chainId)
     if (!o || configured.sink) return configured
     return { sink: o.sink, schedule: null }
@@ -100,13 +87,8 @@ export class HolderService {
    * Refused wherever the config names one — no runtime message may move the
    * fee, which is the whole point of keeping it in the build (T10).
    */
-  configure(input: {
-    chainId: number
-    sink: string | null
-    schedule: string | null
-  }): FeeAddresses {
-    if (feeRecipient(input.chainId))
-      throw new EngineError('unauthorized', 'the fee recipient for this chain is set in the build')
+  configure(input: { chainId: number; sink: string | null; schedule: string | null }): FeeAddresses {
+    if (feeRecipient(input.chainId)) throw new EngineError('unauthorized', 'the fee recipient for this chain is set in the build')
     const sink = input.sink && isAddress(input.sink) ? getAddress(input.sink) : null
     this.overrides.set(input.chainId, { sink, schedule: null })
     this.tierCache.clear()
@@ -125,20 +107,13 @@ export class HolderService {
    * behind it. `DynoWeight` does its measuring elsewhere, so this answers the
    * same at sign time as it did on the last screen.
    */
-  private async scheduleFrom(chainId: number): Promise<{
-    schedule: FeeSchedule
-    source: 'config' | 'fallback'
-    dynoWeightSource: 'config' | 'average'
-  }> {
+  private async scheduleFrom(chainId: number): Promise<{ schedule: FeeSchedule; source: 'config' | 'fallback'; dynoWeightSource: 'config' | 'average' }> {
     // Resolves at once once the ladder has been read, and never rejects, so a
     // quote is not held up by the network on any call after the first.
     await this.deps.ladders?.ensure(chainId)
     const c = walletFeeConfig(chainId)
     if (!c) return { schedule: FALLBACK_SCHEDULE, source: 'fallback', dynoWeightSource: 'config' }
-    const w = (await this.deps.weights?.weight(chainId)) ?? {
-      value: BigInt(c.dynoWeight),
-      measured: false,
-    }
+    const w = (await this.deps.weights?.weight(chainId)) ?? { value: BigInt(c.dynoWeight), measured: false }
     return {
       schedule: {
         baseBips: c.baseBips,
@@ -158,11 +133,7 @@ export class HolderService {
       chainId,
       baseName: tierName(chainId, 0) ?? '',
       baseBips: schedule.baseBips,
-      tiers: schedule.tiers.map((t, i) => ({
-        name: tierName(chainId, i + 1) ?? '',
-        minScore: t.minScore.toString(),
-        bips: t.bips,
-      })),
+      tiers: schedule.tiers.map((t, i) => ({ name: tierName(chainId, i + 1) ?? '', minScore: t.minScore.toString(), bips: t.bips })),
       dynoWeight: schedule.dynoWeight.toString(),
       dynoWeightSource,
       countFarmBolt: schedule.countFarmBolt,
@@ -196,12 +167,7 @@ export class HolderService {
     }
   }
 
-  private async readTier(
-    accountId: string,
-    chainId: number,
-    key: string,
-    now: number,
-  ): Promise<HolderTier> {
+  private async readTier(accountId: string, chainId: number, key: string, now: number): Promise<HolderTier> {
     const account = (await this.deps.vault.accounts()).find((x) => x.id === accountId)
     if (!account) throw new EngineError('not_found', 'no such account')
     let value: HolderTier
@@ -235,16 +201,10 @@ export class HolderService {
       this account holds.
     */
     const calls = [
-      ...(bolt
-        ? [{ address: bolt, abi: ERC20_ABI, functionName: 'balanceOf', args: [owner] }]
-        : []),
-      ...(dyno
-        ? [{ address: dyno, abi: ERC20_ABI, functionName: 'balanceOf', args: [owner] }]
-        : []),
+      ...(bolt ? [{ address: bolt, abi: ERC20_ABI, functionName: 'balanceOf', args: [owner] }] : []),
+      ...(dyno ? [{ address: dyno, abi: ERC20_ABI, functionName: 'balanceOf', args: [owner] }] : []),
     ]
-    const results = calls.length
-      ? await readMany(this.deps.chains, chainId, calls).catch(() => [] as Array<{ ok: false }>)
-      : []
+    const results = calls.length ? await readMany(this.deps.chains, chainId, calls).catch(() => [] as Array<{ ok: false }>) : []
     let i = 0
     const boltBal = bolt ? results[i++] : undefined
     const dynoBal = dyno ? results[i++] : undefined
@@ -276,35 +236,10 @@ const ChainArg = z.object({ chainId: z.number().int().positive() })
 
 export function holderNamespace(holder: HolderService): NamespaceSpec {
   return {
-    tier: {
-      input: z.object({ accountId: AccountIdSchema, chainId: z.number().int().positive() }),
-      handler: (arg) =>
-        holder.tier((arg as { accountId: string }).accountId, (arg as { chainId: number }).chainId),
-    },
-    cachedTier: {
-      input: z.object({ accountId: AccountIdSchema, chainId: z.number().int().positive() }),
-      handler: (arg) =>
-        holder.cachedTier(
-          (arg as { accountId: string }).accountId,
-          (arg as { chainId: number }).chainId,
-        ),
-    },
-    schedule: {
-      input: ChainArg,
-      handler: (arg) => holder.schedule((arg as { chainId: number }).chainId),
-    },
-    addresses: {
-      input: ChainArg,
-      handler: async (arg) => holder.addresses((arg as { chainId: number }).chainId),
-    },
-    configure: {
-      input: z.object({
-        chainId: z.number().int().positive(),
-        sink: z.string().nullable(),
-        schedule: z.string().nullable(),
-      }),
-      handler: async (arg) =>
-        holder.configure(arg as { chainId: number; sink: string | null; schedule: string | null }),
-    },
+    tier: { input: z.object({ accountId: AccountIdSchema, chainId: z.number().int().positive() }), handler: (arg) => holder.tier((arg as { accountId: string }).accountId, (arg as { chainId: number }).chainId) },
+    cachedTier: { input: z.object({ accountId: AccountIdSchema, chainId: z.number().int().positive() }), handler: (arg) => holder.cachedTier((arg as { accountId: string }).accountId, (arg as { chainId: number }).chainId) },
+    schedule: { input: ChainArg, handler: (arg) => holder.schedule((arg as { chainId: number }).chainId) },
+    addresses: { input: ChainArg, handler: async (arg) => holder.addresses((arg as { chainId: number }).chainId) },
+    configure: { input: z.object({ chainId: z.number().int().positive(), sink: z.string().nullable(), schedule: z.string().nullable() }), handler: async (arg) => holder.configure(arg as { chainId: number; sink: string | null; schedule: string | null }) },
   }
 }

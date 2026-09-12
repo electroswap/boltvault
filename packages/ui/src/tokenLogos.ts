@@ -61,10 +61,7 @@ export function setTokenLogoBase(next: string): void {
  * the PNGs. Same seam the extension already uses for its disk image cache
  * (`setImageResolver`), so ui stays free of platform branches.
  */
-export type LogoSource =
-  | { readonly kind: 'uri'; readonly uri: string }
-  | { readonly kind: 'svg'; readonly xml: string }
-  | { readonly kind: 'asset'; readonly module: number }
+export type LogoSource = { readonly kind: 'uri'; readonly uri: string } | { readonly kind: 'svg'; readonly xml: string } | { readonly kind: 'asset'; readonly module: number }
 
 type LogoResolver = (chainId: number, address: string) => LogoSource | null
 
@@ -79,36 +76,21 @@ export function setTokenLogoResolver(next: LogoResolver | null): void {
 export const NATIVE_KEY = 'native'
 
 const FILES: Readonly<Record<string, string>> = {
-  '52014:0x043faa1b5c5fc9a7dc35171f290c29ecde0ccff1':
-    '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1.svg', // BOLT
-  '52014:0xc9fc4ab00911793d99b5c7bd01f01203c21d4131':
-    '0xC9FC4AB00911793D99b5c7Bd01f01203C21D4131.png', // CLUB
-  '52014:0x309b916b3a90cb3e071697ea9680e9217a30066f':
-    '0x309B916b3A90cb3E071697Ea9680e9217A30066f.png', // CORE
-  '52014:0xe74e4e7a064310466f3bdbd3f3ce4e8c8f7cf1d5':
-    '0xE74e4E7A064310466f3bdBd3F3Ce4e8c8F7CF1d5.png', // DCNT
-  '52014:0xee432c220273e4f949007b4c1946562826efa055':
-    '0xEe432C220273e4F949007B4c1946562826Efa055.svg', // DYNO
-  '52014:0x075533ab8eec6a6999f07c8bc2f1900eb8312e25':
-    '0x075533AB8EeC6A6999F07C8bc2f1900eB8312e25.png', // FUGAZI
-  '52014:0xc20d02538368d8f7debeaeb99d9a8b4d4d1ddc1c':
-    '0xc20d02538368D8F7deBeAeB99D9a8b4d4D1DDC1C.png', // PDY
-  '52014:0x3187dead7a2bd6770f5fe81495d1b715926aae6e':
-    '0x74d64C56926E3D758404600B4B6f3954F4216e51.svg', // USDC
-  '52014:0x48e722f1458b253c2fb0e573f939318d7dbd54e7':
-    '0xD70B4b2e14cBA41fE011ea0c7021B6E64d960d87.svg', // USDT
-  '52014:0x138dafbda0ccb3d8e39c19edb0510fc31b7c1c77':
-    '0x138DAFbDA0CCB3d8E39C19edb0510Fc31b7C1c77.svg', // WETN
-  '5201420:0x8768cca8591160b423a5b7efa72842a0ac55382d':
-    '0x8768CcA8591160B423A5b7eFA72842A0AC55382D.svg', // tBOLT
-  '5201420:0x162d5a58096b63d89d83e0c66b4731a6cc8b10af':
-    '0x162D5a58096b63D89D83e0C66b4731A6CC8b10aF.svg', // tDYNO
-  '5201420:0x9a110a3ecc8704e93bd4fa1ba44d5cf93327202b':
-    '0x9a110A3Ecc8704e93Bd4FA1bA44D5CF93327202B.svg', // tUSDC
-  '5201420:0x02fec8c559fb598762df8d033bd7a3df9b374771':
-    '0x02FeC8c559fB598762df8D033bD7A3Df9b374771.svg', // tUSDT
-  '5201420:0x154c9fd7f006b92b6afa746098d8081a831dc1fc':
-    '0x154c9fD7F006b92b6afa746098d8081A831DC1FC.svg', // tWETN
+  '52014:0x043faa1b5c5fc9a7dc35171f290c29ecde0ccff1': '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1.svg', // BOLT
+  '52014:0xc9fc4ab00911793d99b5c7bd01f01203c21d4131': '0xC9FC4AB00911793D99b5c7Bd01f01203C21D4131.png', // CLUB
+  '52014:0x309b916b3a90cb3e071697ea9680e9217a30066f': '0x309B916b3A90cb3E071697Ea9680e9217A30066f.png', // CORE
+  '52014:0xe74e4e7a064310466f3bdbd3f3ce4e8c8f7cf1d5': '0xE74e4E7A064310466f3bdBd3F3Ce4e8c8F7CF1d5.png', // DCNT
+  '52014:0xee432c220273e4f949007b4c1946562826efa055': '0xEe432C220273e4F949007B4c1946562826Efa055.svg', // DYNO
+  '52014:0x075533ab8eec6a6999f07c8bc2f1900eb8312e25': '0x075533AB8EeC6A6999F07C8bc2f1900eB8312e25.png', // FUGAZI
+  '52014:0xc20d02538368d8f7debeaeb99d9a8b4d4d1ddc1c': '0xc20d02538368D8F7deBeAeB99D9a8b4d4D1DDC1C.png', // PDY
+  '52014:0x3187dead7a2bd6770f5fe81495d1b715926aae6e': '0x74d64C56926E3D758404600B4B6f3954F4216e51.svg', // USDC
+  '52014:0x48e722f1458b253c2fb0e573f939318d7dbd54e7': '0xD70B4b2e14cBA41fE011ea0c7021B6E64d960d87.svg', // USDT
+  '52014:0x138dafbda0ccb3d8e39c19edb0510fc31b7c1c77': '0x138DAFbDA0CCB3d8E39C19edb0510Fc31b7C1c77.svg', // WETN
+  '5201420:0x8768cca8591160b423a5b7efa72842a0ac55382d': '0x8768CcA8591160B423A5b7eFA72842A0AC55382D.svg', // tBOLT
+  '5201420:0x162d5a58096b63d89d83e0c66b4731a6cc8b10af': '0x162D5a58096b63D89D83e0C66b4731A6CC8b10aF.svg', // tDYNO
+  '5201420:0x9a110a3ecc8704e93bd4fa1ba44d5cf93327202b': '0x9a110A3Ecc8704e93Bd4FA1bA44D5CF93327202B.svg', // tUSDC
+  '5201420:0x02fec8c559fb598762df8d033bd7a3df9b374771': '0x02FeC8c559fB598762df8D033bD7A3Df9b374771.svg', // tUSDT
+  '5201420:0x154c9fd7f006b92b6afa746098d8081a831dc1fc': '0x154c9fD7F006b92b6afa746098d8081A831DC1FC.svg', // tWETN
   '52014:native': 'etn.svg', // ETN
   '5201420:native': 'etn.svg', // tETN
 }
@@ -173,8 +155,7 @@ function listLogo(uri: string | null | undefined): string | null {
   if (uri === null || uri === undefined) return null
   const u = uri.trim()
   if (u.startsWith('https://')) return u
-  if (u.startsWith('ipfs://'))
-    return `${IPFS_GATEWAY}${u.slice('ipfs://'.length).replace(/^ipfs\//, '')}`
+  if (u.startsWith('ipfs://')) return `${IPFS_GATEWAY}${u.slice('ipfs://'.length).replace(/^ipfs\//, '')}`
   return null
 }
 
@@ -215,9 +196,7 @@ export interface TokenLogoStore {
 const localStore: TokenLogoStore | null = (() => {
   try {
     const ls = globalThis.localStorage
-    return typeof ls?.getItem === 'function'
-      ? { get: (k: string) => ls.getItem(k), set: (k: string, v: string) => ls.setItem(k, v) }
-      : null
+    return typeof ls?.getItem === 'function' ? { get: (k: string) => ls.getItem(k), set: (k: string, v: string) => ls.setItem(k, v) } : null
   } catch {
     // Private windows and blocked storage throw on access, not on use.
     return null
@@ -238,14 +217,10 @@ export function setTokenLogoStore(next: TokenLogoStore | null): void {
 const NEGATIVE_TTL_MS = 7 * 24 * 60 * 60_000
 const memory = new Map<string, { uri: string | null; at: number }>()
 
-const cacheKey = (chainId: number, address: string): string =>
-  `${chainId}:${normaliseTokenAddress(address)}`
+const cacheKey = (chainId: number, address: string): string => `${chainId}:${normaliseTokenAddress(address)}`
 
 /** What won last time, or null when we have never resolved this token. */
-export function cachedTokenLogo(
-  chainId: number,
-  address: string,
-): { readonly uri: string | null } | null {
+export function cachedTokenLogo(chainId: number, address: string): { readonly uri: string | null } | null {
   const key = cacheKey(chainId, address)
   let hit = memory.get(key)
   if (hit === undefined && store !== null) {
@@ -305,12 +280,7 @@ export function siblingExtension(uri: string): string | null {
  * `tokenLogoCandidates`, but able to carry markup and asset modules as well as
  * URLs. A bundled source never needs a load event; a remote one does.
  */
-export function tokenLogoSources(
-  chainId: number,
-  address: string,
-  logoUri?: string | null,
-  coingecko?: string | null,
-): LogoSource[] {
+export function tokenLogoSources(chainId: number, address: string, logoUri?: string | null, coingecko?: string | null): LogoSource[] {
   const out: LogoSource[] = []
   const key = normaliseTokenAddress(address)
   const bundled = resolver !== null ? resolver(chainId, key) : null
@@ -335,12 +305,7 @@ export function tokenLogoSources(
  * remembering the winner is TokenAvatar's job, because only the thing drawing
  * the image knows whether one drew.
  */
-export function tokenLogoCandidates(
-  chainId: number,
-  address: string,
-  logoUri?: string | null,
-  coingecko?: string | null,
-): string[] {
+export function tokenLogoCandidates(chainId: number, address: string, logoUri?: string | null, coingecko?: string | null): string[] {
   const out: string[] = []
   const push = (u: string | null | undefined): void => {
     if (u !== null && u !== undefined && u !== '' && !out.includes(u)) out.push(u)
@@ -370,20 +335,15 @@ export function tokenLogoCandidates(
 
   // 3. Trust Wallet assets, by chain slug.
   const slug = TWA_SLUGS[chainId]
-  if (slug !== undefined && path !== null)
-    push(
-      `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${slug}/assets/${path}/logo.png`,
-    )
+  if (slug !== undefined && path !== null) push(`https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${slug}/assets/${path}/logo.png`)
 
   // 4. smol-assets. Skipped on Electroneum for the same reason step 3 is:
   //    it does not index the chain, so the request could only ever 404.
-  if (!etn && path !== null)
-    push(`https://assets.smold.app/api/token/${chainId}/${key}/logo-128.png`)
+  if (!etn && path !== null) push(`https://assets.smold.app/api/token/${chainId}/${key}/logo-128.png`)
 
   // 5. CoinGecko, only when we already know this token's image id.
   const id = coingecko ?? coingeckoId(chainId, key)
-  if (id !== null && id !== '')
-    push(`https://assets.coingecko.com/coins/images/${id}/small/image.png`)
+  if (id !== null && id !== '') push(`https://assets.coingecko.com/coins/images/${id}/small/image.png`)
 
   // 6. is TokenMark, which is drawn rather than fetched (see the header).
   return out

@@ -25,10 +25,7 @@ export const ACTIVITY_ALARM = 'bv.activity'
 const SCAN_EVERY_MS = 3 * 60_000
 /** A round younger than this answers a UI request from the cache. */
 const SCAN_DEBOUNCE_MS = 60_000
-const summarySpec = (accountId: string) => ({
-  key: cacheKey('activity', 'scan', accountId),
-  schema: ScanSummarySchema,
-})
+const summarySpec = (accountId: string) => ({ key: cacheKey('activity', 'scan', accountId), schema: ScanSummarySchema })
 
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
 const WINDOW = 50_000
@@ -65,8 +62,7 @@ export class ActivityScanner {
       void (async () => {
         const active = await d.vault.active().catch(() => null)
         const unlocked = (await d.vault.status().catch(() => null))?.unlocked === true
-        if (active && unlocked)
-          await this.scanAll(active.id, { force: true }).catch(() => undefined)
+        if (active && unlocked) await this.scanAll(active.id, { force: true }).catch(() => undefined)
         if (unlocked) await this.schedule()
       })()
     })
@@ -82,10 +78,7 @@ export class ActivityScanner {
   }
 
   private schedule(): Promise<void> {
-    return this.deps.platform.alarms.schedule(
-      ACTIVITY_ALARM,
-      this.deps.platform.now() + SCAN_EVERY_MS,
-    )
+    return this.deps.platform.alarms.schedule(ACTIVITY_ALARM, this.deps.platform.now() + SCAN_EVERY_MS)
   }
 
   /** Every enabled chain in turn (Electroneum first). Debounced: a round younger than 60 s is returned as is unless `force`. */
@@ -99,9 +92,7 @@ export class ActivityScanner {
     const run = (async (): Promise<ScanSummary> => {
       const release = d.platform.keepAlive.hold('activity-scan')
       try {
-        const chainIds = [52014, ...((await d.settings?.get())?.enabledChains ?? [])].filter(
-          (c, i, all) => all.indexOf(c) === i,
-        )
+        const chainIds = [52014, ...((await d.settings?.get())?.enabledChains ?? [])].filter((c, i, all) => all.indexOf(c) === i)
         let added = 0
         const problems: number[] = []
         for (const chainId of chainIds) {
@@ -111,13 +102,7 @@ export class ActivityScanner {
             problems.push(chainId)
           }
         }
-        const summary: ScanSummary = {
-          accountId,
-          chainIds,
-          added,
-          problems,
-          observedAt: d.platform.now(),
-        }
+        const summary: ScanSummary = { accountId, chainIds, added, problems, observedAt: d.platform.now() }
         await d.cache?.write(summarySpec(accountId), summary)
         return summary
       } finally {
@@ -136,10 +121,7 @@ export class ActivityScanner {
     return (await this.deps.cache?.read(summarySpec(accountId))) ?? null
   }
 
-  async scan(
-    accountId: string,
-    chainId: number,
-  ): Promise<{ added: number; fromBlock: number; toBlock: number }> {
+  async scan(accountId: string, chainId: number): Promise<{ added: number; fromBlock: number; toBlock: number }> {
     const d = this.deps
     const account = (await d.vault.accounts()).find((a) => a.id === accountId)
     if (!account) throw new EngineError('not_found', 'no such account')
@@ -149,28 +131,13 @@ export class ActivityScanner {
     const from = Math.max(cursor.block + 1, head - WINDOW, 0)
     if (from > head) return { added: 0, fromBlock: from, toBlock: head }
     const universe = await d.tokens.universe(chainId)
-    const known = new Map(
-      universe.filter((t) => t.address !== 'native').map((t) => [t.address.toLowerCase(), t]),
-    )
+    const known = new Map(universe.filter((t) => t.address !== 'native').map((t) => [t.address.toLowerCase(), t]))
     const existing = new Set((await d.activity.list({ accountId, chainId })).map((e) => e.id))
     let added = 0
     let scanned = from
     for (let start = from; start <= head; start += CHUNK) {
       const end = Math.min(head, start + CHUNK - 1)
-      const logs = (await d.chains.rpc(chainId, 'eth_getLogs', [
-        {
-          fromBlock: `0x${start.toString(16)}`,
-          toBlock: `0x${end.toString(16)}`,
-          topics: [TRANSFER_TOPIC, null, pad(owner, { size: 32 })],
-        },
-      ])) as Array<{
-        address: Hex
-        topics: Hex[]
-        data: Hex
-        transactionHash: Hex
-        blockNumber: Hex
-        logIndex: Hex
-      }>
+      const logs = (await d.chains.rpc(chainId, 'eth_getLogs', [{ fromBlock: `0x${start.toString(16)}`, toBlock: `0x${end.toString(16)}`, topics: [TRANSFER_TOPIC, null, pad(owner, { size: 32 })] }])) as Array<{ address: Hex; topics: Hex[]; data: Hex; transactionHash: Hex; blockNumber: Hex; logIndex: Hex }>
       for (const log of logs) {
         if (log.topics.length !== 3) continue // ERC-721 transfers carry the id as topic 3
         const id = `${log.transactionHash}:${parseInt(log.logIndex, 16)}`
@@ -190,9 +157,7 @@ export class ActivityScanner {
           submittedAt: d.platform.now(),
           origin: null,
           category: 'RECEIVE',
-          statements: [
-            `Received ${token ? token.symbol : 'tokens'} from ${fromAddr.slice(0, 6)}…${fromAddr.slice(-4)}`,
-          ],
+          statements: [`Received ${token ? token.symbol : 'tokens'} from ${fromAddr.slice(0, 6)}…${fromAddr.slice(-4)}`],
           riskCodes: [],
           status: 'confirmed',
           blockNumber: parseInt(log.blockNumber, 16),
@@ -212,22 +177,12 @@ export function activityScanNamespace(scanner: ActivityScanner): NamespaceSpec {
   return {
     scan: {
       input: z.object({ accountId: AccountIdSchema, chainId: z.number().int().positive() }),
-      handler: (arg) =>
-        scanner.scan(
-          (arg as { accountId: string }).accountId,
-          (arg as { chainId: number }).chainId,
-        ),
+      handler: (arg) => scanner.scan((arg as { accountId: string }).accountId, (arg as { chainId: number }).chainId),
     },
     scanAll: {
       input: z.object({ accountId: AccountIdSchema, force: z.boolean().optional() }),
-      handler: (arg) =>
-        scanner.scanAll((arg as { accountId: string }).accountId, {
-          ...((arg as { force?: boolean }).force ? { force: true } : {}),
-        }),
+      handler: (arg) => scanner.scanAll((arg as { accountId: string }).accountId, { ...((arg as { force?: boolean }).force ? { force: true } : {}) }),
     },
-    cached: {
-      input: z.object({ accountId: AccountIdSchema }),
-      handler: (arg) => scanner.cached((arg as { accountId: string }).accountId),
-    },
+    cached: { input: z.object({ accountId: AccountIdSchema }), handler: (arg) => scanner.cached((arg as { accountId: string }).accountId) },
   }
 }

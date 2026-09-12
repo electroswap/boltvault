@@ -3,17 +3,7 @@
  * full tab and the Expo app. It exercises the whole path: UI → engine
  * (channel or in-process) → platform → chain RPC → event → UI.
  */
-import {
-  Address,
-  Body,
-  Column,
-  Filament,
-  Plate,
-  Readout,
-  Row,
-  Screen,
-  metrics,
-} from '@boltvault/ui'
+import { Address, Body, Column, Filament, Plate, Readout, Row, Screen, metrics } from '@boltvault/ui'
 import { useEngineQuery } from '../engine/EngineProvider'
 import { useChainHead } from '../hooks/useChainHead'
 
@@ -33,11 +23,7 @@ export function Hello({ body }: HelloProps) {
   const head = useChainHead(ETN)
 
   return (
-    <Screen
-      padding={body === 'extension-popup' ? metrics.inset : metrics.insetWide}
-      gap="$5"
-      testID="hello"
-    >
+    <Screen padding={body === 'extension-popup' ? metrics.inset : metrics.insetWide} gap="$5" testID="hello">
       <Row gap="$3">
         <Body size="title">BoltVault</Body>
         <Body tone="mute" size="caption">
@@ -64,12 +50,7 @@ export function Hello({ body }: HelloProps) {
           <Body tone="burn">{status.error}</Body>
         ) : status.value ? (
           <Body testID="vault-status">
-            {status.value.exists
-              ? status.value.unlocked
-                ? 'Unlocked'
-                : 'Locked'
-              : 'Not created yet'}{' '}
-            · auto-lock {status.value.autoLock}
+            {status.value.exists ? (status.value.unlocked ? 'Unlocked' : 'Locked') : 'Not created yet'} · auto-lock {status.value.autoLock}
           </Body>
         ) : (
           <Body tone="mute">loading…</Body>

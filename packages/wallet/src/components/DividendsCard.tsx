@@ -210,18 +210,8 @@ export function DividendsCard({
           </Row>
           {/* The earning bar: how much of your collection shares in every fee. */}
           <Column gap={4} testID={`${testID}-earning`}>
-            <Column
-              height={6}
-              borderRadius={3}
-              backgroundColor="rgba(122, 140, 255, 0.16)"
-              overflow="hidden"
-            >
-              <Column
-                width={`${Math.round(share * 100)}%`}
-                height={6}
-                overflow="hidden"
-                position="relative"
-              >
+            <Column height={6} borderRadius={3} backgroundColor="rgba(122, 140, 255, 0.16)" overflow="hidden">
+              <Column width={`${Math.round(share * 100)}%`} height={6} overflow="hidden" position="relative">
                 <CurrentFill />
               </Column>
             </Column>

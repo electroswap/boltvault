@@ -47,7 +47,9 @@ function parseSimplePrice(d: GeckoSimplePrice | undefined, at: number): TokenPri
   const usd = typeof d.usd === 'number' ? d.usd : parseFloat(String(d.usd))
   if (!Number.isFinite(usd)) return null
   const ch = d.usd_24h_change
-  return Number.isFinite(ch) ? { usd, change24h: ch, at } : { usd, at }
+  return Number.isFinite(ch)
+    ? { usd, change24h: ch, at }
+    : { usd, at }
 }
 
 export class CoinGeckoMarketData implements MarketData {

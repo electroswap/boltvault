@@ -19,21 +19,8 @@ export function agoLabel(observedAt: number, now: number = Date.now()): string {
   return t({ id: 'fresh.days', message: 'As of {d} days ago', values: { d: Math.round(h / 24) } })
 }
 
-export function FreshnessLine({
-  freshness,
-  observedAt,
-  refreshing,
-  reducedMotion = false,
-  testID,
-}: {
-  freshness: Freshness
-  observedAt: number | null
-  refreshing: boolean
-  reducedMotion?: boolean
-  testID?: string
-}) {
-  const stale =
-    freshness === 'cached' && observedAt !== null && Date.now() - observedAt > STALE_AFTER_MS
+export function FreshnessLine({ freshness, observedAt, refreshing, reducedMotion = false, testID }: { freshness: Freshness; observedAt: number | null; refreshing: boolean; reducedMotion?: boolean; testID?: string }) {
+  const stale = freshness === 'cached' && observedAt !== null && Date.now() - observedAt > STALE_AFTER_MS
   return (
     <Column gap="$1" testID={testID}>
       <Refreshing active={refreshing} reducedMotion={reducedMotion} />

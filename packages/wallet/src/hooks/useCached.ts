@@ -26,13 +26,7 @@ export type CachedAction<T> =
   | { type: 'fresh'; value: T; at: number }
   | { type: 'error'; message: string }
 
-export const INITIAL: CachedState<never> = {
-  value: null,
-  freshness: 'loading',
-  observedAt: null,
-  error: null,
-  refreshing: false,
-}
+export const INITIAL: CachedState<never> = { value: null, freshness: 'loading', observedAt: null, error: null, refreshing: false }
 
 /** A value never becomes null on an error; an error next to a value is a note, not a state. */
 export function reduceCached<T>(state: CachedState<T>, action: CachedAction<T>): CachedState<T> {
@@ -44,40 +38,17 @@ export function reduceCached<T>(state: CachedState<T>, action: CachedAction<T>):
       // went there -> gone -> there. Refreshing is true because the effect
       // that seeds also goes and revalidates.
       if (action.seeded === null) return INITIAL as CachedState<T>
-      return {
-        value: action.seeded.value,
-        observedAt: action.seeded.observedAt,
-        freshness: 'cached',
-        error: null,
-        refreshing: true,
-      }
+      return { value: action.seeded.value, observedAt: action.seeded.observedAt, freshness: 'cached', error: null, refreshing: true }
     case 'cached':
       // A cached read never downgrades a fresh value.
       if (state.freshness === 'fresh') return state
-      return {
-        ...state,
-        value: action.cached.value,
-        observedAt: action.cached.observedAt,
-        freshness: 'cached',
-        error: null,
-      }
+      return { ...state, value: action.cached.value, observedAt: action.cached.observedAt, freshness: 'cached', error: null }
     case 'refreshing':
       return { ...state, refreshing: true }
     case 'fresh':
-      return {
-        value: action.value,
-        observedAt: action.at,
-        freshness: 'fresh',
-        error: null,
-        refreshing: false,
-      }
+      return { value: action.value, observedAt: action.at, freshness: 'fresh', error: null, refreshing: false }
     case 'error':
-      return {
-        ...state,
-        refreshing: false,
-        error: action.message,
-        freshness: state.value === null ? 'error' : state.freshness,
-      }
+      return { ...state, refreshing: false, error: action.message, freshness: state.value === null ? 'error' : state.freshness }
   }
 }
 
@@ -133,15 +104,7 @@ export function useCached<T>(opts: UseCachedOptions<T>): UseCachedResult<T> {
     opts.key,
     (k: string | null): CachedState<T> => {
       const hit = seedOf<T>(k)
-      return hit === null
-        ? (INITIAL as CachedState<T>)
-        : {
-            value: hit.value,
-            observedAt: hit.observedAt,
-            freshness: 'cached',
-            error: null,
-            refreshing: true,
-          }
+      return hit === null ? (INITIAL as CachedState<T>) : { value: hit.value, observedAt: hit.observedAt, freshness: 'cached', error: null, refreshing: true }
     },
   )
   // The readers may be inline lambdas; the effects key on `key` alone.
@@ -161,9 +124,7 @@ export function useCached<T>(opts: UseCachedOptions<T>): UseCachedResult<T> {
           if (forKey !== null) remember(forKey, { value, observedAt: at })
           dispatch({ type: 'fresh', value, at })
         },
-        (err: unknown) =>
-          alive() &&
-          dispatch({ type: 'error', message: err instanceof Error ? err.message : String(err) }),
+        (err: unknown) => alive() && dispatch({ type: 'error', message: err instanceof Error ? err.message : String(err) }),
       )
     },
     [engine],

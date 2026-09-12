@@ -4,19 +4,7 @@
  * Swap, the Piece, the farm, the campaign and the Legends vault — each
  * shows only the flow kinds it started.
  */
-import {
-  Body,
-  Column,
-  Discharge,
-  Icon,
-  Key,
-  Plate,
-  Row,
-  ScrollView,
-  metrics,
-  paint,
-  useWindowDimensions,
-} from '@boltvault/ui'
+import { Body, Column, Discharge, Icon, Key, Plate, Row, ScrollView, metrics, paint, useWindowDimensions } from '@boltvault/ui'
 import type { SwapFlow } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { t } from '../i18n'
@@ -38,10 +26,7 @@ export function stepLabel(step: SwapFlow['steps'][number]['step']): string {
     case 'cancel':
       return t({ id: 'flow.cancel', message: 'Cancel order' })
     case 'approve_collection':
-      return t({
-        id: 'flow.approveCollection',
-        message: 'Let the marketplace move this collection',
-      })
+      return t({ id: 'flow.approveCollection', message: 'Let the marketplace move this collection' })
     case 'sign_order':
       return t({ id: 'flow.signOrder', message: 'Sign the order' })
     case 'post_order':
@@ -89,16 +74,10 @@ export function statusLabel(status: SwapFlow['steps'][number]['status']): string
 }
 
 /** The active flow, only when it is one of these kinds and belongs to the active account. */
-export function useActiveFlow(kinds: ReadonlyArray<SwapFlow['kind']>): {
-  flow: SwapFlow | null
-  dismiss: () => void
-} {
+export function useActiveFlow(kinds: ReadonlyArray<SwapFlow['kind']>): { flow: SwapFlow | null; dismiss: () => void } {
   const { flow, dismiss } = useSwapFlow()
   const { active } = useWalletState()
-  return {
-    flow: flow && kinds.includes(flow.kind) && flow.accountId === active?.id ? flow : null,
-    dismiss,
-  }
+  return { flow: flow && kinds.includes(flow.kind) && flow.accountId === active?.id ? flow : null, dismiss }
 }
 
 export interface FlowPlateProps {
@@ -111,15 +90,7 @@ export interface FlowPlateProps {
   readonly testID?: string
 }
 
-export function FlowPlate({
-  flow,
-  titles,
-  summary = null,
-  onDone,
-  body,
-  reducedMotion = false,
-  testID = 'flow',
-}: FlowPlateProps) {
+export function FlowPlate({ flow, titles, summary = null, onDone, body, reducedMotion = false, testID = 'flow' }: FlowPlateProps) {
   const { width, height } = useWindowDimensions()
   const [fire, setFire] = useState(0)
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
@@ -129,70 +100,22 @@ export function FlowPlate({
   }, [flow.status])
   return (
     <Column flex={1} backgroundColor="$void" testID={testID}>
-      {finished ? (
-        <Discharge
-          fire={fire}
-          kind={flow.status === 'done' ? 'confirm' : 'reject'}
-          width={width}
-          height={height}
-          reducedMotion={reducedMotion}
-        />
-      ) : null}
-      <ScrollView
-        contentContainerStyle={{ padding: inset, gap: 14, flexGrow: 1, justifyContent: 'center' }}
-        style={{ zIndex: 1 }}
-      >
+      {finished ? <Discharge fire={fire} kind={flow.status === 'done' ? 'confirm' : 'reject'} width={width} height={height} reducedMotion={reducedMotion} /> : null}
+      <ScrollView contentContainerStyle={{ padding: inset, gap: 14, flexGrow: 1, justifyContent: 'center' }} style={{ zIndex: 1 }}>
         <Body size="title" testID={`${testID}-title`}>
-          {flow.status === 'done'
-            ? titles.done
-            : flow.status === 'rejected'
-              ? t({ id: 'flow.rejected.title', message: 'Nothing was signed' })
-              : flow.status === 'failed'
-                ? t({ id: 'flow.failed.title', message: 'The network refused it' })
-                : titles.working}
+          {flow.status === 'done' ? titles.done : flow.status === 'rejected' ? t({ id: 'flow.rejected.title', message: 'Nothing was signed' }) : flow.status === 'failed' ? t({ id: 'flow.failed.title', message: 'The network refused it' }) : titles.working}
         </Body>
         {summary ? <Body tone="mute">{summary}</Body> : null}
         <Plate gap="$2" testID={`${testID}-steps`}>
           {flow.steps.map((s, i) => (
-            <Row
-              key={`${s.step}-${i}`}
-              justifyContent="space-between"
-              alignItems="center"
-              minHeight={28}
-            >
+            <Row key={`${s.step}-${i}`} justifyContent="space-between" alignItems="center" minHeight={28}>
               <Row gap="$2" alignItems="center" flexShrink={1}>
-                <Icon
-                  name={
-                    s.status === 'confirmed'
-                      ? 'check'
-                      : s.status === 'rejected' || s.status === 'failed'
-                        ? 'close'
-                        : 'chevronRight'
-                  }
-                  size={16}
-                  color={
-                    s.status === 'confirmed'
-                      ? paint.arc
-                      : s.status === 'rejected' || s.status === 'failed'
-                        ? paint.burn
-                        : paint.mute
-                  }
-                />
+                <Icon name={s.status === 'confirmed' ? 'check' : s.status === 'rejected' || s.status === 'failed' ? 'close' : 'chevronRight'} size={16} color={s.status === 'confirmed' ? paint.arc : s.status === 'rejected' || s.status === 'failed' ? paint.burn : paint.mute} />
                 <Body tone={s.status === 'signing' ? 'ink' : 'mute'} numberOfLines={1}>
                   {stepLabel(s.step)}
                 </Body>
               </Row>
-              <Body
-                tone={
-                  s.status === 'confirmed'
-                    ? 'arc'
-                    : s.status === 'rejected' || s.status === 'failed'
-                      ? 'burn'
-                      : 'mute'
-                }
-                size="caption"
-                testID={`${testID}-step-${s.step}`}
-              >
+              <Body tone={s.status === 'confirmed' ? 'arc' : s.status === 'rejected' || s.status === 'failed' ? 'burn' : 'mute'} size="caption" testID={`${testID}-step-${s.step}`}>
                 {statusLabel(s.status)}
               </Body>
             </Row>
@@ -204,17 +127,7 @@ export function FlowPlate({
             {flow.hash}
           </Body>
         ) : null}
-        {finished ? (
-          <Key
-            label={
-              flow.status === 'done'
-                ? t({ id: 'flow.back', message: 'Back' })
-                : t({ id: 'flow.tryAgain', message: 'Try again' })
-            }
-            onPress={onDone}
-            testID={`${testID}-done`}
-          />
-        ) : null}
+        {finished ? <Key label={flow.status === 'done' ? t({ id: 'flow.back', message: 'Back' }) : t({ id: 'flow.tryAgain', message: 'Try again' })} onPress={onDone} testID={`${testID}-done`} /> : null}
       </ScrollView>
     </Column>
   )

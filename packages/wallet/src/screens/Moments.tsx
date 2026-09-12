@@ -58,14 +58,7 @@ export type MomentId = 'ignition' | 'discharge' | 'qr' | 'rack' | 'coil' | 'lege
 type BodyKind = 'extension-popup' | 'extension-tab' | 'mobile'
 
 /** The six, in the plan's order. M1 reviews the first three, M6 the rest. */
-export const MOMENT_IDS: readonly MomentId[] = [
-  'ignition',
-  'discharge',
-  'qr',
-  'rack',
-  'coil',
-  'legends',
-]
+export const MOMENT_IDS: readonly MomentId[] = ['ignition', 'discharge', 'qr', 'rack', 'coil', 'legends']
 
 /**
  * The name on the pill and the acceptance criterion, quoted from §7.12 with
@@ -142,39 +135,19 @@ export function Moments({ reducedMotion = false }: { reducedMotion?: boolean }) 
     reads the one thing it can see. The three widths are the three the
     screenshot harness and the clip recorder use.
   */
-  const body: BodyKind =
-    width >= 900 ? 'extension-tab' : width >= 420 ? 'mobile' : 'extension-popup'
+  const body: BodyKind = width >= 900 ? 'extension-tab' : width >= 420 ? 'mobile' : 'extension-popup'
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const onFire = (): void => setFire((n) => n + 1)
 
   return (
     <Column flex={1} backgroundColor="$void" testID="moments">
-      <Field
-        address={ADDRESS}
-        pulse={1}
-        width={width}
-        height={height}
-        reducedMotion={reducedMotion}
-      />
-      <Discharge
-        fire={fire}
-        width={width}
-        height={height}
-        reducedMotion={reducedMotion}
-        testID="discharge"
-      />
+      <Field address={ADDRESS} pulse={1} width={width} height={height} reducedMotion={reducedMotion} />
+      <Discharge fire={fire} width={width} height={height} reducedMotion={reducedMotion} testID="discharge" />
       <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="moments-scroll">
         <Body size="title">{t({ id: 'moments.title', message: 'Signature moments' })}</Body>
         <Row gap="$2" flexWrap="wrap" testID="moment-picker">
           {MOMENT_IDS.map((id) => (
-            <Pill
-              key={id}
-              label={copy(id).name}
-              selected={id === moment}
-              size="sm"
-              onPress={() => setMoment(id)}
-              testID={`moment-pick-${id}`}
-            />
+            <Pill key={id} label={copy(id).name} selected={id === moment} size="sm" onPress={() => setMoment(id)} testID={`moment-pick-${id}`} />
           ))}
         </Row>
         <Plate role="recessed" gap={4} testID="moment-criterion">
@@ -189,17 +162,11 @@ export function Moments({ reducedMotion = false }: { reducedMotion?: boolean }) 
           </Body>
         </Plate>
         {moment === 'ignition' ? <IgnitionStage reducedMotion={reducedMotion} /> : null}
-        {moment === 'discharge' ? (
-          <DischargeStage reducedMotion={reducedMotion} onFire={onFire} />
-        ) : null}
+        {moment === 'discharge' ? <DischargeStage reducedMotion={reducedMotion} onFire={onFire} /> : null}
         {moment === 'qr' ? <QrStage /> : null}
-        {moment === 'rack' ? (
-          <RackStage body={body} reducedMotion={reducedMotion} onFire={onFire} />
-        ) : null}
+        {moment === 'rack' ? <RackStage body={body} reducedMotion={reducedMotion} onFire={onFire} /> : null}
         {moment === 'coil' ? <CoilStage reducedMotion={reducedMotion} onFire={onFire} /> : null}
-        {moment === 'legends' ? (
-          <LegendsStage reducedMotion={reducedMotion} onFire={onFire} />
-        ) : null}
+        {moment === 'legends' ? <LegendsStage reducedMotion={reducedMotion} onFire={onFire} /> : null}
       </ScrollView>
     </Column>
   )
@@ -231,47 +198,27 @@ function IgnitionStage({ reducedMotion }: { reducedMotion: boolean }) {
             <Column alignItems="flex-start">
               <Body>{t({ id: 'moments.ignition.seat', message: 'volt.etn' })}</Body>
               <Body tone="mute" size="caption">
-                {t({
-                  id: 'moments.ignition.seat.caption',
-                  message: 'The Field comes up around the seat',
-                })}
+                {t({ id: 'moments.ignition.seat.caption', message: 'The Field comes up around the seat' })}
               </Body>
             </Column>
           </Row>
         </Ignition>
         <Ignition reducedMotion={reducedMotion} order={2}>
           <Column gap="$2">
-            <RollingReadout
-              value="$12,478.00"
-              hero
-              reducedMotion={reducedMotion}
-              testID="moments-readout"
-            />
-            <LiveFilament
-              tick={block}
-              live
-              reducedMotion={reducedMotion}
-              testID="moments-filament"
-            />
+            <RollingReadout value="$12,478.00" hero reducedMotion={reducedMotion} testID="moments-readout" />
+            <LiveFilament tick={block} live reducedMotion={reducedMotion} testID="moments-filament" />
           </Column>
         </Ignition>
         <Ignition reducedMotion={reducedMotion} order={3}>
           <Plate role="raised" gap="$2">
             <Body tone="mute" size="caption">
-              {t({
-                id: 'moments.ignition.plate',
-                message: 'The plates arrive last, 400 ms after the first light.',
-              })}
+              {t({ id: 'moments.ignition.plate', message: 'The plates arrive last, 400 ms after the first light.' })}
             </Body>
           </Plate>
         </Ignition>
       </Column>
       <Row gap="$2">
-        <Key
-          label={t({ id: 'moments.ignition.replay', message: 'Replay ignition' })}
-          onPress={() => setTake((n) => n + 1)}
-          testID="moment-ignition-replay"
-        />
+        <Key label={t({ id: 'moments.ignition.replay', message: 'Replay ignition' })} onPress={() => setTake((n) => n + 1)} testID="moment-ignition-replay" />
       </Row>
     </Column>
   )
@@ -310,12 +257,7 @@ function DischargeStage({ reducedMotion, onFire }: { reducedMotion: boolean; onF
         <Body tone="mute" size="caption">
           {t({ id: 'moments.discharge.total', message: 'Total' })}
         </Body>
-        <RollingReadout
-          value={`$${value}`}
-          hero
-          reducedMotion={reducedMotion}
-          testID="moments-readout"
-        />
+        <RollingReadout value={`$${value}`} hero reducedMotion={reducedMotion} testID="moments-readout" />
       </Column>
       <Plate role="raised" gap="$2" testID="moment-activity">
         <Row gap="$2" alignItems="center">
@@ -327,9 +269,7 @@ function DischargeStage({ reducedMotion, onFire }: { reducedMotion: boolean; onF
         </Row>
         {Array.from({ length: rows }, (_, i) => (
           <Row key={i} justifyContent="space-between" gap="$2" testID={`moment-activity-row-${i}`}>
-            <Body size="caption">
-              {t({ id: 'moments.discharge.row', message: 'Swapped 4,200 BOLT → 2.31 USDC' })}
-            </Body>
+            <Body size="caption">{t({ id: 'moments.discharge.row', message: 'Swapped 4,200 BOLT → 2.31 USDC' })}</Body>
             <Body tone="mute" size="caption">
               {t({ id: 'moments.discharge.now', message: 'just now' })}
             </Body>
@@ -353,12 +293,7 @@ function DischargeStage({ reducedMotion, onFire }: { reducedMotion: boolean; onF
           }}
           testID="fire-discharge"
         />
-        <Key
-          label={t({ id: 'moments.discharge.clear', message: 'Clear the list' })}
-          kind="secondary"
-          onPress={() => setLanded(0)}
-          testID="moment-discharge-clear"
-        />
+        <Key label={t({ id: 'moments.discharge.clear', message: 'Clear the list' })} kind="secondary" onPress={() => setLanded(0)} testID="moment-discharge-clear" />
       </Row>
     </Column>
   )
@@ -381,8 +316,7 @@ function QrStage() {
       <Body tone="mute" size="caption">
         {t({
           id: 'moments.qr.note',
-          message:
-            'The light across the engraving follows the phone on native (device motion); on the web it is static by design. Scan it from 30 cm to review the criterion.',
+          message: 'The light across the engraving follows the phone on native (device motion); on the web it is static by design. Scan it from 30 cm to review the criterion.',
         })}
       </Body>
     </Column>
@@ -391,15 +325,7 @@ function QrStage() {
 
 /* ------------------------------------------------------------------- Rack */
 
-function RackStage({
-  body,
-  reducedMotion,
-  onFire,
-}: {
-  body: BodyKind
-  reducedMotion: boolean
-  onFire: () => void
-}) {
+function RackStage({ body, reducedMotion, onFire }: { body: BodyKind; reducedMotion: boolean; onFire: () => void }) {
   // The fixture account holds three pieces: one with an offer, one listed, one
   // plain — exactly the three states the criterion asks a stranger to tell apart.
   const TOTAL = 3
@@ -407,10 +333,7 @@ function RackStage({
   const [bought, setBought] = useState(0)
   useEffect(() => {
     if (bought === 0) return
-    const h = setTimeout(
-      () => setShelf((n) => Math.min(TOTAL, n + 1)),
-      reducedMotion ? 0 : motion.discharge,
-    )
+    const h = setTimeout(() => setShelf((n) => Math.min(TOTAL, n + 1)), reducedMotion ? 0 : motion.discharge)
     return () => clearTimeout(h)
   }, [bought, reducedMotion])
   return (
@@ -418,29 +341,12 @@ function RackStage({
       {/* The real Rack, not a copy of it: the shelves, the price tag and the offer mark are the ones that ship. */}
       <Rack body={body} embedded limit={shelf} />
       <Row gap="$2" flexWrap="wrap">
-        <Key
-          label={t({ id: 'moments.rack.buy', message: 'Buy a piece' })}
-          disabled={shelf >= TOTAL}
-          onPress={() => {
-            onFire()
-            setBought((n) => n + 1)
-          }}
-          testID="moment-rack-buy"
-        />
+        <Key label={t({ id: 'moments.rack.buy', message: 'Buy a piece' })} disabled={shelf >= TOTAL} onPress={() => { onFire(); setBought((n) => n + 1) }} testID="moment-rack-buy" />
         {/* Not product copy — no user reaches this screen, and a beat has to be re-armable to be reviewed twice. */}
-        <Key
-          label={t({ id: 'moments.rack.reset', message: 'Empty the shelf again' })}
-          kind="secondary"
-          onPress={() => setShelf(2)}
-          testID="moment-rack-reset"
-        />
+        <Key label={t({ id: 'moments.rack.reset', message: 'Empty the shelf again' })} kind="secondary" onPress={() => setShelf(2)} testID="moment-rack-reset" />
       </Row>
       <Body tone="mute" size="caption">
-        {t({
-          id: 'moments.rack.note',
-          message:
-            'Press a piece to take the shared-element move into it, where the artwork is lit by one slow light sweep.',
-        })}
+        {t({ id: 'moments.rack.note', message: 'Press a piece to take the shared-element move into it, where the artwork is lit by one slow light sweep.' })}
       </Body>
     </Column>
   )
@@ -476,16 +382,7 @@ function CoilStage({ reducedMotion, onFire }: { reducedMotion: boolean; onFire: 
   return (
     <Column gap="$4" testID="moment-coil">
       <Column alignItems="center">
-        <Coil
-          durationMultiplier={17_500}
-          boltMultiplier={10_500}
-          glow={glow}
-          size={200}
-          at2x="12 Mar"
-          at25x="9 Sep"
-          reducedMotion={reducedMotion}
-          testID="coil"
-        />
+        <Coil durationMultiplier={17_500} boltMultiplier={10_500} glow={glow} size={200} at2x="12 Mar" at25x="9 Sep" reducedMotion={reducedMotion} testID="coil" />
       </Column>
       <Column gap="$2">
         <Row justifyContent="space-between" alignItems="flex-end" gap="$2">
@@ -493,12 +390,7 @@ function CoilStage({ reducedMotion, onFire }: { reducedMotion: boolean; onFire: 
             <Body tone="mute" size="caption">
               {t({ id: 'moments.coil.pending', message: 'DYNO to collect' })}
             </Body>
-            <RollingReadout
-              value={dyno(pending)}
-              hero
-              reducedMotion={reducedMotion}
-              testID="moment-coil-pending"
-            />
+            <RollingReadout value={dyno(pending)} hero reducedMotion={reducedMotion} testID="moment-coil-pending" />
           </Column>
           <Column alignItems="flex-end">
             <Body tone="mute" size="caption">
@@ -510,19 +402,8 @@ function CoilStage({ reducedMotion, onFire }: { reducedMotion: boolean; onFire: 
           </Column>
         </Row>
         {/* The DYNO bar: how full the coil is, the same number the glow reads. */}
-        <Column
-          height={6}
-          borderRadius={3}
-          backgroundColor="rgba(122, 140, 255, 0.16)"
-          overflow="hidden"
-        >
-          <Column
-            width={`${Math.round(glow * 100)}%`}
-            height={6}
-            overflow="hidden"
-            position="relative"
-            testID="moment-coil-bar"
-          >
+        <Column height={6} borderRadius={3} backgroundColor="rgba(122, 140, 255, 0.16)" overflow="hidden">
+          <Column width={`${Math.round(glow * 100)}%`} height={6} overflow="hidden" position="relative" testID="moment-coil-bar">
             <CurrentFill />
           </Column>
         </Column>
@@ -531,11 +412,7 @@ function CoilStage({ reducedMotion, onFire }: { reducedMotion: boolean; onFire: 
         <Body tone="mute" size="caption">
           {t({ id: 'moments.coil.collected', message: 'Collected' })}
         </Body>
-        <RollingReadout
-          value={dyno(collected)}
-          reducedMotion={reducedMotion}
-          testID="moment-coil-collected"
-        />
+        <RollingReadout value={dyno(collected)} reducedMotion={reducedMotion} testID="moment-coil-collected" />
       </Row>
       <Row gap="$2" flexWrap="wrap">
         <Key
@@ -549,12 +426,7 @@ function CoilStage({ reducedMotion, onFire }: { reducedMotion: boolean; onFire: 
           testID="moment-coil-collect"
         />
         {/* Reduced motion has no ticker, so the accrual needs a hand to review the hum at all. */}
-        <Key
-          label={t({ id: 'moments.coil.accrue', message: 'Accrue a day' })}
-          kind="secondary"
-          onPress={() => setPending((p) => p + 3_200)}
-          testID="moment-coil-accrue"
-        />
+        <Key label={t({ id: 'moments.coil.accrue', message: 'Accrue a day' })} kind="secondary" onPress={() => setPending((p) => p + 3_200)} testID="moment-coil-accrue" />
       </Row>
     </Column>
   )
@@ -606,11 +478,7 @@ function LegendsStage({ reducedMotion, onFire }: { reducedMotion: boolean; onFir
 
   if (!base) return null
   const best = BigInt(base.bestClaimWei)
-  const status: LegendsStatus = {
-    ...base,
-    claimableWei: claimable.toString(),
-    vesselLevel: levelOf(claimable, best),
-  }
+  const status: LegendsStatus = { ...base, claimableWei: claimable.toString(), vesselLevel: levelOf(claimable, best) }
   const claim = (): void => {
     onFire()
     setClaimed((c) => c + claimable)
@@ -619,70 +487,33 @@ function LegendsStage({ reducedMotion, onFire }: { reducedMotion: boolean; onFir
   return (
     <Column gap="$3" testID="moment-legends">
       <Body tone="mute" size="caption">
-        {t({
-          id: 'moments.legends.full',
-          message: 'The Legends screen — the vessel at full size.',
-        })}
+        {t({ id: 'moments.legends.full', message: 'The Legends screen — the vessel at full size.' })}
       </Body>
-      <DividendsCard
-        status={status}
-        reducedMotion={reducedMotion}
-        onClaim={claim}
-        testID="dividends"
-      />
+      <DividendsCard status={status} reducedMotion={reducedMotion} onClaim={claim} testID="dividends" />
       <Body tone="mute" size="caption">
-        {t({
-          id: 'moments.legends.compact',
-          message: 'The collection page — collapsed by default; the vessel stays.',
-        })}
+        {t({ id: 'moments.legends.compact', message: 'The collection page — collapsed by default; the vessel stays.' })}
       </Body>
-      <DividendsCard
-        status={status}
-        collapsed={!details}
-        onDetails={() => setDetails((v) => !v)}
-        reducedMotion={reducedMotion}
-        onClaim={claim}
-        testID="dividends-collection"
-      />
+      <DividendsCard status={status} collapsed={!details} onDetails={() => setDetails((v) => !v)} reducedMotion={reducedMotion} onClaim={claim} testID="dividends-collection" />
       <Row justifyContent="space-between" alignItems="center" gap="$2">
         <Column alignItems="flex-start">
           <Body tone="mute" size="caption">
             {t({ id: 'moments.legends.claimed', message: 'Claimed into the readout' })}
           </Body>
-          <RollingReadout
-            value={formatRaw(claimed.toString(), 18)}
-            hero
-            reducedMotion={reducedMotion}
-            testID="moment-legends-claimed"
-          />
+          <RollingReadout value={formatRaw(claimed.toString(), 18)} hero reducedMotion={reducedMotion} testID="moment-legends-claimed" />
         </Column>
         {/* Proof the poll happened: if this number moves and the liquid does not, the criterion holds. */}
         <Body tone="mute" size="caption" testID="moment-legends-polls">
-          {t({
-            id: 'moments.legends.polls',
-            message: 'Polls with no change: {n}',
-            values: { n: polls },
-          })}
+          {t({ id: 'moments.legends.polls', message: 'Polls with no change: {n}', values: { n: polls } })}
         </Body>
       </Row>
       <Row gap="$2" flexWrap="wrap">
-        <Key
-          label={t({ id: 'moments.legends.fee', message: 'A fee arrives' })}
-          kind="secondary"
-          onPress={() => setClaimable((c) => c + FEE_WEI)}
-          testID="moment-legends-fee"
-        />
+        <Key label={t({ id: 'moments.legends.fee', message: 'A fee arrives' })} kind="secondary" onPress={() => setClaimable((c) => c + FEE_WEI)} testID="moment-legends-fee" />
         {/*
           The criterion's teeth. This re-renders the card with byte-identical
           values, which is what a 30 s status poll does all day; the vessel must
           not move a pixel.
         */}
-        <Key
-          label={t({ id: 'moments.legends.poll', message: 'Poll — nothing changed' })}
-          kind="secondary"
-          onPress={() => setPolls((n) => n + 1)}
-          testID="moment-legends-poll"
-        />
+        <Key label={t({ id: 'moments.legends.poll', message: 'Poll — nothing changed' })} kind="secondary" onPress={() => setPolls((n) => n + 1)} testID="moment-legends-poll" />
       </Row>
     </Column>
   )

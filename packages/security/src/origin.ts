@@ -4,16 +4,7 @@
  */
 
 /** The names a phisher imitates. Subdomains of these are fine; lookalikes are not. */
-export const PROTECTED_HOSTS: readonly string[] = [
-  'electroswap.io',
-  'electroneum.com',
-  'ens.electroneum.com',
-  'hyperlane.xyz',
-  'metamask.io',
-  'ledger.com',
-  'trezor.io',
-  'walletconnect.com',
-]
+export const PROTECTED_HOSTS: readonly string[] = ['electroswap.io', 'electroneum.com', 'ens.electroneum.com', 'hyperlane.xyz', 'metamask.io', 'ledger.com', 'trezor.io', 'walletconnect.com']
 
 /**
  * ElectroSwap's own web surfaces — the sites that are us rather than a dApp.
@@ -33,10 +24,7 @@ export const PROTECTED_HOSTS: readonly string[] = [
 export const FIRST_PARTY_HOSTS: readonly string[] = ['electroswap.io']
 
 /** True for ElectroSwap's own origins (and their subdomains) over https. */
-export function isFirstPartyOrigin(
-  origin: string,
-  firstParty: readonly string[] = FIRST_PARTY_HOSTS,
-): boolean {
+export function isFirstPartyOrigin(origin: string, firstParty: readonly string[] = FIRST_PARTY_HOSTS): boolean {
   // http:// is never us. The in-app browser upgrades what a user types, but a
   // cleartext page is one an attacker can rewrite in flight, and handing it the
   // fee policy — or believing its fee — would be trusting the rewrite.
@@ -62,9 +50,7 @@ export function registrableOrigin(url: string): string | null {
 export function hostOf(origin: string): string | null {
   const trimmed = origin.trim().toLowerCase()
   if (!trimmed) return null
-  const withoutScheme = trimmed.includes('://')
-    ? trimmed.slice(trimmed.indexOf('://') + 3)
-    : trimmed
+  const withoutScheme = trimmed.includes('://') ? trimmed.slice(trimmed.indexOf('://') + 3) : trimmed
   const hostPart = withoutScheme.split('/')[0] ?? ''
   const host = hostPart.split(':')[0] ?? ''
   return host === '' ? null : host
@@ -130,10 +116,7 @@ export interface TyposquatHit {
  * subdomains, or when a protected host appears as a label prefix of an
  * unrelated domain (`electroswap.io.claim-airdrop.net`).
  */
-export function typosquat(
-  host: string,
-  protectedHosts: readonly string[] = PROTECTED_HOSTS,
-): TyposquatHit | null {
+export function typosquat(host: string, protectedHosts: readonly string[] = PROTECTED_HOSTS): TyposquatHit | null {
   const h = host.toLowerCase()
   for (const p of protectedHosts) {
     if (h === p || h.endsWith(`.${p}`)) return null
@@ -141,24 +124,15 @@ export function typosquat(
   for (const p of protectedHosts) {
     const registrable = h.split('.').slice(-2).join('.')
     const pRegistrable = p.split('.').slice(-2).join('.')
-    if (h.startsWith(`${p}.`) || h.includes(`.${p}.`))
-      return { protectedHost: p, reason: 'embedded' }
+    if (h.startsWith(`${p}.`) || h.includes(`.${p}.`)) return { protectedHost: p, reason: 'embedded' }
     const folded = normaliseHomoglyphs(registrable)
-    if (folded === pRegistrable && registrable !== pRegistrable)
-      return { protectedHost: p, reason: 'homoglyph' }
+    if (folded === pRegistrable && registrable !== pRegistrable) return { protectedHost: p, reason: 'homoglyph' }
     const [pName] = pRegistrable.split('.')
     const [name] = registrable.split('.')
-    if (
-      pName &&
-      name &&
-      name !== pName &&
-      levenshtein(folded.split('.')[0] ?? '', pName) <= 2 &&
-      Math.abs(name.length - pName.length) <= 2
-    ) {
+    if (pName && name && name !== pName && levenshtein(folded.split('.')[0] ?? '', pName) <= 2 && Math.abs(name.length - pName.length) <= 2) {
       return { protectedHost: p, reason: 'edit_distance' }
     }
-    if (registrable !== pRegistrable && levenshtein(folded, pRegistrable) <= 2)
-      return { protectedHost: p, reason: 'edit_distance' }
+    if (registrable !== pRegistrable && levenshtein(folded, pRegistrable) <= 2) return { protectedHost: p, reason: 'edit_distance' }
   }
   return null
 }

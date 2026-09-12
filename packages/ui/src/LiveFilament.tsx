@@ -25,28 +25,9 @@ export function LiveFilament({ tick, live, reducedMotion = false, testID }: Live
   }, [tick])
   const still = !live || reducedMotion || tick === null
   return (
-    <View
-      style={{
-        height: metrics.filament,
-        backgroundColor: edge,
-        borderRadius: 1,
-        overflow: 'hidden',
-      }}
-      testID={testID}
-      accessibilityElementsHidden
-    >
+    <View style={{ height: metrics.filament, backgroundColor: edge, borderRadius: 1, overflow: 'hidden' }} testID={testID} accessibilityElementsHidden>
       {still ? (
-        <View
-          style={{
-            height: metrics.filament,
-            width: live ? '100%' : '35%',
-            backgroundColor: live ? 'transparent' : paint.mute,
-            borderRadius: 1,
-            overflow: 'hidden',
-          }}
-        >
-          {live ? <CurrentFill radius={1} /> : null}
-        </View>
+        <View style={{ height: metrics.filament, width: live ? '100%' : '35%', backgroundColor: live ? 'transparent' : paint.mute, borderRadius: 1, overflow: 'hidden' }}>{live ? <CurrentFill radius={1} /> : null}</View>
       ) : (
         <Animated.View
           key={runId}
@@ -56,10 +37,7 @@ export function LiveFilament({ tick, live, reducedMotion = false, testID }: Live
             borderRadius: 1,
             overflow: 'hidden',
             transformOrigin: 'left',
-            animationName: {
-              from: { transform: [{ scaleX: 0 }] },
-              to: { transform: [{ scaleX: 1 }] },
-            },
+            animationName: { from: { transform: [{ scaleX: 0 }] }, to: { transform: [{ scaleX: 1 }] } },
             animationDuration: '700ms',
             animationTimingFunction: cubicBezier(0.2, 0.9, 0.3, 1),
             animationFillMode: 'forwards',

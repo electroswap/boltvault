@@ -59,9 +59,7 @@ let manifest
 try {
   manifest = JSON.parse(await readFile(join(dir, 'manifest.json'), 'utf8'))
 } catch {
-  console.error(
-    `No build at ${relative(root, dir)} — run \`pnpm --filter @boltvault/extension build${browser === 'firefox' ? ':firefox' : ''}\` first.`,
-  )
+  console.error(`No build at ${relative(root, dir)} — run \`pnpm --filter @boltvault/extension build${browser === 'firefox' ? ':firefox' : ''}\` first.`)
   process.exit(1)
 }
 const version = String(manifest.version)
@@ -73,70 +71,22 @@ const locals = []
 const centrals = []
 let offset = 0
 for (const name of files) {
-  const data =
-    name === 'manifest.json'
-      ? Buffer.from(JSON.stringify(manifest, null, 2) + '\n')
-      : await readFile(join(dir, name))
+  const data = name === 'manifest.json' ? Buffer.from(JSON.stringify(manifest, null, 2) + '\n') : await readFile(join(dir, name))
   const packed = deflateRawSync(data, { level: 9 })
   const crc = crc32(data)
   const nameBuf = Buffer.from(name, 'utf8')
-  const head = Buffer.concat([
-    u32(0x04034b50),
-    u16(20),
-    u16(0x0800),
-    u16(8),
-    u16(DOS_TIME),
-    u16(DOS_DATE),
-    u32(crc),
-    u32(packed.length),
-    u32(data.length),
-    u16(nameBuf.length),
-    u16(0),
-    nameBuf,
-  ])
+  const head = Buffer.concat([u32(0x04034b50), u16(20), u16(0x0800), u16(8), u16(DOS_TIME), u16(DOS_DATE), u32(crc), u32(packed.length), u32(data.length), u16(nameBuf.length), u16(0), nameBuf])
   locals.push(head, packed)
-  centrals.push(
-    Buffer.concat([
-      u32(0x02014b50),
-      u16(20),
-      u16(20),
-      u16(0x0800),
-      u16(8),
-      u16(DOS_TIME),
-      u16(DOS_DATE),
-      u32(crc),
-      u32(packed.length),
-      u32(data.length),
-      u16(nameBuf.length),
-      u16(0),
-      u16(0),
-      u16(0),
-      u16(0),
-      u32(0),
-      u32(offset),
-      nameBuf,
-    ]),
-  )
+  centrals.push(Buffer.concat([u32(0x02014b50), u16(20), u16(20), u16(0x0800), u16(8), u16(DOS_TIME), u16(DOS_DATE), u32(crc), u32(packed.length), u32(data.length), u16(nameBuf.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset), nameBuf]))
   offset += head.length + packed.length
 }
 const central = Buffer.concat(centrals)
-const eocd = Buffer.concat([
-  u32(0x06054b50),
-  u16(0),
-  u16(0),
-  u16(files.length),
-  u16(files.length),
-  u32(central.length),
-  u32(offset),
-  u16(0),
-])
+const eocd = Buffer.concat([u32(0x06054b50), u16(0), u16(0), u16(files.length), u16(files.length), u32(central.length), u32(offset), u16(0)])
 const zip = Buffer.concat([...locals, central, eocd])
 
 const out = join(root, 'apps/extension/.output', `boltvault-${browser}-${version}.zip`)
 await writeFile(out, zip)
 const sha = createHash('sha256').update(zip).digest('hex')
 console.log(relative(root, out))
-console.log(
-  `${files.length} files · ${(zip.length / 1024).toFixed(0)} KB · manifest key ${hadKey ? 'stripped' : 'absent'} · version ${version}`,
-)
+console.log(`${files.length} files · ${(zip.length / 1024).toFixed(0)} KB · manifest key ${hadKey ? 'stripped' : 'absent'} · version ${version}`)
 console.log(`sha256 ${sha}`)

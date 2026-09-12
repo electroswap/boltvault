@@ -11,16 +11,7 @@
  * can still produce: an activity restored after the process was killed is a
  * cold start and should show it, but a remount inside one session should not.
  */
-import {
-  Body,
-  Column,
-  EsWordmark,
-  SPLASH_BEAT,
-  SplashArt,
-  TamaguiProvider,
-  tamaguiConfig,
-  useWindowDimensions,
-} from '@boltvault/ui'
+import { Body, Column, EsWordmark, SPLASH_BEAT, SplashArt, TamaguiProvider, tamaguiConfig, useWindowDimensions } from '@boltvault/ui'
 import { memo } from 'react'
 import { t } from '../i18n'
 
@@ -67,13 +58,7 @@ export const Splash = memo(function Splash({ reducedMotion = false }: { reducedM
       reducedMotion={reducedMotion}
       testID="splash"
       name={
-        <Body
-          size="title"
-          fontSize={34}
-          lineHeight={40}
-          letterSpacing={-0.5}
-          testID="splash-wordmark"
-        >
+        <Body size="title" fontSize={34} lineHeight={40} letterSpacing={-0.5} testID="splash-wordmark">
           {t({ id: 'splash.name', message: 'BoltVault' })}
         </Body>
       }
@@ -103,11 +88,7 @@ export const Splash = memo(function Splash({ reducedMotion = false }: { reducedM
  * So: `Splash` inside the app (the screen registry, the harness, tests),
  * `SplashRoot` outside it.
  */
-export const SplashRoot = memo(function SplashRoot({
-  reducedMotion = false,
-}: {
-  reducedMotion?: boolean
-}) {
+export const SplashRoot = memo(function SplashRoot({ reducedMotion = false }: { reducedMotion?: boolean }) {
   return (
     <TamaguiProvider config={tamaguiConfig} defaultTheme="dark">
       <Splash reducedMotion={reducedMotion} />

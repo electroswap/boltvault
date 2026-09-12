@@ -3,10 +3,7 @@ import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 
 /** The local activity log for an account, newest first, kept current by the engine event. */
-export function useActivity(
-  accountId: string | null,
-  chainId?: number,
-): { entries: readonly ActivityEntry[]; loaded: boolean } {
+export function useActivity(accountId: string | null, chainId?: number): { entries: readonly ActivityEntry[]; loaded: boolean } {
   const engine = useEngine()
   const [entries, setEntries] = useState<readonly ActivityEntry[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -17,10 +14,7 @@ export function useActivity(
       return
     }
     let alive = true
-    const filter = (list: readonly ActivityEntry[]): ActivityEntry[] =>
-      list.filter(
-        (e) => e.accountId === accountId && (chainId === undefined || e.chainId === chainId),
-      )
+    const filter = (list: readonly ActivityEntry[]): ActivityEntry[] => list.filter((e) => e.accountId === accountId && (chainId === undefined || e.chainId === chainId))
     engine.activity.list({ accountId, ...(chainId !== undefined ? { chainId } : {}) }).then(
       (list) => {
         if (!alive) return

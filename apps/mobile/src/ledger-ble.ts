@@ -58,8 +58,7 @@ const modelFromName = (name: string | undefined): string => {
 export function bleLedgerProvider(): LedgerTransportProvider {
   const open = new Map<string, ApduTransport & { readonly model: string }>()
   const names = new Map<string, string>()
-  const load = (): Promise<BleModule> =>
-    import('@ledgerhq/react-native-hw-transport-ble') as unknown as Promise<BleModule>
+  const load = (): Promise<BleModule> => import('@ledgerhq/react-native-hw-transport-ble') as unknown as Promise<BleModule>
   return {
     kind: 'ble',
     async list() {
@@ -74,8 +73,7 @@ export function bleLedgerProvider(): LedgerTransportProvider {
         An open transport already answers the question a scan would ask, so
         answer from it and leave the radio alone.
       */
-      if (open.size > 0)
-        return [...open.keys()].map((id) => ({ id, model: modelFromName(names.get(id)) }))
+      if (open.size > 0) return [...open.keys()].map((id) => ({ id, model: modelFromName(names.get(id)) }))
       const m = await load()
       return new Promise<LedgerDeviceInfo[]>((resolve) => {
         const found = new Map<string, string>()
@@ -124,11 +122,7 @@ export function bleLedgerProvider(): LedgerTransportProvider {
       const existing = open.get(id)
       if (existing) return existing
       const m = await load()
-      const t = await withTimeout(
-        m.default.open(id),
-        OPEN_TIMEOUT_MS,
-        'The Ledger did not finish connecting. Wake it, open the Ethereum app and try again.',
-      )
+      const t = await withTimeout(m.default.open(id), OPEN_TIMEOUT_MS, 'The Ledger did not finish connecting. Wake it, open the Ethereum app and try again.')
       // One exchange at a time; see ledger-queue.ts.
       const queue = serial()
       const transport = {

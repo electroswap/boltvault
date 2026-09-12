@@ -11,7 +11,5 @@ import { SvgXml } from 'react-native-svg'
 import type { SvgImageProps } from './SvgImage'
 
 export function SvgImage({ xml, width, height, label, testID }: SvgImageProps) {
-  return (
-    <SvgXml xml={xml} width={width} height={height} accessibilityLabel={label} testID={testID} />
-  )
+  return <SvgXml xml={xml} width={width} height={height} accessibilityLabel={label} testID={testID} />
 }

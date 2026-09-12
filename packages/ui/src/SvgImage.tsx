@@ -22,13 +22,5 @@ export interface SvgImageProps {
 }
 
 export function SvgImage({ uri, width, height, label, testID }: SvgImageProps) {
-  return (
-    <Image
-      source={{ uri }}
-      style={{ width, height }}
-      accessibilityLabel={label}
-      accessibilityIgnoresInvertColors
-      testID={testID}
-    />
-  )
+  return <Image source={{ uri }} style={{ width, height }} accessibilityLabel={label} accessibilityIgnoresInvertColors testID={testID} />
 }

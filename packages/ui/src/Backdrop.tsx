@@ -37,25 +37,10 @@ export interface BackdropProps {
 /** The ceremonies have no account to seed from, so they share a constant. */
 const NO_ACCOUNT = '0x0000000000000000000000000000000000000e7n'
 
-export function Backdrop({
-  scene,
-  width,
-  height,
-  reducedMotion = false,
-  address = NO_ACCOUNT,
-  testID = 'field',
-}: BackdropProps) {
+export function Backdrop({ scene, width, height, reducedMotion = false, address = NO_ACCOUNT, testID = 'field' }: BackdropProps) {
   return (
     <>
-      <Field
-        scene={scene}
-        address={address}
-        intensity={0.58}
-        width={width}
-        height={height}
-        reducedMotion={reducedMotion}
-        testID={testID}
-      />
+      <Field scene={scene} address={address} intensity={0.58} width={width} height={height} reducedMotion={reducedMotion} testID={testID} />
       <Column position="absolute" left={0} top={0} zIndex={0} pointerEvents="none">
         <Scrim width={width} height={height} edge="top" strength={0.86} testID="field-fade" />
       </Column>

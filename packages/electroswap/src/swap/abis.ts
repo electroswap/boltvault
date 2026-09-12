@@ -32,17 +32,10 @@ export const V2_ROUTER_ABI = parseAbi([
   'function getAmountsIn(uint256 amountOut, address[] path) view returns (uint256[] amounts)',
 ])
 
-export const V2_FACTORY_ABI = parseAbi([
-  'function getPair(address tokenA, address tokenB) view returns (address pair)',
-])
-export const V3_FACTORY_ABI = parseAbi([
-  'function getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)',
-])
+export const V2_FACTORY_ABI = parseAbi(['function getPair(address tokenA, address tokenB) view returns (address pair)'])
+export const V3_FACTORY_ABI = parseAbi(['function getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)'])
 
-export const UNIVERSAL_ROUTER_ABI = parseAbi([
-  'function execute(bytes commands, bytes[] inputs, uint256 deadline) payable',
-  'function execute(bytes commands, bytes[] inputs) payable',
-])
+export const UNIVERSAL_ROUTER_ABI = parseAbi(['function execute(bytes commands, bytes[] inputs, uint256 deadline) payable', 'function execute(bytes commands, bytes[] inputs) payable'])
 
 export const PERMIT2_ABI = parseAbi([
   'function allowance(address owner, address token, address spender) view returns (uint160 amount, uint48 expiration, uint48 nonce)',

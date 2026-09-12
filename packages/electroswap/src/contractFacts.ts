@@ -70,12 +70,7 @@ function instantOf(seconds: number | null | undefined, now: number): number | nu
  * the caller can fall through to its own source; a returned view may still
  * carry nulls, which mean the API was asked and did not know.
  */
-export async function fetchContractFacts(
-  client: ElectroSwapClient,
-  chainId: number,
-  address: string,
-  now: number,
-): Promise<ContractFactsView | null> {
+export async function fetchContractFacts(client: ElectroSwapClient, chainId: number, address: string, now: number): Promise<ContractFactsView | null> {
   const data = await client.query<unknown>(CONTRACT_FACTS, { chain: chainEnum(chainId), address })
   const parsed = ResponseSchema.safeParse(data)
   if (!parsed.success) return null
@@ -86,9 +81,6 @@ export async function fetchContractFacts(
     hasCode: facts.hasCode ?? null,
     verified: facts.verified ?? null,
     deployedAt: instantOf(facts.deployedAt, now),
-    newAfterDays:
-      typeof facts.newAfterDays === 'number' && Number.isFinite(facts.newAfterDays)
-        ? facts.newAfterDays
-        : null,
+    newAfterDays: typeof facts.newAfterDays === 'number' && Number.isFinite(facts.newAfterDays) ? facts.newAfterDays : null,
   }
 }

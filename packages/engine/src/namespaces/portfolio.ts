@@ -14,13 +14,7 @@ import { EngineError } from '../errors'
 import type { PriceSource } from '../prices'
 import type { EventBus, NamespaceSpec } from '../host'
 import { multicallAddress, readMany, type ReadCall } from '../multicall'
-import {
-  AccountIdSchema,
-  type PortfolioPoint,
-  type PortfolioRow,
-  type PortfolioSnapshot,
-  type TokenView,
-} from '../schema'
+import { AccountIdSchema, type PortfolioPoint, type PortfolioRow, type PortfolioSnapshot, type TokenView } from '../schema'
 // Snapshots and "since you last looked" used to be one plaintext document per
 // account (`bv:local:portfolio.<accountId>`), which put the USD total, every
 // per-token quantity *and* the account id on disk in the clear, readable with
@@ -77,16 +71,9 @@ const HISTORY_CAP = 120
  *
  * Pure and exported so the bounding is testable without a chain.
  */
-export function appendPoint(
-  series: readonly PortfolioPoint[],
-  at: number,
-  total: number | null,
-): PortfolioPoint[] {
+export function appendPoint(series: readonly PortfolioPoint[], at: number, total: number | null): PortfolioPoint[] {
   const bucket = Math.floor(at / HISTORY_BUCKET_MS)
-  const next = [
-    ...series.filter((p) => Math.floor(p.at / HISTORY_BUCKET_MS) !== bucket),
-    { at, total },
-  ].sort((a, b) => a.at - b.at)
+  const next = [...series.filter((p) => Math.floor(p.at / HISTORY_BUCKET_MS) !== bucket), { at, total }].sort((a, b) => a.at - b.at)
   return next.length > HISTORY_CAP ? next.slice(next.length - HISTORY_CAP) : next
 }
 
@@ -142,28 +129,13 @@ export class PortfolioService {
   constructor(private readonly deps: PortfolioDeps) {}
 
   /** The last-good snapshot at once (stale flag set), and a refresh in the background. */
-  async snapshot(
-    accountId: string,
-    chainIds: readonly number[] = [HOME_CHAIN_ID],
-  ): Promise<PortfolioSnapshot> {
+  async snapshot(accountId: string, chainIds: readonly number[] = [HOME_CHAIN_ID]): Promise<PortfolioSnapshot> {
     const k = scopeKey(accountId, chainIds)
     const value = await this.deps.snapshots.get(k)
     const last = this.lastRefresh.get(k) ?? 0
-    if (this.deps.platform.now() - last > refreshEveryMs(chainIds))
-      void this.refresh(accountId, chainIds).catch(() => undefined)
+    if (this.deps.platform.now() - last > refreshEveryMs(chainIds)) void this.refresh(accountId, chainIds).catch(() => undefined)
     if (value) return { ...value, stale: true }
-    return {
-      accountId,
-      chainIds: [...chainIds],
-      currency: 'USD',
-      total: null,
-      change24h: null,
-      unpricedCount: 0,
-      rows: [],
-      observedAt: 0,
-      stale: true,
-      history: [],
-    }
+    return { accountId, chainIds: [...chainIds], currency: 'USD', total: null, change24h: null, unpricedCount: 0, rows: [], observedAt: 0, stale: true, history: [] }
   }
 
   /**
@@ -175,10 +147,7 @@ export class PortfolioService {
    * display prices (§2.8), and nothing off-device is asked what the total used
    * to be. A gap in the line is a gap in the looking.
    */
-  async history(
-    accountId: string,
-    chainIds: readonly number[] = [HOME_CHAIN_ID],
-  ): Promise<PortfolioPoint[]> {
+  async history(accountId: string, chainIds: readonly number[] = [HOME_CHAIN_ID]): Promise<PortfolioPoint[]> {
     const snap = await this.deps.snapshots.get(scopeKey(accountId, chainIds))
     return [...(snap?.history ?? [])]
   }
@@ -192,9 +161,7 @@ export class PortfolioService {
    * snapshot can only speak for one of them.
    */
   async cached(accountId: string, chainIds?: readonly number[]): Promise<PortfolioSnapshot | null> {
-    const value = chainIds
-      ? await this.deps.snapshots.get(scopeKey(accountId, chainIds))
-      : await this.widest(accountId)
+    const value = chainIds ? await this.deps.snapshots.get(scopeKey(accountId, chainIds)) : await this.widest(accountId)
     return value ? { ...value, stale: true } : null
   }
 
@@ -204,20 +171,12 @@ export class PortfolioService {
     let best: PortfolioSnapshot | null = null
     for (const [id, snap] of Object.entries(await this.deps.snapshots.entries())) {
       if (!id.startsWith(prefix)) continue
-      if (
-        best === null ||
-        snap.chainIds.length > best.chainIds.length ||
-        (snap.chainIds.length === best.chainIds.length && snap.observedAt > best.observedAt)
-      )
-        best = snap
+      if (best === null || snap.chainIds.length > best.chainIds.length || (snap.chainIds.length === best.chainIds.length && snap.observedAt > best.observedAt)) best = snap
     }
     return best
   }
 
-  async refresh(
-    accountId: string,
-    chainIds: readonly number[] = [HOME_CHAIN_ID],
-  ): Promise<PortfolioSnapshot> {
+  async refresh(accountId: string, chainIds: readonly number[] = [HOME_CHAIN_ID]): Promise<PortfolioSnapshot> {
     const k = scopeKey(accountId, chainIds)
     const open = this.inFlight.get(k)
     if (open) return open
@@ -251,19 +210,8 @@ export class PortfolioService {
       on display data: the price call keeps its bounded slot, and a slow or
       rate-limited source yields unpriced rows, never a late snapshot.
     */
-    const held = universe.filter(
-      (t) =>
-        (balances.get(t.address.toLowerCase()) ?? 0n) > 0n ||
-        t.source === 'user' ||
-        t.source === 'dapp' ||
-        t.pinned,
-    )
-    const prices = await Promise.race([
-      this.prices(chainId, owner, held),
-      new Promise<Map<string, PriceRow>>((resolve) =>
-        setTimeout(() => resolve(new Map()), PRICE_BUDGET_MS),
-      ),
-    ])
+    const held = universe.filter((t) => (balances.get(t.address.toLowerCase()) ?? 0n) > 0n || t.source === 'user' || t.source === 'dapp' || t.pinned)
+    const prices = await Promise.race([this.prices(chainId, owner, held), new Promise<Map<string, PriceRow>>((resolve) => setTimeout(() => resolve(new Map()), PRICE_BUDGET_MS))])
     for (const t of held) {
       const raw = balances.get(t.address.toLowerCase()) ?? 0n
       const quantityNum = Number(formatUnits(raw, t.decimals))
@@ -277,11 +225,7 @@ export class PortfolioService {
       let fiat: number | null = raw === 0n ? 0 : null
       let change24h: number | null = null
       if (price && Number.isFinite(price.price)) {
-        const diverged =
-          price.apiQuantity !== null &&
-          quantityNum > 0 &&
-          Math.abs(price.apiQuantity - quantityNum) / Math.max(price.apiQuantity, quantityNum) >
-            DIVERGENCE
+        const diverged = price.apiQuantity !== null && quantityNum > 0 && Math.abs(price.apiQuantity - quantityNum) / Math.max(price.apiQuantity, quantityNum) > DIVERGENCE
         if (!diverged) {
           fiat = quantityNum * price.price
           change24h = price.change24h
@@ -304,10 +248,7 @@ export class PortfolioService {
         share: 0,
         pinned: t.pinned,
         custom: t.source === 'user' || t.source === 'dapp',
-        hidden:
-          t.hidden ||
-          spam ||
-          (raw > 0n && fiat !== null && fiat < DUST_FIAT && !t.pinned && t.address !== 'native'),
+        hidden: t.hidden || spam || (raw > 0n && fiat !== null && fiat < DUST_FIAT && !t.pinned && t.address !== 'native'),
       })
     }
     return rows
@@ -345,10 +286,7 @@ export class PortfolioService {
     let previous = 0
     for (const r of priced) previous += (r.fiat ?? 0) / (1 + (r.change24h ?? 0))
     const change24h = total !== null && previous > 0 ? total / previous - 1 : null
-    const withShare = rows.map((r) => ({
-      ...r,
-      share: total && r.fiat !== null && !r.hidden ? r.fiat / total : 0,
-    }))
+    const withShare = rows.map((r) => ({ ...r, share: total && r.fiat !== null && !r.hidden ? r.fiat / total : 0 }))
     /*
       Most valuable first, and the native coin takes its place in that order
       like everything else.
@@ -391,20 +329,11 @@ export class PortfolioService {
     return snapshot
   }
 
-  private async balances(
-    chainId: number,
-    owner: Hex,
-    universe: readonly TokenView[],
-  ): Promise<Map<string, bigint>> {
+  private async balances(chainId: number, owner: Hex, universe: readonly TokenView[]): Promise<Map<string, bigint>> {
     const out = new Map<string, bigint>()
     const erc20 = universe.filter((t) => t.address !== 'native')
     const mc = await multicallAddress(this.deps.chains, chainId)
-    const calls: ReadCall[] = erc20.map((t) => ({
-      address: t.address as Hex,
-      abi: ERC20_BALANCE,
-      functionName: 'balanceOf',
-      args: [owner],
-    }))
+    const calls: ReadCall[] = erc20.map((t) => ({ address: t.address as Hex, abi: ERC20_BALANCE, functionName: 'balanceOf', args: [owner] }))
     /*
       The native coin rides in the same aggregate.
 
@@ -414,13 +343,7 @@ export class PortfolioService {
       so ten chains meant ten extra calls, each one holding up the aggregate
       behind it.
     */
-    if (mc)
-      calls.push({
-        address: mc,
-        abi: MULTICALL3_BALANCE,
-        functionName: 'getEthBalance',
-        args: [owner],
-      })
+    if (mc) calls.push({ address: mc, abi: MULTICALL3_BALANCE, functionName: 'getEthBalance', args: [owner] })
     const results = await readMany(this.deps.chains, chainId, calls)
     erc20.forEach((t, i) => {
       const r = results[i]
@@ -432,18 +355,12 @@ export class PortfolioService {
       return out
     }
     // No multicall here, or it declined to answer for the coin: ask directly.
-    const native = (await this.deps.chains
-      .rpc(chainId, 'eth_getBalance', [owner, 'latest'])
-      .catch(() => null)) as string | null
+    const native = (await this.deps.chains.rpc(chainId, 'eth_getBalance', [owner, 'latest']).catch(() => null)) as string | null
     if (native) out.set('native', BigInt(native))
     return out
   }
 
-  private async prices(
-    chainId: number,
-    owner: Hex,
-    held: readonly TokenView[],
-  ): Promise<Map<string, PriceRow>> {
+  private async prices(chainId: number, owner: Hex, held: readonly TokenView[]): Promise<Map<string, PriceRow>> {
     const out = new Map<string, PriceRow>()
     const es = this.deps.electroswap
     if (chainId !== 52014 && chainId !== 5201420) return this.otherPrices(chainId, held)
@@ -454,20 +371,8 @@ export class PortfolioService {
         const qty = Number(b.quantity)
         const value = b.denominatedValue?.value
         if (!Number.isFinite(qty) || qty <= 0 || typeof value !== 'number') continue
-        const k =
-          b.token.standard === 'NATIVE' || b.token.address.toUpperCase() === 'NATIVE'
-            ? 'native'
-            : b.token.address.toLowerCase()
-        out.set(k, {
-          price: value / qty,
-          change24h:
-            typeof b.tokenProjectMarket?.pricePercentChange?.value === 'number'
-              ? b.tokenProjectMarket.pricePercentChange.value / 100
-              : null,
-          apiQuantity: qty,
-          spam: b.tokenProjectMarket?.tokenProject?.isSpam === true,
-          logoUri: null,
-        })
+        const k = b.token.standard === 'NATIVE' || b.token.address.toUpperCase() === 'NATIVE' ? 'native' : b.token.address.toLowerCase()
+        out.set(k, { price: value / qty, change24h: typeof b.tokenProjectMarket?.pricePercentChange?.value === 'number' ? b.tokenProjectMarket.pricePercentChange.value / 100 : null, apiQuantity: qty, spam: b.tokenProjectMarket?.tokenProject?.isSpam === true, logoUri: null })
       }
     } catch {
       // Display data is optional: unpriced rows, never a shrinking hero.
@@ -476,26 +381,13 @@ export class PortfolioService {
   }
 
   /** Off Electroneum only token addresses leave the wallet — never the account (§3.8). */
-  private async otherPrices(
-    chainId: number,
-    held: readonly TokenView[],
-  ): Promise<Map<string, PriceRow>> {
+  private async otherPrices(chainId: number, held: readonly TokenView[]): Promise<Map<string, PriceRow>> {
     const out = new Map<string, PriceRow>()
     const source = this.deps.prices
     if (!source) return out
     try {
-      const priced = await source.prices(
-        chainId,
-        held.map((t) => t.address),
-      )
-      for (const [k, v] of priced)
-        out.set(k, {
-          price: v.price,
-          change24h: v.change24h,
-          apiQuantity: null,
-          spam: false,
-          logoUri: v.logoUri,
-        })
+      const priced = await source.prices(chainId, held.map((t) => t.address))
+      for (const [k, v] of priced) out.set(k, { price: v.price, change24h: v.change24h, apiQuantity: null, spam: false, logoUri: v.logoUri })
     } catch {
       // Unpriced rows, never a shrinking hero.
     }
@@ -503,9 +395,7 @@ export class PortfolioService {
   }
 
   /** "Since you last looked": the total at the previous first open, then record this one. */
-  async lastLook(
-    accountId: string,
-  ): Promise<{ previous: { at: number; total: number | null } | null; total: number | null }> {
+  async lastLook(accountId: string): Promise<{ previous: { at: number; total: number | null } | null; total: number | null }> {
     const d = this.deps
     const previous = await d.looks.get(accountId)
     const snap = await this.widest(accountId)
@@ -518,45 +408,30 @@ export class PortfolioService {
 export function portfolioNamespace(portfolio: PortfolioService): NamespaceSpec {
   return {
     snapshot: {
-      input: z.object({
-        accountId: AccountIdSchema,
-        chainIds: z.array(z.number().int().positive()).optional(),
-      }),
+      input: z.object({ accountId: AccountIdSchema, chainIds: z.array(z.number().int().positive()).optional() }),
       handler: (arg) => {
         const { accountId, chainIds } = arg as { accountId: string; chainIds?: number[] }
         return portfolio.snapshot(accountId, chainIds ?? [HOME_CHAIN_ID])
       },
     },
     refresh: {
-      input: z.object({
-        accountId: AccountIdSchema,
-        chainIds: z.array(z.number().int().positive()).optional(),
-      }),
+      input: z.object({ accountId: AccountIdSchema, chainIds: z.array(z.number().int().positive()).optional() }),
       handler: (arg) => {
         const { accountId, chainIds } = arg as { accountId: string; chainIds?: number[] }
         return portfolio.refresh(accountId, chainIds ?? [HOME_CHAIN_ID])
       },
     },
-    lastLook: {
-      input: z.object({ accountId: AccountIdSchema }),
-      handler: (arg) => portfolio.lastLook((arg as { accountId: string }).accountId),
-    },
+    lastLook: { input: z.object({ accountId: AccountIdSchema }), handler: (arg) => portfolio.lastLook((arg as { accountId: string }).accountId) },
     /** The scope's own series of totals, oldest first (§8.2). */
     history: {
-      input: z.object({
-        accountId: AccountIdSchema,
-        chainIds: z.array(z.number().int().positive()).optional(),
-      }),
+      input: z.object({ accountId: AccountIdSchema, chainIds: z.array(z.number().int().positive()).optional() }),
       handler: (arg) => {
         const { accountId, chainIds } = arg as { accountId: string; chainIds?: number[] }
         return portfolio.history(accountId, chainIds ?? [HOME_CHAIN_ID])
       },
     },
     cached: {
-      input: z.object({
-        accountId: AccountIdSchema,
-        chainIds: z.array(z.number().int().positive()).optional(),
-      }),
+      input: z.object({ accountId: AccountIdSchema, chainIds: z.array(z.number().int().positive()).optional() }),
       handler: (arg) => {
         const { accountId, chainIds } = arg as { accountId: string; chainIds?: number[] }
         return portfolio.cached(accountId, chainIds)

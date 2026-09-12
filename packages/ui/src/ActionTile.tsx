@@ -25,36 +25,12 @@ export interface ActionTileProps {
   readonly testID?: string
 }
 
-const BADGE_BG: Record<ActionTileBadge['tone'], string> = {
-  arc: 'rgba(79, 195, 255, 0.18)',
-  surge: 'rgba(62, 230, 165, 0.18)',
-  ember: 'rgba(245, 198, 107, 0.2)',
-  burn: 'rgba(255, 92, 122, 0.2)',
-}
+const BADGE_BG: Record<ActionTileBadge['tone'], string> = { arc: 'rgba(79, 195, 255, 0.18)', surge: 'rgba(62, 230, 165, 0.18)', ember: 'rgba(245, 198, 107, 0.2)', burn: 'rgba(255, 92, 122, 0.2)' }
 
 export function Badge({ badge, corner = false }: { badge: ActionTileBadge; corner?: boolean }) {
   return (
-    <View
-      style={[
-        {
-          paddingHorizontal: 6,
-          paddingVertical: 1,
-          borderRadius: 999,
-          backgroundColor: BADGE_BG[badge.tone],
-          alignSelf: 'flex-start',
-          maxWidth: '100%',
-        },
-        corner ? { position: 'absolute', top: 6, right: 6, maxWidth: '70%', zIndex: 2 } : null,
-      ]}
-    >
-      <Body
-        size="caption"
-        tone={badge.tone}
-        fontWeight="600"
-        fontSize={10.5}
-        lineHeight={13}
-        numberOfLines={1}
-      >
+    <View style={[{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: 999, backgroundColor: BADGE_BG[badge.tone], alignSelf: 'flex-start', maxWidth: '100%' }, corner ? { position: 'absolute', top: 6, right: 6, maxWidth: '70%', zIndex: 2 } : null]}>
+      <Body size="caption" tone={badge.tone} fontWeight="600" fontSize={10.5} lineHeight={13} numberOfLines={1}>
         {badge.text}
       </Body>
     </View>
@@ -75,18 +51,7 @@ export function Badge({ badge, corner = false }: { badge: ActionTileBadge; corne
  */
 export function Glyph({ icon, size = 34 }: { icon: IconName; size?: number }) {
   return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        alignItems: 'center',
-        justifyContent: 'center',
-        overflow: 'hidden',
-        position: 'relative',
-        backgroundColor: paint.glassRaisedSolid,
-      }}
-    >
+    <View style={{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative', backgroundColor: paint.glassRaisedSolid }}>
       <CurrentFill radius={size / 2} opacity={0.5} />
       <Icon name={icon} size={Math.round(size * 0.56)} color={paint.ink} strokeWidth={1.9} />
       <Rim radius={size / 2} opacity={0.5} />
@@ -94,54 +59,20 @@ export function Glyph({ icon, size = 34 }: { icon: IconName; size?: number }) {
   )
 }
 
-export function ActionTile({
-  icon,
-  label,
-  badge = null,
-  onPress,
-  layout = 'stacked',
-  testID,
-}: ActionTileProps) {
+export function ActionTile({ icon, label, badge = null, onPress, layout = 'stacked', testID }: ActionTileProps) {
   const stacked = layout === 'stacked'
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={badge ? `${label}, ${badge.text}` : label}
-      testID={testID}
-      style={{ flex: stacked ? 1 : undefined, minHeight: 44 }}
-    >
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={badge ? `${label}, ${badge.text}` : label} testID={testID} style={{ flex: stacked ? 1 : undefined, minHeight: 44 }}>
       {stacked ? (
-        <Plate
-          role="tile"
-          height={metrics.actionCell}
-          paddingVertical={8}
-          paddingHorizontal={8}
-          alignItems="center"
-          justifyContent="center"
-          gap={5}
-          position="relative"
-        >
+        <Plate role="tile" height={metrics.actionCell} paddingVertical={8} paddingHorizontal={8} alignItems="center" justifyContent="center" gap={5} position="relative">
           {badge ? <Badge badge={badge} corner /> : null}
           <Glyph icon={icon} size={38} />
-          <Body
-            size="caption"
-            fontWeight="600"
-            fontSize={typeScale.caption.size}
-            lineHeight={typeScale.caption.size + 3}
-            numberOfLines={1}
-            textAlign="center"
-          >
+          <Body size="caption" fontWeight="600" fontSize={typeScale.caption.size} lineHeight={typeScale.caption.size + 3} numberOfLines={1} textAlign="center">
             {label}
           </Body>
         </Plate>
       ) : (
-        <Plate
-          role="tile"
-          height={metrics.actionCellRow}
-          paddingHorizontal="$3"
-          justifyContent="center"
-        >
+        <Plate role="tile" height={metrics.actionCellRow} paddingHorizontal="$3" justifyContent="center">
           <Row gap="$3" alignItems="center">
             <Glyph icon={icon} size={40} />
             <Column flex={1} gap={3} alignItems="flex-start">

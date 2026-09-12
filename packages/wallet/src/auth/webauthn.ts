@@ -12,18 +12,10 @@ import type { PasskeyProvider, PasskeyResult } from '../host'
 const PRF_SALT = new TextEncoder().encode('boltvault/vault-unlock/v1')
 
 function b64url(bytes: Uint8Array): string {
-  return btoa(String.fromCharCode(...bytes))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 function fromB64url(s: string): Uint8Array {
-  const b = atob(
-    s
-      .replace(/-/g, '+')
-      .replace(/_/g, '/')
-      .padEnd(Math.ceil(s.length / 4) * 4, '='),
-  )
+  const b = atob(s.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(s.length / 4) * 4, '='))
   return Uint8Array.from(b, (c) => c.charCodeAt(0))
 }
 function hex(bytes: Uint8Array): string {
@@ -41,11 +33,7 @@ export function createWebAuthnPasskeys(): PasskeyProvider {
       try {
         const platform = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
         if (!platform) return false
-        const caps = (
-          PublicKeyCredential as unknown as {
-            getClientCapabilities?: () => Promise<Record<string, boolean>>
-          }
-        ).getClientCapabilities
+        const caps = (PublicKeyCredential as unknown as { getClientCapabilities?: () => Promise<Record<string, boolean>> }).getClientCapabilities
         if (caps) {
           const c = await caps()
           return c['extension:prf'] !== false
@@ -60,25 +48,15 @@ export function createWebAuthnPasskeys(): PasskeyProvider {
       const cred = (await navigator.credentials.create({
         publicKey: {
           rp: { name: rpName },
-          user: {
-            id: Uint8Array.from(userIdHex.match(/.{2}/g)?.map((b) => parseInt(b, 16)) ?? []),
-            name: userName,
-            displayName: userName,
-          },
+          user: { id: Uint8Array.from(userIdHex.match(/.{2}/g)?.map((b) => parseInt(b, 16)) ?? []), name: userName, displayName: userName },
           challenge: crypto.getRandomValues(new Uint8Array(32)),
           pubKeyCredParams: [
             { type: 'public-key', alg: -8 },
             { type: 'public-key', alg: -7 },
             { type: 'public-key', alg: -257 },
           ],
-          authenticatorSelection: {
-            authenticatorAttachment: 'platform',
-            residentKey: 'required',
-            userVerification: 'required',
-          },
-          extensions: {
-            prf: { eval: { first: PRF_SALT } },
-          } as AuthenticationExtensionsClientInputs,
+          authenticatorSelection: { authenticatorAttachment: 'platform', residentKey: 'required', userVerification: 'required' },
+          extensions: { prf: { eval: { first: PRF_SALT } } } as AuthenticationExtensionsClientInputs,
         },
       })) as PublicKeyCredential | null
       if (!cred) throw new Error('no credential was created')
@@ -88,34 +66,23 @@ export function createWebAuthnPasskeys(): PasskeyProvider {
         // Created without PRF support: the credential is usable only as "passkey + password" — refuse so the UI can explain.
         throw new Error('prf-unsupported')
       }
-      return {
-        credentialId: b64url(new Uint8Array(cred.rawId)),
-        prfSecretHex: hex(new Uint8Array(first)),
-      }
+      return { credentialId: b64url(new Uint8Array(cred.rawId)), prfSecretHex: hex(new Uint8Array(first)) }
     },
 
     async get(credentialIds): Promise<PasskeyResult> {
       const cred = (await navigator.credentials.get({
         publicKey: {
           challenge: crypto.getRandomValues(new Uint8Array(32)),
-          allowCredentials: credentialIds.map((id) => ({
-            type: 'public-key' as const,
-            id: fromB64url(id) as BufferSource,
-          })),
+          allowCredentials: credentialIds.map((id) => ({ type: 'public-key' as const, id: fromB64url(id) as BufferSource })),
           userVerification: 'required',
-          extensions: {
-            prf: { eval: { first: PRF_SALT } },
-          } as AuthenticationExtensionsClientInputs,
+          extensions: { prf: { eval: { first: PRF_SALT } } } as AuthenticationExtensionsClientInputs,
         },
       })) as PublicKeyCredential | null
       if (!cred) throw new Error('no credential was returned')
       const ext = cred.getClientExtensionResults() as PrfResults
       const first = ext.prf?.results?.first
       if (!first) throw new Error('prf-unsupported')
-      return {
-        credentialId: b64url(new Uint8Array(cred.rawId)),
-        prfSecretHex: hex(new Uint8Array(first)),
-      }
+      return { credentialId: b64url(new Uint8Array(cred.rawId)), prfSecretHex: hex(new Uint8Array(first)) }
     },
   }
 }

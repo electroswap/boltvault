@@ -25,13 +25,7 @@ export interface MaxKeyProps {
   readonly testID?: string
 }
 
-export function MaxKey({
-  label,
-  onPress,
-  disabled = false,
-  accessibilityLabel,
-  testID,
-}: MaxKeyProps) {
+export function MaxKey({ label, onPress, disabled = false, accessibilityLabel, testID }: MaxKeyProps) {
   const reduced = useReducedMotionPref()
   return (
     <Pressable
@@ -43,12 +37,7 @@ export function MaxKey({
       testID={testID}
       // The 44 px hit target is kept, but it no longer forces the row taller:
       // the well's own padding supplies the slack.
-      style={{
-        minHeight: metrics.hit,
-        justifyContent: 'center',
-        alignSelf: 'center',
-        marginVertical: -11,
-      }}
+      style={{ minHeight: metrics.hit, justifyContent: 'center', alignSelf: 'center', marginVertical: -11 }}
     >
       <Animated.View
         style={{

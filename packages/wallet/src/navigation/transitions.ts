@@ -58,8 +58,7 @@ interface TransitionDocument {
 
 function transitionDocument(): TransitionDocument | null {
   if (typeof document === 'undefined') return null
-  const start: unknown = (document as unknown as { startViewTransition?: unknown })
-    .startViewTransition
+  const start: unknown = (document as unknown as { startViewTransition?: unknown }).startViewTransition
   return typeof start === 'function' ? (document as unknown as TransitionDocument) : null
 }
 
@@ -155,9 +154,7 @@ export function routeTag(screen: ScreenId, params?: unknown): string | null {
       return chainId !== null && address !== null ? tokenSharedId(chainId, address) : null
     case 'nft': {
       const tokenId = param(params, 'tokenId')
-      return chainId !== null && address !== null && tokenId !== null
-        ? pieceSharedId(chainId, address, tokenId)
-        : null
+      return chainId !== null && address !== null && tokenId !== null ? pieceSharedId(chainId, address, tokenId) : null
     }
     case 'campaign': {
       const pool = param(params, 'pool')

@@ -5,11 +5,7 @@
  */
 import * as Haptics from 'expo-haptics'
 
-const STYLE = {
-  light: Haptics.ImpactFeedbackStyle.Light,
-  medium: Haptics.ImpactFeedbackStyle.Medium,
-  heavy: Haptics.ImpactFeedbackStyle.Heavy,
-} as const
+const STYLE = { light: Haptics.ImpactFeedbackStyle.Light, medium: Haptics.ImpactFeedbackStyle.Medium, heavy: Haptics.ImpactFeedbackStyle.Heavy } as const
 
 export function haptic(kind: 'light' | 'medium' | 'heavy'): void {
   void Haptics.impactAsync(STYLE[kind]).catch(() => undefined)

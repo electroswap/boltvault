@@ -4,18 +4,7 @@
  * screens is replaced by Unlock. A pending dApp approval takes over the
  * popup and the mobile body (the sign window mounts it by route).
  */
-import {
-  Column,
-  Field,
-  MotionProvider,
-  PageLoader,
-  Scrim,
-  ScreenEnter,
-  metrics,
-  useInsets,
-  useWindowDimensions,
-  type EnterDirection,
-} from '@boltvault/ui'
+import { Column, Field, MotionProvider, PageLoader, Scrim, ScreenEnter, metrics, useInsets, useWindowDimensions, type EnterDirection } from '@boltvault/ui'
 import { Suspense, lazy, useEffect, useRef } from 'react'
 import { Approval } from '../screens/Approval'
 import { Home, type HomeProps } from '../screens/Home'
@@ -53,13 +42,9 @@ const ETN = 52014
  */
 const Accounts = lazy(() => import('../screens/Accounts').then((m) => ({ default: m.Accounts })))
 const Activity = lazy(() => import('../screens/Activity').then((m) => ({ default: m.Activity })))
-const Allowances = lazy(() =>
-  import('../screens/Allowances').then((m) => ({ default: m.Allowances })),
-)
+const Allowances = lazy(() => import('../screens/Allowances').then((m) => ({ default: m.Allowances })))
 const Backup = lazy(() => import('../screens/Backup').then((m) => ({ default: m.Backup })))
-const ConnectedSites = lazy(() =>
-  import('../screens/ConnectedSites').then((m) => ({ default: m.ConnectedSites })),
-)
+const ConnectedSites = lazy(() => import('../screens/ConnectedSites').then((m) => ({ default: m.ConnectedSites })))
 const Devices = lazy(() => import('../screens/Devices').then((m) => ({ default: m.Devices })))
 const Portfolio = lazy(() => import('../screens/Portfolio').then((m) => ({ default: m.Portfolio })))
 const Moments = lazy(() => import('../screens/Moments').then((m) => ({ default: m.Moments })))
@@ -67,9 +52,7 @@ const Receive = lazy(() => import('../screens/Receive').then((m) => ({ default: 
 const Security = lazy(() => import('../screens/Security').then((m) => ({ default: m.Security })))
 const Send = lazy(() => import('../screens/Send').then((m) => ({ default: m.Send })))
 const Explore = lazy(() => import('../screens/Explore').then((m) => ({ default: m.Explore })))
-const Collection = lazy(() =>
-  import('../screens/Collection').then((m) => ({ default: m.Collection })),
-)
+const Collection = lazy(() => import('../screens/Collection').then((m) => ({ default: m.Collection })))
 const Piece = lazy(() => import('../screens/Piece').then((m) => ({ default: m.Piece })))
 const Rack = lazy(() => import('../screens/Rack').then((m) => ({ default: m.Rack })))
 const Offers = lazy(() => import('../screens/Offers').then((m) => ({ default: m.Offers })))
@@ -79,18 +62,14 @@ const Legends = lazy(() => import('../screens/Legends').then((m) => ({ default: 
 const Alerts = lazy(() => import('../screens/Alerts').then((m) => ({ default: m.Alerts })))
 const Bridge = lazy(() => import('../screens/Bridge').then((m) => ({ default: m.Bridge })))
 const Networks = lazy(() => import('../screens/Networks').then((m) => ({ default: m.Networks })))
-const AddressBook = lazy(() =>
-  import('../screens/AddressBook').then((m) => ({ default: m.AddressBook })),
-)
+const AddressBook = lazy(() => import('../screens/AddressBook').then((m) => ({ default: m.AddressBook })))
 const Browser = lazy(() => import('../screens/Browser').then((m) => ({ default: m.Browser })))
 const Feel = lazy(() => import('../screens/Feel').then((m) => ({ default: m.Feel })))
 const About = lazy(() => import('../screens/About').then((m) => ({ default: m.About })))
 const Spending = lazy(() => import('../screens/Spending').then((m) => ({ default: m.Spending })))
 const Swap = lazy(() => import('../screens/Swap').then((m) => ({ default: m.Swap })))
 const Token = lazy(() => import('../screens/Token').then((m) => ({ default: m.Token })))
-const SettingsShell = lazy(() =>
-  import('../screens/shells').then((m) => ({ default: m.SettingsShell })),
-)
+const SettingsShell = lazy(() => import('../screens/shells').then((m) => ({ default: m.SettingsShell })))
 
 /** Warm every on-demand screen once the first paint is done. */
 export function prefetchScreens(): void {
@@ -128,9 +107,7 @@ export function prefetchScreens(): void {
       import('../screens/shells'),
     ]).catch(() => undefined)
   }
-  const idle = (
-    globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => void }
-  ).requestIdleCallback
+  const idle = (globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => void }).requestIdleCallback
   if (idle) idle(load, { timeout: 2_000 })
   else setTimeout(load, 300)
 }
@@ -209,17 +186,7 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
     move are two animations disagreeing about where the same pixels are, and
     the element the eye is following is the one that should win.
   */
-  const direction: EnterDirection = sharedTransitionActive()
-    ? 'none'
-    : state.tab !== prev.current.tab
-      ? 'tab'
-      : depth > prev.current.depth
-        ? 'push'
-        : depth < prev.current.depth
-          ? 'pop'
-          : current.screen !== prev.current.screen
-            ? 'push'
-            : 'none'
+  const direction: EnterDirection = sharedTransitionActive() ? 'none' : state.tab !== prev.current.tab ? 'tab' : depth > prev.current.depth ? 'push' : depth < prev.current.depth ? 'pop' : current.screen !== prev.current.screen ? 'push' : 'none'
   useEffect(() => {
     prev.current = { depth, tab: state.tab, screen: current.screen }
   })
@@ -237,13 +204,7 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   // A dApp is waiting: the popup and the phone show the sheet over everything (§8.15).
   // Our own flows (Send, Revoke) navigate to the sheet themselves.
   const external = pending.filter((p) => !p.origin.startsWith('internal:'))
-  if (
-    external.length > 0 &&
-    body !== 'extension-tab' &&
-    current.screen !== 'sign' &&
-    current.screen !== 'onboarding' &&
-    current.screen !== 'moments'
-  ) {
+  if (external.length > 0 && body !== 'extension-tab' && current.screen !== 'sign' && current.screen !== 'onboarding' && current.screen !== 'moments') {
     return (
       <MotionContext.Provider value={reducedMotion}>
         <Approval body={body} reducedMotion={reducedMotion} requestId={external[0]?.id} />
@@ -262,52 +223,22 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
     case 'swap': {
       const p = current.params as { tokenIn?: string; tokenOut?: string } | undefined
       // Keyed on its prefill so Token → Swap remounts with the new pair (plan B2).
-      screen = (
-        <Swap
-          key={`${p?.tokenIn ?? ''}>${p?.tokenOut ?? ''}`}
-          body={body}
-          reducedMotion={reducedMotion}
-          {...(p?.tokenIn ? { tokenIn: p.tokenIn } : {})}
-          {...(p?.tokenOut ? { tokenOut: p.tokenOut } : {})}
-        />
-      )
+      screen = <Swap key={`${p?.tokenIn ?? ''}>${p?.tokenOut ?? ''}`} body={body} reducedMotion={reducedMotion} {...(p?.tokenIn ? { tokenIn: p.tokenIn } : {})} {...(p?.tokenOut ? { tokenOut: p.tokenOut } : {})} />
       break
     }
     case 'explore': {
-      const p = current.params as
-        { segment?: 'tokens' | 'collectibles' | 'launch' | 'farms'; search?: boolean } | undefined
-      screen = (
-        <Explore
-          body={body}
-          {...(p?.segment ? { segment: p.segment } : {})}
-          {...(p?.search ? { search: true } : {})}
-        />
-      )
+      const p = current.params as { segment?: 'tokens' | 'collectibles' | 'launch' | 'farms'; search?: boolean } | undefined
+      screen = <Explore body={body} {...(p?.segment ? { segment: p.segment } : {})} {...(p?.search ? { search: true } : {})} />
       break
     }
     case 'collection': {
       const p = current.params as { chainId: number; address: string } | undefined
-      screen = (
-        <Collection
-          body={body}
-          reducedMotion={reducedMotion}
-          chainId={p?.chainId ?? 52014}
-          address={p?.address ?? ''}
-        />
-      )
+      screen = <Collection body={body} reducedMotion={reducedMotion} chainId={p?.chainId ?? 52014} address={p?.address ?? ''} />
       break
     }
     case 'nft': {
       const p = current.params as { chainId: number; address: string; tokenId: string } | undefined
-      screen = (
-        <Piece
-          body={body}
-          reducedMotion={reducedMotion}
-          chainId={p?.chainId ?? 52014}
-          address={p?.address ?? ''}
-          tokenId={p?.tokenId ?? '0'}
-        />
-      )
+      screen = <Piece body={body} reducedMotion={reducedMotion} chainId={p?.chainId ?? 52014} address={p?.address ?? ''} tokenId={p?.tokenId ?? '0'} />
       break
     }
     case 'rack':
@@ -318,26 +249,12 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
       break
     case 'farm': {
       const p = current.params as { chainId: number; farmId: number } | undefined
-      screen = (
-        <Farm
-          body={body}
-          reducedMotion={reducedMotion}
-          chainId={p?.chainId ?? 52014}
-          farmId={p?.farmId ?? 0}
-        />
-      )
+      screen = <Farm body={body} reducedMotion={reducedMotion} chainId={p?.chainId ?? 52014} farmId={p?.farmId ?? 0} />
       break
     }
     case 'campaign': {
       const p = current.params as { chainId: number; pool: string } | undefined
-      screen = (
-        <Campaign
-          body={body}
-          reducedMotion={reducedMotion}
-          chainId={p?.chainId ?? 52014}
-          pool={p?.pool ?? ''}
-        />
-      )
+      screen = <Campaign body={body} reducedMotion={reducedMotion} chainId={p?.chainId ?? 52014} pool={p?.pool ?? ''} />
       break
     }
     case 'legends':
@@ -345,14 +262,7 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
       break
     case 'bridge': {
       const p = current.params as { chainId?: number; token?: string } | undefined
-      screen = (
-        <Bridge
-          body={body}
-          reducedMotion={reducedMotion}
-          {...(p?.chainId ? { chainId: p.chainId } : {})}
-          {...(p?.token ? { token: p.token } : {})}
-        />
-      )
+      screen = <Bridge body={body} reducedMotion={reducedMotion} {...(p?.chainId ? { chainId: p.chainId } : {})} {...(p?.token ? { token: p.token } : {})} />
       break
     }
     case 'networks':
@@ -416,35 +326,17 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
       break
     case 'sign': {
       const requestId = (current.params as { requestId?: string } | undefined)?.requestId
-      screen = (
-        <Approval body={body} reducedMotion={reducedMotion} {...(requestId ? { requestId } : {})} />
-      )
+      screen = <Approval body={body} reducedMotion={reducedMotion} {...(requestId ? { requestId } : {})} />
       break
     }
     case 'receive': {
       const p = current.params as { token?: string; chainId?: number } | undefined
-      screen = (
-        <Receive
-          body={body}
-          {...(p?.token ? { token: p.token } : {})}
-          {...(p?.chainId ? { chainId: p.chainId } : {})}
-        />
-      )
+      screen = <Receive body={body} {...(p?.token ? { token: p.token } : {})} {...(p?.chainId ? { chainId: p.chainId } : {})} />
       break
     }
     case 'send': {
-      const p = current.params as
-        { token?: string; to?: string; requestId?: string; chainId?: number } | undefined
-      screen = (
-        <Send
-          body={body}
-          reducedMotion={reducedMotion}
-          {...(p?.token ? { token: p.token } : {})}
-          {...(p?.to ? { to: p.to } : {})}
-          {...(p?.requestId ? { requestId: p.requestId } : {})}
-          {...(p?.chainId ? { chainId: p.chainId } : {})}
-        />
-      )
+      const p = current.params as { token?: string; to?: string; requestId?: string; chainId?: number } | undefined
+      screen = <Send body={body} reducedMotion={reducedMotion} {...(p?.token ? { token: p.token } : {})} {...(p?.to ? { to: p.to } : {})} {...(p?.requestId ? { requestId: p.requestId } : {})} {...(p?.chainId ? { chainId: p.chainId } : {})} />
       break
     }
     case 'token': {
@@ -456,24 +348,12 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
 
   return (
     <MotionProvider reduced={reducedMotion}>
-      <MotionContext.Provider value={reducedMotion}>
-        <Column flex={1} backgroundColor="$void">
-          {meta.grid ? (
-            <>
-              <Field
-                scene={scene}
-                address={active?.address ?? NO_ACCOUNT_SEED}
-                pulse={head?.live ? 1 : 0}
-                warmth={tier ? Math.min(1, tier.tier / 4) : 0}
-                intensity={0.5}
-                quiet={!vault?.unlocked}
-                reducedMotion={reducedMotion}
-                fps={body === 'extension-popup' ? 30 : 60}
-                width={width}
-                height={height}
-                testID="field"
-              />
-              {/*
+    <MotionContext.Provider value={reducedMotion}>
+      <Column flex={1} backgroundColor="$void">
+        {meta.grid ? (
+          <>
+            <Field scene={scene} address={active?.address ?? NO_ACCOUNT_SEED} pulse={head?.live ? 1 : 0} warmth={tier ? Math.min(1, tier.tier / 4) : 0} intensity={0.5} quiet={!vault?.unlocked} reducedMotion={reducedMotion} fps={body === 'extension-popup' ? 30 : 60} width={width} height={height} testID="field" />
+            {/*
               Dark at the top, the circuit emerging downward — the Unlock
               screen's look, which the owner asked for everywhere the scene
               runs. It is also the style bible's own rule: "the top third of the
@@ -486,18 +366,12 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
               hand-written implementations (WebGL and Skia) of one spec and this
               is a composition choice, not a change to what the scene is.
             */}
-              <Column position="absolute" left={0} top={0} zIndex={0} pointerEvents="none">
-                <Scrim
-                  width={width}
-                  height={height}
-                  edge="top"
-                  strength={0.78}
-                  testID="field-fade"
-                />
-              </Column>
-            </>
-          ) : null}
-          {/*
+            <Column position="absolute" left={0} top={0} zIndex={0} pointerEvents="none">
+              <Scrim width={width} height={height} edge="top" strength={0.78} testID="field-fade" />
+            </Column>
+          </>
+        ) : null}
+        {/*
           The screen area clips. Every enter animation starts outside its own
           box — a push from translateX(14), a tab change from translateY(6), a
           sheet panel from translateY(28) — and without a clip here that
@@ -507,26 +381,20 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
           Sheets are position:absolute inset-0 inside this same column, so
           clipping it does not change what they cover.
         */}
-          {/*
+        {/*
           Top inset only here, so the scene still paints edge to edge behind the
           status bar while nothing readable sits under it. The dock takes the
           bottom inset itself.
         */}
-          {/*
+        {/*
           The bottom inset belongs to whoever is at the bottom. With a dock it
           is the dock's; without one it is the screen's, and nothing was
           claiming it — so on a phone with gesture navigation the last control
           of every dockless screen sat under the system bar. The owner
           photographed onboarding's "Next" cut in half by it.
         */}
-          <Column
-            flex={1}
-            zIndex={1}
-            overflow="hidden"
-            paddingTop={insets.top}
-            paddingBottom={insets.bottom}
-          >
-            {/*
+        <Column flex={1} zIndex={1} overflow="hidden" paddingTop={insets.top} paddingBottom={insets.bottom}>
+          {/*
             One width for every screen, applied here rather than in each of
             thirty. Home, Portfolio, Swap, the Rack and a handful of others had
             said it for themselves; Send, Receive, Explore, the Launchpad and
@@ -534,38 +402,26 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
             that wants to be narrower still says so — a narrower child inside
             this is exactly what it looks like.
           */}
-            <Column
-              flex={1}
-              width="100%"
-              {...(wide ? { maxWidth: metrics.page, alignSelf: 'center' } : {})}
-            >
-              <ScreenEnter key={enterKey} direction={direction} reducedMotion={reducedMotion}>
-                {/*
+          <Column flex={1} width="100%" {...(wide ? { maxWidth: metrics.page, alignSelf: 'center' } : {})}>
+            <ScreenEnter key={enterKey} direction={direction} reducedMotion={reducedMotion}>
+            {/*
               The fallback is a plate-shaped skeleton, not a spinner and not a
               blank: a screen whose chunk is still arriving should look like
               the screen, for the same reason a screen whose data is still
               arriving does. In practice it is rarely seen — prefetchScreens
               warms every chunk once Home has painted.
             */}
-                <Suspense
-                  fallback={
-                    <PageLoader overlay reducedMotion={reducedMotion} testID="screen-loading" />
-                  }
-                >
-                  {screen}
-                </Suspense>
-              </ScreenEnter>
-            </Column>
-            {/* Over the screen, under the tab bar: the page assembles beneath it. */}
-            {busy ? (
-              <PageLoader overlay reducedMotion={reducedMotion} testID="page-loading" />
-            ) : null}
+              <Suspense fallback={<PageLoader overlay reducedMotion={reducedMotion} testID="screen-loading" />}>{screen}</Suspense>
+            </ScreenEnter>
           </Column>
-          {/* Last child, so a device round trip sheet paints above the tab bar (§7.5). */}
-          <HardwarePrompt body={body} reducedMotion={reducedMotion} />
-          <UpdateRequired />
+          {/* Over the screen, under the tab bar: the page assembles beneath it. */}
+          {busy ? <PageLoader overlay reducedMotion={reducedMotion} testID="page-loading" /> : null}
         </Column>
-      </MotionContext.Provider>
+        {/* Last child, so a device round trip sheet paints above the tab bar (§7.5). */}
+        <HardwarePrompt body={body} reducedMotion={reducedMotion} />
+        <UpdateRequired />
+      </Column>
+    </MotionContext.Provider>
     </MotionProvider>
   )
 }

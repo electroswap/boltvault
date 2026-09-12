@@ -10,14 +10,7 @@
  * transitions, shared elements) is layered on in the mobile-only milestone
  * without changing a screen.
  */
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useSyncExternalStore,
-  type ReactNode,
-} from 'react'
+import { createContext, useCallback, useContext, useMemo, useSyncExternalStore, type ReactNode } from 'react'
 import type { ScreenId, ScreenParams, TabId } from './registry'
 import { TABS } from './registry'
 import { routeTag, withSharedTransition } from './transitions'
@@ -73,11 +66,7 @@ export class RouterStore {
   private readonly tabHistory: TabId[] = []
 
   constructor(initial: Partial<RouterState> = {}) {
-    this.state = {
-      tab: initial.tab ?? 'home',
-      stack: initial.stack ?? [],
-      roots: initial.roots ?? {},
-    }
+    this.state = { tab: initial.tab ?? 'home', stack: initial.stack ?? [], roots: initial.roots ?? {} }
   }
 
   get(): RouterState {
@@ -111,10 +100,7 @@ export class RouterStore {
   }
 
   setTab(tab: TabId, params?: ScreenParams[ScreenId]): void {
-    const roots =
-      params === undefined
-        ? this.state.roots
-        : { ...this.state.roots, [tab]: { screen: TABS[tab].screen, params } as Route }
+    const roots = params === undefined ? this.state.roots : { ...this.state.roots, [tab]: { screen: TABS[tab].screen, params } as Route }
     if (tab !== this.state.tab) {
       // Keep it shallow: this is a "go back one" trail, not a full journey.
       this.tabHistory.push(this.state.tab)
@@ -166,19 +152,12 @@ export function useRouter(): Router {
       could not do.
     */
     const here = routeTag(current.screen, current.params)
-    const move = (there: string | null, update: () => void): void =>
-      withSharedTransition(there ?? here, update)
+    const move = (there: string | null, update: () => void): void => withSharedTransition(there ?? here, update)
     return {
       state,
       current,
-      navigate: (screen, params) =>
-        move(routeTag(screen, params), () =>
-          store.navigate(params === undefined ? { screen } : { screen, params }),
-        ),
-      replace: (screen, params) =>
-        move(routeTag(screen, params), () =>
-          store.replace(params === undefined ? { screen } : { screen, params }),
-        ),
+      navigate: (screen, params) => move(routeTag(screen, params), () => store.navigate(params === undefined ? { screen } : { screen, params })),
+      replace: (screen, params) => move(routeTag(screen, params), () => store.replace(params === undefined ? { screen } : { screen, params })),
       back: () => move(null, () => store.back()),
       setTab: (tab, params) => store.setTab(tab, params),
       reset: () => store.reset(),

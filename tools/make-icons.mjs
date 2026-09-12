@@ -132,11 +132,7 @@ function glowAt(d) {
   const alpha = Math.min(1, skin + halo + aura)
   if (alpha <= 0.001) return { colour: PLASMA, alpha: 0 }
   // The colour is whichever fall dominates here: core, then arc, then plasma.
-  const colour = mix(
-    mix(PLASMA, ARC, Math.min(1, halo / Math.max(0.0001, halo + aura))),
-    CORE,
-    Math.min(1, skin / Math.max(0.0001, skin + halo + aura)),
-  )
+  const colour = mix(mix(PLASMA, ARC, Math.min(1, halo / Math.max(0.0001, halo + aura))), CORE, Math.min(1, skin / Math.max(0.0001, skin + halo + aura)))
   return { colour, alpha }
 }
 
@@ -149,19 +145,14 @@ function glowAt(d) {
  * @param bloom  the bloom alone, over transparency — for the native splash,
  *               which composites over the window's own colour
  */
-function png(
-  size,
-  { shape = 'rounded', fill = 'current', scale = 1, ground = true, bloom = false } = {},
-) {
+function png(size, { shape = 'rounded', fill = 'current', scale = 1, ground = true, bloom = false } = {}) {
   const ss = 4 // supersampling for soft edges
   const rows = []
   for (let y = 0; y < size; y++) {
     const row = [0]
     for (let x = 0; x < size; x++) {
       let cover = 0
-      for (let sy = 0; sy < ss; sy++)
-        for (let sx = 0; sx < ss; sx++)
-          if (inside((x + (sx + 0.5) / ss) / size, (y + (sy + 0.5) / ss) / size, scale)) cover++
+      for (let sy = 0; sy < ss; sy++) for (let sx = 0; sx < ss; sx++) if (inside((x + (sx + 0.5) / ss) / size, (y + (sy + 0.5) / ss) / size, scale)) cover++
       const a = cover / (ss * ss)
       const nx = (x + 0.5) / size
       const ny = (y + 0.5) / size
@@ -169,19 +160,10 @@ function png(
       // The mark: the current, corner to corner of the bolt itself.
       const bx = (nx - 0.5) / scale + 0.5
       const by = (ny - 0.5) / scale + 0.5
-      const tGrad = Math.min(
-        1,
-        Math.max(
-          0,
-          ((bx - BOLT_BOX.x0) / (BOLT_BOX.x1 - BOLT_BOX.x0) +
-            (by - BOLT_BOX.y0) / (BOLT_BOX.y1 - BOLT_BOX.y0)) /
-            2,
-        ),
-      )
+      const tGrad = Math.min(1, Math.max(0, ((bx - BOLT_BOX.x0) / (BOLT_BOX.x1 - BOLT_BOX.x0) + (by - BOLT_BOX.y0) / (BOLT_BOX.y1 - BOLT_BOX.y0)) / 2))
       // A lit lip along the near edge, the way every raised surface carries one.
       const inner = 0
-      const markColour =
-        fill === 'white' ? CORE : mix(mix(CURRENT_FROM, CURRENT_TO, tGrad), CORE, inner)
+      const markColour = fill === 'white' ? CORE : mix(mix(CURRENT_FROM, CURRENT_TO, tGrad), CORE, inner)
 
       let px
       if (ground) {
@@ -259,18 +241,9 @@ writeFileSync(join(mob, 'icon.png'), png(1024, { shape: 'square' }))
 writeFileSync(join(mob, 'favicon.png'), png(48))
 // Android adaptive: the foreground is cropped hard (the safe zone is the middle
 // two-thirds), so the mark sits at half scale with nothing behind it.
-writeFileSync(
-  join(mob, 'android-icon-foreground.png'),
-  png(432, { shape: 'none', ground: false, scale: 0.5 }),
-)
-writeFileSync(
-  join(mob, 'android-icon-background.png'),
-  png(432, { shape: 'square', scale: 0.0001 }),
-)
-writeFileSync(
-  join(mob, 'android-icon-monochrome.png'),
-  png(432, { shape: 'none', ground: false, fill: 'white', scale: 0.5 }),
-)
+writeFileSync(join(mob, 'android-icon-foreground.png'), png(432, { shape: 'none', ground: false, scale: 0.5 }))
+writeFileSync(join(mob, 'android-icon-background.png'), png(432, { shape: 'square', scale: 0.0001 }))
+writeFileSync(join(mob, 'android-icon-monochrome.png'), png(432, { shape: 'none', ground: false, fill: 'white', scale: 0.5 }))
 // The native splash mark: the bolt alone, so it sits on the splash colour.
 writeFileSync(join(mob, 'splash-icon.png'), png(512, { shape: 'none', ground: false, scale: 0.68 }))
 /*
@@ -282,9 +255,6 @@ writeFileSync(join(mob, 'splash-icon.png'), png(512, { shape: 'none', ground: fa
 
   `plugins/withNativeSplash.js` copies this into the Android project.
 */
-writeFileSync(
-  join(mob, 'splash-mark.png'),
-  png(1024, { shape: 'none', ground: false, bloom: true, scale: 1 / 1.8 }),
-)
+writeFileSync(join(mob, 'splash-mark.png'), png(1024, { shape: 'none', ground: false, bloom: true, scale: 1 / 1.8 }))
 
 console.log(`icons written to ${ext} and ${mob}`)

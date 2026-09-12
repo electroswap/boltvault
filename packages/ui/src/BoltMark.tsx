@@ -74,10 +74,7 @@ function outline(count: number): Array<readonly [number, number]> {
         continue
       }
       const t = seg.len === 0 ? 0 : d / seg.len
-      out.push([
-        seg.p[0] + (seg.q[0] - seg.p[0]) * t,
-        seg.p[1] + (seg.q[1] - seg.p[1]) * t,
-      ] as const)
+      out.push([seg.p[0] + (seg.q[0] - seg.p[0]) * t, seg.p[1] + (seg.q[1] - seg.p[1]) * t] as const)
       break
     }
   }
@@ -111,13 +108,7 @@ export function BoltMark({ size, glow = 1, testID }: BoltMarkProps) {
       The viewBox is bigger than the mark on purpose: at `0 0 1 1` the aura was
       clipped square at all four edges, which is exactly what light does not do.
     */
-    <Svg
-      width={size}
-      height={size}
-      viewBox="-0.4 -0.4 1.8 1.8"
-      testID={testID}
-      accessibilityRole="image"
-    >
+    <Svg width={size} height={size} viewBox="-0.4 -0.4 1.8 1.8" testID={testID} accessibilityRole="image">
       <Defs>
         {/*
           The current runs corner to corner of the BOLT, not of the frame. Over
@@ -125,14 +116,7 @@ export function BoltMark({ size, glow = 1, testID }: BoltMarkProps) {
           one flat periwinkle; over its own box it spends the whole ramp on the
           thing you can see — cyan at the strike, violet at the tail.
         */}
-        <LinearGradient
-          id={`bm-g-${id}`}
-          x1="0.24"
-          y1="0.06"
-          x2="0.76"
-          y2="0.94"
-          gradientUnits="userSpaceOnUse"
-        >
+        <LinearGradient id={`bm-g-${id}`} x1="0.24" y1="0.06" x2="0.76" y2="0.94" gradientUnits="userSpaceOnUse">
           <Stop offset="0" stopColor={current.from} />
           <Stop offset="1" stopColor={current.to} />
         </LinearGradient>
@@ -153,16 +137,8 @@ export function BoltMark({ size, glow = 1, testID }: BoltMarkProps) {
           <Stop offset="1" stopColor={light.plasma} stopOpacity={0} />
         </RadialGradient>
       </Defs>
-      {glow > 0
-        ? AURA.map(([x, y, r]) => (
-            <Circle key={`a${x}-${y}`} cx={x} cy={y} r={r} fill={`url(#${far})`} />
-          ))
-        : null}
-      {glow > 0
-        ? RIM.map(([x, y], i) => (
-            <Circle key={`r${i}`} cx={x} cy={y} r={RIM_R} fill={`url(#${near})`} />
-          ))
-        : null}
+      {glow > 0 ? AURA.map(([x, y, r]) => <Circle key={`a${x}-${y}`} cx={x} cy={y} r={r} fill={`url(#${far})`} />) : null}
+      {glow > 0 ? RIM.map(([x, y], i) => <Circle key={`r${i}`} cx={x} cy={y} r={RIM_R} fill={`url(#${near})`} />) : null}
       <Path d={BOLT} fill={`url(#bm-g-${id})`} />
     </Svg>
   )
