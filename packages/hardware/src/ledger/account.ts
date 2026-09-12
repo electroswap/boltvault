@@ -17,13 +17,20 @@ import {
 } from 'viem'
 import { toAccount, type LocalAccount } from 'viem/accounts'
 import { LedgerError } from './apdu'
-import type { LedgerEthApp } from './eth'
+import type { Eip712TypedData } from './eip712'
+import { supportsClearSigning, type LedgerEthApp } from './eth'
 import { legacyV, yParityByRecovery, yParityFromLedgerV } from './v'
 
 export interface LedgerAccountInput {
   readonly address: Hex
   readonly path: string
   readonly app: LedgerEthApp
+  /**
+   * Called when typed data had to be signed by hashes after all, with the
+   * reason. The sheet already warns when the app is too old; this catches the
+   * cases only the message itself can reveal.
+   */
+  readonly onHashedTypedData?: (reason: string) => void
 }
 
 function toSignature(r: Hex, s: Hex, v: number): Hex {
@@ -77,17 +84,55 @@ export function ledgerAccount(input: LedgerAccountInput): LocalAccount {
         EIP712Domain: getTypesForEIP712Domain({ domain }),
         ...td.types,
       } as Parameters<typeof hashStruct>[0]['types']
-      const domainSeparator = hashDomain({ domain: domain ?? {}, types })
-      const messageHash = hashStruct({
-        data: td.message as Record<string, unknown>,
-        primaryType: td.primaryType,
-        types,
-      })
-      const sig = await app.signTypedDataHashed(
-        path,
-        hexToBytes(domainSeparator),
-        hexToBytes(messageHash),
-      )
+      /*
+        Tell the device what it is signing, and only fall back to hashes when
+        it cannot be told (ES-BV-006).
+
+        Permit2 and Seaport signatures move tokens with no transaction behind
+        them, so a typed-data signature is exactly the case a hardware wallet
+        exists for — and a device shown two 32-byte hashes is checking
+        nothing. The full flow describes every struct and walks every value, so
+        the spender, the amount and the deadline appear on the device's own
+        screen.
+
+        Three things send us back to hashes: an app too old for the
+        instructions, a message shaped in a way the app cannot be told about
+        (`eip712Plan` throws before anything is sent), and a device that
+        refuses the flow mid-way. A rejection is not one of them — that is
+        the user's answer and it stands.
+      */
+      const full = await (async (): Promise<{ v: number; r: Hex; s: Hex } | null> => {
+        try {
+          const { version } = await app.getAppConfiguration()
+          if (!supportsClearSigning(version)) {
+            input.onHashedTypedData?.('The Ethereum app on this Ledger is too old to show the fields.')
+            return null
+          }
+          return await app.signTypedDataFull(path, {
+            types: types as unknown as Eip712TypedData['types'],
+            primaryType: td.primaryType,
+            domain: (domain ?? {}) as Record<string, unknown>,
+            message: td.message as Record<string, unknown>,
+          })
+        } catch (err) {
+          if (err instanceof LedgerError && err.code === 'rejected') throw err
+          input.onHashedTypedData?.(err instanceof Error ? err.message : 'The device could not be shown this message.')
+          return null
+        }
+      })()
+      const sig =
+        full ??
+        (await app.signTypedDataHashed(
+          path,
+          hexToBytes(hashDomain({ domain: domain ?? {}, types })),
+          hexToBytes(
+            hashStruct({
+              data: td.message as Record<string, unknown>,
+              primaryType: td.primaryType,
+              types,
+            }),
+          ),
+        ))
       const v = sig.v >= 27 ? sig.v : sig.v + 27
       return toSignature(sig.r, sig.s, v)
     },

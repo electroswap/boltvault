@@ -340,7 +340,11 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
     it. The probe is bounded, shows nothing on the device, and stops the moment
     the device is ready or the signer has it.
   */
-  const [ledger, setLedger] = useState<{ ready: boolean; message: string | null } | null>(null)
+  const [ledger, setLedger] = useState<{
+    ready: boolean
+    message: string | null
+    clearSigning: boolean | null
+  } | null>(null)
   const probeLedger = deviceName === 'Ledger' && !busy && !signing && ledger?.ready !== true
   useEffect(() => {
     if (deviceName !== 'Ledger') {
@@ -351,7 +355,8 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
     let alive = true
     const check = (): void => {
       void engine.hardware.ledgerPreflight().then(
-        (r) => alive && setLedger({ ready: r.state === 'ready', message: r.message }),
+        (r) =>
+          alive && setLedger({ ready: r.state === 'ready', message: r.message, clearSigning: r.clearSigning }),
         () => undefined,
       )
     }
@@ -1275,13 +1280,55 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
                   </Body>
                 </>
               ) : payload.kind === 'sign_typed_data' ? (
-                <Body tone="mute" size="caption">
-                  {t({
-                    id: 'device.typed',
-                    message:
-                      'The device shows two hashes (domain and message) — the statements above are what they mean.',
-                  })}
-                </Body>
+                /*
+                  Say which of the two EIP-712 flows this signature will take
+                  (ES-BV-006).
+
+                  A Ledger signing typed data used to be handed two 32-byte
+                  hashes, so the device checked nothing and this card said as
+                  much. It is now told the whole message and shows the fields,
+                  which is the only reason a hardware wallet helps against a
+                  host that is lying. Two things can still send it back to
+                  hashes: an Ethereum app too old for the instructions, which
+                  the preflight reports, and a message shaped in a way the app
+                  cannot be told about, which the engine works out when it
+                  builds this sheet. Either one, and the card says so.
+                */
+                signer.kind === 'ledger' &&
+                payload.deviceFields !== false &&
+                ledger?.clearSigning !== false ? (
+                  <Body tone="mute" size="caption" testID="approval-device-clear">
+                    {t({
+                      id: 'device.typed.fields',
+                      message:
+                        'The device shows the fields of this message — check the spender, the amount and the deadline there too.',
+                    })}
+                  </Body>
+                ) : (
+                  <Body
+                    tone={signer.kind === 'ledger' ? 'ember' : 'mute'}
+                    size="caption"
+                    testID="approval-device-hashes"
+                  >
+                    {signer.kind === 'ledger'
+                      ? ledger?.clearSigning === false
+                        ? t({
+                            id: 'device.typed.old',
+                            message:
+                              'Your Ledger will show hashes only — update the Ethereum app to see the fields. Until then the statements above are the only description of what you are signing.',
+                          })
+                        : t({
+                            id: 'device.typed.shape',
+                            message:
+                              'Your Ledger cannot show this message as fields, so it will show hashes only — the statements above are the only description of what you are signing.',
+                          })
+                      : t({
+                          id: 'device.typed',
+                          message:
+                            'The device shows two hashes (domain and message) — the statements above are what they mean.',
+                        })}
+                  </Body>
+                )
               ) : (
                 <Body tone="mute" size="caption">
                   {t({ id: 'device.message', message: 'The device shows the message text.' })}

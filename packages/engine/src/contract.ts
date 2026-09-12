@@ -814,6 +814,8 @@ export interface HardwareNamespace {
     state: 'ready' | 'no_device' | 'locked' | 'wrong_app' | 'no_answer' | 'unavailable' | 'error'
     message: string | null
     blindSigning: boolean | null
+    /** Whether the Ethereum app is new enough to show typed data as fields. */
+    clearSigning: boolean | null
   }>
   ledgerAddresses(input: {
     scheme: 'bip44' | 'live'

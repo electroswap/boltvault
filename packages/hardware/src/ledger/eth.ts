@@ -1,11 +1,13 @@
 /**
  * The Ethereum app over one transport: configuration (blind-signing flag,
  * version), addresses (with on-device verification), transaction, personal
- * message and EIP-712 hashed signatures. Chunking mirrors LedgerHQ's
+ * message and EIP-712 signatures — clear-signed where the app can manage it,
+ * by hashes where it cannot (ES-BV-006). Chunking mirrors LedgerHQ's
  * hw-app-eth (150-byte chunks; a legacy transaction's EIP-155 tail is never
  * split). Nothing here knows about the wallet — only APDUs.
  */
 import { buildApdu, concatBytes, INS, LedgerError, unwrapResponse } from './apdu'
+import { eip712Plan, type Eip712TypedData } from './eip712'
 import { pathToBytes } from './paths'
 
 export interface ApduTransport {
@@ -38,6 +40,25 @@ export interface RawSignature {
 }
 
 const CHUNK = 150
+/**
+ * The first Ethereum app that speaks the struct-definition and
+ * struct-implementation instructions well enough to be trusted with them.
+ */
+export const CLEAR_SIGNING_MIN_VERSION = '1.9.19'
+
+/** `1.9.19` and above, by number and not by string order. */
+export function supportsClearSigning(version: string, min = CLEAR_SIGNING_MIN_VERSION): boolean {
+  const parts = (v: string): number[] => v.split('.').map((p) => Number.parseInt(p, 10))
+  const got = parts(version)
+  const want = parts(min)
+  if (got.length < 3 || got.some((n) => !Number.isFinite(n))) return false
+  for (let i = 0; i < want.length; i += 1) {
+    const a = got[i] ?? 0
+    const b = want[i] ?? 0
+    if (a !== b) return a > b
+  }
+  return true
+}
 /**
  * The APDU data field is one byte of length, so 255 is the hard ceiling. The
  * EIP-155 tail rule is allowed to run a chunk past `CHUNK`; this is the bound
@@ -180,9 +201,45 @@ export class LedgerEthApp {
     return parseSignature(response)
   }
 
-  /** EIP-712 by hashes (every app version; the device shows the two hashes — our sheet is the source of truth). */
+  /** EIP-712 by hashes: every app version, and the device shows two hashes and nothing else. */
   async signTypedDataHashed(path: string, domainSeparator: Uint8Array, messageHash: Uint8Array): Promise<RawSignature> {
     if (domainSeparator.length !== 32 || messageHash.length !== 32) throw new Error('hashes must be 32 bytes')
-    return parseSignature(await this.send(INS.SIGN_EIP712_HASHED, 0x00, 0x00, concatBytes(pathToBytes(path), domainSeparator, messageHash)))
+    return parseSignature(await this.send(INS.SIGN_EIP712, 0x00, 0x00, concatBytes(pathToBytes(path), domainSeparator, messageHash)))
+  }
+
+  /**
+   * EIP-712 the way a hardware wallet is supposed to do it (ES-BV-006).
+   *
+   * The whole message goes to the device: every struct in `types` as a
+   * definition, then the domain and the message walked value by value, then
+   * the signature request with `P2 = 0x01`. The device computes the hash
+   * itself from what it was told and shows the fields, so the sheet is no
+   * longer the only place the spender, the amount and the deadline appear.
+   *
+   * Throws `Eip712Unsupported` before a single byte is sent for typed data the
+   * app cannot be told about, and a `LedgerError` for anything the device
+   * refuses. Both are the caller's cue to fall back to `signTypedDataHashed`
+   * and say on the sheet that the device is showing hashes.
+   */
+  async signTypedDataFull(path: string, typedData: Eip712TypedData): Promise<RawSignature> {
+    // Built in full first: a message that cannot be described should not leave
+    // the device half-told before we find out.
+    const plan = eip712Plan(typedData)
+    for (const step of plan) {
+      const ins = step.kind === 'def' ? INS.EIP712_STRUCT_DEF : INS.EIP712_STRUCT_IMPL
+      if (!step.chunk) {
+        await this.send(ins, 0x00, step.p2, step.data)
+        continue
+      }
+      // A field value may be longer than one APDU: P1 says "more to come".
+      let offset = 0
+      do {
+        const size = Math.min(APDU_DATA_MAX, step.data.length - offset)
+        const last = offset + size >= step.data.length
+        await this.send(ins, last ? 0x00 : 0x01, step.p2, step.data.subarray(offset, offset + size))
+        offset += size
+      } while (offset < step.data.length)
+    }
+    return parseSignature(await this.send(INS.SIGN_EIP712, 0x00, 0x01, pathToBytes(path)))
   }
 }

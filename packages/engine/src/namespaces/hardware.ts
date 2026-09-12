@@ -7,7 +7,7 @@
  * account; everything else — the firewall, the sheet, Activity — is
  * unchanged. Keystone's round trip is a pending table the UI drains.
  */
-import { LedgerEthApp, LedgerError, LedgerTransportError, TrezorError, hidLedgerProvider, ledgerAccount, pathFor, trezorAccount, unwrapTrezor, type HidProvider, type KeystoneBridge, type KeystoneRequest, type LedgerTransportProvider, type PathScheme, type TrezorConnectLike } from '@boltvault/hardware'
+import { LedgerEthApp, LedgerError, LedgerTransportError, TrezorError, hidLedgerProvider, ledgerAccount, pathFor, supportsClearSigning, trezorAccount, unwrapTrezor, type HidProvider, type KeystoneBridge, type KeystoneRequest, type LedgerTransportProvider, type PathScheme, type TrezorConnectLike } from '@boltvault/hardware'
 import type * as KeystoneCodec from '@boltvault/hardware/keystone'
 import type { Platform } from '@boltvault/platform'
 import type { LocalAccount } from 'viem/accounts'
@@ -40,6 +40,11 @@ export interface LedgerPreflightView {
   readonly message: string | null
   /** Whether blind signing is on, when we could ask. */
   readonly blindSigning: boolean | null
+  /**
+   * Whether this Ethereum app is new enough to be shown typed data field by
+   * field (ES-BV-006). Null when we could not ask.
+   */
+  readonly clearSigning: boolean | null
 }
 
 export interface LedgerStatusView {
@@ -127,19 +132,20 @@ export class HardwareService {
    * the device — safe to call while a sheet is being read.
    */
   async ledgerPreflight(deviceId?: string): Promise<LedgerPreflightView> {
-    if (!this.ledger) return { state: 'unavailable', message: 'Ledger is not available in this body.', blindSigning: null }
+    if (!this.ledger) return { state: 'unavailable', message: 'Ledger is not available in this body.', blindSigning: null, clearSigning: null }
     const devices = await this.ledger.list().catch(() => [])
     if (devices.length === 0) {
       const message = this.ledger.kind === 'ble' ? 'No Ledger is in range. Turn it on, unlock it and open the Ethereum app.' : 'No Ledger is connected. Plug it in, unlock it and open the Ethereum app.'
-      return { state: 'no_device', message, blindSigning: null }
+      return { state: 'no_device', message, blindSigning: null, clearSigning: null }
     }
     try {
       const { app } = await this.app(deviceId)
       const readiness = await app.ready()
-      if (readiness.state === 'ready') return { state: 'ready', message: null, blindSigning: readiness.app.blindSigning }
-      return { state: readiness.state, message: readiness.message, blindSigning: null }
+      if (readiness.state === 'ready')
+        return { state: 'ready', message: null, blindSigning: readiness.app.blindSigning, clearSigning: supportsClearSigning(readiness.app.version) }
+      return { state: readiness.state, message: readiness.message, blindSigning: null, clearSigning: null }
     } catch (err) {
-      return { state: 'error', message: plain(err), blindSigning: null }
+      return { state: 'error', message: plain(err), blindSigning: null, clearSigning: null }
     }
   }
 

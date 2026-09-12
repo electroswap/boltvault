@@ -133,6 +133,17 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
     version: z.enum(['v3', 'v4']),
     domainName: z.string().nullable(),
     primaryType: z.string(),
+    /**
+     * Whether this message can be described to a Ledger field by field
+     * (ES-BV-006).
+     *
+     * False for shapes the Ethereum app cannot be told about — nested
+     * arrays, chiefly — which fall back to signing two hashes. The sheet
+     * pairs it with the app version the preflight reports: either one being
+     * unhappy means the device is showing hashes and the statements above it
+     * are the only description of what is being signed.
+     */
+    deviceFields: z.boolean().optional(),
     assessment: AssessmentViewSchema,
     clientRequestId: z.string(),
     intentDigest: z.string().optional(),

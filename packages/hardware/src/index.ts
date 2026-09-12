@@ -29,10 +29,25 @@ export {
 export {
   LedgerEthApp,
   eip155TailOffset,
+  supportsClearSigning,
+  CLEAR_SIGNING_MIN_VERSION,
   type ApduTransport,
   type AppConfiguration,
   type RawSignature,
 } from './ledger/eth'
+export {
+  eip712Plan,
+  definitionField,
+  encodeLeaf,
+  leafType,
+  parseType,
+  Eip712Unsupported,
+  DEF as EIP712_DEF_P2,
+  IMPL as EIP712_IMPL_P2,
+  type Eip712Field,
+  type Eip712Step,
+  type Eip712TypedData,
+} from './ledger/eip712'
 export { ledgerAccount, type LedgerAccountInput } from './ledger/account'
 export { pathFor, pathToBytes, schemeOf, type PathScheme } from './ledger/paths'
 export { yParityFromLedgerV, yParityByRecovery, legacyV } from './ledger/v'

@@ -2,7 +2,9 @@
  * APDU building and the Ethereum app's status words. The app's protocol is
  * public (LedgerHQ/app-ethereum, doc/ethapp.adoc); this is the subset the
  * wallet uses: configuration, address, transaction, personal message and
- * EIP-712 (hashed) signatures.
+ * EIP-712 — both ways the app will take it (ES-BV-006): the struct
+ * definition and implementation instructions that let the device show the
+ * fields, and the two-hash instruction for an app too old to be told.
  */
 
 export const CLA = 0xe0
@@ -11,7 +13,10 @@ export const INS = {
   SIGN_TRANSACTION: 0x04,
   GET_APP_CONFIGURATION: 0x06,
   SIGN_PERSONAL_MESSAGE: 0x08,
-  SIGN_EIP712_HASHED: 0x0c,
+  /** P2 0x00 takes the two hashes; P2 0x01 signs what the struct APDUs described. */
+  SIGN_EIP712: 0x0c,
+  EIP712_STRUCT_DEF: 0x1a,
+  EIP712_STRUCT_IMPL: 0x1c,
 } as const
 
 export type LedgerErrorCode = 'rejected' | 'locked' | 'wrong_app' | 'blind_signing_off' | 'invalid_data' | 'unsupported' | 'device'

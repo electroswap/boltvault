@@ -15,6 +15,7 @@
  */
 import { getChain, isElectroneumChainId, pollMs } from '@boltvault/chains'
 import { ElectroSwapClient, fetchCollections } from '@boltvault/electroswap'
+import { eip712Plan } from '@boltvault/hardware'
 import type { Platform } from '@boltvault/platform'
 import {
   RPC,
@@ -1168,12 +1169,28 @@ export class ProviderService {
           survives a failed execution so a device refusal can be retried — would
           leave that sheet pending for good.
         */
-        normaliseTypedData(typedJson)
+        const normalised = normaliseTypedData(typedJson)
+        /*
+          Can a Ledger be shown this, or only its hash (ES-BV-006)?
+
+          The device's app version is the sheet's other half and comes from the
+          preflight; this half is about the message, and it is knowable here
+          without a device in the room. `eip712Plan` throws for anything the
+          Ethereum app cannot be told about, so building it is the check.
+        */
+        let deviceFields = true
+        try {
+          const t = normalised as { types: Record<string, Array<{ name: string; type: string }>>; primaryType: string; domain?: Record<string, unknown>; message: Record<string, unknown> }
+          eip712Plan({ types: { EIP712Domain: t.types.EIP712Domain ?? [], ...t.types }, primaryType: t.primaryType, domain: t.domain ?? {}, message: t.message })
+        } catch {
+          deviceFields = false
+        }
         return {
           kind: 'sign_typed_data',
           from: intent.from,
           typedData: typedJson,
           version: intent.version,
+          deviceFields,
           /*
             Both come from the thing being signed (ES-BV-038). The decoder caps
             their length but leaves the characters alone, and these two are
