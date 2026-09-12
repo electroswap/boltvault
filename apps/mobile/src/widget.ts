@@ -22,6 +22,7 @@
  */
 import type { WidgetSnapshot } from '@boltvault/wallet'
 import { Directory, File, Paths } from 'expo-file-system'
+import { excludeFromBackup as excludeTargetFromBackup } from './backup-exclusion'
 import { Platform } from 'react-native'
 
 export const WIDGET_DIR = 'widget'
@@ -76,12 +77,5 @@ export async function clearWidgetSnapshot(): Promise<void> {
  * "somebody has the phone". Best-effort: the API is iOS-only, and a failure
  * here must not stop the widget being written.
  */
-function excludeFromBackup(file: File): void {
-  if (Platform.OS !== 'ios') return
-  try {
-    const f = file as unknown as { excludeFromBackup?: () => void }
-    f.excludeFromBackup?.()
-  } catch {
-    // An older expo-file-system without the flag; the widget still works.
-  }
-}
+// One helper for both stores, which also says whether it worked (ES-BV-042).
+const excludeFromBackup = (file: File): boolean => excludeTargetFromBackup(file, Platform.OS === 'ios')

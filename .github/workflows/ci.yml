@@ -102,6 +102,55 @@ jobs:
             apps/extension/screenshots
           if-no-files-found: ignore
 
+  # The store packages, built and gated on a release ref (ES-BV-044).
+  #
+  # `zip-store.mjs` refuses a build carrying the harness, a cleartext or
+  # localhost origin, the fixture engine, or a reproducible-build manifest that
+  # does not describe the tree being zipped. Every one of those gates only ever
+  # ran when somebody remembered to run `pnpm zip:chrome` by hand, which is not
+  # a gate. A tag runs them, and the packages are what the release publishes.
+  package:
+    name: store packages · reproducible build
+    runs-on: ubuntu-latest
+    needs: gates
+    if: startsWith(github.ref, 'refs/tags/') || startsWith(github.ref, 'refs/heads/release/')
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # `build:repro` reads the commit date and hash, so the history has to
+          # be there.
+          fetch-depth: 0
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: chrome package
+        run: pnpm zip:chrome
+      - name: firefox package
+        run: pnpm zip:firefox
+      # Built twice from the same commit must give the same manifest hash;
+      # otherwise "reproducible" is a word rather than a property.
+      - name: the build reproduces
+        run: |
+          before="$(node tools/build-manifest.mjs apps/extension/.output/chrome-mv3 | cut -d' ' -f1)"
+          rm -rf apps/extension/.output
+          pnpm build:repro >/dev/null
+          after="$(node tools/build-manifest.mjs apps/extension/.output/chrome-mv3 | cut -d' ' -f1)"
+          if [ "$before" != "$after" ]; then
+            echo "::error::the extension build is not reproducible: $before then $after"
+            exit 1
+          fi
+          echo "reproducible: $after"
+      - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: store-packages
+          path: |
+            apps/extension/.output/*.zip
+            apps/extension/.output/*.manifest.json
+          if-no-files-found: error
+
   mobile:
     name: mobile bundle (Metro export)
     runs-on: ubuntu-latest

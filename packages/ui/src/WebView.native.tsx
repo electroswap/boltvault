@@ -104,6 +104,8 @@ export function WebView({
       */
       onShouldStartLoadWithRequest={(r) => {
         if (/^https:/i.test(r.url)) return true
+        // A blank frame is what a page makes for itself; it navigates nowhere.
+        if (/^about:blank$/i.test(r.url.trim())) return true
         return (
           onExternalNavigation?.({
             url: r.url,
@@ -116,8 +118,24 @@ export function WebView({
       }}
       javaScriptEnabled
       domStorageEnabled
-      // Cleartext navigations go to the OS browser, not into the wallet's chrome.
-      originWhitelist={['https://*']}
+      /*
+        Everything passes the whitelist so that the callback above can run
+        (ES-BV-039).
+
+        This was `['https://*']`, which reads like a deny-list and is not one.
+        The pinned library consults the application's callback *only* for URLs
+        that already pass the whitelist: a URL that fails it is handed straight
+        to `Linking.canOpenURL` → `Linking.openURL` with no callback at all. So
+        the gate added for this finding never ran for the schemes it was
+        written for — a page setting `location` to `ethereum:` or
+        `boltvault://wc?uri=…` still round-tripped through the OS into the
+        wallet's own deep-link handler, prefilling Send with an attacker's
+        address or raising a pairing, with no gesture and no confirmation. It
+        also made `about:blank` frames fail, which no page expects.
+
+        The allow decision lives in one place now, and it is the callback.
+      */
+      originWhitelist={['*']}
       style={{ flex: 1, backgroundColor: '#060913' }}
       testID={testID}
     />

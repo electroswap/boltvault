@@ -22,10 +22,18 @@ const ETN = 52014
  * goes through the same parser and the same screens as a real deep link
  * without ever leaving the app.
  */
-const listeners = new Set<(url: string) => void>()
+const listeners = new Set<(url: string, from?: string) => void>()
 
-export function deliverLink(url: string): void {
-  for (const l of [...listeners]) l(url)
+/**
+ * Hand a link to the app as if the OS had delivered it.
+ *
+ * `from` is where it came from, and it reaches the pairing confirmation
+ * (ES-BV-040): "a page you were reading asked to connect" and "you opened this
+ * from somewhere else" are different questions, and only the user can answer
+ * either. The in-app browser passes the page's origin.
+ */
+export function deliverLink(url: string, from?: string): void {
+  for (const l of [...listeners]) l(url, from)
 }
 
 /**
@@ -41,6 +49,15 @@ export interface PendingPairing {
   readonly uri: string
   /** The topic, which is all a URI says about itself before the peer answers. */
   readonly topic: string
+  /**
+   * Where the link came from, when the app knows (ES-BV-040).
+   *
+   * A page inside the in-app browser passes its own origin. "A page you were
+   * reading asked to connect" and "you opened this from somewhere else" are
+   * different questions and the confirmation should not ask the same one for
+   * both.
+   */
+  readonly from?: string
 }
 
 export function useLinks(): {
@@ -55,7 +72,7 @@ export function useLinks(): {
   useEffect(() => {
     const links = host.links
     const seen = new Set<string>()
-    const act = async (url: string): Promise<void> => {
+    const act = async (url: string, from?: string): Promise<void> => {
       if (seen.has(url)) return
       seen.add(url)
       const action: LinkAction | null = parseLink(url)
@@ -63,7 +80,11 @@ export function useLinks(): {
       switch (action.kind) {
         case 'wc':
           // Not without a yes (ES-BV-040).
-          setPendingPairing({ uri: action.uri, topic: action.uri.slice(3).split('@')[0] ?? '' })
+          setPendingPairing({
+            uri: action.uri,
+            topic: action.uri.slice(3).split('@')[0] ?? '',
+            ...(from ? { from } : {}),
+          })
           return
         case 'launchpad': {
           await engine.launchpad.rememberFromLink({ url: action.url }).catch(() => undefined)
@@ -82,7 +103,7 @@ export function useLinks(): {
       }
     }
     void links?.initial().then((url) => (url ? act(url) : undefined))
-    const inApp = (url: string): void => void act(url)
+    const inApp = (url: string, from?: string): void => void act(url, from)
     listeners.add(inApp)
     const off = links?.subscribe((url) => void act(url))
     return () => {

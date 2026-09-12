@@ -90,16 +90,47 @@ if (harness.length) {
   can point the wallet at localhost. Grep the bundle rather than trust the
   environment of whoever is running this.
 */
+/*
+  Hosts the gate must ignore, because they are not origins the wallet talks to.
+
+  The grep matched any quoted `http://` string, which in a bundle means every
+  XML namespace an SVG or a DOM helper carries — `http://www.w3.org/2000/svg`
+  is in almost every build. A gate that fires on those is a gate somebody turns
+  off (ES-BV-044).
+*/
+const NOT_AN_ORIGIN = /^https?:\/\/(www\.w3\.org|www\.inkscape\.org|purl\.org|ns\.adobe\.com|schemas\.|creativecommons\.org|sodipodi\.sourceforge\.net|xmlns\.)/i
+
 for (const name of files) {
   if (!name.endsWith('.js')) continue
   const text = await readFile(join(dir, name), 'utf8')
-  const cleartext = text.match(/["'`]http:\/\/(?!localhost|127\.0\.0\.1)[^"'`]+["'`]/)
   if (text.includes('http://localhost') || text.includes('http://127.0.0.1')) {
     console.error(`Refusing to package: ${name} carries a localhost origin. Build with a production WXT_BOLTVAULT_API.`)
     process.exit(1)
   }
-  if (cleartext) {
-    console.error(`Refusing to package: ${name} carries a cleartext origin ${cleartext[0]}.`)
+  for (const m of text.matchAll(/["'`](http:\/\/[^"'`\s]+)["'`]/g)) {
+    const url = m[1]
+    if (NOT_AN_ORIGIN.test(url)) continue
+    console.error(`Refusing to package: ${name} carries a cleartext origin ${url}.`)
+    process.exit(1)
+  }
+}
+
+/*
+  The fixture engine must not be in the bundle either (ES-BV-044).
+
+  It moved behind its own package entry so only the harness imports it, but
+  "only the harness imports it" is a property of the import graph on the day
+  it was checked. The fixture vault's password is a string nothing else in the
+  wallet contains, so the bundle itself can be asked.
+*/
+const FIXTURE_MARKERS = [/fixtureEngine/, /createFixtureEngine/]
+for (const name of files) {
+  if (!name.endsWith('.js')) continue
+  const text = await readFile(join(dir, name), 'utf8')
+  const hit = FIXTURE_MARKERS.find((re) => re.test(text))
+  if (hit) {
+    console.error(`Refusing to package: ${name} carries the fixture engine (${String(hit)}).`)
+    console.error('Build with `pnpm build:release`; the fixtures entry is for the harness only.')
     process.exit(1)
   }
 }
@@ -110,12 +141,37 @@ for (const name of files) {
   compare a published package against.
 */
 const manifestPath = `${dir}.manifest.json`
+let recorded
 try {
-  await stat(manifestPath)
+  recorded = JSON.parse(await readFile(manifestPath, 'utf8'))
 } catch {
   console.error(`Refusing to package: no reproducible-build manifest at ${relative(root, manifestPath)}.`)
   console.error('Run `pnpm build:repro` so the package can be checked against a manifest.')
   process.exit(1)
+}
+
+/*
+  And it must describe *this* tree, not some earlier one (ES-BV-044).
+
+  The check was presence-only, so a manifest left behind by a previous build
+  satisfied it while the directory being zipped had moved on — which is the
+  one thing a reproducible-build manifest exists to rule out. The hashes are
+  recomputed here, the same way `build-manifest.mjs` computes them.
+*/
+{
+  const rows = []
+  for (const name of files) {
+    rows.push({ path: name, sha256: createHash('sha256').update(await readFile(join(dir, name))).digest('hex') })
+  }
+  rows.sort((a, b) => a.path.localeCompare(b.path))
+  const top = createHash('sha256').update(rows.map((r) => `${r.sha256}  ${r.path}\n`).join('')).digest('hex')
+  if (recorded?.sha256 !== top) {
+    console.error(`Refusing to package: ${relative(root, manifestPath)} describes a different build.`)
+    console.error(`  manifest: ${String(recorded?.sha256)}`)
+    console.error(`  on disk:  ${top}`)
+    console.error('Run `pnpm build:repro` so the manifest and the output are the same build.')
+    process.exit(1)
+  }
 }
 const locals = []
 const centrals = []

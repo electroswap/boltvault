@@ -18,6 +18,7 @@ import { Buffer } from 'buffer'
 import type { AlarmScheduler, KeyValueStore, Platform } from '@boltvault/platform'
 import * as LocalAuthentication from 'expo-local-authentication'
 import { AppState, Linking, Platform as RNPlatform } from 'react-native'
+import { excludeFromBackup } from './backup-exclusion'
 import * as Keychain from 'react-native-keychain'
 import Sodium from 'react-native-libsodium'
 import { createMMKV, type MMKV } from 'react-native-mmkv'
@@ -108,10 +109,17 @@ async function storeDirectory(): Promise<string | null> {
     */
     const dir = new Directory(Paths.document, 'mmkv')
     if (!dir.exists) dir.create({ intermediates: true })
-    if (RNPlatform.OS === 'ios') {
-      // `NSURLIsExcludedFromBackupKey`, the same flag the widget file carries.
-      ;(dir as unknown as { excludeFromBackup?: () => void }).excludeFromBackup?.()
-    }
+    /*
+      `NSURLIsExcludedFromBackupKey`, where the platform can set it
+      (ES-BV-042).
+
+      It cannot today: the pinned `expo-file-system` exposes no such method, so
+      this returns false and the encrypted stores are in the phone's backups.
+      That is recorded here rather than hidden behind an optional call that
+      silently did nothing, and `apps/mobile/tests/backup-exclusion.test.ts`
+      fails the day the API arrives so this stops being a comment.
+    */
+    excludeFromBackup(dir, RNPlatform.OS === 'ios')
     return dir.uri.replace(/^file:\/\//, '').replace(/\/$/, '')
   } catch {
     return null

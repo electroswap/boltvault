@@ -483,10 +483,18 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
             >
               <Column gap="$3">
                 <Body tone="mute" size="caption">
-                  {t({
-                    id: 'wc.pair.body',
-                    message: 'A link asked BoltVault to start a WalletConnect session. If you did not just scan a code or tap Connect on a site, say no.',
-                  })}
+                  {/* Where it came from, because that is the part that decides
+                      the answer (ES-BV-040). */}
+                  {pendingPairing?.from
+                    ? t({
+                        id: 'wc.pair.body.page',
+                        message: 'A page you were reading ({s}) asked BoltVault to start a WalletConnect session. If you did not tap Connect on that page, say no.',
+                        values: { s: pendingPairing.from },
+                      })
+                    : t({
+                        id: 'wc.pair.body',
+                        message: 'A link from outside BoltVault asked it to start a WalletConnect session. If you did not just scan a code or tap Connect on a site, say no.',
+                      })}
                 </Body>
                 <Body size="caption" tone="mute" selectable testID="wc-pair-topic">
                   {pendingPairing?.topic ?? ''}

@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
+import { frameAttributionOk } from '../webviewAge'
 import { useRouter } from '../navigation/router'
 import { deliverLink } from '../state/useLinks'
 
@@ -68,6 +69,18 @@ export function Browser({
   */
   const [navigating, setNavigating] = useState(true)
   const [session, setSession] = useState<DappSession | null>(null)
+  /*
+    The WebView's own user agent, reported before any page script runs
+    (ES-BV-043).
+
+    On an Android System WebView below 88 the bridge cannot say which frame
+    posted a message, so it reports the main frame's URL whichever frame did —
+    and the frame-origin check below is what stands between an advert iframe
+    on a connected dApp and speaking in that dApp's name. Null until the page
+    has reported it, which is fail-open for the very first message and closed
+    from then on; the alternative is a native module this build cannot add.
+  */
+  const [webviewUa, setWebviewUa] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   /*
     A page inside the browser asking to leave it (ES-BV-039).
@@ -145,6 +158,8 @@ export function Browser({
       let data: {
         target?: unknown
         channel?: unknown
+        kind?: unknown
+        userAgent?: unknown
         id?: unknown
         method?: unknown
         params?: unknown
@@ -154,13 +169,13 @@ export function Browser({
       } catch {
         return
       }
-      if (
-        data.target !== INPAGE_TARGET ||
-        data.channel !== channel.current ||
-        typeof data.id !== 'number' ||
-        typeof data.method !== 'string'
-      )
+      if (data.target !== INPAGE_TARGET || data.channel !== channel.current) return
+      // The user-agent report, which carries no id and no method.
+      if (data.kind === 'ua') {
+        if (typeof data.userAgent === 'string') setWebviewUa(data.userAgent)
         return
+      }
+      if (typeof data.id !== 'number' || typeof data.method !== 'string') return
       const id = data.id
       const reply = (message: Record<string, unknown>): void =>
         handle.current?.postMessage(
@@ -189,6 +204,23 @@ export function Browser({
         reply({ error: { code: 4900, message: 'Not connected.' } })
         return
       }
+      /*
+        …and the frame check has to mean something (ES-BV-043).
+
+        Below WebView 88 the bridge reports the main frame's URL for every
+        frame, so the comparison above passes for an iframe embedded in the
+        dApp. There is nothing to check with, so there is nothing to answer.
+      */
+      if (!frameAttributionOk(webviewUa, host.isAndroid === true)) {
+        reply({
+          error: {
+            code: 4900,
+            message:
+              'This device\u2019s Android System WebView is too old for BoltVault to tell which part of a page is asking. Update Android System WebView in the Play Store to use dApps in the in-app browser.',
+          },
+        })
+        return
+      }
       engine.dapps
         .request({
           sessionId: session.sessionId,
@@ -205,10 +237,13 @@ export function Browser({
             }),
         )
     },
-    [engine, session],
+    [engine, session, webviewUa, host.isAndroid],
   )
 
-  const script = `window.__BV_CHANNEL=${JSON.stringify(channel.current)};${host.browser?.providerScript ?? ''}`
+  // The provider, plus a one-off report of the WebView's own user agent, sent
+  // before any page script can shadow `navigator.userAgent` (ES-BV-043).
+  const uaReport = `try{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({target:${JSON.stringify(INPAGE_TARGET)},channel:${JSON.stringify(channel.current)},kind:'ua',userAgent:navigator.userAgent}))}catch(e){}`
+  const script = `window.__BV_CHANNEL=${JSON.stringify(channel.current)};${uaReport};${host.browser?.providerScript ?? ''}`
   // An SPA route change on iOS can drop the early injection: check on every load end and re-inject (§5.3).
   const reinject = useCallback(() => {
     handle.current?.injectJavaScript(
@@ -312,7 +347,8 @@ export function Browser({
               onPress={() => {
                 const target = leaving
                 setLeaving(null)
-                if (target) deliverLink(target)
+                // Which page asked, so the confirmation can say so (ES-BV-040).
+                if (target) deliverLink(target, origin ?? undefined)
               }}
               testID="browser-leave-go"
             />

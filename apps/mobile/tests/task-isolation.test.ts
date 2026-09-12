@@ -1,63 +1,80 @@
 /**
- * The tapjacking guard is injected or the build stops (ES-BV-043).
+ * The tapjacking guard and the task isolation are injected, or the build stops
+ * (ES-BV-043).
  *
- * `withObscuredTouchFilter` anchors on the generated `super.onCreate(...)` in
- * MainActivity. A miss used to log a warning and return the config unchanged,
- * so a build whose Expo template had shifted shipped without
+ * Both halves used to give up quietly when their anchor was missing. The
+ * obscured-touch half logged a warning and returned the config unchanged, so a
+ * build whose Expo template had shifted shipped without
  * `filterTouchesWhenObscured` — the guard that stops a window drawn over the
- * approval sheet passing taps through to it — and nothing failed.
+ * approval sheet passing taps through to it. The task-affinity half returned
+ * silently when `.MainActivity` was not found, which ships the wallet with the
+ * default affinity: the package name, which another app may declare, which is
+ * how a user returns to what looks like BoltVault and types a password into
+ * something else.
+ *
+ * This drives the plugin's own exported modifiers. The previous version
+ * asserted against its own copy of the regex, which tests the copy.
  */
 import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 
-// The plugin is CommonJS, loaded the way Expo's prebuild loads it.
 const plugin = createRequire(import.meta.url)('../plugins/withTaskIsolation.js') as {
-  withObscuredTouchFilter?: unknown
-  default?: unknown
+  applyObscuredTouchFilter(src: string): string
+  applyPrivateTask(manifest: unknown): unknown
+  GUARD: string
 }
 
-/** A minimal `withMainActivity` stand-in: run the modifier over some source. */
-function runFilter(contents: string): string {
-  // The module applies `withMainActivity` from @expo/config-plugins; rather
-  // than stubbing the plugin chain, exercise the anchor and the injection the
-  // same way the modifier does.
-  const GUARD = 'filterTouchesWhenObscured'
-  if (contents.includes(GUARD)) return contents
-  const m = /(\n(\s*)super\.onCreate\([^)]*\)\s*\n)/.exec(contents)
-  if (!m)
-    throw new Error(
-      '[withTaskIsolation] could not find super.onCreate in MainActivity, so obscured-touch filtering was not applied.',
-    )
-  const anchor = m[1] ?? ''
-  const indent = m[2] ?? '    '
-  return contents.replace(anchor, `${anchor}${indent}window.decorView.${GUARD} = true\n`)
-}
+const MAIN_ACTIVITY = `package io.electroswap.boltvault
 
-const ACTIVITY = `class MainActivity : ReactActivity() {
+class MainActivity : ReactActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(null)
+    setTheme(R.style.AppTheme)
   }
 }
 `
 
-describe('the obscured-touch filter', () => {
+const manifestWith = (name: string): Record<string, unknown> => ({
+  manifest: { application: [{ activity: [{ $: { 'android:name': name } }] }] },
+})
+
+describe('the obscured-touch half', () => {
   it('injects the guard after super.onCreate', () => {
-    const out = runFilter(ACTIVITY)
-    expect(out).toContain('filterTouchesWhenObscured = true')
-    expect(out.indexOf('super.onCreate')).toBeLessThan(out.indexOf('filterTouchesWhenObscured'))
+    const out = plugin.applyObscuredTouchFilter(MAIN_ACTIVITY)
+    expect(out).toContain(`window.decorView.${plugin.GUARD} = true`)
+    // After the call, not before it: the decor view does not exist until then.
+    expect(out.indexOf('super.onCreate')).toBeLessThan(out.indexOf(plugin.GUARD))
   })
 
-  it('is idempotent, so a second prebuild does not double it', () => {
-    const once = runFilter(ACTIVITY)
-    expect(runFilter(once)).toBe(once)
+  it('is idempotent, because a prebuild may run twice', () => {
+    const once = plugin.applyObscuredTouchFilter(MAIN_ACTIVITY)
+    expect(plugin.applyObscuredTouchFilter(once)).toBe(once)
   })
 
-  it('throws rather than shipping without it when the anchor is gone', () => {
-    const shifted = `class MainActivity : ReactActivity() {\n  override fun onStart() {}\n}\n`
-    expect(() => runFilter(shifted)).toThrow(/obscured-touch filtering was not applied/)
+  it('stops the build when the anchor is gone', () => {
+    expect(() => plugin.applyObscuredTouchFilter('class MainActivity {}')).toThrow(/super\.onCreate/)
   })
 
-  it('is the module the prebuild loads', () => {
-    expect(typeof (plugin.default ?? plugin)).toBe('function')
+  it('handles the Kotlin template’s argument, whatever Expo passes', () => {
+    const other = MAIN_ACTIVITY.replace('super.onCreate(null)', 'super.onCreate(savedInstanceState)')
+    expect(plugin.applyObscuredTouchFilter(other)).toContain(plugin.GUARD)
+  })
+})
+
+describe('the task-affinity half', () => {
+  it('gives MainActivity a task no other app can name', () => {
+    const manifest = manifestWith('.MainActivity') as {
+      manifest: { application: Array<{ activity: Array<{ $: Record<string, string> }> }> }
+    }
+    plugin.applyPrivateTask(manifest)
+    const attrs = manifest.manifest.application[0]?.activity[0]?.$ ?? {}
+    // An empty affinity is a real value, not an absent one.
+    expect(attrs['android:taskAffinity']).toBe('')
+    expect(attrs['android:allowTaskReparenting']).toBe('false')
+  })
+
+  it('stops the build when the activity is not there', () => {
+    expect(() => plugin.applyPrivateTask(manifestWith('.SomethingElse'))).toThrow(/MainActivity/)
+    expect(() => plugin.applyPrivateTask({ manifest: {} })).toThrow(/MainActivity/)
   })
 })
