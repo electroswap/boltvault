@@ -1,7 +1,14 @@
 /**
- * IconButton — a 44 px pressable around a 34 px glass disc with one glyph
- * (style bible › chrome). Headers, contract rows, pin/hide, alerts. The
+ * IconButton — a 44 px pressable around a `metrics.disc` glass disc with one
+ * glyph (style bible › chrome). Headers, contract rows, pin/hide, alerts. The
  * optional badge is a small ember pill at the top-right corner.
+ *
+ * The disc used to be a 34 px literal here while the account seat's circle was
+ * a 40 px literal there, and the two trade places on the same header line —
+ * Home opens with the account circle, a pushed screen opens with the round
+ * Back — so navigating shrank the circle at the top left. Both read
+ * `metrics.disc` now. The pressable frame is still `metrics.hit`, so the
+ * bigger disc costs no hit target.
  */
 import { Pressable, View } from 'react-native'
 import { Icon, type IconName } from './Icon'
@@ -35,11 +42,11 @@ export function IconButton({ icon, label, onPress, active = false, tone = 'mute'
       testID={testID}
       style={{ width: metrics.hit, height: metrics.hit, alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.45 : 1 }}
     >
-      <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: paint.glassRaised, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+      <View style={{ width: metrics.disc, height: metrics.disc, borderRadius: metrics.disc / 2, backgroundColor: paint.glassRaised, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
         <View style={{ zIndex: 1 }}>
           <Icon name={icon} size={18} color={color} />
         </View>
-        <Rim radius={17} opacity={active ? 0.7 : 0.35} />
+        <Rim radius={metrics.disc / 2} opacity={active ? 0.7 : 0.35} />
       </View>
       {showBadge ? (
         <View style={{ position: 'absolute', top: 2, right: 0, minWidth: 16, height: 16, paddingHorizontal: 4, borderRadius: 8, backgroundColor: paint.ember, alignItems: 'center', justifyContent: 'center' }} pointerEvents="none">

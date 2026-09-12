@@ -71,6 +71,7 @@ import {
   SettingsSchema,
   type ApprovalDecision,
   type ApprovalRequest,
+  type NameLookup,
   type Settings,
 } from './schema'
 import { DEFAULT_QUOTER_PATH, Quoter } from './quoterApi'
@@ -341,6 +342,13 @@ export function createEngine(deps: EngineDeps): Engine {
       return facts ? { deployedAt: facts.deployedAt, verified: facts.verified, newAfterDays: facts.newAfterDays } : null
     },
     /*
+      Names for the addresses a sheet names (§8.1). `names` is built further
+      down — it raises its own registration approvals through this service — so
+      the arrow is the binding, and it only runs once a sheet is being assessed.
+      Sanitised there, not here: `ctx.labels` is printed straight by rules.ts.
+    */
+    counterpartyNames: (chainId: number, addresses: readonly string[]): Promise<NameLookup[]> => names.lookup(chainId, addresses),
+    /*
       One answer for "what does this account pay", read by both the site and
       the sheet (§8.6, §8.18).
 
@@ -465,7 +473,7 @@ export function createEngine(deps: EngineDeps): Engine {
     snapshots: sealed.portfolio,
     looks: sealed.looks,
   })
-  const names = new NamesService({ platform: deps.platform, chains, vault, provider })
+  const names: NamesService = new NamesService({ platform: deps.platform, chains, vault, provider, cache })
   /*
     The pre-assessment reaches the firewall through the provider's own payload
     builder — the function that builds every sheet — rather than through a

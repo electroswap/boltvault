@@ -18,6 +18,7 @@ import { PageHeader } from '../components/PageHeader'
 import { ScreenFooter } from '../components/ScreenFooter'
 import { useEngine, useEngineEvent } from '../engine/EngineProvider'
 import { formatFiat, formatRaw } from '../format'
+import { useName } from '../hooks/useNames'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { swapFlowStore, useSwapFlow } from '../state/useSwapFlow'
@@ -65,6 +66,8 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
   const engine = useEngine()
   const router = useRouter()
   const { active } = useWalletState()
+  // The account's own name where its address would be (§8.1); null leaves the short form.
+  const accountName = useName(active?.address)
   const { setActive } = useSwapFlow()
   const { flow, dismiss } = useActiveFlow(['bridge'])
   const [chains, setChains] = useState<ChainView[]>([])
@@ -221,7 +224,7 @@ export function Bridge({ body, reducedMotion = false, chainId: initialChain, tok
   return (
     <Column flex={1}>
       <ScrollView contentContainerStyle={{ paddingHorizontal: inset, paddingTop: inset, paddingBottom: 12, gap: 10 }} testID="bridge">
-        <PageHeader title={t({ id: 'bridge.title', message: 'Bridge' })} subtitle={active.label ? t({ id: 'from.account', message: 'from {a}', values: { a: `${active.label} · ${shortAddress(active.address)}` } }) : undefined} />
+        <PageHeader title={t({ id: 'bridge.title', message: 'Bridge' })} subtitle={active.label ? t({ id: 'from.account', message: 'from {a}', values: { a: `${active.label} · ${accountName ?? shortAddress(active.address)}` } }) : undefined} />
 
         {/* The console: From and To wells, the flip (or the cable, in flight) on the seam. */}
         <Plate role="console" gap="$1" padding={10} testID="bridge-console">

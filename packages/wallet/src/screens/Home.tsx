@@ -19,6 +19,7 @@ import { useActivity } from '../hooks/useActivity'
 import { useCached } from '../hooks/useCached'
 import { useChainHead } from '../hooks/useChainHead'
 import { useHolderTier } from '../hooks/useHolderTier'
+import { useName } from '../hooks/useNames'
 import { useNotifications } from '../hooks/useNotifications'
 import { useOpenInTab } from '../hooks/useOpenInTab'
 import { usePortfolio } from '../hooks/usePortfolio'
@@ -53,6 +54,13 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   const { vault, active, loading } = useWalletState()
   const head = useChainHead(ETN)
   const tier = useHolderTier(active?.id ?? null)
+  /*
+    The seat has always been able to show a name ahead of the label — §8.1 and
+    the component's own docstring say `.etn` → label → 0x1F90…7B63 — and nothing
+    ever resolved one, so only the middle rung was ever used. Null leaves the
+    label exactly where it was.
+  */
+  const seatName = useName(active?.address)
   const scope = useHomeScope()
   const [scopeOpen, setScopeOpen] = useState(false)
   const portfolio = usePortfolio(active?.id ?? null, 5_000, scope.loaded ? scope.chainIds : null)
@@ -342,7 +350,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
         <Ignition active={ignite} reducedMotion={reducedMotion} order={0}>
           <Row justifyContent="space-between" alignItems="center" minHeight={metrics.header} gap="$2">
             {active ? (
-              <Seat address={active.address} label={active.label} onPress={() => router.navigate('accounts')} onCopy={copy} copied={copied} testID="seat" />
+              <Seat address={active.address} label={active.label} name={seatName} onPress={() => router.navigate('accounts')} onCopy={copy} copied={copied} testID="seat" />
             ) : (
               <Body size="title">BoltVault</Body>
             )}
@@ -432,7 +440,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
               <Plate role="console" gap={6} padding={12} testID="home-console">
                 <Row justifyContent="space-between" alignItems="center">
                   <ScopePill scope={scope.scope} label={scope.label} onPress={() => setScopeOpen(true)} testID="home-scope" />
-                  {portfolio.snapshot ? (
+                  {portfolio.snapshot && !unfunded ? (
                     <Body tone="mute" size="caption" testID="home-token-count">
                       {tokenCount === 1 ? t({ id: 'home.tokens.one', message: '1 token' }) : t({ id: 'home.tokens.many', message: '{n} tokens', values: { n: tokenCount } })}
                       {unpriced > 0 ? ` · ${t({ id: 'home.unpriced', message: '{n} without price', values: { n: unpriced } })}` : ''}

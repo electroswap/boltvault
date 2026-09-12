@@ -17,6 +17,8 @@ import { mainnet } from 'viem/chains'
 import { normalize } from 'viem/ens'
 import { bytesToHex, encodeFunctionData, isAddress, namehash, parseAbi, type Abi, type Hex } from 'viem'
 import { z } from 'zod'
+import { untrusted } from '@boltvault/security'
+import { cacheKey, type CacheSpec, type DocCache } from '../cache'
 import { EngineError } from '../errors'
 import type { NamespaceSpec } from '../host'
 import { AccountIdSchema, type NameLookup } from '../schema'
@@ -35,6 +37,61 @@ const RESOLVERS: Record<number, Hex> = {
 
 const SUFFIX: Record<number, string> = { 52014: '.etn', 1: '.eth' }
 const CACHE_MS = 5 * 60_000
+
+/**
+ * A display name survives the popup closing.
+ *
+ * `lookup` is what puts a name where an address would go — the seat, the
+ * accounts rail, an activity row — and the popup is a page that dies every time
+ * it loses focus. The in-memory map below is therefore never more than a
+ * within-page guard: on its own it bought one UniversalResolver round trip per
+ * address per open, which is a lookup per screen, not per session. The answer
+ * rides in the DEK-sealed document cache like every other served resource
+ * (`cache.ts`), one entry per address, so a reopened popup paints the name
+ * before the chain is asked anything.
+ *
+ * Six hours, because a primary name changes when somebody registers or
+ * re-points one — not on a block. `setPrimary` invalidates the one address it
+ * just changed rather than waiting the window out.
+ */
+const REVERSE_TTL_MS = 6 * 60 * 60 * 1000
+const reverseSpec = (chainId: number, address: string): CacheSpec<{ name: string | null }> => ({
+  key: cacheKey('names', 'reverse', chainId, address.toLowerCase()),
+  schema: z.object({ name: z.string().nullable() }),
+})
+
+/** How much of a name fits where a short address would have been; `untrusted`'s own default. */
+const NAME_MAX = 32
+
+/**
+ * A third party's name, as it is safe to print where an address would go.
+ *
+ * The string comes off somebody else's resolver, so it gets exactly what a
+ * contract's label gets in the approval sheet: NFKC, then control, format and
+ * bidi characters stripped, then bounded (`untrusted`, security/explain.ts).
+ * Two rules on top of that, because this text REPLACES an address on screen
+ * rather than sitting in a sentence:
+ *
+ *  - it must still end in the suffix it resolved on. `untrusted` marks a
+ *    truncation with an ellipsis, so a 300-character name arrives here clipped
+ *    mid-label, and a clipped label is not a name — it is a smear the length of
+ *    whatever the attacker chose.
+ *  - it must not open with `0x`. `0xYou….etn` standing in the slot the short
+ *    address occupies is an address that is not one, which is the whole
+ *    impersonation the short form invites.
+ *
+ * Anything that fails either is not printed at all, and the caller falls back
+ * to the shortened address — which is never a lie.
+ */
+export function displayName(chainId: number, raw: string | null): string | null {
+  if (raw === null) return null
+  const clean = untrusted(raw.trim().toLowerCase(), NAME_MAX)
+  if (clean.length === 0) return null
+  const suffix = SUFFIX[chainId]
+  if (suffix !== undefined && !clean.endsWith(suffix)) return null
+  if (clean.startsWith('0x')) return null
+  return clean
+}
 
 /**
  * The `.etn` registrar, verified on chain 2026-09-11 against Electroneum
@@ -241,6 +298,8 @@ export interface NamesDeps {
   readonly chains: ChainsService
   readonly vault: VaultManager
   readonly provider: ProviderService
+  /** Absent in a test harness: `lookup` then answers live every five minutes instead of from disk. */
+  readonly cache?: DocCache
 }
 
 export class NamesService {
@@ -275,25 +334,45 @@ export class NamesService {
   async lookup(chainId: number, addresses: readonly string[]): Promise<NameLookup[]> {
     const resolver = RESOLVERS[chainId]
     if (!resolver) return addresses.map((address) => ({ address, name: null, verified: false }))
-    const client = await this.deps.chains.client(chainId)
     const out: NameLookup[] = []
     for (const address of addresses.slice(0, 200)) {
-      const k = `${chainId}:${address.toLowerCase()}`
-      const cached = this.reverse.get(k)
-      if (cached && this.now() - cached.at < CACHE_MS) {
-        out.push({ address, name: cached.name, verified: cached.name !== null })
-        continue
-      }
-      let name: string | null = null
-      try {
-        name = await client.getEnsName({ address: address as Hex, universalResolverAddress: resolver })
-      } catch {
-        name = null
-      }
-      this.reverse.set(k, { name, at: this.now() })
+      const name = await this.reverseName(chainId, address, resolver)
       out.push({ address, name, verified: name !== null })
     }
     return out
+  }
+
+  /**
+   * One address's primary name, sanitised, or null.
+   *
+   * Three layers, cheapest first: the session map, because a list on screen
+   * asks for the same address on every render; the sealed document cache,
+   * because a popup open is a fresh process; then the resolver. The client is
+   * built inside the loader rather than above it, so a screen whose names are
+   * all cached touches no chain at all.
+   *
+   * A failure answers null and is remembered for the session only — never
+   * written to disk, so an RPC outage cannot persist "this address has no
+   * name" for six hours.
+   */
+  private async reverseName(chainId: number, address: string, resolver: Hex): Promise<string | null> {
+    const k = `${chainId}:${address.toLowerCase()}`
+    const hit = this.reverse.get(k)
+    if (hit && this.now() - hit.at < CACHE_MS) return hit.name
+    const load = async (): Promise<{ name: string | null }> => {
+      const client = await this.deps.chains.client(chainId)
+      const raw = await client.getEnsName({ address: address as Hex, universalResolverAddress: resolver })
+      return { name: displayName(chainId, raw ?? null) }
+    }
+    let name: string | null = null
+    try {
+      const cache = this.deps.cache
+      name = cache ? (await cache.through(reverseSpec(chainId, address), REVERSE_TTL_MS, load)).value.name : (await load()).name
+    } catch {
+      name = null
+    }
+    this.reverse.set(k, { name, at: this.now() })
+    return name
   }
 
   async resolve(chainId: number, name: string): Promise<string | null> {
@@ -527,8 +606,10 @@ export class NamesService {
       tx: { from: account.address as Hex, to: reg.reverseRegistrar, value: '0x0', data: encodeFunctionData({ abi: REVERSE_ABI, functionName: 'setName', args: [name] }) },
       clientRequestId: `names.setPrimary:${name}`,
     })
-    // The display cache would otherwise keep showing the old answer for five minutes.
+    // Both layers, or the display keeps showing the old answer — the session
+    // map for five minutes and the sealed entry for six hours.
     this.reverse.delete(`${input.chainId}:${account.address.toLowerCase()}`)
+    await this.deps.cache?.invalidate(reverseSpec(input.chainId, account.address).key)
     return { requestId, name }
   }
 

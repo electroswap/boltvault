@@ -8,6 +8,7 @@ import type { AccountView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../../engine/EngineProvider'
 import { formatFiat } from '../../format'
+import { useName } from '../../hooks/useNames'
 import { t } from '../../i18n'
 
 /** The account's last-good total, from the persisted portfolio document; '' until one exists. */
@@ -63,6 +64,13 @@ export function derivationLabel(a: AccountView): string | null {
 
 export function AccountRow({ account, active, onSelect, onMenu, onCopy, copied = false }: { account: AccountView; active: boolean; onSelect: () => void; onMenu: () => void; onCopy?: () => void; copied?: boolean }) {
   const total = useAccountTotal(account.id)
+  /*
+    The second line is the only place this row says which address it is, and
+    `0x1F90…7B63` is not an answer anybody can check against what they were
+    told. A primary name stands in its place when one resolves; copy still
+    copies the address, because that is the thing you paste.
+  */
+  const name = useName(account.address)
   return (
     <Row alignItems="center" gap="$2" opacity={account.hidden ? 0.55 : 1} testID={`account-${account.id}`}>
       <Pressable onPress={onSelect} accessibilityRole="button" accessibilityLabel={account.label} accessibilityState={{ selected: active }} style={{ flex: 1, minHeight: 52, justifyContent: 'center' }} testID={`use-${account.id}`}>
@@ -89,7 +97,7 @@ export function AccountRow({ account, active, onSelect, onMenu, onCopy, copied =
             </Row>
             <Row gap={2} alignItems="center">
               <Body tone={copied ? 'arc' : 'mute'} size="caption" fontVariant={['tabular-nums']} numberOfLines={1}>
-                {copied ? t({ id: 'copied', message: 'Copied' }) : shortAddress(account.address)}
+                {copied ? t({ id: 'copied', message: 'Copied' }) : (name ?? shortAddress(account.address))}
               </Body>
               {onCopy ? (
                 <Pressable onPress={onCopy} accessibilityRole="button" accessibilityLabel={t({ id: 'acct.copy', message: 'Copy address' })} style={{ minHeight: 44, minWidth: 44, marginVertical: -12, justifyContent: 'center', alignItems: 'flex-start', paddingLeft: 4 }} testID={`copy-${account.id}`}>

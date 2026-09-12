@@ -189,4 +189,8 @@ const KNOWN_SHARDS = [
   'holder.tier',
   'holder.weight',
   'activity.scan',
+  // Keyed by address, not by account: a removed account's own address is swept
+  // by `forgetAccount` only if it appears in the key, and here it does not.
+  // Listed anyway so the family set stays the complete one this file promises.
+  'names.reverse',
 ] as const

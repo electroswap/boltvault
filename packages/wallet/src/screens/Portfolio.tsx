@@ -85,11 +85,19 @@ export function Portfolio({ body }: { body: BodyKind }) {
   return (
     <Column flex={1} testID="portfolio">
       <ScrollView contentContainerStyle={{ padding: inset, gap: 16 }}>
-        <PageHeader title={t({ id: 'portfolio.title', message: 'Portfolio' })} />
+        {/*
+          The chain selector rides the header, beside the title.
+
+          It used to sit on its own line between the header and the total, which
+          spent a whole row on a control and pushed the hero readout down — and
+          "Portfolio" then shared that line with nothing. Owner: put the chain
+          selector on the top right, to the right of the title. It is still the
+          one selector (`ScopePill` → `ChainSelectPill`), at `size="sm"`, which
+          is the size the bible gives it beside a title; the header's right slot
+          already holds controls, so it needs no variant of its own.
+        */}
+        <PageHeader title={t({ id: 'portfolio.title', message: 'Portfolio' })} right={<ScopePill scope={scope.scope} label={scope.label} onPress={() => setScopeOpen(true)} size="sm" testID="home-scope" />} />
         <Column gap="$2">
-          <Row>
-            <ScopePill scope={scope.scope} label={scope.label} onPress={() => setScopeOpen(true)} testID="home-scope" />
-          </Row>
           <RollingReadout value={totalText} hero reducedMotion={reducedMotion} testID="total" />
           <Row gap="$3" flexWrap="wrap">
             {change ? (

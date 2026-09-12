@@ -13,6 +13,7 @@ import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { useActivity } from '../hooks/useActivity'
 import { useCached } from '../hooks/useCached'
+import { useName } from '../hooks/useNames'
 import { useNotifications } from '../hooks/useNotifications'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
@@ -72,6 +73,15 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
   const { items: notes, markRead } = useNotifications()
   const [filter, setFilter] = useState<Filter>('all')
   const [open, setOpen] = useState<ActivityEntry | null>(null)
+  /*
+    Who the open row was with, by name where there is one.
+
+    The detail sheet's only statement of the counterparty was `0x2222…2222`,
+    which is the form a poisoned lookalike is designed to survive. Asked for the
+    open row alone rather than for every row in the list: a history of two
+    hundred sends is two hundred resolver lookups nobody reads.
+  */
+  const toName = useName(open?.to)
   const [chains, setChains] = useState<ChainView[]>([])
   /*
     Whether the open row can still be replaced, and why not when it cannot
@@ -345,7 +355,7 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
               <Body tone="mute" size="caption">
                 {t({ id: 'activity.to', message: 'To' })}
               </Body>
-              <Body size="caption">{open.to ? shortAddress(open.to) : '—'}</Body>
+              <Body size="caption">{open.to ? (toName ?? shortAddress(open.to)) : '—'}</Body>
             </Row>
             <Row justifyContent="space-between">
               <Body tone="mute" size="caption">

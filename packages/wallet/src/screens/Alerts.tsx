@@ -31,9 +31,25 @@ const ICONS = { alert: 'bell', live: 'launch', offer: 'nft', collect: 'farm', di
 
 type BodyKind = 'extension-popup' | 'extension-tab' | 'mobile'
 
+/** What the host can say about push (`host.push.status`); `null` is "not asked yet". */
+type PushState = 'unavailable' | 'off' | 'granted' | 'denied'
+
 export function Alerts({ body }: { body: BodyKind }) {
   const host = useHost()
-  const [pushState, setPushState] = useState<'unavailable' | 'off' | 'granted' | 'denied'>('unavailable')
+  // A control that could never be thrown was still on screen. The plate
+  // rendered whenever `host.push` existed and `pushState` started at
+  // 'unavailable', so a body or an API without push got a Push plate whose only
+  // key was permanently disabled — a switch whose whole job was to explain why
+  // it does nothing. Owner: when push is not enabled on the wallet body or on
+  // the API, it should not be visible at all.
+  //
+  // `null` is "we have not asked yet", and it is deliberately neither
+  // 'unavailable' nor 'off'. Hiding has to be the settled answer: seeding the
+  // state with 'off' flashes the plate in and yanks it out a tick later, and
+  // seeding it with 'unavailable' renders "we have not asked" as "there is
+  // none", which hides a plate that is about to be legitimate. So nothing is
+  // drawn until `push.status()` has answered.
+  const [pushState, setPushState] = useState<PushState | null>(null)
   const refreshPush = (): void => {
     if (host.push) host.push.status().then(setPushState, () => setPushState('unavailable'))
   }
@@ -74,6 +90,20 @@ export function Alerts({ body }: { body: BodyKind }) {
     if (target.startsWith('campaign:')) return router.navigate('campaign', { chainId: ETN, pool: target.slice(9) })
   }
 
+  // Both halves of the owner's condition land in one answer.
+  //
+  // THE BODY: no `host.push` at all (the extension), or a `push.status()` of
+  // 'unavailable'.
+  //
+  // THE API: `POST /api/wallet/devices` answers 503 — not 404 — when the
+  // service runs with `pushEnabled` false, precisely so a client can tell "off"
+  // from "gone". The phone's host is what hears that (`apps/mobile/src/push.ts`)
+  // and folds it back into `status()` as 'unavailable', because a device the
+  // watcher will not register cannot be told anything while the app is closed.
+  // No endpoint states that setting, so the wallet cannot know it before it has
+  // tried once; what it must never do is call the unknown "available".
+  const pushVisible = host.push !== undefined && pushState !== null && pushState !== 'unavailable'
+
   const key = (i: WatchItem): string => `${i.kind}:${i.chainId}:${i.address.toLowerCase()}`
   const save = async (i: WatchItem): Promise<void> => {
     const d = drafts[key(i)]
@@ -98,16 +128,20 @@ export function Alerts({ body }: { body: BodyKind }) {
           ))}
         </Column>
       ) : null}
-      {host.push ? (
-      <Plate gap="$2" testID="alerts-push">
-        <Row justifyContent="space-between" alignItems="center">
-          <Body size="title">{t({ id: 'alerts.push', message: 'Push' })}</Body>
-          {host.push ? <Key label={pushState === 'granted' ? t({ id: 'alerts.push.off', message: 'Turn off' }) : t({ id: 'alerts.push.on', message: 'Turn on' })} kind="secondary" disabled={pushState === 'denied' || pushState === 'unavailable'} onPress={() => void (pushState === 'granted' ? host.push?.disable().then(() => refreshPush()) : host.push?.enable().then(() => refreshPush()))} testID="alerts-push-toggle" /> : null}
-        </Row>
-        <Body tone="mute" size="caption">
-          {!host.push ? t({ id: 'alerts.push.web', message: 'The extension checks in the background on its own; push is for the phone.' }) : pushState === 'granted' ? t({ id: 'alerts.push.granted', message: 'On. Incoming funds, sales and offers, campaigns going live, rewards and dividends arrive while the app is closed.' }) : pushState === 'denied' ? t({ id: 'alerts.push.denied', message: 'Notifications are off for BoltVault in the system settings.' }) : t({ id: 'alerts.push.off.body', message: 'Off. Turn it on to hear about incoming funds, sales, campaigns and rewards while the app is closed. Only a type and an id ever travel; the app fetches the details.' })}
-        </Body>
-      </Plate>
+      {pushVisible ? (
+        <Plate gap="$2" testID="alerts-push">
+          <Row justifyContent="space-between" alignItems="center">
+            <Body size="title">{t({ id: 'alerts.push', message: 'Push' })}</Body>
+            {/* 'denied' is the one state that still shows a disabled key: the
+                switch is real, it is the system settings that are holding it
+                down, and the caption below says so. 'unavailable' no longer
+                reaches here at all — the plate is gone instead. */}
+            <Key label={pushState === 'granted' ? t({ id: 'alerts.push.off', message: 'Turn off' }) : t({ id: 'alerts.push.on', message: 'Turn on' })} kind="secondary" disabled={pushState === 'denied'} onPress={() => void (pushState === 'granted' ? host.push?.disable().then(() => refreshPush()) : host.push?.enable().then(() => refreshPush()))} testID="alerts-push-toggle" />
+          </Row>
+          <Body tone="mute" size="caption">
+            {pushState === 'granted' ? t({ id: 'alerts.push.granted', message: 'On. Incoming funds, sales and offers, campaigns going live, rewards and dividends arrive while the app is closed.' }) : pushState === 'denied' ? t({ id: 'alerts.push.denied', message: 'Notifications are off for BoltVault in the system settings.' }) : t({ id: 'alerts.push.off.body', message: 'Off. Turn it on to hear about incoming funds, sales, campaigns and rewards while the app is closed. Only a type and an id ever travel; the app fetches the details.' })}
+          </Body>
+        </Plate>
       ) : null}
       {items.length === 0 ? (
         <Plate gap="$2" testID="alerts-empty">

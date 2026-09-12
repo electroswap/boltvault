@@ -5,7 +5,9 @@
  * check on the chosen one; a chain that is turned off says so and offers
  * Networks. Home, Portfolio, Send, Receive, Add token and Bridge all use it,
  * always as the first control under the header (or the first row of the
- * balance plate), never anywhere else.
+ * balance plate) — or, on Portfolio, in the header itself at `size="sm"`,
+ * beside the title, which is the placement the owner asked for there. Never
+ * anywhere else, and never a second selector.
  */
 import { Body, ChainMark, Column, Icon, Key, Pill, Pressable, Row, Sheet, paint } from '@boltvault/ui'
 import { useEffect, useState } from 'react'

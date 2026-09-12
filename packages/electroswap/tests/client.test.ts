@@ -198,3 +198,75 @@ describe.skipIf(SKIP)('ElectroSwapClient live (SKIP_LIVE)', () => {
     expect(m.decimals).toBe(18)
   })
 })
+
+/**
+ * Batched token markets.
+ *
+ * The addresses used to be pasted into the query text, which made the document
+ * different for every wallet — unlistable by the API's operation allow-list, and
+ * a copy of someone's holdings in every log line. They are variables now, so the
+ * document is constant and the request carries the addresses.
+ */
+describe('ElectroSwapClient.tokenMarkets', () => {
+  const A = '0x' + '11'.repeat(20)
+  const B = '0x' + '22'.repeat(20)
+
+  function marketRow(address: string, symbol: string) {
+    return { address, symbol, name: symbol, decimals: 18, market: { price: { value: 1.5, currency: 'USD' } } }
+  }
+
+  it('sends one constant document, with the addresses as variables', async () => {
+    const { fn, calls } = mockFetch({ tokens: [marketRow(A, 'AAA'), marketRow(B, 'BBB')] })
+    const client = new ElectroSwapClient({ fetchImpl: fn })
+    await client.tokenMarkets(ELECTRONEUM_MAINNET, [A, B])
+
+    const body = JSON.parse(String(calls[0]?.init.body)) as { query: string; variables: Record<string, unknown> }
+    expect(body.query).toContain('query BoltBatch($contracts: [ContractInput!]!)')
+    // The addresses must not appear in the document itself — that is the whole change.
+    expect(body.query).not.toContain(A)
+    expect(body.query).not.toContain(B)
+    expect(body.variables['contracts']).toEqual([
+      { chain: 'ELECTRONEUM', address: A },
+      { chain: 'ELECTRONEUM', address: B },
+    ])
+  })
+
+  it('sends the same document whatever is being asked for', async () => {
+    const { fn, calls } = mockFetch({ tokens: [marketRow(A, 'AAA')] })
+    const client = new ElectroSwapClient({ fetchImpl: fn })
+    await client.tokenMarkets(ELECTRONEUM_MAINNET, [A])
+    await client.tokenMarkets(ELECTRONEUM_MAINNET, [B])
+    const [first, second] = calls.map((call) => (JSON.parse(String(call.init.body)) as { query: string }).query)
+    expect(first).toBe(second)
+  })
+
+  it('lines answers up with the addresses it asked for, and fills a gap with an empty token', async () => {
+    // A null in the middle is "we do not know this one", not a shortened list.
+    const { fn } = mockFetch({ tokens: [marketRow(A, 'AAA'), null] })
+    const client = new ElectroSwapClient({ fetchImpl: fn })
+    const out = await client.tokenMarkets(ELECTRONEUM_MAINNET, [A, B])
+    expect(out.get(A.toLowerCase())?.symbol).toBe('AAA')
+    expect(out.get(B.toLowerCase())).toBeDefined()
+    expect(out.get(B.toLowerCase())?.price).toBeNull()
+  })
+
+  it('chunks at twelve, so no single request approaches the server cap', async () => {
+    const many = Array.from({ length: 25 }, (_, i) => '0x' + String(i).padStart(2, '0').repeat(20))
+    const { fn, calls } = mockFetch({ tokens: [] })
+    const client = new ElectroSwapClient({ fetchImpl: fn })
+    await client.tokenMarkets(ELECTRONEUM_MAINNET, many)
+    expect(calls).toHaveLength(3)
+    for (const call of calls) {
+      const body = JSON.parse(String(call.init.body)) as { variables: { contracts: unknown[] } }
+      expect(body.variables.contracts.length).toBeLessThanOrEqual(12)
+    }
+  })
+
+  it('maps the native sentinel through unchanged', async () => {
+    const { fn, calls } = mockFetch({ tokens: [marketRow('NATIVE', 'ETN')] })
+    const client = new ElectroSwapClient({ fetchImpl: fn })
+    await client.tokenMarkets(ELECTRONEUM_MAINNET, [nativeAddress()])
+    const body = JSON.parse(String(calls[0]?.init.body)) as { variables: { contracts: { address: string }[] } }
+    expect(body.variables.contracts[0]?.address).toBe('NATIVE')
+  })
+})

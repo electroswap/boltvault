@@ -10,7 +10,7 @@
  *
  * The distinction the sheet has to get right is between a network that cannot
  * preview anything and a tracer that was asked and could not answer. Only the
- * first is "Preview shows no balance changes".
+ * first is "Balance changes could not be simulated".
  */
 import { createMemoryPlatform } from '@boltvault/platform/memory'
 import type { ProviderPortMessage } from '@boltvault/protocol'
@@ -202,7 +202,7 @@ describe('the transaction preview', () => {
     const payload = await preview()
     expect(payload.assessment.simulationMode).toBe('estimate')
     const rule = payload.assessment.rules.find((r) => r.code === 'SIM_INCOMPLETE')
-    expect(rule?.title).toBe('Preview shows no balance changes')
+    expect(rule?.title).toBe('Balance changes could not be simulated')
   })
 
   it('repeats the tracer’s own reason when it was asked and could not answer', async () => {

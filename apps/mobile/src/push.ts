@@ -15,6 +15,24 @@ export const CLIENT_KEY = process.env['EXPO_PUBLIC_BOLTVAULT_KEY'] ?? ''
 
 let configured = false
 
+/**
+ * The API said push is switched off, so this install has no watcher to register
+ * with.
+ *
+ * `/api/wallet/devices` answers **503**, not 404, when the service runs with
+ * `pushEnabled` false — deliberately, so a client can tell "off today" from
+ * "no such route". We used to throw that away (`return res.ok`) and report the
+ * refusal as an ordinary failure, which left Settings › Notifications offering
+ * a Push switch that could never do anything. Remembering it turns `status()`
+ * into 'unavailable', and the screen hides the control entirely.
+ *
+ * In memory only, and only after a first attempt: there is no endpoint that
+ * states the setting, so this is the one moment the wallet ever hears it. A
+ * relaunch asks again, which is also the only way a wallet would notice the API
+ * being switched back on.
+ */
+let apiPushOff = false
+
 export function configureNotifications(): void {
   if (configured) return
   configured = true
@@ -47,6 +65,9 @@ export async function notifyLocal(n: {
 }
 
 export async function pushStatus(): Promise<'unavailable' | 'off' | 'granted' | 'denied'> {
+  // Before the OS permission, because an allowed permission with nowhere to
+  // register is still no push: nothing arrives while the app is closed.
+  if (apiPushOff) return 'unavailable'
   const p = await Notifications.getPermissionsAsync().catch(() => null)
   if (!p) return 'unavailable'
   if (p.status === 'granted') return 'granted'
@@ -80,6 +101,8 @@ export async function registerPush(input: {
     },
     body,
   })
+  // 503 is the API saying push is not enabled at all — remembered, not retried.
+  if (res.status === 503) apiPushOff = true
   return res.ok
 }
 
@@ -91,12 +114,14 @@ export async function unregisterPush(): Promise<void> {
   if (!token) return
   const url = `${API_BASE}/api/wallet/devices`
   const body = JSON.stringify({ token })
-  await fetch(url, {
+  const res = await fetch(url, {
     method: 'DELETE',
     headers: {
       'content-type': 'application/json',
       ...authHeaders({ key: CLIENT_KEY, method: 'DELETE', url, body, now: Date.now() }),
     },
     body,
-  }).catch(() => undefined)
+  }).catch(() => null)
+  // The unregister route is gated on the same flag, so it carries the same news.
+  if (res?.status === 503) apiPushOff = true
 }

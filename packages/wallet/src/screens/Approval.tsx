@@ -39,6 +39,7 @@ import {
 } from '@boltvault/engine'
 import { parseUnits } from 'viem'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ScreenFooter } from '../components/ScreenFooter'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { useFeel } from '../feel'
@@ -577,10 +578,23 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
         height={height}
         reducedMotion={reducedMotion}
       />
-      <ScrollView
-        style={{ zIndex: 1 }}
-        contentContainerStyle={{ padding: inset, gap: 14, paddingBottom: 120 }}
-      >
+      {/*
+        The scroll region and the verbs are siblings, not layers.
+
+        This screen used to pin its own verbs with `position: absolute` and buy
+        the room back with `paddingBottom: 120` on the scroll content — a
+        number that was right once and has not been since. The footer is 146 px
+        in the popup (two 56 px keys, a gap and the inset), so the last 26 px of
+        the sheet sat under the buttons: the owner photographed "No Ledger is
+        connected" cut in half by them, its second line half behind Sign. It
+        also grows — the device loader, the countdown, "2 more waiting" — so no
+        constant could have been right for every state.
+
+        `ScreenFooter` is what Send, Swap, Bridge, Allowances and the Rack use:
+        the footer takes its own height out of the column and the scroll region
+        keeps the rest, so nothing can hide under it.
+      */}
+      <ScrollView style={{ zIndex: 1 }} contentContainerStyle={{ padding: inset, gap: 14 }}>
         {/* Origin */}
         <Column gap="$1" testID="approval-origin">
           <Row gap="$2">
@@ -1185,17 +1199,7 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
       </ScrollView>
 
       {/* Verbs */}
-      <Column
-        position="absolute"
-        left={0}
-        right={0}
-        bottom={0}
-        padding={inset}
-        gap="$2"
-        backgroundColor="$void"
-        zIndex={2}
-        testID="approval-verbs"
-      >
+      <ScreenFooter inset={inset} testID="approval-verbs">
         {/*
           A hardware signer wants a button pressed on the device, and this
           screen used to say nothing about that — approving simply greyed the
@@ -1253,7 +1257,7 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
             })}
           </Body>
         ) : null}
-      </Column>
+      </ScreenFooter>
 
       {/*
         The fee editor. Everything in it is money in the chain's own coin: what
