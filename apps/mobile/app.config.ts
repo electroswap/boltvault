@@ -30,7 +30,7 @@ const { version, androidVersionCode } = require('../../version.json') as {
   androidVersionCode: number
 }
 
-export default ({ config }: ConfigContext): ExpoConfig => ({
+export default ({ config }: ConfigContext): Partial<ExpoConfig> => ({
   ...config,
   version,
   android: { ...config.android, versionCode: androidVersionCode },
