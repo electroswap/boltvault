@@ -199,7 +199,9 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "BoltVault scans QR codes: a Keystone signer, a paired device, a WalletConnect link."
+          "cameraPermission": "BoltVault scans QR codes: a Keystone signer, a paired device, a WalletConnect link.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
         }
       ],
       [
@@ -220,13 +222,17 @@
         "react-native-ble-plx",
         {
           "isBackgroundEnabled": false,
-          "modes": [
-            "central"
-          ],
           "bluetoothAlwaysPermission": "BoltVault talks to a Ledger over Bluetooth to sign with it."
         }
       ],
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "enableBackgroundPlayback": false,
+          "recordAudioAndroid": false
+        }
+      ],
       "./plugins/withWidgets.js",
       "./plugins/withUsbHost.js",
       "./plugins/withTaskIsolation.js",
