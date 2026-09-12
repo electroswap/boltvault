@@ -15,8 +15,6 @@ node_modules/
 pnpm-lock.yaml.lock
 .turbo/
 
-rebuild-*.sh
-
 # Local build configuration: the API origin and the wallet API key a developer
 # builds against. `.env.example` is the committed template; `.env` is yours and
 # holds a real key, so it never leaves the machine.
