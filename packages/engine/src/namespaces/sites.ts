@@ -126,13 +126,18 @@ export class SitesService {
         const publicRows: Record<string, { chainId: number }> = {}
         for (const [origin, row] of Object.entries(sites)) publicRows[origin] = { chainId: row.chainId }
         await writeDoc(platform.storage.local, SITES_PUBLIC_DOC, publicRows)
-        // Sealed writes are skipped while locked (`whenLocked: 'skip'`): nothing
-        // that lives in this half can change without an unlocked vault, and a
-        // chain switch from a connected dApp must not fail because of it.
-        for (const origin of await sealed.ids()) {
-          if (!sites[origin]) await sealed.delete(origin)
-        }
-        for (const [origin, row] of Object.entries(sites)) await sealed.set(origin, row)
+        /*
+          One encryption, not one per row (ES-BV-016).
+
+          This looped `sealed.set(origin, row)` over every site, and each of
+          those re-encrypts the whole blob — so saving N sites cost N
+          encryptions of N rows, on a path a connected page can drive by
+          calling `eth_requestAccounts` in a loop. Sealed writes are still
+          skipped while locked (`whenLocked: 'skip'`): nothing in this half can
+          change without an unlocked vault, and a chain switch from a connected
+          dApp must not fail because of it.
+        */
+        await sealed.replaceAll(Object.entries(sites))
       },
     }
     this.registry = new SiteRegistry(store)

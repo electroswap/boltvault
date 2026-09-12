@@ -133,3 +133,13 @@ export const MAX_LOG_RANGE = 10_000
 
 /** SAFE requests per second per origin. */
 export const SAFE_RATE_PER_SECOND = 60
+/**
+ * A much lower budget for the classes that do work per call (ES-BV-016).
+ *
+ * `eth_requestAccounts` on an already-connected origin touches the site row,
+ * and switching between two already-allowed chains persists the choice — so
+ * either one, called in a loop, re-encrypts the whole sites blob as fast as
+ * the page can ask. No honest page connects or switches chains five times a
+ * second; the leaky bucket refills, so a burst is still absorbed.
+ */
+export const CONNECT_RATE_PER_SECOND = 5

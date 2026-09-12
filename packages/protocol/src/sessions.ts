@@ -34,6 +34,9 @@ export interface SitesStore {
   save(sites: Record<string, ConnectedSite>): Promise<void>
 }
 
+/** How often a site's "last used" is worth writing down (ES-BV-016). */
+const TOUCH_INTERVAL_MS = 60_000
+
 export class SiteRegistry {
   private readonly sites: Record<string, ConnectedSite> = {}
 
@@ -154,9 +157,19 @@ export class SiteRegistry {
     await this.persist()
   }
 
+  /**
+   * Remember that a site was used, at most once a minute (ES-BV-016).
+   *
+   * Every already-connected `eth_requestAccounts` came through here, and the
+   * only guard was `lastUsed === now` — true for two calls in the same
+   * millisecond and false for everything else — so a page in a loop persisted
+   * the whole sites document, sealed half included, as fast as it could ask.
+   * "When did this site last connect" does not need millisecond resolution.
+   */
   async touch(origin: string, now: number): Promise<void> {
     const row = this.sites[origin]
-    if (!row || row.lastUsed === now) return
+    if (!row) return
+    if (typeof row.lastUsed === 'number' && now - row.lastUsed < TOUCH_INTERVAL_MS) return
     row.lastUsed = now
     await this.persist()
   }

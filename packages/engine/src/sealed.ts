@@ -132,6 +132,21 @@ export class SealedMap<T> {
     return this.mutate(() => [])
   }
 
+  /**
+   * Replace the whole map in one write (ES-BV-016).
+   *
+   * `set()` per entry means one encryption of the entire blob per entry, so a
+   * caller holding N rows and saving them all paid N encryptions of N rows —
+   * quadratic in the number of connected sites, on a path a page can trigger.
+   * This is the same work as one `set`, whatever the size of the map.
+   */
+  async replaceAll(entries: Iterable<readonly [string, T]>): Promise<boolean> {
+    const next: Item<T>[] = []
+    for (const [id, value] of entries) next.push({ id, value })
+    const cap = this.opts.cap
+    return this.mutate(() => (cap !== undefined && next.length > cap ? next.slice(next.length - cap) : next))
+  }
+
   /** Forget the decrypted entries on lock. */
   forget(): void {
     this.poisoned = false

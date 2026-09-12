@@ -45,6 +45,12 @@ const PENDING_DOC: DocSpec<ApprovalRequest[]> = {
   defaultValue: () => [],
 }
 
+/** The tab a request's payload names, where it names one (ES-BV-019). */
+function tabOf(payload: unknown): number | undefined {
+  const tabId = (payload as { tabId?: unknown } | null)?.tabId
+  return typeof tabId === 'number' ? tabId : undefined
+}
+
 export const APPROVAL_TTL_MS = 5 * 60_000
 /**
  * How many requests may wait for a human at once, across every origin. Eight
@@ -52,6 +58,16 @@ export const APPROVAL_TTL_MS = 5 * 60_000
  * bury the sheet the user meant to read.
  */
 export const MAX_PENDING = 8
+/**
+ * How many of those one tab may hold (ES-BV-019).
+ *
+ * The global cap is shared across every origin, and a page can host
+ * cross-origin iframes — so eight iframes on eight attacker origins filled the
+ * whole queue and a legitimate dApp got `limit_exceeded` for as long as five
+ * minutes. Two per tab is more than any honest flow needs, and it means the
+ * queue can only be filled by that many separate tabs the user opened.
+ */
+export const MAX_PENDING_PER_TAB = 2
 
 /**
  * The kinds that end in a signature, and therefore the only kinds where
@@ -157,7 +173,25 @@ export class ApprovalStore {
       actually meant to read. The wallet's own flows are exempt: a hostile page
       must not be able to stop someone sending their own funds.
     */
-    if (!input.origin.startsWith('internal:') && this.list().length >= MAX_PENDING)
+    const external = !input.origin.startsWith('internal:')
+    const tabId = tabOf(input.payload)
+    /*
+      A page can host cross-origin iframes, so the global cap alone let eight
+      of them fill the queue and lock out the site the user was actually
+      looking at (ES-BV-019). A per-tab cap means only tabs the user opened can
+      contribute.
+    */
+    if (external && tabId !== undefined) {
+      const fromTab = this.list().filter(
+        (r) => r.status === 'pending' && tabOf(r.payload) === tabId,
+      )
+      if (fromTab.length >= MAX_PENDING_PER_TAB)
+        throw new EngineError(
+          'limit_exceeded',
+          'This tab already has requests waiting for you. Answer or dismiss one first.',
+        )
+    }
+    if (external && this.list().length >= MAX_PENDING)
       throw new EngineError(
         'limit_exceeded',
         'Too many requests are already waiting for you. Answer or dismiss one first.',
@@ -174,8 +208,22 @@ export class ApprovalStore {
       expiresAt: now + this.ttlMs,
       status: 'pending',
     }
+    /*
+      Persist first (ES-BV-020).
+
+      The entry went into the map and *then* was written, so a storage failure
+      — a quota a page had just filled with an oversized payload — left a
+      request in memory that no restart would ever find and that `isPending`
+      reported as blocking the origin. If it cannot be written down it did not
+      happen.
+    */
     this.byId.set(req.id, req)
-    await this.persist()
+    try {
+      await this.persist()
+    } catch (err) {
+      this.byId.delete(req.id)
+      throw err
+    }
     return req
   }
 

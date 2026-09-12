@@ -126,6 +126,23 @@ export default defineBackground(() => {
     badge()
   }
   browser.tabs.onActivated.addListener(({ tabId }) => release(tabId))
+  /*
+    A tab that closes takes its requests with it (ES-BV-019).
+
+    A sheet raised by a page that is gone can still be approved — and approving
+    it broadcasts to nobody while the origin lock is held for the full five
+    minutes, so the site cannot be used again in a new tab until it expires.
+    The content port's own disconnect covers the ordinary case; this covers the
+    ones where it does not fire, and the requests that were only ever waiting
+    for the tab to come to the front.
+  */
+  browser.tabs.onRemoved.addListener((tabId) => {
+    for (const [id, held] of waiting) if (held.tabId === tabId) waiting.delete(id)
+    void engine.approvals
+      .rejectAll((r) => r.status === 'pending' && tabOf(r) === tabId)
+      .catch(() => undefined)
+    badge()
+  })
   browser.windows.onFocusChanged.addListener((windowId) => {
     if (windowId === browser.windows.WINDOW_ID_NONE) return
     void browser.tabs

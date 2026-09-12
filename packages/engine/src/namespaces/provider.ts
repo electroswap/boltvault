@@ -404,6 +404,87 @@ export interface ReplacedTx {
   readonly gasPrice?: string | null
 }
 
+/**
+ * A trace frame, as far as anything here may assume (ES-BV-024).
+ *
+ * The response was cast to `TraceFrame` and walked, so a service that answered
+ * with something else — a string where a log should be, a `calls` array of
+ * nulls — reached `deltasFromTrace` as though it were a frame. Shape first,
+ * and only the fields that are read.
+ */
+const TraceLogSchema: z.ZodType<unknown> = z.object({
+  address: z.string(),
+  topics: z.array(z.string()),
+  data: z.string(),
+})
+const TraceFrameSchema: z.ZodType<unknown> = z.lazy(() =>
+  z.object({
+    type: z.string().optional(),
+    from: z.string().optional(),
+    to: z.string().optional(),
+    value: z.string().optional(),
+    error: z.string().optional(),
+    revertReason: z.string().optional(),
+    gasUsed: z.string().optional(),
+    input: z.string().optional(),
+    output: z.string().optional(),
+    logs: z.array(TraceLogSchema).optional(),
+    calls: z.array(TraceFrameSchema).optional(),
+  }),
+)
+
+function parseTraceFrame(value: unknown): TraceFrame | null {
+  const parsed = TraceFrameSchema.safeParse(value)
+  return parsed.success ? (parsed.data as TraceFrame) : null
+}
+
+/**
+ * A preview never talks the wallet out of a revert it already measured
+ * (ES-BV-024).
+ *
+ * `simulationFromTrace` reports `ok: true` for any frame with no `error` on
+ * it, and it was returned in place of the estimate — so a trace that came back
+ * clean while the local `eth_estimateGas` had reverted produced a sheet with
+ * no `SIM_FAILED` on it at all. The estimate is the check that matters; the
+ * trace only ever adds detail to it.
+ */
+function withEstimate(
+  simulation: Simulation,
+  prepared: { tx: PreparedTx; estimateError: string | null },
+): Simulation {
+  if (!prepared.estimateError) return simulation
+  return {
+    ...simulation,
+    ok: false,
+    revertReason: simulation.revertReason ?? untrusted(prepared.estimateError, 200),
+  }
+}
+
+/**
+ * The largest request a page may put on the wire (ES-BV-020).
+ *
+ * Comfortably above the biggest honest payload — a 128 KiB calldata, a typed
+ * message of the same order — and far below anything that troubles the
+ * extension's storage quota.
+ */
+const MAX_PORT_MESSAGE_BYTES = 256 * 1024
+
+function messageSize(raw: unknown): number {
+  try {
+    return JSON.stringify(raw)?.length ?? 0
+  } catch {
+    // A cycle cannot have come over a structured-clone boundary, but a message
+    // this cannot measure is a message it will not pass on either.
+    return Number.POSITIVE_INFINITY
+  }
+}
+
+/** The tab a pending approval came from, where its payload names one. */
+function payloadTabId(request: ApprovalRequest): number | undefined {
+  const tabId = (request.payload as { tabId?: unknown } | null)?.tabId
+  return typeof tabId === 'number' ? tabId : undefined
+}
+
 function stableJson(v: unknown): string {
   if (v === null || typeof v !== 'object') return JSON.stringify(v) ?? 'null'
   if (Array.isArray(v)) return `[${v.map(stableJson).join(',')}]`
@@ -510,6 +591,28 @@ export class ProviderService {
     this.ports.set(origin, set)
     const offMessage = channel.onMessage((raw) => {
       if (!isProviderPortMessage(raw) || raw.kind !== 'request') return
+      /*
+        One bound at the door (ES-BV-020).
+
+        Everything past this point — the intent, the approval payload, session
+        storage — was sized by whatever the page sent. Each individual field is
+        bounded in `RpcFlow.intent`, and this is the backstop for the shapes
+        nobody has thought of yet: a hundred parameters, a deeply nested
+        object, a method that takes none of them and got a megabyte anyway.
+      */
+      const size = messageSize(raw)
+      if (size > MAX_PORT_MESSAGE_BYTES) {
+        try {
+          channel.post({
+            kind: 'response',
+            id: raw.id,
+            error: new RpcError(RPC.INVALID_PARAMS, 'That request is too large.').toPayload(),
+          })
+        } catch {
+          // gone
+        }
+        return
+      }
       const clientRequestId = `${origin}#${raw.session ?? 'nosession'}#${raw.id}`
       /*
         Which tab is asking, for as long as it is asking. The approval payload
@@ -534,7 +637,27 @@ export class ProviderService {
     const stop = (): void => {
       offMessage()
       set.delete(onEvent)
-      if (set.size === 0) this.ports.delete(origin)
+      if (set.size > 0) return
+      this.ports.delete(origin)
+      /*
+        The tab is gone; so is everything that was waiting on it (ES-BV-019,
+        ES-BV-017).
+
+        A sheet raised by a page that has since closed can still be approved —
+        and approving it broadcasts to nobody while the origin lock is held for
+        the full five minutes, so the site cannot be used again in a new tab
+        until the lock expires. The per-origin subscriptions and the chain
+        state this flow was holding go with it.
+      */
+      void this.deps.approvals
+        .rejectAll(
+          (r) =>
+            r.origin === origin &&
+            r.status === 'pending' &&
+            (info.tabId === undefined || payloadTabId(r) === info.tabId),
+        )
+        .catch(() => undefined)
+      this.flow.forgetOrigin(origin)
     }
     const offDisconnect = channel.onDisconnect(stop)
     return () => {
@@ -681,6 +804,13 @@ export class ProviderService {
       session: (origin) => this.sessionFor(origin),
       executeSafe: (chainId, method, params) => d.chains.rpc(chainId, method, params),
       approve: (intent) => this.approve(intent),
+      /*
+        A page revoking its own permissions goes through the engine's door
+        (ES-BV-018), so the change listeners that reject the origin's pending
+        approvals and refresh Settings actually fire. `ctx.sites` is the raw
+        registry, which only writes the row.
+      */
+      revoke: (origin) => d.sites.disconnect(origin),
       emit: (origin, event) => {
         for (const l of this.ports.get(origin) ?? []) l(event)
       },
@@ -979,7 +1109,6 @@ export class ProviderService {
         return {
           kind: 'watch_asset',
           type: intent.type,
-          options: intent.options,
           address,
           symbol,
           decimals,
@@ -1708,8 +1837,9 @@ export class ProviderService {
             ],
           }),
         })
-        const json = (await res.json()) as { result?: TraceFrame; error?: { message?: string } }
-        if (json.result) return simulationFromTrace(json.result, request.tx.from)
+        const json = (await res.json()) as { result?: unknown; error?: { message?: string } }
+        const frame = parseTraceFrame(json.result)
+        if (frame) return withEstimate(simulationFromTrace(frame, request.tx.from), prepared)
       } catch {
         // fall through to the API, then to the estimate
       }
@@ -1773,10 +1903,11 @@ export class ProviderService {
         body,
       })
       const json = (await res.json()) as {
-        result?: TraceFrame
+        result?: unknown
         error?: { code?: number; message?: string }
       }
-      if (json.result) return simulationFromTrace(json.result, request.tx.from)
+      const frame = parseTraceFrame(json.result)
+      if (frame) return withEstimate(simulationFromTrace(frame, request.tx.from), prepared)
       /*
         -32002 is "tracing is not enabled" — the one case the plain message is
         for. Anything else is a tracer that exists and could not answer this
@@ -1788,7 +1919,9 @@ export class ProviderService {
         return estimateSimulation(
           BigInt(prepared.tx.gas),
           prepared.estimateError,
-          `The preview service could not trace this: ${err.message}.`,
+          // The service's own words, rendered on the sheet: bounded and
+          // stripped like every other remote string (ES-BV-024).
+          `The preview service could not trace this: ${untrusted(err.message, 200)}.`,
         )
     } catch {
       // Unreachable API: no preview, and no explanation worth showing either.

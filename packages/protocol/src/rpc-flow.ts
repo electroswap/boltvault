@@ -14,6 +14,7 @@ import {
   classify,
   MAX_LOG_RANGE,
   SAFE_RATE_PER_SECOND,
+  CONNECT_RATE_PER_SECOND,
   SESSION_METHODS,
 } from './methods'
 import type { SiteRegistry } from './sessions'
@@ -160,6 +161,13 @@ export interface RpcContext {
   executeSafe(chainId: number, method: string, params: readonly unknown[]): Promise<unknown>
   /** Put the intent in front of the user and, if approved, execute it. Throws RpcError 4001 on reject. */
   approve(intent: ApprovalIntent): Promise<unknown>
+  /**
+   * Disconnect an origin through the engine's own path (ES-BV-018), so the
+   * change listeners that reject its pending approvals and refresh Settings
+   * actually fire. Absent in a bare harness, which then falls back to the raw
+   * registry.
+   */
+  revoke?(origin: string): Promise<void>
   emit(origin: string, event: ProviderEvent): void
   readonly settings: { readonly ethSignEnabled: boolean }
   /** Fan a chain's heads out as `message` events to this origin; returns the unsubscribe. */
@@ -215,6 +223,40 @@ function optionalHex(v: unknown, what: string): Hex | undefined {
 }
 
 /** A leaky bucket per origin for SAFE traffic. */
+/** How many live `newHeads` subscriptions one origin may hold (ES-BV-017). */
+const MAX_SUBSCRIPTIONS_PER_ORIGIN = 8
+
+/*
+  What a page may hand the wallet (ES-BV-020).
+
+  Only `method.length` was bounded, so `message`, `typedData`, `data` and the
+  `wallet_watchAsset` options were unbounded all the way into an approval
+  payload and from there into session storage — which has a quota, and a write
+  that fails there takes the wallet's own approvals with it. These are far
+  above anything an honest dApp sends: a SIWE message is a few hundred bytes,
+  the largest real calldata is tens of kilobytes.
+*/
+const MAX_MESSAGE_BYTES = 64 * 1024
+const MAX_CALLDATA_BYTES = 128 * 1024
+const MAX_TYPED_DATA_BYTES = 128 * 1024
+
+/** `JSON.stringify` that answers null on a cycle rather than throwing. */
+function safeStringify(v: unknown): string | null {
+  try {
+    return JSON.stringify(v) ?? null
+  } catch {
+    return null
+  }
+}
+
+function bounded(value: string, max: number, what: string): string {
+  // Hex and JSON are both ASCII-ish; the character count is the byte count
+  // within a factor nobody cares about at these sizes.
+  if (value.length > max)
+    throw new RpcError(RPC.INVALID_PARAMS, `${what} is too large (limit ${max} bytes).`)
+  return value
+}
+
 class RateLimiter {
   private readonly buckets = new Map<string, { tokens: number; at: number }>()
   constructor(
@@ -244,6 +286,10 @@ export class RpcFlow {
     { clientRequestId: string; promise: Promise<unknown> }
   >()
   private readonly limiter: RateLimiter
+  /** A second, much lower bucket for connect and chain calls (ES-BV-016). */
+  private readonly heavyLimiter: RateLimiter
+  /** Subscription ids per origin, so a page cannot hold an unbounded number (ES-BV-017). */
+  private readonly subsByOrigin = new Map<string, Set<string>>()
   /*
     An unconnected origin's chain preference, in memory only.
 
@@ -262,6 +308,7 @@ export class RpcFlow {
 
   constructor(private readonly ctx: RpcContext) {
     this.limiter = new RateLimiter(SAFE_RATE_PER_SECOND, () => ctx.now())
+    this.heavyLimiter = new RateLimiter(CONNECT_RATE_PER_SECOND, () => ctx.now())
   }
 
   /** Whether an approval is open for this origin (the UI may show a badge). */
@@ -296,8 +343,18 @@ export class RpcFlow {
           throw new RpcError(RPC.LIMIT_EXCEEDED, 'Too many requests. Slow down.')
         return this.safe(origin, chainId, method, params)
       case 'connect':
+        /*
+          Metered too (ES-BV-016). The leaky bucket used to apply to `safe`
+          alone, so a connected page could call `eth_requestAccounts` — or
+          switch between two chains it had already been allowed — as fast as it
+          liked, and each call re-encrypted the whole sites blob.
+        */
+        if (!this.heavyLimiter.take(origin))
+          throw new RpcError(RPC.LIMIT_EXCEEDED, 'Too many requests. Slow down.')
         return this.connect(origin, chainId, method, clientRequestId)
       case 'chain':
+        if (!this.heavyLimiter.take(origin))
+          throw new RpcError(RPC.LIMIT_EXCEEDED, 'Too many requests. Slow down.')
         return this.chain(origin, chainId, method, params, clientRequestId)
       case 'approval':
         return this.approval(origin, chainId, method, params, clientRequestId)
@@ -366,8 +423,20 @@ export class RpcFlow {
           )
         if (!this.ctx.subscribeHeads)
           throw new RpcError(RPC.UNSUPPORTED_METHOD, 'Subscriptions are not supported here.')
+        /*
+          Bounded per origin (ES-BV-017). Subscriptions were keyed
+          `origin:id` with no cap and removed only by `eth_unsubscribe` or a
+          whole-flow dispose, and each one keeps a per-chain head poll alive —
+          so a page in a loop could hold an unbounded number of them, and the
+          polling outlived the tab that asked.
+        */
+        const live = this.subsByOrigin.get(origin) ?? new Set<string>()
+        if (live.size >= MAX_SUBSCRIPTIONS_PER_ORIGIN)
+          throw new RpcError(RPC.LIMIT_EXCEEDED, 'Too many open subscriptions for this site.')
         const id = `0x${(++this.subCounter).toString(16).padStart(32, '0')}` as Hex
         this.subscriptions.set(`${origin}:${id}`, this.ctx.subscribeHeads(origin, chainId, id))
+        live.add(id)
+        this.subsByOrigin.set(origin, live)
         return id
       }
       case 'eth_unsubscribe': {
@@ -376,6 +445,7 @@ export class RpcFlow {
         if (!off) return false
         off()
         this.subscriptions.delete(`${origin}:${id}`)
+        this.subsByOrigin.get(origin)?.delete(id)
         return true
       }
       case 'eth_getLogs': {
@@ -490,7 +560,19 @@ export class RpcFlow {
   ): Promise<unknown> {
     if (method === 'wallet_revokePermissions') {
       const was = await this.ctx.session(origin)
-      await this.ctx.sites.disconnect(origin)
+      /*
+        The same door the user's own revoke uses (ES-BV-018).
+
+        This called the raw `SiteRegistry`, which writes the row and stops —
+        so the engine's change listeners never fired: the origin's pending
+        approvals stayed on screen and could still be approved after the site
+        had disconnected itself, and Settings went on listing a site that was
+        gone. `revoke` is `SitesService.disconnect`, which is what Settings
+        calls, and it fans the change out.
+      */
+      if (this.ctx.revoke) await this.ctx.revoke(origin)
+      else await this.ctx.sites.disconnect(origin)
+      this.forgetOrigin(origin)
       if (was) {
         this.ctx.emit(origin, { event: 'accountsChanged', payload: [] })
         this.ctx.emit(origin, {
@@ -616,8 +698,8 @@ export class RpcFlow {
         owns(fromHex)
         const msg =
           typeof message === 'string' && HEX.test(message)
-            ? (message as Hex)
-            : (`0x${utf8Hex(String(message))}` as Hex)
+            ? (bounded(message, MAX_MESSAGE_BYTES * 2, 'message') as Hex)
+            : (`0x${utf8Hex(bounded(String(message), MAX_MESSAGE_BYTES, 'message'))}` as Hex)
         return {
           kind: 'sign_message',
           origin,
@@ -648,6 +730,11 @@ export class RpcFlow {
         const typed = param(params, 1)
         if (typed === undefined || typed === null)
           throw new RpcError(RPC.INVALID_PARAMS, 'typed data is required')
+        bounded(
+          typeof typed === 'string' ? typed : (safeStringify(typed) ?? ''),
+          MAX_TYPED_DATA_BYTES,
+          'typed data',
+        )
         return {
           kind: 'sign_typed_data',
           origin,
@@ -680,7 +767,13 @@ export class RpcFlow {
             ? { value: optionalHex(t['value'], 'value') }
             : {}),
           ...(optionalHex(t['data'] ?? t['input'], 'data') !== undefined
-            ? { data: optionalHex(t['data'] ?? t['input'], 'data') }
+            ? {
+                data: bounded(
+                  optionalHex(t['data'] ?? t['input'], 'data') as string,
+                  MAX_CALLDATA_BYTES * 2,
+                  'calldata',
+                ) as Hex,
+              }
             : {}),
           ...(optionalHex(t['gas'], 'gas') !== undefined
             ? { gas: optionalHex(t['gas'], 'gas') }
@@ -788,9 +881,32 @@ export class RpcFlow {
     this.ctx.emit(origin, { event: 'accountsChanged', payload: [...addresses] })
   }
 
+  /**
+   * Drop everything this flow was holding for one origin (ES-BV-017).
+   *
+   * Subscriptions kept a per-chain head poll alive for as long as the flow
+   * lived, whatever became of the tab that asked — and `pendingChain` and
+   * `allowedChains` grew an entry per origin that was never removed. Called
+   * when an origin's last port goes away, and when a site revokes itself.
+   */
+  forgetOrigin(origin: string): void {
+    for (const id of this.subsByOrigin.get(origin) ?? []) {
+      const key = `${origin}:${id}`
+      this.subscriptions.get(key)?.()
+      this.subscriptions.delete(key)
+    }
+    this.subsByOrigin.delete(origin)
+    this.pendingChain.delete(origin)
+    // Allowed chains are keyed `<origin>#<chainId>`; an origin that has gone
+    // away should have to ask again for every chain it was allowed.
+    for (const key of [...this.allowedChains])
+      if (key.startsWith(`${origin}#`)) this.allowedChains.delete(key)
+  }
+
   dispose(): void {
     for (const off of this.subscriptions.values()) off()
     this.subscriptions.clear()
+    this.subsByOrigin.clear()
   }
 }
 

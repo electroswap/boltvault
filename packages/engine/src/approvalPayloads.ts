@@ -189,8 +189,15 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     kind: z.literal('watch_asset'),
-    type: z.string(),
-    options: z.unknown(),
+    type: z.string().max(32),
+    /*
+      The site's raw options are not carried (ES-BV-020).
+
+      They were copied into the payload as `unknown` and persisted with it, so
+      a page could put an arbitrarily large object into session storage through
+      a sheet — and everything the sheet actually reads is already decoded into
+      the named fields below. What is kept is what is shown.
+    */
     /** What the site claims (EIP-747) and what the chain says; `mismatch` when they disagree (plan A3). */
     address: z.string().nullable(),
     symbol: z.string().nullable(),
@@ -211,7 +218,11 @@ export const WatchAssetOptionsSchema = z.object({
   address: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
   symbol: z.string().max(16).optional(),
   decimals: z.number().int().min(0).max(36).optional(),
-  image: z.string().optional(),
+  /*
+    A logo URL, not a data: URI of arbitrary length (ES-BV-020). It was
+    unbounded and reached the payload, the store and the sheet.
+  */
+  image: z.string().max(2048).optional(),
 })
 export type WatchAssetOptions = z.infer<typeof WatchAssetOptionsSchema>
 export type ApprovalPayload = z.infer<typeof ApprovalPayloadSchema>
