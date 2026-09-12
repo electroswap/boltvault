@@ -88,6 +88,17 @@ const TOP_AIR = 48
  * that is set on the `Pressable`, not here.
  */
 const ROW_PAD = 5
+
+/**
+ * How long the screen waits after a keystroke before asking for a price.
+ *
+ * Every millisecond here is a millisecond the user spends looking at the
+ * previous number, so it is the cheapest latency in the whole path to give
+ * back — and now the safest, because a request this does start is cancelled by
+ * the next one rather than left running. 250 was chosen when a superseded quote
+ * ran to completion and cost a full mini-router call; it no longer does.
+ */
+const QUOTE_DEBOUNCE_MS = 160
 const QUOTE_STALE_MS = 8_000
 const DURATIONS = [
   { id: '86400', label: '1 day' },
@@ -204,13 +215,29 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
         setQuote(null)
         return
       }
+      /*
+        The debounce, and what happens to the one already in flight.
+
+        `alive` was only a guard against a late answer painting over a newer
+        one. It still is — but the request it belongs to now stops as well: the
+        engine's `Quoter` aborts whatever it was asking about this pair the
+        moment a new amount arrives, and a superseded quote returns a skeleton
+        instead of falling through to the mini-router. So a fast typist leaves
+        no fetches running behind them and no RPC spent on amounts they have
+        already replaced. Owner: "cancel in flight requests if the input/output
+        number is updated."
+
+        `QUOTE_DEBOUNCE_MS` is the wait before asking at all, and it is time the
+        user spends looking at a stale number, so it is as short as it can be
+        without asking on every keypress.
+      */
       let alive = true
       const id = setTimeout(() => {
         engine.swap.quote(swapArgs()).then(
           (q) => alive && setQuote(q),
           (err: unknown) => alive && setError(err instanceof Error ? err.message : String(err)),
         )
-      }, 250)
+      }, QUOTE_DEBOUNCE_MS)
       return () => {
         alive = false
         clearTimeout(id)

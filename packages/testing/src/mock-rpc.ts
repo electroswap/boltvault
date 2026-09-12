@@ -49,6 +49,9 @@ export interface MockRpc {
 
 const MULTICALL3_ABI = parseAbi([
   'function aggregate3((address target, bool allowFailure, bytes callData)[] calls) payable returns ((bool success, bytes returnData)[] returnData)',
+  // The real Multicall3 has this, and the swap path batches the native balance
+  // through it rather than spending a separate eth_getBalance on it.
+  'function getEthBalance(address addr) view returns (uint256 balance)',
 ])
 
 function hex(n: bigint): Hex {
@@ -84,6 +87,15 @@ export async function startMockRpc(init: Partial<Pick<MockChainState, 'chainId' 
     // Multicall3 (any address a test registered as multicall) — recurse per call.
     if (state.code.get(to) === 'multicall3') {
       const decoded = decodeFunctionData({ abi: MULTICALL3_ABI, data: tx.data })
+      // Multicall3's own helper, which a batch may target like any other contract.
+      if (decoded.functionName === 'getEthBalance') {
+        const who = String(decoded.args[0]).toLowerCase()
+        return encodeFunctionResult({
+          abi: MULTICALL3_ABI,
+          functionName: 'getEthBalance',
+          result: state.balances.get(who) ?? 0n,
+        })
+      }
       const calls = decoded.args[0]
       const results: Array<{ success: boolean; returnData: Hex }> = []
       for (const c of calls) {

@@ -46,7 +46,7 @@ import {
   type TaxProbe,
 } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
-import { formatUnits, maxUint256, parseUnits, type Hex } from 'viem'
+import { formatUnits, maxUint256, parseUnits, type Abi, type Hex } from 'viem'
 import { z } from 'zod'
 import type {
   ClientFailureInput,
@@ -57,7 +57,7 @@ import type {
 } from '../clientFailureApi'
 import { EngineError } from '../errors'
 import type { NamespaceSpec } from '../host'
-import { readMany } from '../multicall'
+import { multicallAddress, readMany } from '../multicall'
 import type { Quoter, QuoterInput } from '../quoterApi'
 import {
   AccountIdSchema,
@@ -190,12 +190,31 @@ export interface SwapAccountState {
   readonly permit2Expiration: number | null
 }
 
+/**
+ * The one Multicall3 function the swap path calls directly.
+ *
+ * Every other read here is a contract call that Multicall3 wraps; the native
+ * balance is the exception, and this is how it joins the same aggregate rather
+ * than costing a round trip of its own.
+ */
+const MULTICALL3_ABI = [
+  {
+    type: 'function',
+    name: 'getEthBalance',
+    stateMutability: 'view',
+    inputs: [{ name: 'addr', type: 'address' }],
+    outputs: [{ name: 'balance', type: 'uint256' }],
+  },
+] as const satisfies Abi
+
 const ZERO = '0x0000000000000000000000000000000000000000' as Hex
 /** The UR deadline for a swap the user is looking at (§8.6: stale after 8 s, but the chain needs headroom). */
 const DEADLINE_S = 20 * 60
 /** Combined slippage at which `minimumOut` reaches zero, i.e. no floor at all. */
 const BIPS_CEILING = 10_000
 /** Hard clamp, so a path that ever skips the refusal still leaves a non-zero floor. */
+/** How long a gas price stays good enough for a fee reserve. */
+const GAS_PRICE_CACHE_MS = 15_000
 const MAX_EFFECTIVE_SLIPPAGE_BPS = 9_900
 const hex = (n: bigint): Hex => `0x${n.toString(16)}`
 const isEtn = (chainId: number): chainId is 52014 | 5201420 =>
@@ -279,6 +298,34 @@ function encodableHop(h: SwapHop): Hop {
 
 export class SwapService {
   constructor(private readonly deps: SwapDeps) {}
+
+  /**
+   * The last gas price read, and when.
+   *
+   * `eth_gasPrice` cannot join the aggregate — it is not a contract call, and
+   * Multicall3's `getBasefee` is the base fee, not the same number — so the way
+   * to get it off the keystroke path is not to ask for it every keystroke. It
+   * feeds one thing: how much native currency to hold back for the network fee
+   * on a native-input swap. That is a reserve, and a reserve computed from a gas
+   * price a few seconds old is the same reserve.
+   *
+   * Keyed by the endpoint as well as the chain, like the holder tier: a price
+   * read through an RPC the user has just replaced is the old endpoint's answer.
+   */
+  private readonly gasPriceCache = new Map<string, { at: number; value: bigint }>()
+
+  private async gasPriceFor(chainId: number): Promise<bigint> {
+    const key = `${String(chainId)}:${String(this.deps.chains.rpcEpoch(chainId))}`
+    const now = this.deps.platform.now()
+    const hit = this.gasPriceCache.get(key)
+    if (hit && now - hit.at < GAS_PRICE_CACHE_MS) return hit.value
+    const raw = await this.deps.chains
+      .rpc(chainId, 'eth_gasPrice', [])
+      .catch(() => '0x3b9aca00')
+    const value = BigInt(String(raw ?? '0x3b9aca00'))
+    this.gasPriceCache.set(key, { at: now, value })
+    return value
+  }
 
   private async pair(
     chainId: number,
@@ -367,7 +414,9 @@ export class SwapService {
     input: QuoterInput,
     addresses: QuoteAddresses,
     read: EsReader,
-  ): Promise<{ quote: RouteQuote; source: 'api' | 'onchain'; provenance: QuoteProvenance } | null> {
+  ): Promise<
+    { quote: RouteQuote; source: 'api' | 'onchain'; provenance: QuoteProvenance } | null | 'superseded'
+  > {
     const quoter = this.deps.quoter
     /*
       Why the service was not used, kept even on the happy path to nothing.
@@ -379,6 +428,14 @@ export class SwapService {
     let fallbackReason: string | null = quoter ? null : 'no routing service in this build'
     if (quoter) {
       const served = await quoter.route(input)
+      /*
+        Nobody is waiting for this one: a newer amount for the same pair
+        replaced it while it was in flight. Falling through to the mini-router
+        here would spend the wallet's largest RPC call answering a question that
+        has already been asked again — so the whole quote is abandoned instead,
+        and `quote()` returns the neutral skeleton the caller will discard.
+      */
+      if (served.kind === 'superseded') return 'superseded'
       if (served.kind === 'route') {
         /*
           The served quote is used as served. No second opinion from the chain.
@@ -477,7 +534,7 @@ export class SwapService {
         d.vault.status(),
         this.isBlocked(chainId, inView.address),
         this.isBlocked(chainId, outView.address),
-        d.chains.rpc(chainId, 'eth_gasPrice', []).catch(() => '0x3b9aca00'),
+        this.gasPriceFor(chainId),
         d.holder.tier(input.accountId, chainId),
       ])
     const account = accountList.find((a) => a.id === input.accountId)
@@ -529,7 +586,7 @@ export class SwapService {
 
     // Balances and the network fee reserve.
     const read = readerFor(d.chains, chainId)
-    const gasPrice = BigInt(String(gasPriceRaw ?? '0x3b9aca00'))
+    const gasPrice = gasPriceRaw
     const stateCalls: EsReadCall[] = nativeIn
       ? []
       : [
@@ -572,12 +629,55 @@ export class SwapService {
         ] as const) as Promise<readonly [Awaited<ReturnType<SwapService['route']>>, TaxProbe, TaxProbe]>)
       : null
 
-    // The owner's own state, in one wave beside the router rather than in front of it.
-    const [nativeBalanceRaw, state] = await Promise.all([
-      d.chains.rpc(chainId, 'eth_getBalance', [owner, 'latest']).catch(() => '0x0'),
-      stateCalls.length ? read(stateCalls) : Promise.resolve([]),
+    /*
+      The native balance rides in the aggregate instead of being its own call.
+
+      `eth_getBalance` is not a contract call, so it looked like it had to go on
+      its own — but Multicall3 exposes `getEthBalance(address)`, so it can sit in
+      the same batch as the allowances and the tax probes. `readMany` coalesces
+      every read issued within 12 ms into one aggregate, and these all are, so
+      the whole of the owner's state plus both tax probes is one round trip.
+      Owner: "any of those calls that could become multicall should."
+
+      When a chain has no working Multicall3 (`multicallAddress` probes once and
+      caches), `readMany` falls back to one call per read anyway, so there is
+      nothing to fold into — the plain `eth_getBalance` is used instead.
+    */
+    const mc = await multicallAddress(d.chains, chainId)
+    const nativeCall: readonly EsReadCall[] = mc
+      ? [{ address: mc, abi: MULTICALL3_ABI, functionName: 'getEthBalance', args: [owner] }]
+      : []
+    const batched = [...nativeCall, ...stateCalls]
+    const [batchedResults, rawNative] = await Promise.all([
+      batched.length ? read(batched) : Promise.resolve([] as EsReadResult[]),
+      mc
+        ? Promise.resolve(null)
+        : d.chains.rpc(chainId, 'eth_getBalance', [owner, 'latest']).catch(() => '0x0'),
     ])
-    const nativeBalance = BigInt(String(nativeBalanceRaw ?? '0x0'))
+    const state = mc ? batchedResults.slice(nativeCall.length) : batchedResults
+    const nativeSlot = mc ? batchedResults[0] : undefined
+    /*
+      A slot that did not answer is not a balance of zero.
+
+      Reading a failed `getEthBalance` as 0n would tell the user they cannot
+      afford the network fee on a funded account — the wallet refusing a swap
+      because a batch entry came back empty. A Multicall3 variant without the
+      helper, or an aggregate that partially failed, therefore falls back to the
+      plain `eth_getBalance` rather than to a number nobody measured. It costs a
+      round trip in a case that should not happen, which is the right way round.
+    */
+    const nativeBalance =
+      nativeSlot?.ok && typeof nativeSlot.value === 'bigint'
+        ? nativeSlot.value
+        : BigInt(
+            String(
+              (rawNative ??
+                (await d.chains
+                  .rpc(chainId, 'eth_getBalance', [owner, 'latest'])
+                  .catch(() => '0x0'))) ??
+                '0x0',
+            ),
+          )
     const balanceIn = nativeIn
       ? nativeBalance
       : state[0]?.ok && typeof state[0].value === 'bigint'
@@ -696,6 +796,13 @@ export class SwapService {
           ),
           ...taxProbes(A, wrappedIn, wrappedOut, wetn, read),
         ]))
+      /*
+        Abandoned mid-flight because the amount changed. Return the neutral
+        skeleton: the caller has already thrown this answer away, and every
+        step after this one — the price-impact probe, the encode, the fee
+        arithmetic — would be work done for nobody.
+      */
+      if (routed === 'superseded') return withState
       probeIn = amountIn / 1000n
       taxIn = tIn
       taxOut = tOut

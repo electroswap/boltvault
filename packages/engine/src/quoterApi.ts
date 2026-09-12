@@ -66,6 +66,16 @@ export type QuoterOutcome =
   | { readonly kind: 'route'; readonly quote: RouteQuote; readonly cached: boolean; readonly blockNumber: string | null; readonly id: string | null }
   /** Asked and got no usable answer. The caller quotes on chain; the reason is for the log, not the user. */
   | { readonly kind: 'none'; readonly reason: string }
+  /**
+   * Abandoned because a newer amount for the same pair replaced it.
+   *
+   * Distinct from `none` on purpose: `none` means "the service could not
+   * answer, quote on chain instead", and doing that for a question nobody is
+   * waiting for is the exact waste this exists to stop. The caller drops the
+   * whole quote instead. Owner: "cancel in flight requests if the input/output
+   * number is updated."
+   */
+  | { readonly kind: 'superseded' }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 const addr = (v: unknown): Hex | null => (typeof v === 'string' && /^0x[0-9a-fA-F]{40}$/.test(v) ? (v.toLowerCase() as Hex) : null)
@@ -204,6 +214,15 @@ export function parseQuote(body: unknown, input: QuoterInput): QuoterOutcome {
 export class Quoter {
   private readonly inflight = new Map<string, Promise<QuoterOutcome>>()
   private readonly recent = new Map<string, { at: number; outcome: QuoterOutcome }>()
+  /**
+   * The request currently in flight for each pair, so a new amount can stop it.
+   *
+   * Keyed by the pair rather than the whole question: typing "1", "12", "123"
+   * asks three different questions about the same two tokens, and only the last
+   * one has anybody waiting for it. The debounce upstream stops most of these
+   * from starting at all; this stops the ones that did.
+   */
+  private readonly pending = new Map<string, { key: string; abort: AbortController }>()
   private blockedUntil = 0
 
   constructor(private readonly deps: QuoterDeps) {}
@@ -211,14 +230,32 @@ export class Quoter {
   async route(input: QuoterInput): Promise<QuoterOutcome> {
     const now = this.deps.now()
     if (now < this.blockedUntil) return { kind: 'none', reason: 'rate limited' }
-    const key = `${String(input.chainId)}|${input.tokenIn.toLowerCase()}|${input.tokenOut.toLowerCase()}|${input.amountIn.toString()}`
+    const pair = `${String(input.chainId)}|${input.tokenIn.toLowerCase()}|${input.tokenOut.toLowerCase()}`
+    const key = `${pair}|${input.amountIn.toString()}`
     const hit = this.recent.get(key)
     if (hit && now - hit.at < CACHE_MS) return hit.outcome
     const running = this.inflight.get(key)
     if (running) return running
-    const run = this.ask(input).then((outcome) => {
-      if (this.recent.size >= MAX_CACHED) this.recent.clear()
-      this.recent.set(key, { at: this.deps.now(), outcome })
+    /*
+      A new amount for this pair replaces whatever was asked about it last.
+
+      The old request has nobody waiting for it — the screen threw its result
+      away the moment the field changed — so it is stopped rather than left to
+      hold a connection open on a phone radio for the rest of its timeout.
+      Asking about the same amount again is NOT a supersession: that is the
+      `inflight` share above, which returns the request already running.
+    */
+    const previous = this.pending.get(pair)
+    if (previous && previous.key !== key) previous.abort.abort()
+    const abort = new AbortController()
+    this.pending.set(pair, { key, abort })
+    const run = this.ask(input, abort.signal).then((outcome) => {
+      // A superseded answer is not an answer: caching it would serve it to the
+      // next person who asks this exact question.
+      if (outcome.kind !== 'superseded') {
+        if (this.recent.size >= MAX_CACHED) this.recent.clear()
+        this.recent.set(key, { at: this.deps.now(), outcome })
+      }
       return outcome
     })
     this.inflight.set(key, run)
@@ -226,10 +263,11 @@ export class Quoter {
       return await run
     } finally {
       this.inflight.delete(key)
+      if (this.pending.get(pair)?.key === key) this.pending.delete(pair)
     }
   }
 
-  private async ask(input: QuoterInput): Promise<QuoterOutcome> {
+  private async ask(input: QuoterInput, signal: AbortSignal): Promise<QuoterOutcome> {
     try {
       /*
         `configs` is mandatory and `configs[0].recipient` is read unguarded, so
@@ -274,7 +312,8 @@ export class Quoter {
         body,
         // ACAO is `*` on this service, which is incompatible with sending credentials.
         credentials: 'omit',
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        // Either reason to stop: the service taking too long, or nobody wanting the answer any more.
+        signal: AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]),
       })
       if (response.status === 429) {
         this.blockedUntil = this.deps.now() + RATE_LIMIT_BACKOFF_MS
@@ -283,6 +322,9 @@ export class Quoter {
       if (!response.ok) return { kind: 'none', reason: `http ${String(response.status)}` }
       return parseQuote(await response.json(), input)
     } catch (error) {
+      // Aborted by a newer amount, not by the clock: the caller drops the quote
+      // rather than falling back to the chain for a question nobody asked.
+      if (signal.aborted) return { kind: 'superseded' }
       return { kind: 'none', reason: error instanceof Error ? error.name : 'failed' }
     }
   }

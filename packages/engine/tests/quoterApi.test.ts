@@ -55,7 +55,10 @@ function served(route: readonly unknown[], quote: Record<string, unknown> = {}, 
 /** The parsed route, or a failure naming the reason the body was refused. */
 function routed(body: unknown, against: QuoterInput = input): Extract<QuoterOutcome, { kind: 'route' }> {
   const outcome = parseQuote(body, against)
-  if (outcome.kind !== 'route') throw new Error(`expected a route, got: ${outcome.reason}`)
+  // `parseQuote` never returns 'superseded' — that is decided by the caller, not
+  // by the body — but the union it shares says it might, so narrow before reading.
+  if (outcome.kind !== 'route')
+    throw new Error(`expected a route, got: ${outcome.kind === 'none' ? outcome.reason : outcome.kind}`)
   return outcome
 }
 
@@ -426,6 +429,75 @@ describe('Quoter.route around the network', () => {
     // One request, one answer, handed to both askers.
     expect(b).toEqual(a)
     expect(h.calls).toHaveLength(1)
+  })
+
+  /*
+    Typing "1", then "12", asks two questions about the same pair and only wants
+    the answer to the second. The first is stopped rather than left to hold a
+    connection open, and it comes back as `superseded` — which the caller reads
+    as "drop this quote", not as "the service failed, go and quote on chain".
+  */
+  it('a new amount for the same pair aborts the request still in flight for it', async () => {
+    const aborted: boolean[] = []
+    const h = harness(
+      (call, init) =>
+        new Promise<Response>((resolve, reject) => {
+          const signal = init?.signal
+          signal?.addEventListener('abort', () => {
+            aborted[call - 1] = true
+            reject(new DOMException('aborted', 'AbortError'))
+          })
+          // The second question answers; the first is never given one. The body
+          // has to echo the amount actually asked about, or `parseQuote` refuses it.
+          if (call === 2)
+            resolve(json(served([[v3(FIX, WETN, '3000')]], { amount: (AMOUNT + 1n).toString() })))
+        }),
+    )
+    const first = h.quoter.route(input)
+    const second = h.quoter.route({ ...input, amountIn: input.amountIn + 1n })
+    const [a, b] = await Promise.all([first, second])
+    expect(a).toEqual({ kind: 'superseded' })
+    expect(aborted[0]).toBe(true)
+    expect(b.kind).toBe('route')
+    expect(h.calls).toHaveLength(2)
+  })
+
+  it('does not cache a superseded answer as this question\u2019s answer', async () => {
+    const h = harness(
+      (call, init) =>
+        new Promise<Response>((resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+          if (call === 2)
+            resolve(json(served([[v3(FIX, WETN, '3000')]], { amount: (AMOUNT + 1n).toString() })))
+          if (call === 3) resolve(json(served([[v3(FIX, WETN, '3000')]])))
+        }),
+    )
+    const first = h.quoter.route(input)
+    await h.quoter.route({ ...input, amountIn: input.amountIn + 1n })
+    expect(await first).toEqual({ kind: 'superseded' })
+    // Asking the original question again must reach the service, not replay the
+    // abandonment as though it were what the service said.
+    const again = await h.quoter.route(input)
+    expect(again.kind).toBe('route')
+    expect(h.calls).toHaveLength(3)
+  })
+
+  /* Supersession is per pair: asking about a different pair cancels nothing. */
+  it('a question about another pair does not abort the one in flight', async () => {
+    const h = harness(
+      (call, init) =>
+        new Promise<Response>((resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+          // Answer the second first, so the first is still in flight when it lands.
+          if (call === 2) resolve(json(served([[v3(FIX, MID, '3000')]])))
+          else setTimeout(() => resolve(json(served([[v3(FIX, WETN, '3000')]]))), 5)
+        }),
+    )
+    const first = h.quoter.route(input)
+    const other = await h.quoter.route({ ...input, tokenOut: MID })
+    expect(other.kind).toBe('route')
+    // The FIX→WETN question was never touched by the FIX→MID one.
+    expect((await first).kind).toBe('route')
   })
 
   it('a repeat a moment later comes from the short cache; one a few seconds later is asked again', async () => {
