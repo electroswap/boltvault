@@ -62,7 +62,7 @@ async function approvalOn(engine: Engine, predicate: (r: ApprovalRequest) => boo
   })
 }
 
-type Payload = { assessment: { rules: Array<{ code: string }>; statements: Array<{ text: string }> } }
+type Payload = { assessment: { rules: Array<{ code: string }>; statements: Array<{ text: string }>; severity: string; presentation: { blocked: boolean } } }
 
 describe("the wallet fee on ElectroSwap's own site", () => {
   let rpc: MockRpc
@@ -131,6 +131,13 @@ describe("the wallet fee on ElectroSwap's own site", () => {
     // Our own sink is not a stranger taking a cut, whoever assembled the bytes.
     expect(payload.assessment.rules.map((r) => r.code)).not.toContain('DAPP_TIPS_THIRD_PARTY')
     expect(payload.assessment.rules.map((r) => r.code)).not.toContain('WALLET_FEE_OVERCHARGE')
+    /*
+      The decision in one assertion: the owner's line was "we don't block, let
+      them use the wallet and they get charged the fee". A sheet that named the
+      fee correctly and then refused to arm would be the opposite of that, and
+      every rule above only says what is *absent*.
+    */
+    expect(payload.assessment.presentation.blocked).toBe(false)
     await engine.engine.approvals.decide({ id: req.id, approve: false })
     await sending
   })
