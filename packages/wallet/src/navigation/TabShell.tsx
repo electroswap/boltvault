@@ -10,7 +10,7 @@ import { Approval } from '../screens/Approval'
 import { Home, type HomeProps } from '../screens/Home'
 import { Onboarding } from '../screens/Onboarding'
 import { Splash } from '../screens/Splash'
-import { UpdateRequired } from '../components/UpdateRequired'
+import { UpdateRequired, isBlockedByUpdate, useUpdateRequired } from '../components/UpdateRequired'
 import { Unlock } from '../screens/Unlock'
 import { useApprovals } from '../state/useApprovals'
 import { HardwarePrompt } from '../components/HardwarePrompt'
@@ -141,6 +141,8 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   useFlowNavigation()
   useFeelEvents()
   const { pendingPairing, confirmPairing, dismissPairing } = useLinks()
+  // Whether the signed flags say this build is too old (ES-BV-007).
+  const staleBuild = useUpdateRequired()
   // Owner: split the routes, "but preload other CSS for the rest of the bundle
   // after home is rendered so there's no additional load time for next
   // tabs/pages." One effect after the first paint, on idle.
@@ -224,6 +226,22 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   if (external.length > 0 && body !== 'extension-tab' && current.screen !== 'sign' && current.screen !== 'onboarding' && current.screen !== 'moments') {
     return bare(<Approval body={body} reducedMotion={reducedMotion} requestId={external[0]?.id} />)
   }
+
+  /*
+    A stale build stops quoting, routing and signing — and nothing else
+    (ES-BV-007).
+
+    `UpdateRequired` used to be a non-dismissible overlay mounted last in this
+    shell, over every screen. So an operational mistake — a `minVersion` of
+    "9.0.0" published by accident, or a misused signing key — locked every
+    install out of Backup, Reveal and Export until a corrected file with a
+    newer `issuedAt` was published and fetched, and an offline device stayed
+    locked out for good. A non-custodial wallet must never put the user's
+    recovery phrase behind a remote switch. The plate now stands in place of
+    the screens that need current code; Settings, Security, Backup, Devices,
+    Accounts and Activity are reached exactly as before.
+  */
+  if (staleBuild && isBlockedByUpdate(current.screen)) return bare(<UpdateRequired />)
 
   let screen: React.ReactNode
   switch (current.screen) {
@@ -463,7 +481,7 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
             </Row>
           </Column>
         </Sheet>
-        <UpdateRequired />
+
       </Column>
     </MotionContext.Provider>
     </MotionProvider>

@@ -288,7 +288,9 @@ export function createEngine(deps: EngineDeps): Engine {
     },
     ...(deps.kdf ? { kdf: deps.kdf } : {}),
   })
-  const approvals = new ApprovalStore(deps.platform, host.events)
+  // A build the signed flags call too old refuses to sign, while Backup,
+  // Reveal and Export stay reachable (ES-BV-007).
+  const approvals = new ApprovalStore(deps.platform, host.events, undefined, () => staticsRef?.view().updateRequired === true)
   const sites = new SitesService(deps.platform, host.events, sealed.sites)
   // The governor is handed over so Settings › Networks can say which host is
   // cooling and which has refused this wallet outright (`hosts()`).

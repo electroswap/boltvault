@@ -15,11 +15,22 @@ import { z } from 'zod'
  */
 export const STATIC_SIGNING_PUBLIC_KEY = '98b03890bbc570eae1416856bc11e252b603104c040e7a9048e2d7ee088ce567'
 
+/** `1.2.3`, optionally with a pre-release tag, and no longer than a version is. */
+const Semver = z.string().max(16).regex(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/)
+
 export const FlagsSchema = z.object({
   v: z.literal(1),
   /** Unix ms; a file older than the one already held is refused (anti-rollback). */
   issuedAt: z.number().int().nonnegative(),
-  minVersion: z.object({ extension: z.string().optional(), mobile: z.string().optional() }).default({}),
+  /*
+    A semver string, and a short one (ES-BV-007). It is rendered on the
+    blocking plate, so an unbounded value from a signed file fills the screen,
+    and a value that is not a version cannot be compared against one — both of
+    which turn an operational mistake into a wallet nobody can use.
+  */
+  minVersion: z
+    .object({ extension: Semver.optional(), mobile: Semver.optional() })
+    .default({}),
   /** Kill-switches (§3.7): a flag can only turn something off. */
   disabled: z
     .object({

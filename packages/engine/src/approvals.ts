@@ -101,6 +101,15 @@ export class ApprovalStore {
     private readonly platform: Platform,
     private readonly bus: EventBus,
     private readonly ttlMs: number = APPROVAL_TTL_MS,
+    /**
+     * Whether the signed flags say this build is too old to sign (ES-BV-007).
+     *
+     * The blocking plate moved off the shell so the user can still reach their
+     * recovery phrase — which means the refusal has to live where the
+     * signature is, not where the screen is. Absent in a harness with no
+     * statics, which then signs as it always did.
+     */
+    private readonly updateRequired: () => boolean = () => false,
   ) {}
 
   async hydrate(): Promise<void> {
@@ -284,6 +293,16 @@ export class ApprovalStore {
       throw new EngineError('invalid_argument', 'this request is already being signed')
     if (req.status !== 'pending')
       throw new EngineError('already_decided', 'this request was already decided')
+    /*
+      A stale build may refuse, and may not sign (ES-BV-007). Rejecting is
+      always allowed: leaving a queue of requests nobody can answer would be
+      its own kind of lock-out.
+    */
+    if (decision.approve && this.updateRequired())
+      throw new EngineError(
+        'invalid_argument',
+        'BoltVault needs updating before it can sign. Your recovery phrase and export are still available in Settings.',
+      )
 
     if (!decision.approve) {
       const rejected: ApprovalRequest = {
