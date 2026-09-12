@@ -313,7 +313,7 @@ describe('transactions', () => {
     expect(a.severity).toBe('danger')
     // The sweep is on the sheet, and it names where the money goes.
     const text = a.statements.map((s) => s.text).join('\n')
-    expect(text).toContain('0x2222…2222')
+    expect(text).toContain('0x222222…222222')
     expect(text.toLowerCase()).toContain('send everything left')
   })
 

@@ -5,6 +5,7 @@
  */
 import { feeRecipient } from '@boltvault/chains'
 import { formatUnits, type Hex } from 'viem'
+import { shortHex } from './address'
 import {
   decodeCalldata,
   decodeMessage,
@@ -40,7 +41,9 @@ function label(ctx: AssessmentContext, chainId: number, address: string): string
   if (l) return l
   const k = knownContract(chainId, address)
   if (k) return k.name
-  return `${address.slice(0, 6)}…${address.slice(-4)}`
+  // Six and six, checksummed: a rule's detail line is a place somebody checks
+  // an address against another one (ES-BV-033).
+  return shortHex(address)
 }
 
 function amountText(ctx: AssessmentContext, token: string, amount: bigint): string {

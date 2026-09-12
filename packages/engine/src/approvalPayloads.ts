@@ -223,6 +223,11 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
       .object({ name: z.string(), symbol: z.string(), decimals: z.number().int().nonnegative() })
       .nullable(),
     mismatch: z.boolean(),
+    /**
+     * The address this symbol already belongs to, when it belongs to another
+     * one (ES-BV-037). A second "USDC" is the whole point of the sheet.
+     */
+    lookalikeOf: z.string().nullable().optional(),
     clientRequestId: z.string(),
     intentDigest: z.string().optional(),
     tabId: z.number().int().optional(),

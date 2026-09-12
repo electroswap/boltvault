@@ -162,7 +162,7 @@ export class TokensService {
       build knows where the majors live; anything wearing one of those symbols
       from somewhere else is marked, and the screens show its address.
     */
-    const majors = this.majorSymbols(chainId)
+    const majors = this.majorSymbols(chainId, custom.filter((x) => x.chainId === chainId))
     for (const t of list) {
       const k = key(chainId, t.address)
       if (seen.has(k)) continue
@@ -174,20 +174,50 @@ export class TokensService {
     return out
   }
 
-  /** Symbol → address for the tokens this build ships addresses for. */
-  private majorSymbols(chainId: number): Map<string, string> {
+  /**
+   * Symbol → the address that symbol is supposed to live at (ES-BV-037).
+   *
+   * Three sources, in order of who vouched for them. The chain's own native
+   * coin, which every chain has. The four tokens this build ships addresses
+   * for on Electroneum — USDT was missing from that list and is the second
+   * most obvious symbol on earth to borrow. And every token the user added
+   * themselves: a list entry wearing the symbol of a token this person has
+   * already chosen, at a different address, is worth marking on any chain,
+   * and it is the only reference set that exists off Electroneum.
+   */
+  private majorSymbols(chainId: number, custom: readonly CustomToken[] = []): Map<string, string> {
     const out = new Map<string, string>()
     const chain = ALL_CHAINS.find((c) => c.chainId === chainId)
     if (chain?.nativeCurrency?.symbol) out.set(chain.nativeCurrency.symbol.toLowerCase(), 'native')
-    if (!isEtnChain(chainId)) return out
-    const a = ELECTRONEUM_ADDRESSES[chainId]
-    const pairs: Array<[string, string | null]> = [
-      ['wetn', a.wetn],
-      ['bolt', a.bolt],
-      ['usdc', a.usdc],
-    ]
-    for (const [symbol, address] of pairs) if (address) out.set(symbol, address.toLowerCase())
+    if (isEtnChain(chainId)) {
+      const a = ELECTRONEUM_ADDRESSES[chainId]
+      const pairs: Array<[string, string | null]> = [
+        ['wetn', a.wetn],
+        ['bolt', a.bolt],
+        ['usdc', a.usdc],
+        ['usdt', a.usdt],
+      ]
+      for (const [symbol, address] of pairs) if (address) out.set(symbol, address.toLowerCase())
+    }
+    // The user's own, last: what they added wins over nothing, and never over
+    // an address the build ships.
+    for (const c of custom) {
+      const k = c.symbol.trim().toLowerCase()
+      if (k && !out.has(k)) out.set(k, c.address.toLowerCase())
+    }
     return out
+  }
+
+  /**
+   * Is this symbol already taken by a token at another address (ES-BV-037)?
+   *
+   * Read by `wallet_watchAsset` and by the custom-token sheet, which are the
+   * two other ways a token with a borrowed symbol gets in front of the user.
+   */
+  async lookalikeOf(chainId: number, address: string, symbol: string): Promise<string | null> {
+    const custom = (await this.custom()).filter((x) => x.chainId === chainId)
+    const real = this.majorSymbols(chainId, custom).get(symbol.trim().toLowerCase())
+    return real !== undefined && real !== address.toLowerCase() ? real : null
   }
 
   async get(chainId: number, address: string): Promise<TokenView | null> {
@@ -296,6 +326,11 @@ export function tokensNamespace(tokens: TokensService): NamespaceSpec {
     get: { input: z.object({ chainId: ChainIdSchema, address: z.string() }), handler: (arg) => tokens.get((arg as { chainId: number; address: string }).chainId, (arg as { address: string }).address) },
     search: { input: z.object({ chainId: ChainIdSchema, query: z.string().max(200) }), handler: (arg) => tokens.search((arg as { chainId: number }).chainId, (arg as { query: string }).query) },
     metadata: { input: z.object({ chainId: ChainIdSchema, address: z.string() }), handler: (arg) => tokens.metadata((arg as { chainId: number }).chainId, (arg as { address: string }).address) },
+    /** Is this symbol already taken by a token at another address (ES-BV-037)? */
+    lookalikeOf: {
+      input: z.object({ chainId: ChainIdSchema, address: z.string(), symbol: z.string() }),
+      handler: (arg) => tokens.lookalikeOf((arg as { chainId: number }).chainId, (arg as { address: string }).address, (arg as { symbol: string }).symbol),
+    },
     addCustom: {
       input: z.object({ chainId: ChainIdSchema, address: z.string(), source: z.enum(['user', 'dapp']).default('user'), origin: z.string().optional() }),
       handler: (arg) => tokens.addCustom(arg as { chainId: number; address: string; source: 'user' | 'dapp'; origin?: string }),

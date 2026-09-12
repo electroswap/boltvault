@@ -51,12 +51,58 @@ import { useApprovals } from '../state/useApprovals'
 import { useScreenBusy } from '../state/useScreenBusy'
 import { useWalletState } from '../state/useWalletState'
 
+/**
+ * How long after the sheet appears before any verb can be pressed
+ * (ES-BV-066).
+ *
+ * It was applied only where the host reports a window focus event, which is
+ * the extension. On mobile there is no such event and the takeover mounts
+ * inside a 150 ms fade, so for an `info`-severity request with no reading
+ * delay of its own the verb was armed from the first, nearly transparent
+ * frame — a tap meant for the page underneath could land on Approve. It is a
+ * floor on every body now: 600 ms is what the extension already waited, and
+ * it comfortably outlasts the fade.
+ */
 const FOCUS_INERT_MS = 600
 
 export interface ApprovalProps {
   readonly requestId?: string
   readonly body: 'extension-popup' | 'extension-tab' | 'mobile'
   readonly reducedMotion?: boolean
+}
+
+/**
+ * One address with the characters that differ from another one marked
+ * (ES-BV-033).
+ *
+ * The plate told the reader to check every character and then handed them two
+ * forty-character strings and a list of positions to count to. The firewall
+ * already knows which characters differ; a person should not have to do the
+ * comparison the wallet has already done.
+ */
+function MarkedAddress({ address, against }: { address: string; against: string }) {
+  const diff = new Set(differingAt(address, against))
+  if (diff.size === 0) return <>{fullAddress(address)}</>
+  const cased = fullAddress(address)
+  return (
+    <>
+      {'0x'}
+      {cased
+        .slice(2)
+        .split('')
+        .map((c, i) =>
+          diff.has(i) ? (
+            // Colour is not the only signal: the weight carries it for a
+            // reader who cannot tell these two apart.
+            <Body key={i} tone="burn" size="caption" fontWeight="700">
+              {c}
+            </Body>
+          ) : (
+            c
+          ),
+        )}
+    </>
+  )
 }
 
 function siteOf(origin: string): { host: string; internal: boolean } {
@@ -239,7 +285,7 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   const largeSend = needsStepUp(codes)
   const delayMs = Math.max(
     assessment?.presentation.delayMs ?? 0,
-    host.onWindowFocus ? FOCUS_INERT_MS : 0,
+    FOCUS_INERT_MS,
     firstTimeRecipient ? COOLING_MS : 0,
   )
   const enableAt = armedAt + delayMs
@@ -820,6 +866,28 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
                 </Body>
               )}
             </Plate>
+            {/*
+              A symbol that already belongs to another address (ES-BV-037).
+
+              The lookalike check added for token lists never reached this
+              sheet, which is the one a page drives. Anyone may deploy a token
+              calling itself USDC; saying which address the real one is at is
+              the difference between a warning and a fact.
+            */}
+            {payload.lookalikeOf ? (
+              <Plate gap={2} borderColor={paint.burn} testID="approval-watch-lookalike">
+                <Body tone="burn">
+                  {t({
+                    id: 'approval.watch.lookalike',
+                    message: 'This is not the {s} you already have.',
+                    values: { s: payload.onChain?.symbol ?? payload.symbol ?? '' },
+                  })}
+                </Body>
+                <Body tone="mute" size="caption" selectable>
+                  {t({ id: 'approval.watch.lookalike.real', message: 'Yours is at {a}', values: { a: fullAddress(payload.lookalikeOf) } })}
+                </Body>
+              </Plate>
+            ) : null}
             {payload.mismatch && payload.onChain ? (
               <Plate gap={2} borderColor={paint.burn} testID="approval-watch-mismatch">
                 <Body tone="burn">
@@ -869,7 +937,7 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
             </Body>
             {recipient ? (
               <Body size="caption" selectable testID="approval-first-time-address">
-                {fullAddress(recipient)}
+                {lookalikeOf ? <MarkedAddress address={recipient} against={lookalikeOf} /> : fullAddress(recipient)}
               </Body>
             ) : null}
             {/*
@@ -884,16 +952,13 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
                   {t({ id: 'approval.lookalike.mine', message: 'The address you use' })}
                 </Body>
                 <Body size="caption" selectable>
-                  {fullAddress(lookalikeOf)}
+                  <MarkedAddress address={lookalikeOf} against={recipient} />
                 </Body>
                 <Body tone="ember" size="caption">
                   {t({
                     id: 'approval.lookalike.diff',
-                    message: 'They differ at {n} of the 40 characters, positions {p}.',
-                    values: {
-                      n: differingAt(recipient, lookalikeOf).length,
-                      p: differingAt(recipient, lookalikeOf).slice(0, 12).map((i) => i + 1).join(', '),
-                    },
+                    message: 'They differ at {n} of the 40 characters, marked above.',
+                    values: { n: differingAt(recipient, lookalikeOf).length },
                   })}
                 </Body>
               </Column>
@@ -998,9 +1063,17 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
               />
               <DetailRow
                 label={t({ id: 'typed.contract', message: 'Valid for contract' })}
+                /*
+                  Checksummed (ES-BV-033). This is the contract a Permit2 or
+                  Seaport signature will be presented to, and it arrives from
+                  the page in whatever casing the page chose — which is the
+                  one thing EIP-55 exists to make comparable.
+                */
                 value={
-                  typedDomain(payload.typedData).verifyingContract ??
-                  t({ id: 'typed.contract.none', message: 'not stated' })
+                  (() => {
+                    const vc = typedDomain(payload.typedData).verifyingContract
+                    return vc ? fullAddress(vc) : t({ id: 'typed.contract.none', message: 'not stated' })
+                  })()
                 }
                 testID="approval-domain-contract"
               />
@@ -1074,12 +1147,14 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
               <Plate gap="$1" testID="approval-tx">
                 <DetailRow
                   label={t({ id: 'tx.to', message: 'To' })}
-                  value={payload.tx.to ?? t({ id: 'device.deploy', message: 'new contract' })}
+                  // The details plate is where somebody checks an address
+                  // against another one, so it is whole and checksummed.
+                  value={payload.tx.to ? fullAddress(payload.tx.to) : t({ id: 'device.deploy', message: 'new contract' })}
                   testID="approval-tx-to"
                 />
                 <DetailRow
                   label={t({ id: 'tx.from', message: 'From' })}
-                  value={payload.tx.from}
+                  value={fullAddress(payload.tx.from)}
                   testID="approval-tx-from"
                 />
                 <DetailRow
@@ -1242,7 +1317,11 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
                 <>
                   <DeviceRow
                     label={t({ id: 'device.to', message: 'To' })}
-                    value={payload.tx.to ?? t({ id: 'device.deploy', message: 'new contract' })}
+                    /*
+                      The device shows a checksummed address; this card is for
+                      comparing the two, so it has to be written the same way.
+                    */
+                    value={payload.tx.to ? fullAddress(payload.tx.to) : t({ id: 'device.deploy', message: 'new contract' })}
                   />
                   <DeviceRow
                     label={t({ id: 'device.amount', message: 'Amount' })}

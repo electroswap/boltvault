@@ -14,13 +14,10 @@
  * not opened at all.
  */
 
-/** Hosts a link must never reach, however it got into the data. */
-export type ScamHosts = readonly string[]
+import { isScamOrigin } from '@boltvault/security'
 
-function registrable(host: string): string {
-  const parts = host.toLowerCase().split('.')
-  return parts.length <= 2 ? parts.join('.') : parts.slice(-2).join('.')
-}
+/** Entries as the signed list writes them: a host, or an origin with a scheme. */
+export type ScamHosts = readonly string[]
 
 /**
  * The URL to open, or null to open nothing.
@@ -40,8 +37,18 @@ export function safeExternalUrl(url: string | null | undefined, scamHosts: ScamH
   // `https://user:pass@real.site@evil.example` and its relatives.
   if (parsed.username !== '' || parsed.password !== '') return null
   if (parsed.hostname === '') return null
-  const host = parsed.hostname.toLowerCase()
-  const reg = registrable(host)
-  if (scamHosts.some((s) => { const t = s.toLowerCase(); return host === t || reg === registrable(t) || host.endsWith(`.${t}`) })) return null
+  /*
+    The same reading of the list as the firewall's (ES-BV-065).
+
+    This gate compared the link's host against the raw strings while the
+    firewall first normalised each entry with `hostOf()`, which strips a
+    scheme, a port and a path. The signed list documents its entries as
+    registrable origins or hosts, so an entry written `https://evil.example`
+    blocked a dApp sheet and was silently ignored here — the Token, Campaign,
+    Piece and Activity links opened it. The naive two-label fallback that used
+    to sit here also treated a listed `x.co.uk` as blocking every `.co.uk`
+    host, which was safe and wrong.
+  */
+  if (isScamOrigin(parsed.hostname, scamHosts)) return null
   return parsed.toString()
 }

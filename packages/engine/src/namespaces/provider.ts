@@ -90,6 +90,13 @@ export interface ProviderDeps {
   readonly activity: ActivityStore
   /** Confirmed address-book entries join the lookalike reference set (§3.6). */
   readonly addressBook?: () => Promise<string[]>
+  /**
+   * Is this symbol already taken by a token at another address (ES-BV-037)?
+   *
+   * A thunk for the same reason `counterpartyNames` is one: the tokens service
+   * is built after this one, and this only runs while a sheet is being built.
+   */
+  readonly symbolTaken?: (chainId: number, address: string, symbol: string) => Promise<string | null>
   /** Token symbols/decimals for a chain, so statements read "2.5 FIX" not raw units. */
   readonly tokenInfo?: (
     chainId: number,
@@ -1175,6 +1182,19 @@ export class ProviderService {
           onChain !== null &&
           ((symbol !== null && symbol.toUpperCase() !== onChain.symbol.toUpperCase()) ||
             (decimals !== null && decimals !== onChain.decimals))
+        /*
+          Is that symbol already somebody else's (ES-BV-037)?
+
+          The lookalike check added for token lists never reached this sheet,
+          which is the other way a token gets added — and the one a page
+          drives. The name shown is the chain's own where there is one, so the
+          symbol compared is the token's, not the page's claim about it.
+        */
+        const claimedSymbol = onChain?.symbol ?? symbol
+        const lookalikeOf =
+          address && claimedSymbol
+            ? await (d.symbolTaken?.(intent.chainId, address, claimedSymbol) ?? Promise.resolve(null)).catch(() => null)
+            : null
         return {
           kind: 'watch_asset',
           type: intent.type,
@@ -1183,6 +1203,7 @@ export class ProviderService {
           decimals,
           onChain,
           mismatch,
+          ...(lookalikeOf ? { lookalikeOf } : {}),
           clientRequestId: intent.clientRequestId,
         }
       }

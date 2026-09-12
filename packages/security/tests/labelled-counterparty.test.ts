@@ -3,7 +3,7 @@
  *
  * `who()` has always read `ctx.labels` first, and nothing ever put a person's
  * name in there — only token symbols — so every statement about somebody named
- * `bolt.etn` said `0x2222…2222` instead. The engine fills the map from the
+ * `bolt.etn` said the short hex instead. The engine fills the map from the
  * reverse resolver now, which makes two things worth pinning here:
  *
  *  - a label reaches the sentence, so the plumbing has somewhere to arrive;
@@ -42,7 +42,9 @@ const run = (labels: Record<string, string>) =>
 
 describe('a named counterparty', () => {
   it('is named in the statement instead of shortened', () => {
-    expect(run({}).statements[0]?.text).toBe('Send 1 FIX to 0x2222…2222')
+    // Six and six, checksummed (ES-BV-033): four-and-four is the shape a
+    // poisoning generator grinds for in minutes.
+    expect(run({}).statements[0]?.text).toBe('Send 1 FIX to 0x222222…222222')
     expect(run({ [THEM.toLowerCase()]: 'bolt.etn' }).statements[0]?.text).toBe('Send 1 FIX to bolt.etn')
   })
 

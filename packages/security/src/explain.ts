@@ -5,6 +5,7 @@
  */
 import { feeRecipient } from '@boltvault/chains'
 import { formatUnits, type Hex } from 'viem'
+import { shortHex } from './address'
 import { decodeCalldata, decodeMessage, type DecodedCall, type ParsedTypedData } from './decode'
 import { nativeSymbolOf } from './rules'
 import { knownContract } from './registry'
@@ -46,7 +47,7 @@ function who(ctx: AssessmentContext, chainId: number, address: string): string {
   if (l) return untrusted(l)
   const k = knownContract(chainId, address)
   if (k) return k.name
-  return `${address.slice(0, 6)}…${address.slice(-4)}`
+  return shortHex(address)
 }
 
 /**

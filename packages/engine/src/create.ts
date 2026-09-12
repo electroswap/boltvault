@@ -367,6 +367,8 @@ export function createEngine(deps: EngineDeps): Engine {
       Sanitised there, not here: `ctx.labels` is printed straight by rules.ts.
     */
     counterpartyNames: (chainId: number, addresses: readonly string[]): Promise<NameLookup[]> => names.lookup(chainId, addresses),
+    // A second "USDC" is worth saying on the sheet that adds one (ES-BV-037).
+    symbolTaken: (chainId: number, address: string, symbol: string): Promise<string | null> => tokens.lookalikeOf(chainId, address, symbol),
     /*
       One answer for "what does this account pay", read by both the site and
       the sheet (§8.6, §8.18).

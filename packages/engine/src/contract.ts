@@ -305,6 +305,12 @@ export interface TokensNamespace {
   universe(input: { chainId?: number }): Promise<TokenView[]>
   get(input: { chainId?: number; address: string }): Promise<TokenView | null>
   search(input: { chainId?: number; query: string }): Promise<TokenView[]>
+  /**
+   * The address this symbol already belongs to, or null (ES-BV-037). Anyone
+   * may deploy a token calling itself USDC; this says where the one the user
+   * already has lives.
+   */
+  lookalikeOf(input: { chainId: number; address: string; symbol: string }): Promise<string | null>
   metadata(input: {
     chainId?: number
     address: string

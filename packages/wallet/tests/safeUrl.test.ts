@@ -43,3 +43,26 @@ describe('safeExternalUrl', () => {
     expect(safeExternalUrl('https://electroswap.io', list)).toBe('https://electroswap.io/')
   })
 })
+
+describe('the scam list, read the way the firewall reads it', () => {
+  /*
+    ES-BV-065. The gate compared the link's host against the raw strings while
+    the firewall normalised each entry first, so a list entry written as an
+    origin blocked a dApp sheet and was silently ignored here.
+  */
+  it('honours an entry written with a scheme, a port or a path', () => {
+    expect(safeExternalUrl('https://evil.example/x', ['https://evil.example'])).toBeNull()
+    expect(safeExternalUrl('https://evil.example/x', ['https://evil.example:443/path'])).toBeNull()
+    expect(safeExternalUrl('https://evil.example/x', ['evil.example'])).toBeNull()
+  })
+
+  it('still blocks a subdomain of a listed host', () => {
+    expect(safeExternalUrl('https://claim.evil.example', ['https://evil.example'])).toBeNull()
+  })
+
+  it('stops treating a listed host as a claim on its whole suffix', () => {
+    // The old two-label fallback read `shop.co.uk` as `co.uk` and blocked
+    // every `.co.uk` host with it.
+    expect(safeExternalUrl('https://bbc.co.uk', ['https://shop.co.uk'])).toBe('https://bbc.co.uk/')
+  })
+})

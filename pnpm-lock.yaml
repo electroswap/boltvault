@@ -671,6 +671,9 @@ importers:
       '@boltvault/platform':
         specifier: workspace:*
         version: link:../platform
+      '@boltvault/security':
+        specifier: workspace:*
+        version: link:../security
       '@boltvault/ui':
         specifier: workspace:*
         version: link:../ui
