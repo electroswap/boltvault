@@ -53,9 +53,28 @@ export class TxService {
   private async pendingRow(id: string): Promise<ActivityEntry> {
     const row = (await this.deps.activity.list({})).find((e) => e.id === id || e.hash === id)
     if (!row) throw new EngineError('not_found', 'no such transaction')
-    if (row.status !== 'pending') throw new EngineError('invalid_argument', 'That transaction has already settled.')
+    /*
+      `dropped` and `unknown` are replaceable too (ES-BV-064).
+
+      Neither is a settled transaction: one means the node this wallet asked
+      did not know the hash, the other that no block reported it inside the
+      watcher's budget. Both still hold their number, and since a send at that
+      number is now refused, a replacement is the only way past — refusing it
+      here as "already settled" left the queue stuck with no control at all.
+    */
+    if (row.status !== 'pending' && row.status !== 'dropped' && row.status !== 'unknown')
+      throw new EngineError('invalid_argument', 'That transaction has already settled.')
     if (row.nonce === null) throw new EngineError('invalid_argument', 'That transaction has no nonce to replace.')
-    if (isElectroneumChainId(row.chainId)) {
+    /*
+      The Electroneum refusal is about *waiting*, not about a stuck slot.
+
+      A transaction that is pending on a five-second chain will settle before
+      anybody finds the button, so offering one is dishonest. A row the node
+      has lost is a different thing: it still holds its number, a fresh send at
+      that number is refused (ES-BV-064), and replacing it is the only way to
+      settle the question. That control has to exist on every chain.
+    */
+    if (isElectroneumChainId(row.chainId) && row.status === 'pending') {
       // Honest refusal rather than a button that cannot work (§7.10).
       throw new EngineError('invalid_argument', 'Electroneum settles in about five seconds, so there is nothing to speed up or cancel.')
     }

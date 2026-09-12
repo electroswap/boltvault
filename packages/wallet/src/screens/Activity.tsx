@@ -135,7 +135,9 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
   useEffect(() => {
     setReplace(null)
     setReplaceError(null)
-    if (!open || open.status !== 'pending') return
+    // A dropped or unresolved row is not settled: it still holds its nonce and
+    // a replacement is the only way past it (ES-BV-064).
+    if (!open || (open.status !== 'pending' && open.status !== 'dropped' && open.status !== 'unknown')) return
     let alive = true
     engine.tx.replaceable({ id: open.id }).then(
       (r) => alive && setReplace(r),
@@ -413,19 +415,33 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
               <Plate gap="$2" testID="activity-unresolved">
                 <Body size="caption">
                   {open.status === 'dropped'
-                    ? t({ id: 'activity.dropped.title', message: 'No longer in the queue' })
+                    ? t({ id: 'activity.dropped.title', message: 'Not seen by the node' })
                     : t({ id: 'activity.unknown.title', message: 'We could not tell' })}
                 </Body>
                 <Body tone="mute" size="caption">
                   {open.status === 'dropped'
-                    ? t({ id: 'activity.dropped.body', message: 'The network no longer has this transaction. It was either replaced at the same position or dropped for price. Nothing was spent.' })
+                    ? t({
+                        id: 'activity.dropped.body',
+                        message:
+                          'The node we asked does not have this transaction. It was probably replaced at the same position or dropped for price — but another node may still be holding it, so do not assume nothing was spent. Check the hash on the explorer, or replace it below to settle the question.',
+                      })
                     : t({ id: 'activity.unknown.body', message: 'This was broadcast but no block has reported it and we stopped asking. Check the hash on the explorer before sending again.' })}
                 </Body>
               </Plate>
             ) : null}
-            {open.status === 'pending' && replace ? (
+            {/*
+              A dropped or unresolved row keeps its place in the queue until
+              the chain moves past it, and a fresh send at that number is
+              refused (ES-BV-064) — so these two are exactly the rows that
+              need the replacement control most.
+            */}
+            {(open.status === 'pending' || open.status === 'dropped' || open.status === 'unknown') && replace ? (
               <Plate gap="$2" testID="activity-replace">
-                <Body size="caption">{t({ id: 'activity.stuck', message: 'Still waiting' })}</Body>
+                <Body size="caption">
+                  {open.status === 'pending'
+                    ? t({ id: 'activity.stuck', message: 'Still waiting' })
+                    : t({ id: 'activity.stuck.unresolved', message: 'Settle this position' })}
+                </Body>
                 {replace.can ? (
                   <>
                     <Body tone="mute" size="caption">

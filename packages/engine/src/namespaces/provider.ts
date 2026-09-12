@@ -363,19 +363,74 @@ function isRetryable(err: unknown): boolean {
  *
  * Treating either as a failure is how the same send goes out twice.
  */
-function possiblySent(err: unknown): boolean {
-  const text = `${(err as { message?: unknown } | null)?.message ?? ''} ${(err as { shortMessage?: unknown } | null)?.shortMessage ?? ''}`
+/**
+ * The library's own names for "no answer came back" (ES-BV-063).
+ *
+ * These are the four ways a request ends without the node having said
+ * anything: a deadline, an HTTP layer that never produced a JSON-RPC body, a
+ * socket that closed, a websocket that failed. A node that answers with a
+ * JSON-RPC error is not here — that is a decision, and it is read from the
+ * node's own words below.
+ */
+const TRANSPORT_FAILURES: ReadonlySet<string> = new Set(['TimeoutError', 'HttpRequestError', 'SocketClosedError', 'WebSocketRequestError'])
+
+/** An error and everything it wraps, innermost last. Bounded: a cycle cannot hang this. */
+function causes(err: unknown): unknown[] {
+  const out: unknown[] = []
+  let at = err
+  for (let i = 0; i < 8 && at !== null && typeof at === 'object'; i += 1) {
+    out.push(at)
+    at = (at as { cause?: unknown }).cause
+  }
+  return out
+}
+
+/**
+ * What the node itself said, with nothing the library added around it.
+ *
+ * `message` is composed — the pinned library folds the endpoint URL and the
+ * request body into it as meta lines — so matching words against it matches
+ * the URL. `details` carries the node's message and `shortMessage` the
+ * library's one-line classification; neither carries the endpoint. The whole
+ * bug was that the bundled Avalanche endpoint is on a host with the word
+ * "network" in it, so every definitive rejection on that chain read as a
+ * transport failure.
+ */
+function nodeWords(err: unknown): string {
+  const parts: string[] = []
+  for (const e of causes(err)) {
+    const o = e as { details?: unknown; shortMessage?: unknown; name?: unknown; message?: unknown }
+    if (typeof o.details === 'string') parts.push(o.details)
+    if (typeof o.shortMessage === 'string') parts.push(o.shortMessage)
+    // A plain Error from a transport the library does not wrap has no composed
+    // meta lines, so its message is the node's or the runtime's own words.
+    else if (typeof o.message === 'string' && o.details === undefined && o.shortMessage === undefined) parts.push(o.message)
+  }
+  return parts.join(' \n ')
+}
+
+export function possiblySent(err: unknown): boolean {
+  for (const e of causes(err)) {
+    const name = (e as { name?: unknown }).name
+    if (typeof name === 'string' && TRANSPORT_FAILURES.has(name)) return true
+  }
+  const said = nodeWords(err)
+  // A transport that broke without the library naming it (a bare fetch, an
+  // aborted request). Read only from words the node or the runtime wrote.
+  if (/timed?\s*out|timeout|aborted|failed to fetch|socket|econn|fetch failed|load failed|network\s*(error|request failed)/i.test(said)) return true
   return (
-    /timed?\s*out|timeout|aborted|network|failed to fetch|socket|econn|fetch failed|load failed/i.test(
-      text,
-    ) ||
     /already\s*known|alreadyknown|known\s*transaction|already\s*in\s*(the\s*)?(pool|mempool)|duplicate\s*transaction/i.test(
-      text,
+      said,
     ) ||
-    /nonce\s*too\s*low|replacement\s*transaction\s*underpriced|transaction\s*underpriced/i.test(
-      text,
-    )
+    /nonce\s*too\s*low|replacement\s*transaction\s*underpriced|transaction\s*underpriced/i.test(said)
   )
+}
+
+/** What to write on the row: the node's words, not the composed message with the endpoint in it. */
+export function broadcastReason(err: unknown): string {
+  const said = nodeWords(err).split('\n')[0]?.trim()
+  if (said) return said.slice(0, 200)
+  return err instanceof Error && err.message ? (err.message.split('\n')[0] ?? '').slice(0, 200) : 'broadcast failed'
 }
 
 /**
@@ -395,6 +450,17 @@ const CONFIRM_DEPTH = 2
 const REORG_WINDOW_MS = 2 * 60 * 1000
 /** A node may not report its own new transaction immediately; wait before calling it dropped. */
 const DROP_GRACE_MS = 30_000
+/**
+ * How many `null` answers in a row before the row says the node has lost it
+ * (ES-BV-064).
+ *
+ * One is not evidence. A failover pair whose nodes do not share a pool
+ * answers `null` from the endpoint that never saw the bytes while the other
+ * holds the transaction, and a row that says "dropped" on that basis invites
+ * the user to send the same money again. Two consecutive misses, a poll apart,
+ * is cheap and rules out the single unlucky read.
+ */
+const DROP_CONFIRMATIONS = 2
 
 /** The transaction a speed-up or cancel is replacing (§8.12, ES-BV-025). */
 export interface ReplacedTx {
@@ -776,6 +842,8 @@ export class ProviderService {
   async resumeWatchers(): Promise<void> {
     const entries = await this.deps.activity.list({}).catch(() => [] as ActivityEntry[])
     for (const e of entries)
+      // No reservation to give back: `reservedNonces` is in-memory and a worker
+      // that restarted has none (ES-BV-064).
       if (e.status === 'pending' && e.hash) this.watch(e.chainId, e.id, e.hash as Hex)
   }
 
@@ -2332,14 +2400,36 @@ export class ProviderService {
       nonce reservation does not survive a restart; the rows do.
     */
     if (!replaces) {
+      /*
+        `dropped` belongs here too (ES-BV-064).
+
+        "Dropped" is what the wallet writes when the node it asked did not know
+        the hash, and the node it asked is not always the node that took the
+        bytes. Until the chain has moved past the number, that transaction may
+        still be in somebody's pool, and a fresh send at the same nonce would
+        leave two different transactions racing for one slot with the user
+        unable to say which one they will get. A replacement — speed up or
+        cancel — is the way past it, and says so.
+      */
       const clash = rows.find(
         (e) =>
           e.id !== request.id &&
           e.accountId === accountId &&
           e.nonce === tx.nonce &&
-          (e.status === 'pending' || e.status === 'unknown'),
+          (e.status === 'pending' || e.status === 'unknown' || e.status === 'dropped'),
       )
-      if (clash)
+      // Once the chain has used the number there is nothing left to race.
+      const settledOnChain =
+        clash === undefined
+          ? false
+          : await d.chains
+              .rpc(chainId, 'eth_getTransactionCount', [tx.from, 'latest'])
+              .then((n) => {
+                const mined = parseInt(String(n), 16)
+                return Number.isFinite(mined) && mined > tx.nonce
+              })
+              .catch(() => false)
+      if (clash && !settledOnChain)
         throw new RpcError(
           RPC.INTERNAL,
           'There is already an unresolved transaction at this position in the queue. Wait for it to settle, or speed it up, before sending another.',
@@ -2485,10 +2575,10 @@ export class ProviderService {
       // is a transaction that happened, whatever the last attempt wrote.
       await d.activity.update(request.id, { hash, status: 'pending' })
       await this.markReplaced(replaces)
-      this.watch(chainId, request.id, hash)
+      this.watch(chainId, request.id, hash, { from: tx.from as Hex, nonce: tx.nonce })
       return hash
     } catch (err) {
-      const reason = err instanceof Error ? err.message : 'broadcast failed'
+      const reason = broadcastReason(err)
       /*
         Three answers, not two.
 
@@ -2505,14 +2595,14 @@ export class ProviderService {
         await d.activity
           .update(request.id, { status: 'pending', statements: [...entry.statements, reason] })
           .catch(() => undefined)
-        this.watch(chainId, request.id, localHash)
+        this.watch(chainId, request.id, localHash, { from: tx.from as Hex, nonce: tx.nonce })
         return localHash
       }
       if (await this.nodeKnows(chainId, localHash)) {
         await d.activity
           .update(request.id, { status: 'pending', statements: [...entry.statements, reason] })
           .catch(() => undefined)
-        this.watch(chainId, request.id, localHash)
+        this.watch(chainId, request.id, localHash, { from: tx.from as Hex, nonce: tx.nonce })
         return localHash
       }
       // Definitively refused: say why on the row, the way a signing error does.
@@ -2557,7 +2647,7 @@ export class ProviderService {
    * The budget is wall-clock rather than a count, so the answer does not
    * depend on how fast the chain's poll cadence happens to be.
    */
-  private watch(chainId: number, id: string, hash: Hex): void {
+  private watch(chainId: number, id: string, hash: Hex, held: { from: Hex; nonce: number } | null = null): void {
     const d = this.deps
     // One watcher per row: a retry, a resume and a re-broadcast all land here.
     if (this.watching.has(id)) return
@@ -2627,6 +2717,7 @@ export class ProviderService {
       await d.activity.update(id, { status: 'pending', blockNumber: null }).catch(() => undefined)
       arm(() => void tick(), every)
     }
+    let misses = 0
     const tick = async (): Promise<void> => {
       const receipt = await receiptOf()
       if (receipt?.blockNumber) {
@@ -2651,7 +2742,25 @@ export class ProviderService {
       const known = await d.chains
         .rpc(chainId, 'eth_getTransactionByHash', [hash])
         .catch(() => undefined)
-      if (known === null && waited > DROP_GRACE_MS) {
+      /*
+        A `null` is a miss, not a verdict (ES-BV-064).
+
+        The endpoint that answers this poll is not necessarily the one that
+        accepted the bytes, so a single `null` from a failover pair whose nodes
+        do not share a pool says nothing. Misses have to arrive consecutively:
+        anything else — a receipt, a hit, a read that failed — resets the
+        count.
+      */
+      if (known === null) misses += 1
+      else if (known !== undefined) misses = 0
+      if (misses >= DROP_CONFIRMATIONS && waited > DROP_GRACE_MS) {
+        /*
+          Give the number back. A re-send then lands on the same nonce, and
+          only one transaction at a nonce can ever mine; holding the
+          reservation is what used to push the re-send to `nonce + 1`, where
+          both could.
+        */
+        if (held) this.releaseNonce(chainId, held.from, held.nonce)
         await settle({ status: 'dropped' })
         return
       }
