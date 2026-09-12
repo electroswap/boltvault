@@ -42,10 +42,10 @@ export function setSharedTransitions(on: boolean): void {
 /**
  * Whether a shared move is in flight right now.
  *
- * `ScreenEnter` asks, because the two must not both run: a screen that slides
- * in from 14 px while its header is being tweened out of a list row is two
- * animations arguing about where the same pixels are. During a shared move
- * the screen simply arrives, and the moving element carries the eye.
+ * `ScreenEnter` asks, because the two must not both run: a screen that fades
+ * in while its header is being tweened out of a list row is two animations
+ * arguing about where the same pixels are. During a shared move the screen
+ * simply arrives, and the moving element carries the eye.
  */
 export function sharedTransitionActive(): boolean {
   return active

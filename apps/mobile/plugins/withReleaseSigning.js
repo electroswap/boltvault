@@ -34,24 +34,41 @@
 const { withAppBuildGradle } = require('expo/config-plugins')
 
 const SIGNING_BLOCK = `
-    // --- BoltVault: added by plugins/withReleaseSigning.js ---
+    // --- BoltVault: added by plugins/withReleaseSigning.js (signing v2) ---
     signingConfigs {
         boltvaultRelease {
             def keystore = System.getenv('BOLTVAULT_RELEASE_KEYSTORE')
-            def allowDebug = System.getenv('BOLTVAULT_ALLOW_DEBUG_SIGNED_RELEASE') == '1'
             if (keystore != null && !keystore.isEmpty()) {
                 storeFile file(keystore)
                 storePassword System.getenv('BOLTVAULT_RELEASE_KEYSTORE_PASSWORD')
                 keyAlias System.getenv('BOLTVAULT_RELEASE_KEY_ALIAS')
                 keyPassword System.getenv('BOLTVAULT_RELEASE_KEY_PASSWORD')
-            } else if (!allowDebug) {
-                // Evaluated lazily: configuring a debug build must not trip over
-                // a release credential that is none of its business.
-                storeFile null
             }
+            // With no release keystore this config is left empty on purpose and
+            // nothing selects it — see the build type below. Configuring it with
+            // a null storeFile instead is what produced
+            // \`SigningConfig "boltvaultRelease" is missing required property
+            // "storeFile"\` at packaging time, which is a confusing way to say
+            // "you have no keystore".
         }
     }
 `
+
+/**
+ * Which key the release build type actually uses, decided at configure time.
+ *
+ * A release keystore selects `boltvaultRelease`. Without one, it selects the
+ * SDK's own `debug` config — the same object the debug build type uses, so no
+ * password is written into this file and the Android Gradle Plugin creates
+ * `~/.android/debug.keystore` on demand if it has never been needed. That path
+ * is only reachable with `BOLTVAULT_ALLOW_DEBUG_SIGNED_RELEASE=1`, because the
+ * guard below refuses the build otherwise.
+ *
+ * `signingConfigs.debug` exists by the time this runs: the template declares it
+ * above `buildTypes`, and this expression lives inside `buildTypes`.
+ */
+const SIGNING_SELECTOR =
+  'signingConfig (System.getenv(\'BOLTVAULT_RELEASE_KEYSTORE\') ? signingConfigs.boltvaultRelease : signingConfigs.debug)'
 
 const RELEASE_GUARD = `
 // --- BoltVault: added by plugins/withReleaseSigning.js ---
@@ -91,7 +108,7 @@ function applyToBuildGradle(contents) {
         .slice(release)
         .replace(
           'signingConfig signingConfigs.debug',
-          'signingConfig signingConfigs.boltvaultRelease',
+          SIGNING_SELECTOR,
         )
   }
   return out + RELEASE_GUARD

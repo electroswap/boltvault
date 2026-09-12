@@ -709,6 +709,12 @@ export const SwapQuoteSchema = z.object({
   quotedAt: z.number().int().nonnegative(),
   ok: z.boolean(),
   problems: z.array(z.string()),
+  /**
+   * What MAX should fill. For native ETN this is the balance less 120% of the
+   * quoted network fee, matching Send; for an ERC-20 it is the token balance.
+   * Defaulted so quotes cached before this field still parse.
+   */
+  maxSpendableRaw: z.string().default('0'),
 })
 export type SwapQuote = z.infer<typeof SwapQuoteSchema>
 
@@ -886,6 +892,12 @@ export const PrefsSchema = z.object({
     still parses, and the inferred type stays `boolean`.
   */
   introSeen: z.boolean().default(false),
+  /*
+    Same `.default(false)` reason as `introSeen`: a required key would
+    quarantine every document written before this line and reset the Home
+    scope. Off means the totals show; on means they read as asterisks.
+  */
+  hideBalances: z.boolean().default(false),
 })
 export type Prefs = z.infer<typeof PrefsSchema>
 

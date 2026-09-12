@@ -136,6 +136,13 @@ half4 main(float2 fragCoord) {
   float aspect = u_res.x / u_res.y;
   float2 p = float2(uv.x * aspect, uv.y);
   float t = u_time;
+  float grain = (hash21(fragCoord + fract(t)) - 0.5) * 0.015;
+  // board() is per-fragment, one cell — zooming out does not shade extra cells.
+  float vig = smoothstep(1.5, 0.35, length(uv - float2(0.5, 0.45)) * 1.3);
+  float calm = smoothstep(0.86, 0.30, uv.y);
+  if (vig < 0.015) {
+    return half4(half3(C_VOID + float3(grain)), 1.0);
+  }
 
   float3 col = mix(C_VOID, C_DEEP, smoothstep(1.0, 0.0, uv.y) * 0.85);
 
@@ -147,37 +154,37 @@ half4 main(float2 fragCoord) {
   float aC = exp(-dot(p - cC, p - cC) * 3.4) * 0.10 * bC;
   col += mix(C_VOLT, C_FLARE, u_warmth * 0.35) * aB + C_SPARK * aC;
 
-  float calm = mix(0.22, 1.0, smoothstep(0.86, 0.30, uv.y));
-  float2 ptr = float2(u_touch.x * aspect, u_touch.y);
-  float hot = u_touch.z * exp(-dot(p - ptr, p - ptr) * 28.0);
+  if (calm * vig > 0.02) {
+    float2 ptr = float2(u_touch.x * aspect, u_touch.y);
+    float hot = u_touch.z * exp(-dot(p - ptr, p - ptr) * 28.0);
 
-  float front = 1.05 - (1.0 - u_pulse) * 1.15;
-  float frontGlow = u_pulse > 0.003 ? exp(-abs(uv.y - front) * 14.0) * u_pulse : 0.0;
-  float behind = u_pulse > 0.003 ? smoothstep(front - 0.02, front + 0.35, uv.y) * u_pulse : 0.0;
-  float flash = u_pulse * u_pulse * 0.05;
+    float front = 1.05 - (1.0 - u_pulse) * 1.15;
+    float frontGlow = u_pulse > 0.003 ? exp(-abs(uv.y - front) * 14.0) * u_pulse : 0.0;
+    float behind = u_pulse > 0.003 ? smoothstep(front - 0.02, front + 0.35, uv.y) * u_pulse : 0.0;
+    float flash = u_pulse * u_pulse * 0.05;
 
-  float3 lattice = float3(0.0);
-  for (int i = 0; i < LAYERS; i++) {
-    bool far = (LAYERS > 1) && (i == 0);
-    float cellSize = far ? 0.056 : 0.096;
-    float depth = far ? 0.30 : 1.0;
-    float parallax = far ? t * 0.006 : t * 0.011;
-    float seed = far ? u_seed.z : u_seed.w;
-    Board b = board(p, cellSize, seed, parallax, 1.0 + hot * 3.0 + behind * 1.5);
-    float3 traceTint = mix(C_VOLT, C_ARC, far ? 0.25 : 0.55 + 0.45 * hot);
-    float traceAmp = (far ? 0.18 : 0.30) * (1.0 + 1.6 * hot + 2.2 * frontGlow);
-    lattice += traceTint * b.trace * traceAmp * depth;
-    lattice += mix(C_ARC, C_SPARK, 0.5) * b.pad * (far ? 0.22 : 0.42) * (1.0 + 2.0 * frontGlow + hot) * depth;
-    float sig = b.signal * (1.0 + 3.0 * behind + 1.5 * hot);
-    lattice += mix(C_SPARK, C_CORE, clamp(sig * 0.9, 0.0, 1.0)) * sig * (far ? 0.55 : 1.0) * depth;
+    float3 lattice = float3(0.0);
+    for (int i = 0; i < LAYERS; i++) {
+      bool far = (LAYERS > 1) && (i == 0);
+      // Smaller cells = camera further back: more traces, same ~1px hairlines.
+      float cellSize = far ? 0.040 : 0.068;
+      float depth = far ? 0.30 : 1.0;
+      float parallax = far ? t * 0.006 : t * 0.011;
+      float seed = far ? u_seed.z : u_seed.w;
+      Board b = board(p, cellSize, seed, parallax, 1.0 + hot * 3.0 + behind * 1.5);
+      float3 traceTint = mix(C_VOLT, C_ARC, far ? 0.25 : 0.55 + 0.45 * hot);
+      float traceAmp = (far ? 0.18 : 0.30) * (1.0 + 1.6 * hot + 2.2 * frontGlow);
+      lattice += traceTint * b.trace * traceAmp * depth;
+      lattice += mix(C_ARC, C_SPARK, 0.5) * b.pad * (far ? 0.22 : 0.42) * (1.0 + 2.0 * frontGlow + hot) * depth;
+      float sig = b.signal * (1.0 + 3.0 * behind + 1.5 * hot);
+      lattice += mix(C_SPARK, C_CORE, clamp(sig * 0.9, 0.0, 1.0)) * sig * (far ? 0.55 : 1.0) * depth;
+    }
+
+    col += lattice * calm;
+    col += (C_SPARK * 0.5 + C_CORE * 0.5) * flash * calm;
   }
 
-  col += lattice * calm;
-  col += (C_SPARK * 0.5 + C_CORE * 0.5) * flash * calm;
-
-  float vig = smoothstep(1.5, 0.35, length(uv - float2(0.5, 0.45)) * 1.3);
   col = mix(C_VOID, col, vig);
-  float grain = (hash21(fragCoord + fract(t)) - 0.5) * 0.015;
   col += grain;
 
   return half4(half3(col), 1.0);

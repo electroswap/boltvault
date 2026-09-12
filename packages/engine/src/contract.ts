@@ -892,7 +892,7 @@ export interface NotificationsNamespace {
   clear(): Promise<void>
 }
 
-/** UI preferences (plan B2): the Home scope, the dismissed coach, the chart timeframe. */
+/** UI preferences (plan B2): the Home scope, the dismissed coach, the chart timeframe, hidden balances. */
 export interface PrefsNamespace {
   get(): Promise<Prefs>
   set(input: Partial<Prefs>): Promise<Prefs>

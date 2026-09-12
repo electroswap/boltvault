@@ -23,7 +23,6 @@ import {
   Pressable,
   Rotor,
   Row,
-  RollingReadout,
   Seat,
   ScrollView,
   edge,
@@ -44,11 +43,12 @@ import {
 import { useEffect, useRef, useState } from 'react'
 import { ChainScopeSheet, ScopePill, useHomeScope } from '../components/ChainScope'
 import { agoLabel } from '../components/FreshnessLine'
+import { PortfolioBalance } from '../components/PortfolioBalance'
 import { PortfolioHistory } from '../components/PortfolioHistory'
 import { DappSheet, DappStrip, useDappStatus } from '../components/DappStatus'
 import { useEngine } from '../engine/EngineProvider'
 import { FeeScheduleSheet } from './FeeScheduleSheet'
-import { formatBolt, formatChange, formatFiat, formatPct, formatPrice, formatRaw } from '../format'
+import { displayFiat, formatBolt, formatChange, formatPct, formatPrice, formatRaw } from '../format'
 import { useHost } from '../host'
 import { useActivity } from '../hooks/useActivity'
 import { useCached } from '../hooks/useCached'
@@ -58,6 +58,7 @@ import { useName } from '../hooks/useNames'
 import { useNotifications } from '../hooks/useNotifications'
 import { useOpenInTab } from '../hooks/useOpenInTab'
 import { usePortfolio } from '../hooks/usePortfolio'
+import { usePrefs } from '../hooks/usePrefs'
 import { usePositions } from '../hooks/usePositions'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
@@ -100,6 +101,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   */
   const seatName = useName(active?.address)
   const scope = useHomeScope()
+  const { prefs, set: setPrefs } = usePrefs()
   const [scopeOpen, setScopeOpen] = useState(false)
   const portfolio = usePortfolio(active?.id ?? null, 5_000, scope.loaded ? scope.chainIds : null)
   const { entries } = useActivity(active?.id ?? null)
@@ -239,7 +241,8 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   const dyno = Number(toCollect) / 1e18
   const total = portfolio.snapshot?.total ?? null
   const currency = portfolio.snapshot?.currency ?? 'USD'
-  const totalText = total === null ? '—' : formatFiat(total, currency)
+  const hidden = prefs.hideBalances
+  const totalText = displayFiat(total, currency, hidden)
   const change = formatChange(portfolio.snapshot?.change24h ?? null)
   const tokenCount = portfolio.snapshot
     ? portfolio.snapshot.rows.filter((r) => !r.hidden).length
@@ -832,7 +835,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
 
         {unlocked ? (
           <>
-            {/* The balance console: the scope, the total with its day, the live filament. */}
+            {/* The balance console: the scope, the total with the eye and the day underneath, the live filament. */}
             <Ignition active={ignite} reducedMotion={reducedMotion} order={1}>
               <Plate role="console" gap={6} padding={12} testID="home-console">
                 <Row justifyContent="space-between" alignItems="center">
@@ -857,52 +860,23 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
                     </Body>
                   ) : null}
                 </Row>
-                <Pressable
+                <PortfolioBalance
+                  value={totalText}
+                  change={change}
+                  hidden={hidden}
+                  onToggle={() => setPrefs({ hideBalances: !hidden })}
+                  reducedMotion={reducedMotion}
                   onPress={() => router.navigate('portfolio')}
-                  accessibilityRole="button"
-                  accessibilityLabel={t({
-                    id: 'home.portfolio.a11y',
-                    message: 'Open your portfolio',
-                  })}
-                  testID="home-portfolio"
-                  style={{ minHeight: 44, justifyContent: 'center' }}
-                >
-                  <Row alignItems="flex-end" gap="$2">
-                    <RollingReadout
-                      value={totalText}
-                      hero
-                      reducedMotion={reducedMotion}
-                      testID="total"
-                    />
-                    <Column flex={1} minWidth={0} paddingBottom={8} alignItems="flex-start">
-                      {change ? (
-                        <Body
-                          tone={
-                            change.startsWith('+')
-                              ? 'surge'
-                              : change.startsWith('−')
-                                ? 'burn'
-                                : 'mute'
-                          }
-                          size="caption"
-                          fontWeight="600"
-                          numberOfLines={1}
-                        >
-                          {change} {t({ id: 'home.today', message: 'today' })}
-                        </Body>
-                      ) : (
-                        <Body tone="mute" size="caption" numberOfLines={1}>
-                          {portfolio.snapshot
-                            ? ''
-                            : t({ id: 'home.scope.none', message: 'No balances yet' })}
-                        </Body>
-                      )}
-                    </Column>
-                    <Column paddingBottom={10}>
-                      <Icon name="chevronRight" size={20} color={paint.mute} />
-                    </Column>
-                  </Row>
-                </Pressable>
+                  trailing={<Icon name="chevronRight" size={20} color={paint.mute} />}
+                  extra={
+                    !change && !portfolio.snapshot ? (
+                      <Body tone="mute" size="caption" numberOfLines={1}>
+                        {t({ id: 'home.scope.none', message: 'No balances yet' })}
+                      </Body>
+                    ) : null
+                  }
+                  pressTestID="home-portfolio"
+                />
                 {/*
                   How old the number is (ES-BV-046).
 
@@ -935,6 +909,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
                 <PortfolioHistory
                   points={portfolio.snapshot?.history ?? []}
                   currency={currency}
+                  hidden={hidden}
                   body={body}
                   inset={inset}
                   reducedMotion={reducedMotion}

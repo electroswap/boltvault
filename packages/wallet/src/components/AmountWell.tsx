@@ -2,12 +2,14 @@
  * AmountWell — the one amount field (Send, Swap, Bridge): a label row with an
  * optional control at its right, the amount big and bare beside the token
  * pill, then what it is worth on the left and what you hold on the right
- * with a MAX key. A read-only well (what you receive) shows the amount as
- * a readout instead of a field. Every screen that takes an amount uses it,
- * so the eye learns the shape once.
+ * with a MAX key. A read-only well shows the amount as a readout instead of
+ * a field (Bridge's receive side). Swap's receive well is an input too —
+ * typing there is exact-output — and `disabled` is for the cases that input
+ * cannot honour (fee-on-transfer). Every screen that takes an amount uses
+ * it, so the eye learns the shape once.
  */
 import { Body, Column, Icon, Input, MaxKey, Plate, Row, paint, type IconName } from '@boltvault/ui'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { t } from '../i18n'
 
 export interface AmountWellProps {
@@ -15,6 +17,12 @@ export interface AmountWellProps {
   readonly value: string
   readonly onChange?: (value: string) => void
   readonly readOnly?: boolean
+  /**
+   * The field stays an input so the well still looks like a well, but nothing
+   * can be typed. Swap uses this when a fee-on-transfer token cannot honour
+   * an exact output — the web interface disables the same panel.
+   */
+  readonly disabled?: boolean
   /** The token pill (or a chain select) at the amount's right. */
   readonly tokenPill?: ReactNode
   /** A control at the label row's right (a chain select, a percentage). */
@@ -56,8 +64,9 @@ export interface AmountWellProps {
    * the owner reads the two on the same phone — and the interface sets its
    * amount at 36 px, stepping to 28 only below its `sm` breakpoint. Measured
    * off the owner's two screenshots our 28 px readout came out a tenth shorter
-   * than the page's, which is the difference they were pointing at. Send and
-   * Bridge have nothing to be measured against and stay exactly as they were.
+   * than the page's, which is the difference they were pointing at. Extra
+   * vertical air on this size keeps the token picker in the middle of the
+   * well and MAX on the bottom row. Send and Bridge stay exactly as they were.
    */
   readonly louder?: boolean
   readonly autoFocus?: boolean
@@ -67,24 +76,31 @@ export interface AmountWellProps {
   readonly balanceTestID?: string
 }
 
-export function AmountWell({ label, value, onChange, readOnly = false, tokenPill, right, fiat, balance, balanceIcon = 'wallet', onMax, error, decimals, accent, louder = false, autoFocus, testID, inputTestID, maxTestID, balanceTestID }: AmountWellProps) {
+export function AmountWell({ label, value, onChange, readOnly = false, disabled = false, tokenPill, right, fiat, balance, balanceIcon = 'wallet', onMax, error, decimals, accent, louder = false, autoFocus, testID, inputTestID, maxTestID, balanceTestID }: AmountWellProps) {
   const empty = !value || value === '0' || value === '—'
+  const [pinStart, setPinStart] = useState(0)
+  const fillMax = onMax
+    ? () => {
+        setPinStart((n) => n + 1)
+        onMax()
+      }
+    : undefined
   return (
-    <Plate role="well" gap={2} paddingVertical={louder ? 10 : 8} paddingHorizontal={12} {...(accent ? { borderColor: accent } : {})} testID={testID}>
+    <Plate role="well" gap={louder ? 4 : 2} paddingVertical={louder ? 16 : 8} paddingHorizontal={12} {...(accent ? { borderColor: accent } : {})} testID={testID}>
       <Row justifyContent="space-between" alignItems="center" minHeight={right ? 32 : 18}>
         <Body tone="mute" size="caption">
           {label}
         </Body>
         {right ?? null}
       </Row>
-      <Row gap="$2" alignItems="center" minHeight={louder ? 44 : 40}>
+      <Row gap="$2" alignItems="center" minHeight={louder ? 52 : 40} flex={louder ? 1 : undefined}>
         <Column flex={1} minWidth={0}>
           {readOnly || !onChange ? (
             <Body fontFamily="$readout" fontSize={louder ? 32 : 28} lineHeight={louder ? 38 : 34} fontWeight="600" letterSpacing={louder ? -1.0 : -0.85} numberOfLines={1} color={empty ? '$mute' : '$ink'} testID={inputTestID}>
               {value || '0'}
             </Body>
           ) : (
-            <Input value={value} onChange={onChange} placeholder="0" bare big {...(louder ? { louder: true } : {})} numeric {...(decimals !== undefined ? { maxDecimals: decimals } : {})} autoFocus={autoFocus} testID={inputTestID} />
+            <Input value={value} onChange={onChange} placeholder="0" bare big {...(louder ? { louder: true } : {})} numeric {...(decimals !== undefined ? { maxDecimals: decimals } : {})} autoFocus={autoFocus} pinStart={pinStart} disabled={disabled} testID={inputTestID} />
           )}
         </Column>
         {tokenPill ?? null}
@@ -102,7 +118,7 @@ export function AmountWell({ label, value, onChange, readOnly = false, tokenPill
               </Body>
             </Row>
           ) : null}
-          {onMax ? <MaxKey label={t({ id: 'max.caps', message: 'MAX' })} onPress={onMax} testID={maxTestID} /> : null}
+          {fillMax ? <MaxKey label={t({ id: 'max.caps', message: 'MAX' })} onPress={fillMax} testID={maxTestID} /> : null}
         </Row>
       </Row>
       {error ? (

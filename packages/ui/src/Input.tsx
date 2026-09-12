@@ -4,8 +4,14 @@
  * amount inside a swap terminal (no well of its own, numerals in the
  * readout face). Focus is a quiet arc edge — never the browser's outline.
  */
-import { forwardRef, useState } from 'react'
-import { TextInput, type TextInputProps } from 'react-native'
+import { forwardRef, useLayoutEffect, useRef, useState } from 'react'
+import {
+  Platform,
+  TextInput,
+  type NativeSyntheticEvent,
+  type TextInputProps,
+  type TextInputSelectionChangeEventData,
+} from 'react-native'
 import { Body, Column } from './primitives'
 import { edge, fonts, metrics, paint, radius } from './tokens'
 
@@ -71,11 +77,35 @@ export interface InputProps {
    * represent, which is the same thing every exchange's amount box does.
    */
   readonly maxDecimals?: number
+  /**
+   * Bump this after a programmatic fill (MAX) to drop the caret at the start.
+   *
+   * A long decimal otherwise leaves the caret at the end, and the field
+   * scrolls to show the last digits instead of the units. The numbers before
+   * the point are the ones that matter; the user can move the caret when they
+   * mean to edit.
+   */
+  readonly pinStart?: number
 }
 
-export const Input = forwardRef<TextInput, InputProps>(function Input({ value, onChange, label, placeholder, secure, multiline, bare, big, louder, numeric, error, hint, autoFocus, onSubmit, testID, autoCapitalize = 'none', disabled, sensitive, maxDecimals }, ref) {
+export const Input = forwardRef<TextInput, InputProps>(function Input({ value, onChange, label, placeholder, secure, multiline, bare, big, louder, numeric, error, hint, autoFocus, onSubmit, testID, autoCapitalize = 'none', disabled, sensitive, maxDecimals, pinStart }, ref) {
   const [focused, setFocused] = useState(false)
+  const inner = useRef<TextInput>(null)
+  const [selection, setSelection] = useState<{ start: number; end: number } | undefined>(undefined)
+  useLayoutEffect(() => {
+    if (!pinStart) return
+    setSelection({ start: 0, end: 0 })
+    const node = inner.current
+    if (!node) return
+    node.setNativeProps?.({ selection: { start: 0, end: 0 } })
+    if (Platform.OS === 'web') {
+      const el = node as unknown as HTMLInputElement
+      el.setSelectionRange?.(0, 0)
+      el.scrollLeft = 0
+    }
+  }, [pinStart])
   const handleChange = (next: string): void => {
+    setSelection(undefined)
     if (!numeric) {
       onChange(next)
       return
@@ -101,9 +131,19 @@ export const Input = forwardRef<TextInput, InputProps>(function Input({ value, o
         </Body>
       ) : null}
       <TextInput
-        ref={ref}
+        ref={(node) => {
+          inner.current = node
+          if (typeof ref === 'function') ref(node)
+          else if (ref) ref.current = node
+        }}
         value={value}
         onChangeText={handleChange}
+        selection={selection}
+        onSelectionChange={(e: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {
+          const sel = e.nativeEvent.selection
+          if (sel.start === 0 && sel.end === 0) return
+          setSelection(undefined)
+        }}
         placeholder={placeholder}
         placeholderTextColor={paint.mute}
         secureTextEntry={secure}
@@ -153,7 +193,9 @@ export const Input = forwardRef<TextInput, InputProps>(function Input({ value, o
           fontSize: big ? (louder ? 32 : 28) : 15,
           letterSpacing: big ? (louder ? -1.0 : -0.85) : 0,
           lineHeight: multiline ? 22 : undefined,
+          textAlign: 'left',
           textAlignVertical: multiline ? 'top' : 'center',
+          ...(big ? { overflow: 'hidden' as const } : {}),
           ...OUTLINE_OFF,
         }}
       />

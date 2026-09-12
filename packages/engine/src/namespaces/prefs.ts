@@ -1,14 +1,14 @@
 /**
  * UI preferences (plan B2): remembered choices that are not settings — the
  * Home chain scope, the dismissed first-swap coach, the chart timeframe,
- * "show all collections". One small persisted document, one event.
+ * whether portfolio totals are hidden. One small persisted document, one event.
  */
 import type { Platform } from '@boltvault/platform'
 import type { EventBus, NamespaceSpec } from '../host'
 import { PrefsSchema, type Prefs } from '../schema'
 import { readDoc, writeDoc, type DocSpec } from '../storage'
 
-export const DEFAULT_PREFS: Prefs = { homeScope: 52014, swapCoachDismissed: false, chartDuration: '1D', introSeen: false }
+export const DEFAULT_PREFS: Prefs = { homeScope: 52014, swapCoachDismissed: false, chartDuration: '1D', introSeen: false, hideBalances: false }
 const DOC: DocSpec<Prefs> = { key: 'ui.prefs', version: 1, schema: PrefsSchema, defaultValue: () => DEFAULT_PREFS }
 
 export class PrefsService {

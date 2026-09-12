@@ -63,7 +63,7 @@ import { readDoc, writeDoc, type DocSpec } from '../storage'
 const KEY_FILE = 'vault.file'
 export const KEY_DEK = 'vault.dek'
 const KEY_UNLOCKED_AT = 'vault.unlockedAt'
-const KEY_LOCK_AT = 'vault.lockAt'
+export const KEY_LOCK_AT = 'vault.lockAt'
 export const AUTOLOCK_ALARM = 'vault.autolock'
 
 const AUTO_LOCK_MS: Record<AutoLock, number> = {
@@ -198,6 +198,8 @@ function unlockFor(input: RevealFactor): UnlockWith {
 
 export class VaultManager {
   private stopAlarms: (() => void) | null = null
+  /** True while `lock()` is clearing the session, so `status()` can re-enter without recursing. */
+  private locking = false
   private readonly crypto: VaultCrypto
 
   constructor(
@@ -218,12 +220,37 @@ export class VaultManager {
 
   /** The alarm fired: lock, unless a touch moved the deadline past now (then re-arm at the moved deadline). */
   private async onAutoLockAlarm(): Promise<void> {
+    await this.expireIfDue()
+    if (!(await this.isUnlockedRaw())) return
     const at = Number((await this.platform.storage.session.get(KEY_LOCK_AT)) ?? 0)
     if (at > this.platform.now() + 1_000) {
       await this.platform.alarms.schedule(AUTOLOCK_ALARM, at)
       return
     }
     await this.lock()
+  }
+
+  /**
+   * Wipe the session if the idle deadline is already in the past.
+   *
+   * Timers do not run while the phone sleeps, so the alarm that should have
+   * locked at `lockAt` only catches up on foreground — asynchronously, after
+   * a `status()` that still sees the DEK. That reply is how the unlock screen
+   * flashes and then yields to Home. Anyone who asks whether we are unlocked
+   * (status, the DEK, a touch, applying a new auto-lock) must lock first.
+   */
+  private async expireIfDue(): Promise<void> {
+    if (this.locking) return
+    if (!(await this.isUnlockedRaw())) return
+    const lockAt = Number((await this.platform.storage.session.get(KEY_LOCK_AT)) ?? 0)
+    // `never` clears KEY_LOCK_AT; a missing deadline is not "already due".
+    if (!Number.isFinite(lockAt) || lockAt <= 0) return
+    if (lockAt > this.platform.now()) return
+    await this.lock()
+  }
+
+  private async isUnlockedRaw(): Promise<boolean> {
+    return (await this.platform.storage.session.get(KEY_DEK)) !== null
   }
 
   dispose(): void {
@@ -255,13 +282,15 @@ export class VaultManager {
   }
 
   private async dek(): Promise<Uint8Array> {
+    await this.expireIfDue()
     const hex = await this.platform.storage.session.get(KEY_DEK)
     if (hex === null) throw new EngineError('locked', 'the vault is locked')
     return fromHex(hex)
   }
 
   async isUnlocked(): Promise<boolean> {
-    return (await this.platform.storage.session.get(KEY_DEK)) !== null
+    await this.expireIfDue()
+    return this.isUnlockedRaw()
   }
 
   private async kdfParams(): Promise<Argon2idParams> {
@@ -325,6 +354,7 @@ export class VaultManager {
   // ---- status -------------------------------------------------------------------
 
   async status(): Promise<VaultStatus> {
+    await this.expireIfDue()
     const [file, dekHex, unlockedAt, lockAt, settings] = await Promise.all([
       this.readFile(),
       this.platform.storage.session.get(KEY_DEK),
@@ -529,7 +559,8 @@ export class VaultManager {
 
   /** A human interacted with the wallet: the idle timer restarts. Cheap enough to call on every gesture. */
   async touch(): Promise<{ lockAt: number | null }> {
-    if (!(await this.isUnlocked())) return { lockAt: null }
+    await this.expireIfDue()
+    if (!(await this.isUnlockedRaw())) return { lockAt: null }
     return this.arm(false)
   }
 
@@ -543,13 +574,23 @@ export class VaultManager {
   }
 
   async applyAutoLock(): Promise<VaultStatus> {
-    if (await this.isUnlocked()) await this.scheduleAutoLock()
+    await this.expireIfDue()
+    if (await this.isUnlockedRaw()) await this.scheduleAutoLock()
     const status = await this.status()
     this.bus.emit({ type: 'vault.status', status })
     return status
   }
 
   async lock(): Promise<void> {
+    this.locking = true
+    try {
+      await this.lockSession()
+    } finally {
+      this.locking = false
+    }
+  }
+
+  private async lockSession(): Promise<void> {
     const session = this.platform.storage.session
     /*
       Overwrite, then remove.

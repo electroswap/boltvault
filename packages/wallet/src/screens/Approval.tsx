@@ -8,7 +8,6 @@ import {
   BarLoader,
   Body,
   Column,
-  Field,
   Icon,
   Input,
   Key,
@@ -21,7 +20,6 @@ import {
   metrics,
   paint,
   shortAddress,
-  useWindowDimensions,
   differingAt,
   fullAddress,
 } from '@boltvault/ui'
@@ -51,7 +49,6 @@ import { useWcProposal } from '../hooks/useWcProposal'
 import { COOLING_MS, needsCooling, needsStepUp, recipientOf } from '../state/safeguards'
 import { useApprovals } from '../state/useApprovals'
 import { useWalletState } from '../state/useWalletState'
-import { useScene } from '../state/useScene'
 
 const FOCUS_INERT_MS = 600
 
@@ -138,8 +135,6 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   const router = useRouter()
   const { pending, loaded } = useApprovals()
   const { accounts, active, vault, loading: vaultLoading } = useWalletState()
-  const { width, height } = useWindowDimensions()
-  const scene = useScene()
   const [chains, setChains] = useState<ChainView[]>([])
   const [typed, setTyped] = useState('')
   const [now, setNow] = useState(() => Date.now())
@@ -475,12 +470,11 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
     finish()
   }, [request, loaded, finish])
 
-  if (!loaded) return <Column flex={1} backgroundColor="$void" testID="approval-loading" />
+  if (!loaded) return <Column flex={1} testID="approval-loading" />
   if (!request || !payload) {
     return (
       <Column
         flex={1}
-        backgroundColor="$void"
         padding={inset}
         gap="$4"
         justifyContent="center"
@@ -597,15 +591,7 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   }
 
   return (
-    <Column flex={1} backgroundColor="$void" testID="approval">
-      <Field
-        scene={scene}
-        address={signer?.address ?? '0x0000000000000000000000000000000000000e7n'}
-        quiet
-        width={width}
-        height={height}
-        reducedMotion={reducedMotion}
-      />
+    <Column flex={1} testID="approval">
       {/*
         The scroll region and the verbs are siblings, not layers.
 

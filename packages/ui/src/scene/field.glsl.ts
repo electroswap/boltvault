@@ -45,7 +45,7 @@ float hash(vec2 p) {
 
 // One sheet's height at x: a slow long wave and a faster short one, seeded.
 float sheetY(float x, float base, float amp, float phase, float t) {
-  return base + amp * sin(x * 2.6 + phase + t * 0.32) + amp * 0.45 * sin(x * 7.1 - t * 0.21 + phase * 1.7);
+    return base + amp * sin(x * 3.64 + phase + t * 0.32) + amp * 0.45 * sin(x * 9.94 - t * 0.21 + phase * 1.7);
 }
 
 // Hairline core plus a wide halo, in px-independent units (uv space).
@@ -80,43 +80,46 @@ void main() {
   float lift = u_touch.z * exp(-dot(p - tp, p - tp) * 9.0) * 0.03;
 
   // Four sheets in the lower 55 %. Colour runs plasma (left) to arc (right), brighter toward the front.
+  // Skip the mesh above that — those pixels are mixed to aurora anyway.
   float s0 = u_seed.x, s1 = u_seed.y, s2 = u_seed.z, s3 = u_seed.w;
   vec3 mesh = vec3(0.0);
   float lattice = 0.0;
   float prevY = -1.0;
-  for (int i = 0; i < 4; i++) {
-    float fi = float(i);
-    float base = 0.06 + fi * (0.085 + s2 * 0.02);
-    float amp = 0.028 + fi * 0.009 + s1 * 0.015;
-    float phase = s0 * 6.283 + fi * (1.9 + s3 * 0.8);
-    float y = sheetY(p.x, base, amp, phase, t) + lift;
-    float d = abs(p.y - y);
-    float depth = 0.35 + 0.65 * (fi / 3.0);
-    vec3 tint = mix(C_PLASMA, C_ARC, smoothstep(0.0, aspect, p.x) * 0.85 + fi * 0.05);
-    // The hairline.
-    mesh += tint * line(d, px) * 0.34 * depth;
-    // Nodes: a dot every ~0.06 of width along the sheet, flaring on a block.
-    float spacing = 0.055 + s3 * 0.01;
-    float along = p.x / spacing + fi * 0.37 + s0;
-    float nx = abs(fract(along) - 0.5) * spacing;
-    float node = exp(-(nx * nx + d * d) / (2.0 * px * px * 2.2)) * (1.0 + u_pulse * 0.6);
-    float nodeHalo = exp(-(nx * nx + d * d) / (2.0 * px * px * 40.0)) * 0.18;
-    mesh += mix(tint, C_CORE, 0.5) * (node * 0.55 + nodeHalo) * depth;
-    // Links to the previous sheet at node positions: the mesh's volume.
-    if (prevY > 0.0) {
-      float lo = min(prevY, y), hi = max(prevY, y);
-      float inside = step(lo, p.y) * step(p.y, hi);
-      float lnk = exp(-nx * nx / (2.0 * px * px * 1.4)) * inside;
-      mesh += tint * lnk * 0.07 * depth;
+  if (uv.y < 0.58) {
+    for (int i = 0; i < 4; i++) {
+      float fi = float(i);
+      float base = 0.06 + fi * (0.085 + s2 * 0.02);
+      float amp = 0.028 + fi * 0.009 + s1 * 0.015;
+      float phase = s0 * 6.283 + fi * (1.9 + s3 * 0.8);
+      float y = sheetY(p.x, base, amp, phase, t) + lift;
+      float d = abs(p.y - y);
+      float depth = 0.35 + 0.65 * (fi / 3.0);
+      vec3 tint = mix(C_PLASMA, C_ARC, smoothstep(0.0, aspect, p.x) * 0.85 + fi * 0.05);
+      // The hairline.
+      mesh += tint * line(d, px) * 0.34 * depth;
+      // Nodes: a dot every ~0.06 of width along the sheet, flaring on a block.
+      float spacing = 0.039 + s3 * 0.007;
+      float along = p.x / spacing + fi * 0.37 + s0;
+      float nx = abs(fract(along) - 0.5) * spacing;
+      float node = exp(-(nx * nx + d * d) / (2.0 * px * px * 2.2)) * (1.0 + u_pulse * 0.6);
+      float nodeHalo = exp(-(nx * nx + d * d) / (2.0 * px * px * 40.0)) * 0.18;
+      mesh += mix(tint, C_CORE, 0.5) * (node * 0.55 + nodeHalo) * depth;
+      // Links to the previous sheet at node positions: the mesh's volume.
+      if (prevY > 0.0) {
+        float lo = min(prevY, y), hi = max(prevY, y);
+        float inside = step(lo, p.y) * step(p.y, hi);
+        float lnk = exp(-nx * nx / (2.0 * px * px * 1.4)) * inside;
+        mesh += tint * lnk * 0.07 * depth;
+      }
+      prevY = y;
+      // A faint dot grid displaced by this sheet, fading with distance from it.
+      vec2 g = vec2(p.x, p.y - (y - base)) / 0.032;
+      vec2 gf = abs(fract(g) - 0.5);
+      float dot2 = exp(-dot(gf, gf) * 60.0);
+      lattice += dot2 * exp(-d * 18.0) * 0.045 * depth;
     }
-    prevY = y;
-    // A faint dot grid displaced by this sheet, fading with distance from it.
-    vec2 g = vec2(p.x, p.y - (y - base)) / 0.045;
-    vec2 gf = abs(fract(g) - 0.5);
-    float dot2 = exp(-dot(gf, gf) * 60.0);
-    lattice += dot2 * exp(-d * 18.0) * 0.045 * depth;
+    col += mesh + mix(C_PLASMA, C_ARC, uv.x) * lattice;
   }
-  col += mesh + mix(C_PLASMA, C_ARC, uv.x) * lattice;
 
   // Keep the top calm for type: fade the mesh out above the sheets (it is already below 0.55).
   col = mix(col, mix(C_VOID, C_DEEP, 0.3) + C_AURORA_V * aV + blue * aB, smoothstep(0.42, 0.62, uv.y) * 0.9);

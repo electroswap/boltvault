@@ -15,7 +15,7 @@ import { useEffect, useState } from 'react'
 import { AppState } from 'react-native'
 
 export function useAppHidden(): boolean {
-  const [hidden, setHidden] = useState(false)
+    const [hidden, setHidden] = useState(() => AppState.currentState !== 'active')
   useEffect(() => {
     // `active` is the only state that counts as on screen: `inactive` is the
     // iOS app switcher and a macOS window losing focus, and both are exactly

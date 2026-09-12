@@ -5,7 +5,7 @@
  * decimal can tip a figure into the unit above, and 999,999 is 1M, not 1000K.
  */
 import { describe, expect, it } from 'vitest'
-import { formatAmount, formatCompact, formatFloor, formatQuantity, formatRaw } from '../src/format'
+import { displayFiat, formatAmount, formatCompact, formatFloor, formatQuantity, formatRaw, maskedFiat } from '../src/format'
 
 describe('formatCompact', () => {
   it('leaves anything under a thousand alone, decimals and all', () => {
@@ -99,5 +99,15 @@ describe('never rounds up', () => {
       if (!Number.isFinite(shown)) continue
       expect(shown).toBeLessThanOrEqual(exact)
     }
+  })
+})
+
+describe('hidden portfolio figures', () => {
+  it('uses a fixed mask so the length cannot leak the size', () => {
+    expect(maskedFiat('USD')).toBe('$****.**')
+    expect(maskedFiat('ETN')).toBe('**** ETN')
+    expect(displayFiat(1234.56, 'USD', true)).toBe('$****.**')
+    expect(displayFiat(1234.56, 'USD', false)).toBe('$1,234.56')
+    expect(displayFiat(null, 'USD', true)).toBe('—')
   })
 })

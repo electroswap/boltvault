@@ -392,6 +392,7 @@ const quoteView: SwapQuoteView = {
   quotedAt: 1_700_000_000_000,
   ok: true,
   problems: [],
+  maxSpendableRaw: '5000000',
   diagnostics: {
     provenance: { id: 'q-7', cached: false, blockNumber: '99', fallbackReason: null },
     account: { account: ACCOUNT, balanceIn: '5000000', nativeBalance: '5000000000000000000', erc20Allowance: '0', permit2Amount: '0', permit2Expiration: 0 },

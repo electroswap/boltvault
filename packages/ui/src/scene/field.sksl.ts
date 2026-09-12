@@ -26,7 +26,7 @@ float hash(float2 p) {
 }
 
 float sheetY(float x, float base, float amp, float phase, float t) {
-  return base + amp * sin(x * 2.6 + phase + t * 0.32) + amp * 0.45 * sin(x * 7.1 - t * 0.21 + phase * 1.7);
+  return base + amp * sin(x * 3.64 + phase + t * 0.32) + amp * 0.45 * sin(x * 9.94 - t * 0.21 + phase * 1.7);
 }
 
 float line(float d, float px) {
@@ -61,35 +61,37 @@ half4 main(float2 fragCoord) {
   half3 mesh = half3(0.0);
   float lattice = 0.0;
   float prevY = -1.0;
-  for (int i = 0; i < 4; i++) {
-    float fi = float(i);
-    float base = 0.06 + fi * (0.085 + s2 * 0.02);
-    float amp = 0.028 + fi * 0.009 + s1 * 0.015;
-    float phase = s0 * 6.283 + fi * (1.9 + s3 * 0.8);
-    float y = sheetY(p.x, base, amp, phase, t) + lift;
-    float d = abs(p.y - y);
-    float depth = 0.35 + 0.65 * (fi / 3.0);
-    half3 tint = mix(C_PLASMA, C_ARC, half(smoothstep(0.0, aspect, p.x) * 0.85 + fi * 0.05));
-    mesh += tint * half(line(d, px) * 0.34 * depth);
-    float spacing = 0.055 + s3 * 0.01;
-    float along = p.x / spacing + fi * 0.37 + s0;
-    float nx = abs(fract(along) - 0.5) * spacing;
-    float node = exp(-(nx * nx + d * d) / (2.0 * px * px * 2.2)) * (1.0 + u_pulse * 0.6);
-    float nodeHalo = exp(-(nx * nx + d * d) / (2.0 * px * px * 40.0)) * 0.18;
-    mesh += mix(tint, C_CORE, half(0.5)) * half((node * 0.55 + nodeHalo) * depth);
-    if (prevY > 0.0) {
-      float lo = min(prevY, y); float hi = max(prevY, y);
-      float inside = step(lo, p.y) * step(p.y, hi);
-      float lnk = exp(-nx * nx / (2.0 * px * px * 1.4)) * inside;
-      mesh += tint * half(lnk * 0.07 * depth);
+  if (uv.y < 0.58) {
+    for (int i = 0; i < 4; i++) {
+      float fi = float(i);
+      float base = 0.06 + fi * (0.085 + s2 * 0.02);
+      float amp = 0.028 + fi * 0.009 + s1 * 0.015;
+      float phase = s0 * 6.283 + fi * (1.9 + s3 * 0.8);
+      float y = sheetY(p.x, base, amp, phase, t) + lift;
+      float d = abs(p.y - y);
+      float depth = 0.35 + 0.65 * (fi / 3.0);
+      half3 tint = mix(C_PLASMA, C_ARC, half(smoothstep(0.0, aspect, p.x) * 0.85 + fi * 0.05));
+      mesh += tint * half(line(d, px) * 0.34 * depth);
+      float spacing = 0.039 + s3 * 0.007;
+      float along = p.x / spacing + fi * 0.37 + s0;
+      float nx = abs(fract(along) - 0.5) * spacing;
+      float node = exp(-(nx * nx + d * d) / (2.0 * px * px * 2.2)) * (1.0 + u_pulse * 0.6);
+      float nodeHalo = exp(-(nx * nx + d * d) / (2.0 * px * px * 40.0)) * 0.18;
+      mesh += mix(tint, C_CORE, half(0.5)) * half((node * 0.55 + nodeHalo) * depth);
+      if (prevY > 0.0) {
+        float lo = min(prevY, y); float hi = max(prevY, y);
+        float inside = step(lo, p.y) * step(p.y, hi);
+        float lnk = exp(-nx * nx / (2.0 * px * px * 1.4)) * inside;
+        mesh += tint * half(lnk * 0.07 * depth);
+      }
+      prevY = y;
+      float2 g = float2(p.x, p.y - (y - base)) / 0.032;
+      float2 gf = abs(fract(g) - 0.5);
+      float dot2 = exp(-dot(gf, gf) * 60.0);
+      lattice += dot2 * exp(-d * 18.0) * 0.045 * depth;
     }
-    prevY = y;
-    float2 g = float2(p.x, p.y - (y - base)) / 0.045;
-    float2 gf = abs(fract(g) - 0.5);
-    float dot2 = exp(-dot(gf, gf) * 60.0);
-    lattice += dot2 * exp(-d * 18.0) * 0.045 * depth;
+    col += mesh + mix(C_PLASMA, C_ARC, half(uv.x)) * half(lattice);
   }
-  col += mesh + mix(C_PLASMA, C_ARC, half(uv.x)) * half(lattice);
 
   col = mix(col, mix(C_VOID, C_DEEP, half(0.3)) + C_AURORA_V * half(aV) + blue * half(aB), half(smoothstep(0.42, 0.62, uv.y) * 0.9));
 

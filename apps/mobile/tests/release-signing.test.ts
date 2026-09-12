@@ -42,11 +42,31 @@ android {
 describe('the release signing config', () => {
   const out = applyToBuildGradle(TEMPLATE)
 
-  it('takes the release build type off the debug key', () => {
+  it('takes the release build type off the debug key when there is a release key', () => {
     const buildTypes = out.slice(out.indexOf('buildTypes {'))
-    expect(buildTypes).toContain('signingConfig signingConfigs.boltvaultRelease')
+    expect(buildTypes).toContain('signingConfigs.boltvaultRelease')
     // The debug build type keeps its own key; only `release` moves.
     expect(buildTypes.split('release {')[0]).toContain('signingConfig signingConfigs.debug')
+  })
+
+  /*
+    The escape hatch has to produce a signable APK, not a different failure.
+
+    `BOLTVAULT_ALLOW_DEBUG_SIGNED_RELEASE=1` used to get past the guard and then
+    die in `packageRelease` with `SigningConfig "boltvaultRelease" is missing
+    required property "storeFile"` — the config was left half-built, because the
+    branch that set a keystore and the branch that set `storeFile null` both
+    declined to run. Nothing selects that config now: the build type chooses
+    between the release key and the SDK's own debug config, and choosing is what
+    makes "signed with the debug key" an outcome rather than an error.
+  */
+  it('lets the release build type fall back to the SDK debug config, and leaves it whole', () => {
+    const buildTypes = out.slice(out.indexOf('buildTypes {'))
+    const release = buildTypes.slice(buildTypes.indexOf('release {'))
+    expect(release).toContain('signingConfigs.debug')
+    expect(release).toContain("System.getenv('BOLTVAULT_RELEASE_KEYSTORE')")
+    // A config that is never fully built must never be the one selected.
+    expect(out).not.toContain('storeFile null')
   })
 
   it('reads the keystore and its passwords from the environment, never the repo', () => {

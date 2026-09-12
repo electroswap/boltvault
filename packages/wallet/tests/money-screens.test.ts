@@ -28,6 +28,7 @@ const SEND = read('screens/Send.tsx')
 const SWAP = read('screens/Swap.tsx')
 const BRIDGE = read('screens/Bridge.tsx')
 const HOME = read('screens/Home.tsx')
+const PORTFOLIO = read('screens/Portfolio.tsx')
 const ACTIVITY = read('screens/Activity.tsx')
 const ACCOUNT_ROW = read('components/accounts/AccountRow.tsx')
 
@@ -78,6 +79,15 @@ describe('an unfunded wallet counts nothing', () => {
     // balance in it keeps every word it had.
     expect(HOME).toContain("id: 'home.tokens.one'")
     expect(HOME).toContain("id: 'home.tokens.many'")
+  })
+})
+
+describe('hiding the portfolio total', () => {
+  it('Home and Portfolio share the one eye control', () => {
+    expect(HOME).toContain('<PortfolioBalance')
+    expect(PORTFOLIO).toContain('<PortfolioBalance')
+    expect(HOME).toContain('hideBalances')
+    expect(PORTFOLIO).toContain('hideBalances')
   })
 })
 

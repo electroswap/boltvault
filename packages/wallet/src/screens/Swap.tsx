@@ -2,17 +2,20 @@
  * Swap (master plan §8.6; plan B4): a title row with the slippage pill, the
  * console — two wells with the flip on their seam — a rate line, and a fee
  * plate that always shows price impact, the wallet fee with your BOLT tier,
- * minimum received and the locked liquidity behind the pair. Quotes come
- * from the mini-router on chain and re-rate every block; a quote older than
- * 8 s disarms the key. The default pair is ETN → BOLT; a token page opens
- * the swap with ETN → that token. Slippage, the token picker, the fee
- * schedule and the first-swap coach are sheets beside the screen.
- * Confirming runs a flow of sheets (approve → permit → swap) and the
- * Discharge lands the result here.
+ * minimum received (or pay-at-most on exact-out) and the locked liquidity
+ * behind the pair. Typing in "You pay" is exact-in; typing in "You receive"
+ * is exact-out, except when a fee-on-transfer token cannot honour a promised
+ * output. Quotes come from the routing service and re-rate every block; a
+ * quote older than 8 s disarms the key. The default pair is ETN → BOLT; a
+ * token page opens the swap with ETN → that token. Slippage, the token
+ * picker, the fee schedule and the first-swap coach are sheets beside the
+ * screen. Confirming runs a flow of sheets (approve → permit → swap) and
+ * the Discharge lands the result here.
  */
-import { Body, ChainMark, Chip, Column, Discharge, Icon, IconButton, Key, Pill, Plate, Pressable, Rim, Row, ScrollView, Segmented, TokenAvatar, metrics, paint, radius, shortAddress, useWindowDimensions } from '@boltvault/ui'
-import { cacheKey, type ExploreToken, type LimitOrderView, type LimitQuote, type LiquidityView, type SwapArgs, type SwapQuote, type TokenView } from '@boltvault/engine'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Body, ChainMark, Chip, Column, Discharge, Icon, IconButton, Key, Pill, Plate, Pressable, Rim, Row, ScrollView, Segmented, TokenAvatar, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
+import { cacheKey, type ExploreToken, type LimitOrderView, type LimitQuote, type LiquidityView, type SwapArgs, type SwapQuoteView, type TokenView } from '@boltvault/engine'
+import { formatUnits } from 'viem'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SlippageSheet } from '../components/SlippageSheet'
 import { SwapCoachSheet } from '../components/SwapCoachSheet'
 import { TokenPickerSheet, type TokenSafety } from '../components/TokenPickerSheet'
@@ -147,13 +150,24 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   const [tokens, setTokens] = useState<TokenView[]>([])
   const [tokenIn, setTokenIn] = useState(initialIn ?? 'native')
   const [tokenOut, setTokenOut] = useState(initialOut ?? '')
+  /**
+   * The amount the user typed, and which well they typed it in.
+   *
+   * Exact-out is not a separate mode or a pill: typing in "You receive" is
+   * exact-out, typing in "You pay" is exact-in, the same way the web interface
+   * treats `independentField`. Fee-on-transfer tokens cannot honour an exact
+   * output, so that well is disabled when the quote reports a tax.
+   */
+  const [tradeType, setTradeType] = useState<'exactIn' | 'exactOut'>('exactIn')
   const [amount, setAmount] = useState('')
+  const quoteNow = useRef(false)
+  const maxGen = useRef(0)
   const [minOut, setMinOut] = useState('')
   const [duration, setDuration] = useState<string>('604800')
   const [slippage, setSlippage] = useState<number | null>(null)
   const [slippageOpen, setSlippageOpen] = useState(false)
   const [picker, setPicker] = useState<'in' | 'out' | null>(null)
-  const [quote, setQuote] = useState<SwapQuote | null>(null)
+  const [quote, setQuote] = useState<SwapQuoteView | null>(null)
   const [limitQuote, setLimitQuote] = useState<LimitQuote | null>(null)
   const [orders, setOrders] = useState<LimitOrderView[]>([])
   const [feeSheet, setFeeSheet] = useState(false)
@@ -196,17 +210,18 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   }, [])
 
   const effectiveSlippage = slippage ?? 50
-  const swapArgs = useCallback(
-    (): SwapArgs => ({
+  const swapArgs = useCallback((): SwapArgs => {
+    const base = {
       accountId: active?.id ?? '',
       chainId: ETN,
       tokenIn,
       tokenOut,
       slippageBips: effectiveSlippage,
-      amountIn: amount,
-    }),
-    [active?.id, tokenIn, tokenOut, effectiveSlippage, amount],
-  )
+    }
+    return tradeType === 'exactOut'
+      ? { ...base, amountOut: amount, tradeType: 'exactOut' as const }
+      : { ...base, amountIn: amount, tradeType: 'exactIn' as const }
+  }, [active?.id, tokenIn, tokenOut, effectiveSlippage, amount, tradeType])
   // Quote as the user types and again on every block while the pair is set (§8.6: rerated per block).
   useEffect(() => {
     if (!active || !tokenOut || slippage === null) return
@@ -232,12 +247,14 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
         without asking on every keypress.
       */
       let alive = true
+      const wait = quoteNow.current ? 0 : QUOTE_DEBOUNCE_MS
+      quoteNow.current = false
       const id = setTimeout(() => {
         engine.swap.quote(swapArgs()).then(
           (q) => alive && setQuote(q),
           (err: unknown) => alive && setError(err instanceof Error ? err.message : String(err)),
         )
-      }, QUOTE_DEBOUNCE_MS)
+      }, wait)
       return () => {
         alive = false
         clearTimeout(id)
@@ -315,6 +332,84 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   const impactTone: 'mute' | 'ember' | 'burn' = quote?.priceImpactPct === null || quote?.priceImpactPct === undefined ? 'mute' : quote.priceImpactPct > 15 ? 'burn' : quote.priceImpactPct > 5 ? 'ember' : 'mute'
   const coachOpen = mode === 'swap' && prefsLoaded && activityLoaded && !hasSwapped && !prefs.swapCoachDismissed
 
+  useEffect(() => {
+    maxGen.current += 1
+  }, [tokenIn, tokenOut])
+
+  /*
+    Native MAX fills the balance less 120% of the quoted network fee. When we
+    do not have that number yet, ask once at the full balance (that quote is
+    refused, which is the point) and take `maxSpendableRaw` off it rather than
+    inventing a reserve.
+  */
+  const fillPayMax = useCallback(() => {
+    if (!rowIn) return
+    quoteNow.current = true
+    if (rowIn.address !== 'native') {
+      setTradeType('exactIn')
+      setAmount(rowIn.quantity)
+      return
+    }
+    const ready = spendableNative(quote)
+    if (ready) {
+      setTradeType('exactIn')
+      setAmount(ready)
+      return
+    }
+    const gen = ++maxGen.current
+    const quantity = rowIn.quantity
+    void engine.swap
+      .quote({
+        accountId: active?.id ?? '',
+        chainId: ETN,
+        tokenIn,
+        tokenOut,
+        slippageBips: effectiveSlippage,
+        amountIn: quantity,
+        tradeType: 'exactIn',
+      })
+      .then(
+        (q) => {
+          if (gen !== maxGen.current) return
+          quoteNow.current = true
+          setTradeType('exactIn')
+          setAmount(spendableNative(q) ?? quantity)
+        },
+        () => {
+          if (gen !== maxGen.current) return
+          quoteNow.current = true
+          setTradeType('exactIn')
+          setAmount(quantity)
+        },
+      )
+  }, [rowIn, quote, engine, active?.id, tokenIn, tokenOut, effectiveSlippage])
+
+  const typePay = useCallback((value: string) => {
+    maxGen.current += 1
+    if (tradeType !== 'exactIn') setQuote(null)
+    setTradeType('exactIn')
+    setAmount(value)
+  }, [tradeType])
+
+  const typeReceive = useCallback((value: string) => {
+    maxGen.current += 1
+    if (tradeType !== 'exactOut') setQuote(null)
+    setTradeType('exactOut')
+    setAmount(value)
+  }, [tradeType])
+
+  /*
+    A fee-on-transfer token cannot honour an exact output. The engine already
+    refuses to quote one; this keeps the well from asking again — and if the
+    user typed an output amount before the tax probe landed, moves that trade
+    back to exact-in with the quoted spend as the new typed amount.
+  */
+  useEffect(() => {
+    if (!quote || quote.taxBips <= 0 || tradeType !== 'exactOut') return
+    setTradeType('exactIn')
+    setAmount(quote.amountInRaw !== '0' ? formatInputAmount(quote.amountInRaw, quote.decimalsIn) : '')
+  }, [quote, tradeType])
+
   /*
     A quote is a quote OF a pair, so changing what the trade is made of drops
     it: the figures on screen belong to the tokens that were there a moment ago.
@@ -324,10 +419,23 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   }, [])
 
   const flip = useCallback(() => {
+    /*
+      The number stays with the token, so the independent field flips with the
+      wells — unless the new output cannot honour an exact amount. Then we keep
+      exact-in and put the previous receive estimate in "You pay", the same
+      way the web interface's `switchCurrencies` does for a fee-on-transfer
+      token.
+    */
+    const fot = (quote?.taxBips ?? 0) > 0
+    if (fot && tradeType === 'exactIn') {
+      if (quote && quote.amountOutRaw !== '0') setAmount(formatInputAmount(quote.receiveRaw, quote.decimalsOut))
+    } else {
+      setTradeType((cur) => (cur === 'exactIn' ? 'exactOut' : 'exactIn'))
+    }
     setTokenIn(tokenOut)
     setTokenOut(tokenIn)
     resetQuote()
-  }, [tokenIn, tokenOut, resetQuote])
+  }, [tokenIn, tokenOut, resetQuote, quote, tradeType])
 
   const pick = (address: string): void => {
     if (picker === 'in') {
@@ -396,7 +504,9 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
           </Body>
           {q ? (
             <Body tone="mute" testID="swap-flow-summary">
-              {t({ id: 'swap.summary', message: '{a} {s} → at least {b} {u}', values: { a: formatRaw(q.amountInRaw, q.decimalsIn), s: q.symbolIn, b: formatFloor(q.minimumOutRaw, q.decimalsOut), u: q.symbolOut } })}
+              {q.tradeType === 'exactOut'
+                ? t({ id: 'swap.summary.out', message: 'at most {a} {s} → {b} {u}', values: { a: formatRaw(q.maximumInRaw, q.decimalsIn), s: q.symbolIn, b: formatRaw(q.receiveRaw, q.decimalsOut), u: q.symbolOut } })
+                : t({ id: 'swap.summary', message: '{a} {s} → at least {b} {u}', values: { a: formatRaw(q.amountInRaw, q.decimalsIn), s: q.symbolIn, b: formatFloor(q.minimumOutRaw, q.decimalsOut), u: q.symbolOut } })}
             </Body>
           ) : null}
           <Plate gap="$2" testID="swap-steps">
@@ -474,7 +584,14 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   const warnedSide = blockedSide !== null ? null : safety.get(tokenOut.toLowerCase()) === 'STRONG_WARNING' ? outView : safety.get(tokenIn.toLowerCase()) === 'STRONG_WARNING' ? inView : null
   const canSwap = blockedSide === null && (mode === 'swap' ? !!quote?.ok && fresh && !busy : !!limitQuote?.ok && !busy)
   const priced = quote && quote.amountOutRaw !== '0'
-  const receiveText = priced ? formatRaw(quote.receiveRaw, quote.decimalsOut) : '—'
+  /*
+    Fee-on-transfer: the same gate the web interface uses. Either side charging
+    a transfer tax makes the output amount a guess rather than a promise, so
+    the receive well stays a quote of what you pay, not a field you type into.
+  */
+  const fotLocked = mode === 'swap' && (quote?.taxBips ?? 0) > 0
+  const payText = tradeType === 'exactIn' ? amount : priced ? formatInputAmount(quote.amountInRaw, quote.decimalsIn) : ''
+  const receiveText = tradeType === 'exactOut' ? amount : priced ? formatInputAmount(quote.receiveRaw, quote.decimalsOut) : ''
   /*
     Which token "Details" is about.
 
@@ -492,7 +609,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   const isEtnSide = (address: string, view: TokenView | null): boolean => address === 'native' || view?.symbol?.toUpperCase() === 'WETN'
   const detailsToken = !isEtnSide(tokenOut, outView) ? tokenOut : !isEtnSide(tokenIn, inView) ? tokenIn : null
   /** Is there anything to say above the key? If not, the box that would say it is not rendered at all. */
-  const notices = Boolean(blockedSide || warnedSide || (problem && (amount.trim() || minOut.trim())) || error || (mode === 'swap' && quote?.ok && !fresh))
+  const notices = Boolean(blockedSide || warnedSide || fotLocked || (problem && (amount.trim() || minOut.trim())) || error || (mode === 'swap' && quote?.ok && !fresh))
   const keyLabel = mode === 'swap' ? (quote && quote.priceImpactPct !== null && quote.priceImpactPct > 15 ? t({ id: 'swap.key.anyway', message: 'Swap anyway' }) : t({ id: 'swap.key', message: 'Swap' })) : t({ id: 'swap.limit.key', message: 'Place order' })
 
   return (
@@ -621,14 +738,14 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
           ) : null}
           <AmountWell
             label={t({ id: 'swap.pay', message: 'You pay' })}
-            value={amount}
-            onChange={setAmount}
+            value={payText}
+            onChange={typePay}
             {...(inView ? { decimals: inView.decimals } : {})}
             louder
             tokenPill={<TokenPill token={inView} onPress={() => setPicker('in')} testID="swap-token-in" />}
-            fiat={formatAmountFiat(amount, rowIn, currency)}
+            fiat={formatAmountFiat(payText, rowIn, currency)}
             balance={rowIn ? `${formatQuantity(rowIn.quantity)} ${rowIn.symbol}` : null}
-            onMax={rowIn ? () => setAmount(rowIn.quantity) : undefined}
+            onMax={rowIn ? fillPayMax : undefined}
             accent={lockRim}
             testID="terminal-in"
             inputTestID="swap-amount-in"
@@ -677,22 +794,23 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
 
           {mode === 'swap' ? (
             /*
-              The receive terminal: a readout, with no control beside its label.
+              The receive terminal is an input, the same as "You pay".
 
-              It carried an "Exact amount" pill that flipped the trade to
-              exact-out. Owner: "I do not like the 'Exact amount' button in the
-              swap dialog" — and the interface's own output panel has nothing
-              there either, so the label row is a label row again. The engine
-              still prices exact-out (`swap.quote` takes `tradeType`); nothing
-              in this product asks it to.
+              Typing here is exact-output: the engine prices `tradeType: 'exactOut'`
+              and the routing service answers `EXACT_OUTPUT`. There is no pill —
+              the owner did not want an "Exact amount" control, and the web
+              interface has none either. Fee-on-transfer tokens cannot honour a
+              promised output (`taxBips > 0`), so the well is disabled then,
+              matching `numericalInputSettings.disabled` on the site.
             */
             <AmountWell
               label={t({ id: 'swap.receive', message: 'You receive' })}
               value={receiveText}
-              readOnly
+              onChange={typeReceive}
+              disabled={fotLocked}
               louder
               tokenPill={<TokenPill token={outView} onPress={() => setPicker('out')} testID="swap-token-out" />}
-              fiat={priced ? formatAmountFiat(formatRaw(quote.receiveRaw, quote.decimalsOut).replace(/,/g, ''), rowOut, currency) : null}
+              fiat={priced ? formatAmountFiat(receiveText.replace(/,/g, ''), rowOut, currency) : null}
               balance={rowOut ? `${formatQuantity(rowOut.quantity)} ${rowOut.symbol}` : null}
               accent={lockRim}
               testID="terminal-out"
@@ -728,23 +846,22 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
             it sits inside the console here now.
           */}
           {/*
-            `radius.well`, not the recessed role's 14.
+            Same well as the terminals, one border — the current rim, not `$edge`.
 
-            The console is 20 and pads its children by 8, so a child of it nests
-            at `innerRadius(20, 8)` = 12 — which is what both terminals use and
-            what the interface computes for its own `SwapSection`. This card is
-            their sibling and the same width to the pixel, but its corners were
-            two pixels rounder, which is enough to read as a different box.
             Owner: "the rate container should be the same width as the
-            input/output containers."
+            input/output containers." The nested look was this plate's `$edge`
+            hairline plus a second SVG rim inset by a pixel. Turning the rim
+            off left the grey hairline, which is the wrong colour next to the
+            console. `borderWidth={0}` drops that; `rim` is the same stroke
+            the console and the flip chip use.
           */}
           {mode === 'swap' ? (
-          <Plate role="recessed" rim={0.7} gap={0} borderRadius={radius.well} paddingVertical={2} paddingHorizontal="$3" testID="fee-stack">
+          <Plate role="well" borderWidth={0} rim={0.7} gap={0} padding={0} testID="fee-stack">
             <Pressable
               onPress={() => setDetails((d) => !d)}
               accessibilityRole="button"
               accessibilityLabel={t({ id: 'swap.details.a11y', message: 'Swap details' })}
-              style={{ minHeight: 44, justifyContent: 'center' }}
+              style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 2 }}
               testID="swap-details-toggle"
             >
               <Row justifyContent="space-between" alignItems="center" gap="$2" minHeight={40}>
@@ -774,9 +891,9 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
                 </Row>
               </Row>
             </Pressable>
-            {details ? <Column height={1} backgroundColor="$edge" marginVertical={4} /> : null}
+            {details ? <Column height={1} backgroundColor="$edge" marginHorizontal={12} marginVertical={4} /> : null}
             {details ? (
-            <>
+            <Column paddingHorizontal={12} paddingBottom={2}>
             <FeeRow label={t({ id: 'swap.impact', message: 'Price impact' })} value={quote?.priceImpactPct !== null && quote?.priceImpactPct !== undefined ? `${quote.priceImpactPct.toFixed(2)}%` : '—'} tone={impactTone} testID="swap-impact" />
             {/*
               Where the price came from (ES-BV-003).
@@ -827,7 +944,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
                 </Column>
               </Row>
             </Pressable>
-            <FeeRow label={t({ id: 'swap.min', message: 'Minimum received' })} value={priced ? `${formatRaw(quote.minimumOutRaw, quote.decimalsOut)} ${quote.symbolOut}` : '—'} tone="mute" testID="swap-min" />
+            <FeeRow label={quote?.tradeType === 'exactOut' ? t({ id: 'swap.max', message: 'Pay at most' }) : t({ id: 'swap.min', message: 'Minimum received' })} value={priced ? (quote.tradeType === 'exactOut' ? `${formatRaw(quote.maximumInRaw, quote.decimalsIn)} ${quote.symbolIn}` : `${formatRaw(quote.minimumOutRaw, quote.decimalsOut)} ${quote.symbolOut}`) : '—'} tone="mute" testID={quote?.tradeType === 'exactOut' ? 'swap-max-in' : 'swap-min'} />
             <FeeRow label={t({ id: 'swap.locked', message: 'Liquidity locked' })} value={lockText} tone={lockTone} testID="swap-locks" />
             {quote && quote.taxBips > 0 ? <FeeRow label={t({ id: 'swap.tax.label', message: 'Token tax' })} value={t({ id: 'swap.tax', message: '+{p} token tax', values: { p: formatPct(quote.taxBips) } })} tone="ember" testID="swap-tax" /> : null}
             {/*
@@ -837,7 +954,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
               tax the figures above do not account for.
             */}
             {quote?.taxUnknown ? <FeeRow label={t({ id: 'swap.tax.label', message: 'Token tax' })} value={t({ id: 'swap.tax.unknown', message: 'could not be checked' })} tone="ember" testID="swap-tax-unknown" /> : null}
-            </>
+            </Column>
             ) : null}
           </Plate>
           ) : (
@@ -880,6 +997,14 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
                   id: 'swap.warned',
                   message: 'Strong warning on {s}. The market flags this token as risky to hold; read its page before you trade it.',
                   values: { s: warnedSide.symbol },
+                })}
+              </Body>
+            ) : null}
+            {fotLocked ? (
+              <Body tone="mute" size="caption" testID="swap-exact-out-locked">
+                {t({
+                  id: 'swap.exactOut.fot',
+                  message: 'A token in this pair charges a fee when it moves, so an exact output cannot be promised. Set the amount you pay instead.',
                 })}
               </Body>
             ) : null}
@@ -1015,4 +1140,31 @@ function FeeRow({ label, value, tone, testID }: { label: string; value: string; 
  */
 function TokenPill({ token, onPress, testID }: { token: TokenView | null; onPress: () => void; testID: string }) {
   return <Pill strong size="lg" label={token?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} icon={token ? <TokenAvatar chainId={ETN} address={token.address} symbol={token.symbol} logoUri={token.logoUri} size={24} /> : undefined} chevron tone="ink" onPress={onPress} accessibilityLabel={token?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} testID={testID} />
+}
+
+/** Native MAX: the balance less 120% of the quoted network fee. Null until a quote has measured that fee. */
+function spendableNative(quote: SwapQuoteView | null): string | null {
+  if (!quote || quote.tokenIn !== 'native' || !quote.maxSpendableRaw || quote.maxSpendableRaw === '0') return null
+  try {
+    return formatUnits(BigInt(quote.maxSpendableRaw), quote.decimalsIn)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * A raw amount as a field value: exact decimals, no grouping commas.
+ *
+ * `formatRaw` is for reading (it groups thousands); putting that string back
+ * into a numeric input would turn "1,234.5" into "1.2345". The independent
+ * well shows what the user typed; this is only the other side, from the quote.
+ */
+function formatInputAmount(raw: string, decimals: number): string {
+  try {
+    const s = formatUnits(BigInt(raw), decimals)
+    if (!s.includes('.')) return s
+    return s.replace(/0+$/, '').replace(/\.$/, '')
+  } catch {
+    return ''
+  }
 }

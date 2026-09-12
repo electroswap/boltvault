@@ -221,8 +221,8 @@ export const motion = {
   roll: 300,
   sheet: 220,
   press: 90,
-  /** A view arriving after navigation. */
-  screen: 180,
+  /** A view arriving after navigation: ease fade in/out. */
+  screen: 150,
   /** A fill, an indicator, a tint answering a press or a choice. */
   micro: 160,
   /** The highlight that sweeps a primary key once per press. */

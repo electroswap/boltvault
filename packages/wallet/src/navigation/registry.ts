@@ -64,17 +64,22 @@ export interface ScreenMeta {
   readonly secrets: boolean
   /** The tab bar stays under this screen (plan B2). */
   readonly dock: boolean
-  /** The Grid renders behind this screen (plan B2). */
+  /** The Grid renders behind this screen. Default on: it is the still surface every page sits on. */
   readonly grid: boolean
+  /**
+   * A darker plate over the Grid so small type reads. The scene still shows
+   * through; this is not Off and not quiet custody — just contrast.
+   */
+  readonly veil: boolean
 }
 
-const meta = (id: ScreenId, presentation: Presentation, opts: Partial<Omit<ScreenMeta, 'id' | 'presentation'>> = {}): ScreenMeta => ({ id, presentation, quiet: false, secrets: false, dock: presentation === 'tab' || presentation === 'push', grid: false, ...opts })
+const meta = (id: ScreenId, presentation: Presentation, opts: Partial<Omit<ScreenMeta, 'id' | 'presentation'>> = {}): ScreenMeta => ({ id, presentation, quiet: false, secrets: false, dock: presentation === 'tab' || presentation === 'push', grid: true, veil: false, ...opts })
 
 export const SCREENS: Record<ScreenId, ScreenMeta> = {
-  home: meta('home', 'tab', { grid: true }),
-  portfolio: meta('portfolio', 'push', { grid: true }),
-  swap: meta('swap', 'tab', { grid: true }),
-  explore: meta('explore', 'push', { grid: true }),
+  home: meta('home', 'tab'),
+  portfolio: meta('portfolio', 'push'),
+  swap: meta('swap', 'tab'),
+  explore: meta('explore', 'push'),
   activity: meta('activity', 'tab'),
   settings: meta('settings', 'push'),
   security: meta('security', 'push', { quiet: true, secrets: true }),
@@ -83,7 +88,7 @@ export const SCREENS: Record<ScreenId, ScreenMeta> = {
   allowances: meta('allowances', 'push'),
   spending: meta('spending', 'push'),
   collection: meta('collection', 'push'),
-  nft: meta('nft', 'push'),
+  nft: meta('nft', 'push', { veil: true }),
   rack: meta('rack', 'push'),
   offers: meta('offers', 'push'),
   farm: meta('farm', 'push'),
@@ -101,7 +106,7 @@ export const SCREENS: Record<ScreenId, ScreenMeta> = {
   unlock: meta('unlock', 'window', { quiet: true }),
   receive: meta('receive', 'push', { dock: false }),
   send: meta('send', 'push'),
-  token: meta('token', 'push', { grid: true }),
+  token: meta('token', 'push', { veil: true }),
   sign: meta('sign', 'window', { quiet: true }),
   onboarding: meta('onboarding', 'push', { quiet: true, secrets: true, dock: false }),
   moments: meta('moments', 'push', { dock: false }),

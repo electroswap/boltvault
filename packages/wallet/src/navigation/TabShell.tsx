@@ -4,8 +4,8 @@
  * screens is replaced by Unlock. A pending dApp approval takes over the
  * popup and the mobile body (the sign window mounts it by route).
  */
-import { Body, Column, Field, Key, MotionProvider, PageLoader, Row, Scrim, ScreenEnter, Sheet, metrics, useInsets, useWindowDimensions, type EnterDirection } from '@boltvault/ui'
-import { Suspense, lazy, useEffect, useRef } from 'react'
+import { Body, Column, Field, Key, MotionProvider, PageLoader, Row, Scrim, ScreenEnter, Sheet, metrics, motion, useAppHidden, useInsets, useWindowDimensions, type EnterDirection } from '@boltvault/ui'
+import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { Approval } from '../screens/Approval'
 import { Home, type HomeProps } from '../screens/Home'
 import { Onboarding } from '../screens/Onboarding'
@@ -18,15 +18,16 @@ import { useFlowNavigation } from '../state/useSwapFlow'
 import { useLinks } from '../state/useLinks'
 import { t } from '../i18n'
 import { useFeelEvents } from '../feel'
-import { useWalletState } from '../state/useWalletState'
+import { useWalletState, vaultRequiresUnlock } from '../state/useWalletState'
 import { useScene } from '../state/useScene'
 import { useAnyScreenBusy } from '../state/useScreenBusy'
 import { MotionContext, useReducedMotion } from '../state/useReducedMotion'
 import { useChainHead } from '../hooks/useChainHead'
 import { useHolderTier } from '../hooks/useHolderTier'
-import { SCREENS } from './registry'
 import { useAndroidBack } from '../state/useAndroidBack'
+import { useEngine } from '../engine/EngineProvider'
 import { useRouter } from './router'
+import { SCREENS } from './registry'
 import { setSharedTransitions, sharedTransitionActive } from './transitions'
 
 const ETN = 52014
@@ -122,15 +123,17 @@ export interface TabShellProps {
 
 export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   const router = useRouter()
+  const engine = useEngine()
   const insets = useInsets()
   useAndroidBack()
   const { vault, loading, active } = useWalletState()
+  const hidden = useAppHidden()
   const { width, height } = useWindowDimensions()
   const scene = useScene()
   // One loader for the whole app, drawn here where it can cover the screen and
   // centre against the viewport rather than against a screen's scroll content.
   const busy = useAnyScreenBusy()
-  // The Grid (plan B2): one Field behind every `grid` screen, pulsed by the ETN head, warmed by the holder tier.
+  // The Grid: one Field behind every screen, pulsed by the ETN head, warmed by the holder tier.
   const head = useChainHead(ETN)
   const tier = useHolderTier(active?.id ?? null)
   const { pending } = useApprovals()
@@ -154,7 +157,6 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   useEffect(() => {
     setSharedTransitions(!reducedMotion)
   }, [reducedMotion])
-  const meta = SCREENS[current.screen]
   /*
     The full tab is not a big phone.
 
@@ -180,52 +182,53 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
     `state.tab` survives: it is still how the router remembers which root you
     are standing on and which stack belongs to it. Only the strip is gone.
   */
-  // How the view arrives (style bible › motion): a push from the right, a pop from the left, a tab change rising in place; the same route never re-animates.
+  // How the view arrives: a 150 ms ease fade, covering when the incoming screen is opaque and dissolving onto the Field when it is not.
   const depth = state.stack.length
-  const prev = useRef({ depth, tab: state.tab, screen: current.screen })
-  /*
-    One move at a time (§7.7). While a shared element is travelling between
-    two screens the arriving screen holds still: the slide and the shared
-    move are two animations disagreeing about where the same pixels are, and
-    the element the eye is following is the one that should win.
-  */
-  const direction: EnterDirection = sharedTransitionActive() ? 'none' : state.tab !== prev.current.tab ? 'tab' : depth > prev.current.depth ? 'push' : depth < prev.current.depth ? 'pop' : current.screen !== prev.current.screen ? 'push' : 'none'
+  // Resume flips `hidden` and re-renders, so `Date.now()` is current: the idle
+  // deadline can have passed while we were asleep, and the last paint still
+  // had `unlocked: true`.
+  const locked = !loading && vaultRequiresUnlock(vault, Date.now())
   useEffect(() => {
-    prev.current = { depth, tab: state.tab, screen: current.screen }
-  })
-  const enterKey = `${state.tab}:${depth}:${current.screen}:${JSON.stringify(current.params ?? null)}`
-
-  /*
-    A screen that takes the whole window still owes the system bars their room.
-
-    The shell below pads by `insets.top`/`insets.bottom` before it paints a
-    screen, but these two returns happen *above* it and painted edge to edge —
-    so on an edge-to-edge Android window a confirmation raised from the in-app
-    browser had its title under the notification bar and its Confirm key under
-    the navigation bar. Owner: "Transaction confirmations triggered via the
-    in-app browser are being cut off by the top Android notification bar, and
-    by the bottom Android navigation bar." Unlock came in through the same door
-    and had the same hole.
-  */
-  const bare = (node: React.ReactNode): React.ReactNode => (
-    <MotionContext.Provider value={reducedMotion}>
-      <Column flex={1} backgroundColor="$void" paddingTop={insets.top} paddingBottom={insets.bottom}>
-        {node}
-      </Column>
-    </MotionContext.Provider>
-  )
-
-  const locked = !loading && !!vault?.exists && !vault.unlocked
-  if (locked && current.screen !== 'onboarding' && current.screen !== 'moments') {
-    return bare(<Unlock body={body} reducedMotion={reducedMotion} />)
-  }
-
+    if (hidden || !vault?.unlocked || vault.lockAt == null || vault.lockAt > Date.now()) return
+    void engine.vault.lock()
+  }, [engine, hidden, vault])
   // A dApp is waiting: the popup and the phone show the sheet over everything (§8.15).
   // Our own flows (Send, Revoke) navigate to the sheet themselves.
   const external = pending.filter((p) => !p.origin.startsWith('internal:'))
-  if (external.length > 0 && body !== 'extension-tab' && current.screen !== 'sign' && current.screen !== 'onboarding' && current.screen !== 'moments') {
-    return bare(<Approval body={body} reducedMotion={reducedMotion} requestId={external[0]?.id} />)
-  }
+  const takeover =
+    locked && current.screen !== 'onboarding' && current.screen !== 'moments'
+      ? 'unlock'
+      : external.length > 0 && body !== 'extension-tab' && current.screen !== 'sign' && current.screen !== 'onboarding' && current.screen !== 'moments'
+        ? 'approval'
+        : null
+  const enterKey =
+    takeover === 'unlock'
+      ? 'overlay:unlock'
+      : takeover === 'approval'
+        ? `overlay:approval:${external[0]?.id ?? ''}`
+        : `${state.tab}:${depth}:${current.screen}:${JSON.stringify(current.params ?? null)}`
+  const prevKey = useRef(enterKey)
+  /*
+    One move at a time (§7.7). While a shared element is travelling between
+    two screens the arriving screen holds still: the fade and the shared
+    move are two animations disagreeing about where the same pixels are, and
+    the element the eye is following is the one that should win.
+  */
+  const direction: EnterDirection = sharedTransitionActive() ? 'none' : enterKey !== prevKey.current ? 'push' : 'none'
+  useEffect(() => {
+    prevKey.current = enterKey
+  })
+  const [fading, setFading] = useState(false)
+  const seenEnter = useRef(false)
+  useEffect(() => {
+    if (!seenEnter.current) {
+      seenEnter.current = true
+      return
+    }
+    setFading(true)
+    const t = setTimeout(() => setFading(false), motion.screen)
+    return () => clearTimeout(t)
+  }, [enterKey])
 
   /*
     A stale build stops quoting, routing and signing — and nothing else
@@ -241,10 +244,20 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
     the screens that need current code; Settings, Security, Backup, Devices,
     Accounts and Activity are reached exactly as before.
   */
-  if (staleBuild && isBlockedByUpdate(current.screen)) return bare(<UpdateRequired />)
+  const blockedByUpdate = staleBuild && !takeover && isBlockedByUpdate(current.screen)
 
   let screen: React.ReactNode
-  switch (current.screen) {
+  if (blockedByUpdate) {
+    // Unlock and the signing sheet are takeovers and are handled above, so a
+    // stale build never stands between the user and their own vault.
+    screen = <UpdateRequired />
+  } else if (takeover === 'unlock') {
+    screen = <Unlock body={body} reducedMotion={reducedMotion} />
+  } else if (takeover === 'approval') {
+    screen = <Approval body={body} reducedMotion={reducedMotion} requestId={external[0]?.id} />
+  }
+  if (!takeover && !blockedByUpdate) {
+    switch (current.screen) {
     case 'home':
       screen = <Home body={body} reducedMotionOverride={reducedMotion} />
       break
@@ -375,15 +388,16 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
       screen = <Token body={body} chainId={p?.chainId ?? 52014} address={p?.address ?? 'native'} />
       break
     }
+    }
   }
 
   return (
     <MotionProvider reduced={reducedMotion}>
     <MotionContext.Provider value={reducedMotion}>
       <Column flex={1} backgroundColor="$void">
-        {meta.grid ? (
+        {current.screen === 'splash' ? null : (
           <>
-            <Field scene={scene} address={active?.address ?? NO_ACCOUNT_SEED} pulse={head?.live ? 1 : 0} warmth={tier ? Math.min(1, tier.tier / 4) : 0} intensity={0.5} quiet={!vault?.unlocked} reducedMotion={reducedMotion} fps={body === 'extension-popup' ? 30 : 60} width={width} height={height} testID="field" />
+            <Field scene={scene} address={active?.address ?? NO_ACCOUNT_SEED} pulse={head?.live ? 1 : 0} warmth={tier ? Math.min(1, tier.tier / 4) : 0} intensity={0.5} reducedMotion={reducedMotion} fps={body === 'extension-popup' ? 30 : 60} width={width} height={height} testID="field" />
             {/*
               Dark at the top, the circuit emerging downward — the Unlock
               screen's look, which the owner asked for everywhere the scene
@@ -400,17 +414,19 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
             <Column position="absolute" left={0} top={0} zIndex={0} pointerEvents="none">
               <Scrim width={width} height={height} edge="top" strength={0.78} testID="field-fade" />
             </Column>
+            {takeover || !SCREENS[current.screen].veil ? null : (
+              <Column position="absolute" left={0} top={0} zIndex={0} pointerEvents="none">
+                <Scrim width={width} height={height} edge="flat" strength={0.6} testID="field-veil" />
+              </Column>
+            )}
           </>
-        ) : null}
+        )}
         {/*
-          The screen area clips. Every enter animation starts outside its own
-          box — a push from translateX(14), a tab change from translateY(6), a
-          sheet panel from translateY(28) — and without a clip here that
-          overflow reaches the document. Chrome sizes an action popup from the
-          document and never shrinks it back, so one frame of a 14 px slide
-          left the popup permanently wider with a margin down the right side.
-          Sheets are position:absolute inset-0 inside this same column, so
-          clipping it does not change what they cover.
+          The screen area clips. Sheets still rise from translateY(28) inside
+          this column, and without a clip that overflow reaches the document.
+          Chrome sizes an action popup from the document and never shrinks it
+          back. Sheets are position:absolute inset-0 here, so clipping does
+          not change what they cover.
         */}
         {/*
           Top inset only here, so the scene still paints edge to edge behind the
@@ -433,7 +449,7 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
             that wants to be narrower still says so — a narrower child inside
             this is exactly what it looks like.
           */}
-          <Column flex={1} width="100%" {...(wide ? { maxWidth: metrics.page, alignSelf: 'center' } : {})}>
+          <Column flex={1} width="100%" {...(wide && !takeover ? { maxWidth: metrics.page, alignSelf: 'center' } : {})}>
             <ScreenEnter key={enterKey} direction={direction} reducedMotion={reducedMotion}>
             {/*
               The fallback is a plate-shaped skeleton, not a spinner and not a
@@ -446,42 +462,45 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
             </ScreenEnter>
           </Column>
           {/* Over the screen, under the tab bar: the page assembles beneath it. */}
-          {busy ? <PageLoader overlay reducedMotion={reducedMotion} testID="page-loading" /> : null}
+          {busy && !takeover && !fading ? <PageLoader overlay reducedMotion={reducedMotion} testID="page-loading" /> : null}
         </Column>
         {/* Last child, so a device round trip sheet paints above the tab bar (§7.5). */}
-        <HardwarePrompt body={body} reducedMotion={reducedMotion} />
-        {/*
-          A pairing waits for a yes (ES-BV-040).
+        {takeover ? null : (
+          <>
+            <HardwarePrompt body={body} reducedMotion={reducedMotion} />
+            {/*
+              A pairing waits for a yes (ES-BV-040).
 
-          `pair()` used to run the moment a `wc:` link arrived from anywhere —
-          a page in the in-app browser, another app, a QR in an email — and the
-          first thing the user saw was a Connect sheet for a peer they had not
-          knowingly invited. Pairing is not free either: it opens a relay
-          subscription and tells the peer this wallet exists.
-        */}
-        <Sheet
-          open={pendingPairing !== null}
-          onClose={dismissPairing}
-          title={t({ id: 'wc.pair.title', message: 'Connect to an app?' })}
-          testID="wc-pair-confirm"
-        >
-          <Column gap="$3">
-            <Body tone="mute" size="caption">
-              {t({
-                id: 'wc.pair.body',
-                message: 'A link asked BoltVault to start a WalletConnect session. If you did not just scan a code or tap Connect on a site, say no.',
-              })}
-            </Body>
-            <Body size="caption" tone="mute" selectable testID="wc-pair-topic">
-              {pendingPairing?.topic ?? ''}
-            </Body>
-            <Row gap="$2">
-              <Key label={t({ id: 'common.cancel', message: 'Cancel' })} kind="secondary" onPress={dismissPairing} testID="wc-pair-cancel" />
-              <Key label={t({ id: 'wc.pair.go', message: 'Connect' })} onPress={confirmPairing} testID="wc-pair-go" />
-            </Row>
-          </Column>
-        </Sheet>
-
+              `pair()` used to run the moment a `wc:` link arrived from anywhere —
+              a page in the in-app browser, another app, a QR in an email — and the
+              first thing the user saw was a Connect sheet for a peer they had not
+              knowingly invited. Pairing is not free either: it opens a relay
+              subscription and tells the peer this wallet exists.
+            */}
+            <Sheet
+              open={pendingPairing !== null}
+              onClose={dismissPairing}
+              title={t({ id: 'wc.pair.title', message: 'Connect to an app?' })}
+              testID="wc-pair-confirm"
+            >
+              <Column gap="$3">
+                <Body tone="mute" size="caption">
+                  {t({
+                    id: 'wc.pair.body',
+                    message: 'A link asked BoltVault to start a WalletConnect session. If you did not just scan a code or tap Connect on a site, say no.',
+                  })}
+                </Body>
+                <Body size="caption" tone="mute" selectable testID="wc-pair-topic">
+                  {pendingPairing?.topic ?? ''}
+                </Body>
+                <Row gap="$2">
+                  <Key label={t({ id: 'common.cancel', message: 'Cancel' })} kind="secondary" onPress={dismissPairing} testID="wc-pair-cancel" />
+                  <Key label={t({ id: 'wc.pair.go', message: 'Connect' })} onPress={confirmPairing} testID="wc-pair-go" />
+                </Row>
+              </Column>
+            </Sheet>
+          </>
+        )}
       </Column>
     </MotionContext.Provider>
     </MotionProvider>

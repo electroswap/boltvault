@@ -4403,6 +4403,21 @@ msgctxt "pin.on"
 msgid "Pin to Home"
 msgstr "Pin to Home"
 
+#: packages/wallet/src/components/PortfolioBalance.tsx
+msgctxt "portfolio.balance.hidden"
+msgid "Balance hidden"
+msgstr "Balance hidden"
+
+#: packages/wallet/src/components/PortfolioBalance.tsx
+msgctxt "portfolio.balance.hide"
+msgid "Hide balances"
+msgstr "Hide balances"
+
+#: packages/wallet/src/components/PortfolioBalance.tsx
+msgctxt "portfolio.balance.show"
+msgid "Show balances"
+msgstr "Show balances"
+
 #: packages/wallet/src/screens/Portfolio.tsx
 msgctxt "portfolio.hidden.many"
 msgid "{n} hidden tokens"

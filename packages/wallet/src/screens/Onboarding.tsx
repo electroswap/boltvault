@@ -20,7 +20,6 @@
  * on the product's behalf without anything implementing it.
  */
 import {
-  Backdrop,
   Body,
   Column,
   EsWordmark,
@@ -33,7 +32,6 @@ import {
   WordGrid,
   metrics,
   paint,
-  useWindowDimensions,
 } from '@boltvault/ui'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
@@ -41,7 +39,6 @@ import { useHost } from '../host'
 import { usePrefs } from '../hooks/usePrefs'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
-import { useScene } from '../state/useScene'
 import { useWalletState } from '../state/useWalletState'
 import { IntroCarousel } from './onboarding/IntroCarousel'
 import {
@@ -77,8 +74,6 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
   const engine = useEngine()
   const host = useHost()
   const router = useRouter()
-  const { width, height } = useWindowDimensions()
-  const scene = useScene()
   const { vault } = useWalletState()
   const { prefs, loaded: prefsLoaded, set: setPrefs } = usePrefs()
 
@@ -336,8 +331,7 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
   )
 
   return (
-    <Column flex={1} backgroundColor="$void" testID="onboarding">
-      <Backdrop scene={scene} width={width} height={height} reducedMotion={reducedMotion} />
+    <Column flex={1} testID="onboarding">
       <ScrollView
         style={{ zIndex: 1 }}
         contentContainerStyle={{ padding: inset, gap: 20, flexGrow: 1, justifyContent: 'center' }}

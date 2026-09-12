@@ -8,7 +8,7 @@
  * grown, never shrinks it back — so a single frame of horizontal overflow
  * anywhere leaves a permanent margin. The overflow is what we can measure:
  * `overflow: hidden` hides it visually but still reports it through
- * scrollWidth, and we sample every frame, because a 180 ms enter animation is
+ * scrollWidth, and we sample every frame, because a 150 ms enter animation is
  * long gone by the time a settled read happens.
  *
  * On failure it names the widest element, because "something overflowed" is
@@ -42,7 +42,7 @@ test('no navigation makes the popup document wider than 400px', async () => {
     await p.setViewportSize({ width: WIDTH, height: HEIGHT })
     await p.goto(ext.url('popup.html'))
 
-    // Sample every frame; a 180 ms enter animation is invisible to a settled read.
+    // Sample every frame; a 150 ms enter animation is invisible to a settled read.
     await p.evaluate(() => {
       window.__maxRight = { escaped: 0, tall: 0, widest: 0, who: '' }
       const describe = (el: Element): string => {

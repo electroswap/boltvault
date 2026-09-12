@@ -16,7 +16,7 @@ import { readDoc, writeDoc, type DocSpec } from '../src/storage'
 const DOC: DocSpec<typeof DEFAULT_PREFS> = { key: 'ui.prefs', version: 1, schema: PrefsSchema, defaultValue: () => DEFAULT_PREFS }
 
 describe('the preferences document', () => {
-  it('reads a document written before `introSeen` existed, without quarantining it', async () => {
+  it('reads a document written before later keys existed, without quarantining it', async () => {
     const platform = createMemoryPlatform()
     // Exactly what a shipped install has on disk today.
     await platform.storage.local.set(DOC.key, JSON.stringify({ v: 1, data: { homeScope: 1, swapCoachDismissed: true, chartDuration: '1W' } }))
@@ -27,16 +27,18 @@ describe('the preferences document', () => {
     expect(read.value.homeScope).toBe(1)
     expect(read.value.swapCoachDismissed).toBe(true)
     expect(read.value.chartDuration).toBe('1W')
-    // ...and the new key arrives with its default rather than as undefined.
+    // ...and the new keys arrive with their defaults rather than as undefined.
     expect(read.value.introSeen).toBe(false)
+    expect(read.value.hideBalances).toBe(false)
   })
 
   it('round-trips the flag once it has been set', async () => {
     const platform = createMemoryPlatform()
-    await writeDoc(platform.storage.local, DOC, { ...DEFAULT_PREFS, introSeen: true })
+    await writeDoc(platform.storage.local, DOC, { ...DEFAULT_PREFS, introSeen: true, hideBalances: true })
     const read = await readDoc(platform.storage.local, DOC)
     expect(read.quarantined).toBe(false)
     expect(read.value.introSeen).toBe(true)
+    expect(read.value.hideBalances).toBe(true)
   })
 
   it('still quarantines a document that is genuinely wrong', async () => {

@@ -114,7 +114,7 @@ test('quote with the fee stack, then approve → permit → swap through the she
     await popup.getByTestId('swap-pick-USDC').click()
     await expect(popup.getByTestId('swap-token-out')).toContainText('USDC')
     await popup.getByTestId('swap-amount-in').fill('2')
-    await expect(popup.getByTestId('swap-amount-out')).toContainText('0.99', { timeout: 20_000 }) // 1 USDC − 0.30 %
+    await expect(popup.getByTestId('swap-amount-out')).toHaveValue(/0\.99/, { timeout: 20_000 }) // 1 USDC − 0.30 %
     // The details card is a disclosure now: the rate is the row you always see,
     // the figures are one tap under it.
     await expect(popup.getByTestId('swap-rate')).toContainText('1 FIX = 0.5 USDC')

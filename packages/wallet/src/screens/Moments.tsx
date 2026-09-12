@@ -25,7 +25,6 @@ import {
   Column,
   CurrentFill,
   Discharge,
-  Field,
   Icon,
   Ignition,
   Key,
@@ -140,8 +139,7 @@ export function Moments({ reducedMotion = false }: { reducedMotion?: boolean }) 
   const onFire = (): void => setFire((n) => n + 1)
 
   return (
-    <Column flex={1} backgroundColor="$void" testID="moments">
-      <Field address={ADDRESS} pulse={1} width={width} height={height} reducedMotion={reducedMotion} />
+    <Column flex={1} testID="moments">
       <Discharge fire={fire} width={width} height={height} reducedMotion={reducedMotion} testID="discharge" />
       <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="moments-scroll">
         <Body size="title">{t({ id: 'moments.title', message: 'Signature moments' })}</Body>

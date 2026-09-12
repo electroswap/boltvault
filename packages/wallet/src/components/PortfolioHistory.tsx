@@ -22,7 +22,7 @@
  */
 import { Body, Column, LineChart, Row, useWindowDimensions, type ChartPoint } from '@boltvault/ui'
 import type { PortfolioPoint } from '@boltvault/engine'
-import { formatFiat } from '../format'
+import { displayFiat } from '../format'
 import { t } from '../i18n'
 
 /** Below this there is no shape to show, and a chart of one reading is a decoration. */
@@ -32,6 +32,8 @@ const DAY_MS = 86_400_000
 export interface PortfolioHistoryProps {
   readonly points: readonly PortfolioPoint[]
   readonly currency: 'USD' | 'ETN'
+  /** Hide the high/low captions; the line still draws from the real series. */
+  readonly hidden?: boolean
   /** The popup is short; the tab and the phone can give the line more room. */
   readonly body: 'extension-popup' | 'extension-tab' | 'mobile'
   readonly inset: number
@@ -50,7 +52,7 @@ function spanLabel(from: number, to: number): string {
   return days <= 1 ? t({ id: 'home.history.day', message: 'the last day' }) : t({ id: 'home.history.days', message: 'the last {n} days', values: { n: days } })
 }
 
-export function PortfolioHistory({ points, currency, body, inset, reducedMotion = false, testID }: PortfolioHistoryProps) {
+export function PortfolioHistory({ points, currency, hidden = false, body, inset, reducedMotion = false, testID }: PortfolioHistoryProps) {
   const { width } = useWindowDimensions()
   /*
     Unpriced readings are dropped rather than plotted as zero. A moment when
@@ -103,7 +105,7 @@ export function PortfolioHistory({ points, currency, body, inset, reducedMotion 
           {t({ id: 'home.history.caption', message: 'What you have been holding, over {span}', values: { span: spanLabel(first.at, last.at) } })}
         </Body>
         <Body tone="mute" size="caption" numberOfLines={1} testID={testID ? `${testID}-range` : undefined}>
-          {t({ id: 'home.history.range', message: '{low} – {high}', values: { low: formatFiat(low, currency), high: formatFiat(high, currency) } })}
+          {t({ id: 'home.history.range', message: '{low} – {high}', values: { low: displayFiat(low, currency, hidden), high: displayFiat(high, currency, hidden) } })}
         </Body>
       </Row>
     </Column>

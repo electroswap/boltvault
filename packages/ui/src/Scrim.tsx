@@ -31,14 +31,25 @@ export interface ScrimProps {
    * grain", "nothing above 40% luminance under a readout" — which the grid
    * screens were not honouring, because their Field runs at full strength from
    * the very top.
+   *
+   * `flat` is an even plate of void over the whole scene — extra night so
+   * small type on Token and Piece can read, with the Grid still showing
+   * through. Not Off, not quiet custody: just contrast.
    */
-  readonly edge?: 'bottom' | 'top'
+  readonly edge?: 'bottom' | 'top' | 'flat'
   readonly testID?: string
 }
 
 export function Scrim({ width, height, strength = 0.92, edge = 'bottom', testID }: ScrimProps) {
   // Each instance needs its own gradient id or they collide in one document.
   const id = `scrim-${useId().replace(/:/g, '')}`
+  if (edge === 'flat') {
+    return (
+      <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} testID={testID} pointerEvents="none">
+        <Rect x={0} y={0} width={width} height={height} fill={paint.void} fillOpacity={strength} />
+      </Svg>
+    )
+  }
   const solid = edge === 'top'
   return (
     <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} testID={testID} pointerEvents="none">
