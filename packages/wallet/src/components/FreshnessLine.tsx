@@ -19,8 +19,23 @@ export function agoLabel(observedAt: number, now: number = Date.now()): string {
   return t({ id: 'fresh.days', message: 'As of {d} days ago', values: { d: Math.round(h / 24) } })
 }
 
-export function FreshnessLine({ freshness, observedAt, refreshing, reducedMotion = false, testID }: { freshness: Freshness; observedAt: number | null; refreshing: boolean; reducedMotion?: boolean; testID?: string }) {
-  const stale = freshness === 'cached' && observedAt !== null && Date.now() - observedAt > STALE_AFTER_MS
+export function FreshnessLine({ freshness, observedAt, refreshing, reducedMotion = false, testID, lastSuccessAt = null }: { freshness: Freshness; observedAt: number | null; refreshing: boolean; reducedMotion?: boolean; testID?: string; lastSuccessAt?: number | null }) {
+  /*
+    Age decides, not the state name (ES-BV-046).
+
+    `freshness` stayed `fresh` for the life of the screen once one read had
+    landed, so a value whose every later refresh failed — a price proxy in
+    cooldown, an endpoint that stopped answering — went on presenting itself
+    as current with no age beside it. A value is stale when the last
+    *successful* read is older than the threshold, whatever the state machine
+    calls it.
+  */
+  const confirmedAt = lastSuccessAt ?? (freshness === 'fresh' ? observedAt : null)
+  const unconfirmed = confirmedAt !== null && Date.now() - confirmedAt > STALE_AFTER_MS
+  const stale =
+    observedAt !== null &&
+    Date.now() - observedAt > STALE_AFTER_MS &&
+    (freshness === 'cached' || unconfirmed)
   return (
     <Column gap="$1" testID={testID}>
       <Refreshing active={refreshing} reducedMotion={reducedMotion} />

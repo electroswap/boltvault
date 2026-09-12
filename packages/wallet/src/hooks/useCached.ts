@@ -17,6 +17,18 @@ export interface CachedState<T> {
   readonly observedAt: number | null
   readonly error: string | null
   readonly refreshing: boolean
+  /**
+   * When this value was last read *successfully* (ES-BV-046).
+   *
+   * `freshness` is a state, not an age: once a value had been read it stayed
+   * `fresh` through every failed refresh after it, so a screen that had not
+   * reached the network for an hour still read as current. This is the figure
+   * the staleness line should judge, and it only ever moves forward on a
+   * `fresh` action.
+   */
+  readonly lastSuccessAt: number | null
+  /** The most recent refresh failure, or null after a success. */
+  readonly lastError: string | null
 }
 
 export type CachedAction<T> =
@@ -26,7 +38,7 @@ export type CachedAction<T> =
   | { type: 'fresh'; value: T; at: number }
   | { type: 'error'; message: string }
 
-export const INITIAL: CachedState<never> = { value: null, freshness: 'loading', observedAt: null, error: null, refreshing: false }
+export const INITIAL: CachedState<never> = { value: null, freshness: 'loading', observedAt: null, error: null, refreshing: false, lastSuccessAt: null, lastError: null }
 
 /** A value never becomes null on an error; an error next to a value is a note, not a state. */
 export function reduceCached<T>(state: CachedState<T>, action: CachedAction<T>): CachedState<T> {
@@ -38,7 +50,7 @@ export function reduceCached<T>(state: CachedState<T>, action: CachedAction<T>):
       // went there -> gone -> there. Refreshing is true because the effect
       // that seeds also goes and revalidates.
       if (action.seeded === null) return INITIAL as CachedState<T>
-      return { value: action.seeded.value, observedAt: action.seeded.observedAt, freshness: 'cached', error: null, refreshing: true }
+      return { value: action.seeded.value, observedAt: action.seeded.observedAt, freshness: 'cached', error: null, refreshing: true, lastSuccessAt: null, lastError: null }
     case 'cached':
       // A cached read never downgrades a fresh value.
       if (state.freshness === 'fresh') return state
@@ -46,9 +58,11 @@ export function reduceCached<T>(state: CachedState<T>, action: CachedAction<T>):
     case 'refreshing':
       return { ...state, refreshing: true }
     case 'fresh':
-      return { value: action.value, observedAt: action.at, freshness: 'fresh', error: null, refreshing: false }
+      return { value: action.value, observedAt: action.at, freshness: 'fresh', error: null, refreshing: false, lastSuccessAt: action.at, lastError: null }
     case 'error':
-      return { ...state, refreshing: false, error: action.message, freshness: state.value === null ? 'error' : state.freshness }
+      // The value stands; what changes is that we know it is no longer being
+      // confirmed, and how long that has been true.
+      return { ...state, refreshing: false, error: action.message, lastError: action.message, freshness: state.value === null ? 'error' : state.freshness }
   }
 }
 
@@ -104,7 +118,7 @@ export function useCached<T>(opts: UseCachedOptions<T>): UseCachedResult<T> {
     opts.key,
     (k: string | null): CachedState<T> => {
       const hit = seedOf<T>(k)
-      return hit === null ? (INITIAL as CachedState<T>) : { value: hit.value, observedAt: hit.observedAt, freshness: 'cached', error: null, refreshing: true }
+      return hit === null ? (INITIAL as CachedState<T>) : { value: hit.value, observedAt: hit.observedAt, freshness: 'cached', error: null, refreshing: true, lastSuccessAt: null, lastError: null }
     },
   )
   // The readers may be inline lambdas; the effects key on `key` alone.

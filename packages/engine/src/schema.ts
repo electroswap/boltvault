@@ -284,6 +284,12 @@ export const PortfolioRowSchema = z.object({
   pinned: z.boolean(),
   custom: z.boolean(),
   hidden: z.boolean(),
+  /**
+   * The balance read failed; `raw` is the last figure this wallet saw, or zero
+   * when it has never seen one (ES-BV-045). A failed read and a zero balance
+   * are not the same answer and must not look the same.
+   */
+  unread: z.boolean().optional(),
 })
 export type PortfolioRow = z.infer<typeof PortfolioRowSchema>
 
@@ -323,6 +329,15 @@ export const PortfolioSnapshotSchema = z.object({
    * silently empty every account's last-good snapshot on upgrade.
    */
   history: z.array(PortfolioPointSchema).optional(),
+  /**
+   * Chains whose balance reads failed during this build (ES-BV-045).
+   *
+   * A non-empty list means the total is incomplete: Home must say "we could
+   * not read this" rather than "$0.00 — add funds", and the snapshot is not
+   * written over the last good one. Optional for the same upgrade reason as
+   * `history`.
+   */
+  errors: z.array(z.object({ chainId: z.number().int().positive(), count: z.number().int().positive() })).optional(),
 })
 export type PortfolioSnapshot = z.infer<typeof PortfolioSnapshotSchema>
 

@@ -17,7 +17,17 @@ export interface ReadCall {
   readonly args?: readonly unknown[]
 }
 
-export type ReadResult = { readonly ok: true; readonly value: unknown } | { readonly ok: false }
+/**
+ * A read's answer.
+ *
+ * `unreachable` means nobody answered — a timeout, a 429, a dead endpoint —
+ * and is the case ES-BV-045 is about: the wallet knows nothing and must not
+ * print a zero. `reverted` means the chain answered and the call failed, which
+ * for `balanceOf` is a contract that is not a token, and *is* information.
+ */
+export type ReadResult =
+  | { readonly ok: true; readonly value: unknown }
+  | { readonly ok: false; readonly reason: 'reverted' | 'unreachable' }
 
 /**
  * Calls per aggregate.
@@ -65,14 +75,30 @@ function candidates(chainId: number): Hex[] {
 export async function multicallAddress(chains: ChainsService, chainId: number): Promise<Hex | null> {
   const known = verified.get(chainId)
   if (known !== undefined) return known
+  /*
+    "No multicall here" is only cacheable when the chain actually said so
+    (ES-BV-045).
+
+    A probe that threw — a 429, a dead endpoint, a timeout — used to be
+    remembered as `null` for the worker's whole life, so one bad moment
+    downgraded every later read on that chain to individual calls, which is
+    where the read failures this finding is about come from. A genuine `0x`
+    answer is a fact about the chain and is remembered; a transport error is
+    a fact about right now and is not.
+  */
+  let answered = false
   for (const address of candidates(chainId)) {
-    const code = (await chains.rpc(chainId, 'eth_getCode', [address, 'latest']).catch(() => '0x')) as string
-    if (typeof code === 'string' && code.length > 2) {
+    const code = await chains
+      .rpc(chainId, 'eth_getCode', [address, 'latest'])
+      .catch(() => undefined)
+    if (typeof code !== 'string') continue
+    answered = true
+    if (code.length > 2) {
       verified.set(chainId, address)
       return address
     }
   }
-  verified.set(chainId, null)
+  if (answered) verified.set(chainId, null)
   return null
 }
 
@@ -168,7 +194,7 @@ async function readManyNow(chains: ChainsService, chainId: number, calls: readon
   }
   // No multicall on this chain: individual calls, bounded so a huge universe cannot melt the RPC.
   for (const c of calls.slice(0, 120)) out.push(await one(client, c))
-  for (let i = 120; i < calls.length; i++) out.push({ ok: false })
+  for (let i = 120; i < calls.length; i++) out.push({ ok: false, reason: 'unreachable' })
   return out
 }
 
@@ -176,7 +202,8 @@ async function readManyNow(chains: ChainsService, chainId: number, calls: readon
 async function aggregate(client: PublicClient, mc: Hex, chunk: readonly ReadCall[]): Promise<ReadResult[]> {
   try {
     const results = await client.multicall({ contracts: chunk.map((c) => ({ address: c.address, abi: c.abi, functionName: c.functionName, args: c.args as never })) as never, multicallAddress: mc, allowFailure: true })
-    return (results as Array<{ status: 'success' | 'failure'; result?: unknown }>).map((r) => (r.status === 'success' ? { ok: true, value: r.result } : { ok: false }))
+    // `allowFailure` failures came back *from* the chain: the call reverted.
+    return (results as Array<{ status: 'success' | 'failure'; result?: unknown }>).map((r) => (r.status === 'success' ? { ok: true, value: r.result } : { ok: false, reason: 'reverted' as const }))
   } catch {
     // A whole chunk failed (RPC hiccup): fall back per call for this chunk.
     const out: ReadResult[] = []
@@ -188,7 +215,25 @@ async function aggregate(client: PublicClient, mc: Hex, chunk: readonly ReadCall
 async function one(client: PublicClient, c: ReadCall): Promise<ReadResult> {
   try {
     return { ok: true, value: await client.readContract({ address: c.address, abi: c.abi, functionName: c.functionName, args: c.args as never }) }
-  } catch {
-    return { ok: false }
+  } catch (err) {
+    return { ok: false, reason: unreachable(err) ? 'unreachable' : 'reverted' }
   }
+}
+
+/**
+ * Did the chain answer at all?
+ *
+ * viem names its transport failures, and everything else that reaches here is
+ * the node telling us the call failed. Guessing wrong in the safe direction
+ * means calling a transport error a revert, which is the behaviour this
+ * distinction exists to remove — so the transport shapes are matched by name
+ * first and by message second.
+ */
+function unreachable(err: unknown): boolean {
+  const e = err as { name?: string; message?: string; cause?: unknown } | null
+  const name = String(e?.name ?? '')
+  if (/HttpRequestError|TimeoutError|SocketClosedError|WebSocketRequestError|RpcRequestError|InternalRpcError|LimitExceededRpcError|UnknownRpcError/.test(name))
+    return true
+  if (e?.cause && e.cause !== err && unreachable(e.cause)) return true
+  return /timed?\s*out|timeout|rate.?limit|too many requests|fetch failed|failed to fetch|network|socket|econn|aborted|status code (429|5\d\d)/i.test(String(e?.message ?? ''))
 }

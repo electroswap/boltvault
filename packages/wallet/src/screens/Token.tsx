@@ -96,7 +96,7 @@ export function Token({
   const { width } = useWindowDimensions()
   const { active } = useWalletState()
   const { prefs, set: setPrefs } = usePrefs()
-  const portfolio = usePortfolio(active?.id ?? null)
+  const portfolio = usePortfolio(active?.id ?? null, 5_000, [chainId])
   const { entries } = useActivity(active?.id ?? null, chainId)
   const [token, setToken] = useState<TokenView | null>(null)
   const [chain, setChain] = useState<ChainView | null>(null)
@@ -402,6 +402,7 @@ export function Token({
         <FreshnessLine
           freshness={detail.freshness}
           observedAt={detail.observedAt}
+          lastSuccessAt={detail.lastSuccessAt}
           refreshing={detail.refreshing}
           testID="token-freshness"
         />
@@ -477,7 +478,19 @@ export function Token({
                 {t({ id: 'token.yours', message: 'Yours' })}
               </Body>
               <Body size="title">
-                {row ? `${formatQuantity(row.quantity)} ${symbol}` : `0 ${symbol}`}
+                {/*
+                  A snapshot that has not arrived is not a balance of zero
+                  (ES-BV-047). This screen used to read the home chain's
+                  portfolio whatever chain the token was on, so every
+                  non-Electroneum token read "0" — a held balance, shown as
+                  nothing. The read is scoped now, and until it lands the
+                  screen says it does not know yet.
+                */}
+                {row
+                  ? `${formatQuantity(row.quantity)} ${symbol}`
+                  : portfolio.snapshot
+                    ? `0 ${symbol}`
+                    : '…'}
               </Body>
             </Column>
             <Column alignItems="flex-end">

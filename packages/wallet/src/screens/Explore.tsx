@@ -170,7 +170,7 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
         </Column>
       ) : (
         <>
-          <FreshnessLine freshness={current.freshness} observedAt={current.observedAt} refreshing={current.refreshing} reducedMotion={reducedMotion} testID="explore-freshness" />
+          <FreshnessLine freshness={current.freshness} observedAt={current.observedAt} lastSuccessAt={current.lastSuccessAt} refreshing={current.refreshing} reducedMotion={reducedMotion} testID="explore-freshness" />
           {current.freshness === 'loading' ? (
             null
           ) : segment === 'tokens' ? (

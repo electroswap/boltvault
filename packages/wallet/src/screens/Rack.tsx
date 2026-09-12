@@ -259,7 +259,7 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
   const content = (
     <>
       {!embedded ? <PageHeader title={t({ id: 'rack.title', message: 'Your collection' })} right={offersPill} /> : null}
-      {!embedded ? <FreshnessLine freshness={inv.freshness} observedAt={inv.observedAt} refreshing={inv.refreshing} reducedMotion={reducedMotion} testID="rack-freshness" /> : null}
+      {!embedded ? <FreshnessLine freshness={inv.freshness} observedAt={inv.observedAt} lastSuccessAt={inv.lastSuccessAt} refreshing={inv.refreshing} reducedMotion={reducedMotion} testID="rack-freshness" /> : null}
       {inventory ? (
         <StatStrip
           bare

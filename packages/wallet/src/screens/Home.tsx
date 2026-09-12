@@ -43,6 +43,7 @@ import {
 } from '@boltvault/engine'
 import { useEffect, useRef, useState } from 'react'
 import { ChainScopeSheet, ScopePill, useHomeScope } from '../components/ChainScope'
+import { agoLabel } from '../components/FreshnessLine'
 import { PortfolioHistory } from '../components/PortfolioHistory'
 import { DappSheet, DappStrip, useDappStatus } from '../components/DappStatus'
 import { useEngine } from '../engine/EngineProvider'
@@ -79,6 +80,9 @@ interface Tile {
   readonly badge: ActionTileBadge | null
   readonly onPress: () => void
 }
+
+/** Past this, the hero total says when it was read (ES-BV-046). */
+const STALE_TOTAL_MS = 60_000
 
 export function Home({ body, reducedMotionOverride }: HomeProps) {
   const router = useRouter()
@@ -241,6 +245,18 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     ? portfolio.snapshot.rows.filter((r) => !r.hidden).length
     : 0
   const unpriced = portfolio.snapshot?.unpricedCount ?? 0
+  /*
+    The total's age, said out loud once it stops being current (ES-BV-046).
+    `stale` covers a remembered snapshot and a build that could not read
+    everything; the clock covers a scope whose refreshes keep failing.
+  */
+  const observedAt = portfolio.snapshot?.observedAt ?? null
+  const ageLabel =
+    observedAt !== null &&
+    observedAt > 0 &&
+    (portfolio.snapshot?.stale === true || Date.now() - observedAt > STALE_TOTAL_MS)
+      ? agoLabel(observedAt)
+      : null
 
   /*
     Nine tiles, and no dock anywhere (owner: "I want to get rid of the bottom
@@ -464,11 +480,19 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     the snapshot always carries the native coin, so no rows at all means the
     read failed, and a failed read must not be reported as "you have nothing".
   */
+  /*
+    And a read that failed is not a zero balance either (ES-BV-045). During an
+    endpoint outage every row came back at zero and the wallet told the user
+    to add funds to a wallet that was not empty. A snapshot that names any
+    chain it could not read says so instead.
+  */
+  const unreadChains = portfolio.snapshot?.errors ?? []
   const unfunded =
     !!portfolio.snapshot &&
     active?.kind !== 'watch' &&
+    unreadChains.length === 0 &&
     portfolio.snapshot.rows.length > 0 &&
-    portfolio.snapshot.rows.every((r) => BigInt(r.raw || '0') === 0n)
+    portfolio.snapshot.rows.every((r) => !r.unread && BigInt(r.raw || '0') === 0n)
 
   const rotor: RotorItem[] = []
   if (notice)
@@ -485,6 +509,16 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     onboarding's last page used to give on its way out: ETN from an exchange
     that supports the smart chain, not from the old app.
   */
+  if (unreadChains.length > 0) {
+    rotor.push({
+      id: 'unread',
+      icon: 'warn',
+      tone: paint.ember,
+      text: t({ id: 'home.acc.unread', message: 'Some balances could not be read' }),
+      sub: t({ id: 'home.acc.unread.sub', message: 'The network did not answer. The total below is incomplete.' }),
+      testID: 'accessory-unread',
+    })
+  }
   if (unfunded) {
     rotor.push({
       id: 'fund',
@@ -869,6 +903,21 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
                     </Column>
                   </Row>
                 </Pressable>
+                {/*
+                  How old the number is (ES-BV-046).
+
+                  The hero total is the figure people act on, and it was shown
+                  with no age beside it whatever its provenance — a snapshot
+                  remembered from a previous session, or one whose refreshes
+                  have been failing for an hour, read exactly like a reading
+                  taken a second ago. Nothing is said while it is current; a
+                  minute past that, it says when it was true.
+                */}
+                {ageLabel ? (
+                  <Body tone="mute" size="caption" testID="home-total-age">
+                    {ageLabel}
+                  </Body>
+                ) : null}
                 {/*
                   The line under the total (§8.2).
 

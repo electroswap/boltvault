@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { AddTokenSheet } from '../components/AddTokenSheet'
 import { ChainScopeSheet, ScopePill, useHomeScope } from '../components/ChainScope'
 import { DividendsCard } from '../components/DividendsCard'
+import { agoLabel } from '../components/FreshnessLine'
 import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
 import { formatChange, formatFiat, formatQuantity, formatRaw } from '../format'
@@ -81,6 +82,14 @@ export function Portfolio({ body }: { body: BodyKind }) {
   const rows = (snapshot?.rows ?? []).filter((r) => !r.hidden)
   const hidden = (snapshot?.rows ?? []).length - rows.length
   const hasPositions = !!positions && (positions.farms.length > 0 || (positions.legends !== null && positions.legends.ownedTokenIds.length > 0) || positions.orders.length > 0 || positions.campaigns.length > 0)
+  /*
+    The total's age, once it stops being current (ES-BV-046). A remembered
+    snapshot, or one whose refreshes have been failing, read exactly like a
+    figure taken a second ago; nothing said so.
+  */
+  const observedAt = snapshot?.observedAt ?? null
+  const ageLabel = observedAt !== null && observedAt > 0 && (snapshot?.stale === true || Date.now() - observedAt > 60_000) ? agoLabel(observedAt) : null
+  const unreadChains = snapshot?.errors ?? []
 
   return (
     <Column flex={1} testID="portfolio">
@@ -99,6 +108,16 @@ export function Portfolio({ body }: { body: BodyKind }) {
         <PageHeader title={t({ id: 'portfolio.title', message: 'Portfolio' })} right={<ScopePill scope={scope.scope} label={scope.label} onPress={() => setScopeOpen(true)} size="sm" testID="home-scope" />} />
         <Column gap="$2">
           <RollingReadout value={totalText} hero reducedMotion={reducedMotion} testID="total" />
+          {ageLabel ? (
+            <Body tone="mute" size="caption" testID="portfolio-total-age">
+              {ageLabel}
+            </Body>
+          ) : null}
+          {unreadChains.length > 0 ? (
+            <Body tone="ember" size="caption" testID="portfolio-unread">
+              {t({ id: 'portfolio.unread', message: 'Some balances could not be read, so this total is incomplete.' })}
+            </Body>
+          ) : null}
           <Row gap="$3" flexWrap="wrap">
             {change ? (
               <Body tone={change.startsWith('+') ? 'surge' : change.startsWith('−') ? 'burn' : 'mute'} size="caption">

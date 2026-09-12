@@ -189,9 +189,15 @@ export class PortfolioService {
    * One chain's rows. Called for every chain at once (see `build`), so nothing
    * in here may depend on another chain having finished.
    */
-  private async chainRows(chainId: number, owner: Hex): Promise<PortfolioRow[]> {
+  private async chainRows(
+    chainId: number,
+    owner: Hex,
+    /** The last good rows for this scope, so an unread token keeps its figure. */
+    lastGood: readonly PortfolioRow[] = [],
+  ): Promise<{ rows: PortfolioRow[]; unread: number }> {
     const d = this.deps
     const rows: PortfolioRow[] = []
+    let unread = 0
     const universe = await d.tokens.universe(chainId)
     const balances = await this.balances(chainId, owner, universe)
     /*
@@ -210,10 +216,28 @@ export class PortfolioService {
       on display data: the price call keeps its bounded slot, and a slow or
       rate-limited source yields unpriced rows, never a late snapshot.
     */
-    const held = universe.filter((t) => (balances.get(t.address.toLowerCase()) ?? 0n) > 0n || t.source === 'user' || t.source === 'dapp' || t.pinned)
+    /*
+      A token whose read failed is still "held" as far as this screen goes:
+      dropping it would silently shrink the list during an outage, which is
+      the same lie as showing it at zero.
+    */
+    const held = universe.filter((t) => {
+      const b = balances.get(t.address.toLowerCase())
+      return b === null || (b ?? 0n) > 0n || t.source === 'user' || t.source === 'dapp' || t.pinned
+    })
     const prices = await Promise.race([this.prices(chainId, owner, held), new Promise<Map<string, PriceRow>>((resolve) => setTimeout(() => resolve(new Map()), PRICE_BUDGET_MS))])
     for (const t of held) {
-      const raw = balances.get(t.address.toLowerCase()) ?? 0n
+      const read = balances.get(t.address.toLowerCase())
+      const failed = read === null
+      if (failed) unread += 1
+      /*
+        The last figure we actually saw, rather than a zero we invented. It is
+        marked `unread` so nothing downstream treats it as current.
+      */
+      const remembered = failed
+        ? (lastGood.find((r) => r.chainId === chainId && r.address === t.address)?.raw ?? '0')
+        : null
+      const raw = failed ? BigInt(remembered ?? '0') : (read ?? 0n)
       const quantityNum = Number(formatUnits(raw, t.decimals))
       const price = prices.get(t.address === 'native' ? 'native' : t.address.toLowerCase()) ?? null
       // A balance of zero is worth zero whatever the price is, and needs no
@@ -222,7 +246,8 @@ export class PortfolioService {
       // as "without price", and drop the whole total to null. Owner: "an
       // empty wallet is showing '1 token - 1 without price' ... I know it's
       // got a price because a wallet with ETN in it shows the value."
-      let fiat: number | null = raw === 0n ? 0 : null
+      // An unread balance has no value to state, whatever the price is.
+      let fiat: number | null = failed ? null : raw === 0n ? 0 : null
       let change24h: number | null = null
       if (price && Number.isFinite(price.price)) {
         const diverged = price.apiQuantity !== null && quantityNum > 0 && Math.abs(price.apiQuantity - quantityNum) / Math.max(price.apiQuantity, quantityNum) > DIVERGENCE
@@ -249,9 +274,10 @@ export class PortfolioService {
         pinned: t.pinned,
         custom: t.source === 'user' || t.source === 'dapp',
         hidden: t.hidden || spam || (raw > 0n && fiat !== null && fiat < DUST_FIAT && !t.pinned && t.address !== 'native'),
+        ...(failed ? { unread: true } : {}),
       })
     }
-    return rows
+    return { rows, unread }
   }
 
   private async build(accountId: string, chainIds: readonly number[]): Promise<PortfolioSnapshot> {
@@ -279,8 +305,14 @@ export class PortfolioService {
       the array's order — so the snapshot is deterministic and the sort below
       is the only thing that decides what the user sees.
     */
-    const perChain = await Promise.all(chainIds.map((chainId) => this.chainRows(chainId, owner)))
-    const rows: PortfolioRow[] = perChain.flat()
+    const perChain = await Promise.all(
+      chainIds.map((chainId) => this.chainRows(chainId, owner, stored?.rows ?? [])),
+    )
+    const rows: PortfolioRow[] = perChain.flatMap((p) => p.rows)
+    // Which chains could not be read, and how much of each is missing.
+    const errors = chainIds
+      .map((chainId, i) => ({ chainId, count: perChain[i]?.unread ?? 0 }))
+      .filter((e) => e.count > 0)
     const priced = rows.filter((r) => r.fiat !== null && !r.hidden)
     const total = priced.length ? priced.reduce((s, r) => s + (r.fiat ?? 0), 0) : null
     let previous = 0
@@ -320,17 +352,38 @@ export class PortfolioService {
       unpricedCount: withShare.filter((r) => r.fiat === null && !r.hidden).length,
       rows: withShare,
       observedAt,
-      stale: false,
-      history: appendPoint(stored?.history ?? [], observedAt, total),
+      /*
+        A build with a failed read is not a fresh answer (ES-BV-045). It is
+        marked stale so every surface that shows an age shows one, its total
+        is not appended to the history series — a dip invented by an outage
+        would sit in the chart for good — and it is not written over the last
+        good snapshot, which is the only complete figure the wallet still has.
+      */
+      stale: errors.length > 0,
+      history:
+        errors.length > 0
+          ? (stored?.history ?? [])
+          : appendPoint(stored?.history ?? [], observedAt, total),
+      ...(errors.length > 0 ? { errors } : {}),
     }
-    await d.snapshots.set(key, snapshot)
+    if (errors.length === 0) await d.snapshots.set(key, snapshot)
     this.lastRefresh.set(key, observedAt)
     d.bus.emit({ type: 'portfolio.snapshot', snapshot })
     return snapshot
   }
 
-  private async balances(chainId: number, owner: Hex, universe: readonly TokenView[]): Promise<Map<string, bigint>> {
-    const out = new Map<string, bigint>()
+  /**
+   * Balances by lowercase address, where `null` means the read failed
+   * (ES-BV-045).
+   *
+   * Omitting a failed read made it indistinguishable from a token the wallet
+   * did not ask about, and the row builder's `?? 0n` then turned both into a
+   * confident zero. During an endpoint outage a user checking whether a
+   * deposit landed saw "$0.00 — add funds" and the last good snapshot was
+   * overwritten with the zeros. A read that did not answer has to say so.
+   */
+  private async balances(chainId: number, owner: Hex, universe: readonly TokenView[]): Promise<Map<string, bigint | null>> {
+    const out = new Map<string, bigint | null>()
     const erc20 = universe.filter((t) => t.address !== 'native')
     const mc = await multicallAddress(this.deps.chains, chainId)
     const calls: ReadCall[] = erc20.map((t) => ({ address: t.address as Hex, abi: ERC20_BALANCE, functionName: 'balanceOf', args: [owner] }))
@@ -347,7 +400,15 @@ export class PortfolioService {
     const results = await readMany(this.deps.chains, chainId, calls)
     erc20.forEach((t, i) => {
       const r = results[i]
-      if (r?.ok && typeof r.value === 'bigint') out.set(t.address.toLowerCase(), r.value)
+      if (r?.ok && typeof r.value === 'bigint') {
+        out.set(t.address.toLowerCase(), r.value)
+        return
+      }
+      /*
+        A `balanceOf` that reverted is a contract that is not a token, and zero
+        is the right thing to say about it. A read nobody answered is not.
+      */
+      out.set(t.address.toLowerCase(), r && !r.ok && r.reason === 'unreachable' ? null : 0n)
     })
     const weighed = mc ? results[erc20.length] : undefined
     if (weighed?.ok && typeof weighed.value === 'bigint') {
@@ -356,7 +417,7 @@ export class PortfolioService {
     }
     // No multicall here, or it declined to answer for the coin: ask directly.
     const native = (await this.deps.chains.rpc(chainId, 'eth_getBalance', [owner, 'latest']).catch(() => null)) as string | null
-    if (native) out.set('native', BigInt(native))
+    out.set('native', typeof native === 'string' ? BigInt(native) : null)
     return out
   }
 
