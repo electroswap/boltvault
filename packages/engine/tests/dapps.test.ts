@@ -57,6 +57,25 @@ describe('external dApp transports', () => {
     await rpc.close()
   })
 
+  it('binds a WebView session to the channel nonce the host injected', async () => {
+    /*
+      A session id is not a secret and not proof of anything. The host mints a
+      nonce, injects it into the document it watched commit, and hands it to
+      `open`; anything that speaks for the session has to hand it back. Without
+      this, guessing or reading a session id was enough to speak as the origin.
+    */
+    const channel = 'a'.repeat(32)
+    const s = await engine.engine.dapps.open({ url: 'https://bound.example/', kind: 'webview', verified: true, channel })
+    const withoutIt = await engine.engine.dapps.request({ sessionId: s.sessionId, id: 1, method: 'eth_chainId' })
+    expect(withoutIt.error?.code).toBe(4900)
+    const withTheWrongOne = await engine.engine.dapps.request({ sessionId: s.sessionId, channel: 'b'.repeat(32), id: 2, method: 'eth_chainId' })
+    expect(withTheWrongOne.error?.code).toBe(4900)
+    const proper = await engine.engine.dapps.request({ sessionId: s.sessionId, channel, id: 3, method: 'eth_chainId' })
+    expect(proper.error).toBeUndefined()
+    expect(proper.result).toBe('0xcb2e')
+    await engine.engine.dapps.close({ sessionId: s.sessionId })
+  })
+
   it('opens a WebView session on the committed origin, answers SAFE reads without a sheet, refuses non-http pages', async () => {
     /*
       `verified` used to default to true for any WebView session, which made

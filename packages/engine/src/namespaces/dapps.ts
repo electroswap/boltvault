@@ -23,6 +23,12 @@ export interface DappsDeps {
 
 interface Live {
   readonly view: DappSession
+  /**
+   * The channel nonce this session was opened with, or null for a transport
+   * that has no page to hold one (WalletConnect). A request that does not
+   * carry it is not from the document the session belongs to (§5.3).
+   */
+  readonly channel: string | null
   readonly listeners: Set<(message: unknown) => void>
   readonly disconnects: Set<() => void>
   readonly pending: Map<number, (m: { result?: unknown; error?: { code: number; message: string; data?: unknown } }) => void>
@@ -38,7 +44,7 @@ export class DappsService {
   constructor(private readonly deps: DappsDeps) {}
 
   /** Open a session for an origin the host observed. `url` is normalised to its registrable origin. */
-  open(input: { url: string; kind: 'webview' | 'walletconnect'; verified?: boolean }): DappSession {
+  open(input: { url: string; kind: 'webview' | 'walletconnect'; verified?: boolean; channel?: string }): DappSession {
     const origin = registrableOrigin(input.url)
     if (!origin) throw new EngineError('invalid_argument', 'Only http(s) pages can connect.')
     const sessionId = Array.from(this.deps.random(8), (b) => b.toString(16).padStart(2, '0')).join('')
@@ -48,7 +54,7 @@ export class DappsService {
       for a cleartext page an attacker had rewritten in flight. The caller
       knows what it observed; it has to say so.
     */
-    const live: Live = { view: { sessionId, origin, kind: input.kind, verified: input.verified ?? false, openedAt: this.deps.now() }, listeners: new Set(), disconnects: new Set(), pending: new Map(), stop: () => undefined }
+    const live: Live = { view: { sessionId, origin, kind: input.kind, verified: input.verified ?? false, openedAt: this.deps.now() }, channel: input.channel ?? null, listeners: new Set(), disconnects: new Set(), pending: new Map(), stop: () => undefined }
     const channel: MessageChannelLike = {
       post: (message) => {
         const r = ResponseShape.safeParse(message)
@@ -80,9 +86,17 @@ export class DappsService {
   }
 
   /** One EIP-1193 request from the page; resolves with the JSON-RPC result or error the flow produced. */
-  request(input: { sessionId: string; id: number; method: string; params?: unknown }): Promise<{ result?: unknown; error?: { code: number; message: string; data?: unknown } }> {
+  request(input: { sessionId: string; channel?: string; id: number; method: string; params?: unknown }): Promise<{ result?: unknown; error?: { code: number; message: string; data?: unknown } }> {
     const live = this.sessions.get(input.sessionId)
     if (!live) return Promise.resolve({ error: { code: 4900, message: 'The session is closed.' } })
+    /*
+      A session id alone is not enough to speak for an origin. The host opens a
+      session for the document it watched commit and hands that document a
+      nonce; a request that arrives without it, or with a nonce from some other
+      screen, is not from that document however well it guessed the id.
+    */
+    if (live.channel !== null && input.channel !== live.channel)
+      return Promise.resolve({ error: { code: 4900, message: 'This page is not the one this session was opened for.' } })
     return new Promise((resolve) => {
       live.pending.set(input.id, resolve)
       const message = { kind: 'request', id: input.id, method: input.method, ...(input.params !== undefined ? { params: input.params } : {}), session: input.sessionId }
@@ -111,8 +125,8 @@ export class DappsService {
 
 export function dappsNamespace(dapps: DappsService): NamespaceSpec {
   return {
-    open: { input: z.object({ url: z.string().min(1), kind: z.enum(['webview', 'walletconnect']), verified: z.boolean().optional() }), handler: async (arg) => dapps.open(arg as { url: string; kind: 'webview' | 'walletconnect'; verified?: boolean }) },
-    request: { input: z.object({ sessionId: z.string(), id: z.number(), method: z.string().min(1).max(64), params: z.unknown().optional() }), handler: (arg) => dapps.request(arg as { sessionId: string; id: number; method: string; params?: unknown }) },
+    open: { input: z.object({ url: z.string().min(1), kind: z.enum(['webview', 'walletconnect']), verified: z.boolean().optional(), channel: z.string().min(1).max(128).optional() }), handler: async (arg) => dapps.open(arg as { url: string; kind: 'webview' | 'walletconnect'; verified?: boolean; channel?: string }) },
+    request: { input: z.object({ sessionId: z.string(), channel: z.string().min(1).max(128).optional(), id: z.number(), method: z.string().min(1).max(64), params: z.unknown().optional() }), handler: (arg) => dapps.request(arg as { sessionId: string; channel?: string; id: number; method: string; params?: unknown }) },
     close: { input: z.object({ sessionId: z.string() }), handler: async (arg) => dapps.close(arg as { sessionId: string }) },
     list: { handler: async () => dapps.list() },
   }

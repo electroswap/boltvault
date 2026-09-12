@@ -788,6 +788,20 @@ export function createEngine(deps: EngineDeps): Engine {
           if (status.exists && !status.unlocked) {
             throw new EngineError('locked', 'Unlock BoltVault before approving this request.')
           }
+          /*
+            The record was written when the sheet went up, and a sheet may sit
+            for minutes. Signing reads the chain and the account from that
+            record rather than from the live request, so this is where the two
+            are checked to still exist: a chain dropped from the registry or an
+            account removed from the vault in the meantime must fail here,
+            while the request can still be raised again, rather than at the
+            signer with a spent approval.
+          */
+          const pending = approvals.get(decision.id)
+          if (pending?.chainId != null && !chains.known(pending.chainId))
+            throw new EngineError('invalid_argument', 'That network is no longer available. Ask the site again.')
+          if (pending?.accountId != null && !(await vault.accounts()).some((a) => a.id === pending.accountId))
+            throw new EngineError('invalid_argument', 'That account is no longer in this wallet. Ask the site again.')
         }
         const decided = await approvals.decide(decision)
         // A signing decision is activity: the idle timer restarts.

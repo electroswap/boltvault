@@ -47,6 +47,13 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
   const [typed, setTyped] = useState(initialUrl ?? HOME)
   const [url, setUrl] = useState(initialUrl ?? HOME)
   const [nav, setNav] = useState({ url: initialUrl ?? HOME, canGoBack: false, canGoForward: false, loading: false, title: '' })
+  /*
+    True from the moment a navigation begins until one commits. A page may
+    start a navigation to any origin and cancel it while staying loaded, so in
+    between there is no origin the wallet may speak for: the session is closed
+    and the channel answers 4900 (§5.3).
+  */
+  const [navigating, setNavigating] = useState(true)
   const [session, setSession] = useState<DappSession | null>(null)
   const [error, setError] = useState<string | null>(null)
   const handle = useRef<WebViewHandle | null>(null)
@@ -54,7 +61,7 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
 
   // One session per committed origin; the engine refuses anything that is not http(s).
-  const origin = originOf(nav.url)
+  const origin = navigating ? null : originOf(nav.url)
   useEffect(() => {
     let alive = true
     if (!origin) {
@@ -62,7 +69,7 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
       return
     }
     // Only a page the OS actually fetched over TLS is vouched for.
-    engine.dapps.open({ url: origin, kind: 'webview', verified: origin.startsWith('https://') }).then(
+    engine.dapps.open({ url: origin, kind: 'webview', verified: origin.startsWith('https://'), channel: channel.current }).then(
       (s) => {
         if (alive) setSession(s)
         else void engine.dapps.close({ sessionId: s.sessionId })
@@ -91,7 +98,7 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
   )
 
   const onMessage = useCallback(
-    (raw: string) => {
+    (raw: string, frameUrl: string | null) => {
       let data: { target?: unknown; channel?: unknown; id?: unknown; method?: unknown; params?: unknown }
       try {
         data = JSON.parse(raw) as typeof data
@@ -105,7 +112,20 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
         reply({ error: { code: 4900, message: 'Not connected.' } })
         return
       }
-      engine.dapps.request({ sessionId: session.sessionId, id, method: data.method, ...(data.params !== undefined ? { params: data.params } : {}) }).then(
+      /*
+        Which frame spoke, not which page is on screen. The nonce only says
+        "a script somewhere in this screen's WebView" — the provider script is
+        main-frame-only but the native bridge is not, so an advert iframe on a
+        connected dApp could post `eth_accounts` and have it answered in the
+        dApp's name. The frame's own origin is the authenticator, and it has
+        to be the origin the session was opened for.
+      */
+      const from = frameUrl === null ? null : originOf(frameUrl)
+      if (from !== session.origin) {
+        reply({ error: { code: 4900, message: 'Not connected.' } })
+        return
+      }
+      engine.dapps.request({ sessionId: session.sessionId, channel: channel.current, id, method: data.method, ...(data.params !== undefined ? { params: data.params } : {}) }).then(
         (r) => reply(r.error ? { error: r.error } : { result: r.result ?? null }),
         (err: unknown) => reply({ error: { code: -32603, message: err instanceof Error ? err.message : 'failed' } }),
       )
@@ -121,6 +141,7 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
 
   const go = (): void => {
     const next = normalise(typed)
+    setNavigating(true)
     setUrl(next)
     setTyped(next)
   }
@@ -152,7 +173,7 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
             {origin ?? '—'}
           </Body>
         </Chip>
-        {nav.loading ? (
+        {navigating ? (
           <Body tone="mute" size="caption">
             {t({ id: 'browser.loading', message: 'Loading…' })}
           </Body>
@@ -170,7 +191,25 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
           {error}
         </Body>
       ) : null}
-      <WebView url={url} injectedScriptBeforeLoad={script} onMessage={onMessage} onNavigate={(s) => { setNav(s); setTyped(s.url); setError(null) }} onLoadEnd={reinject} onError={(m) => setError(m)} handleRef={(h) => (handle.current = h)} testID="browser-page" />
+      <WebView
+        url={url}
+        injectedScriptBeforeLoad={script}
+        onMessage={onMessage}
+        onNavigate={(s) => {
+          setNav(s)
+          setTyped(s.url)
+          setError(null)
+          setNavigating(false)
+        }}
+        onNavigateStart={() => setNavigating(true)}
+        onLoadEnd={reinject}
+        onError={(m) => {
+          setError(m)
+          setNavigating(false)
+        }}
+        handleRef={(h) => (handle.current = h)}
+        testID="browser-page"
+      />
     </Column>
   )
 }

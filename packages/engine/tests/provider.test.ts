@@ -277,3 +277,119 @@ describe('provider service', () => {
     expect(PROVIDER_PORT_NAME).toBe('bv-provider')
   })
 })
+
+/*
+ * ATT-BV-002 — what a re-sent request may inherit from a pending sheet.
+ *
+ * Inside one live worker `RpcFlow.exclusive` already joins a re-send to the
+ * open promise by client id, so the interesting case is the one the design
+ * supports and the audit reproduced: the worker died with a sheet up, the
+ * bridge reconnected, and the request arrives again against an approval store
+ * that hydrated from session storage. It re-attaches by origin plus the page's
+ * own `clientRequestId`, neither of which says anything about the contents —
+ * so the contents are what these tests pin.
+ */
+describe('a re-attached approval after a worker restart', () => {
+  const PAGE = 'page-restart'
+  const MESSAGE = `0x${Buffer.from('the message the sheet showed').toString('hex')}` as Hex
+
+  async function upToTheSheet(): Promise<{
+    platform: ReturnType<typeof createMemoryPlatform>
+    rpc: MockRpc
+    engine: Engine
+    address: Hex
+    accountId: string
+  }> {
+    const platform = createMemoryPlatform()
+    const rpc = await startMockRpc({ chainId: TESTNET })
+    const engine = createEngine({ platform, kdf: KDF, receiptPollMs: 20 })
+    await engine.ready
+    const created = await engine.engine.vault.create({ password: PASSWORD })
+    const address = created.accounts[0]?.address as Hex
+    const accountId = created.accounts[0]?.id ?? ''
+    await engine.chains.setRpc(TESTNET, rpc.url)
+    const site = dapp(engine, ORIGIN_A, PAGE)
+    const connecting = site.request('eth_requestAccounts', undefined, 1)
+    const hello = await nextApproval(engine)
+    await engine.engine.approvals.decide({ id: hello.id, approve: true, data: { accountId, chainId: TESTNET } })
+    await connecting
+    // The sheet the user is reading when the worker dies.
+    void site.request('personal_sign', [MESSAGE, address], 2)
+    await nextApproval(engine, (r) => r.kind === 'sign_message')
+    return { platform, rpc, engine, address, accountId }
+  }
+
+  async function restart(platform: ReturnType<typeof createMemoryPlatform>, dead: Engine): Promise<Engine> {
+    dead.dispose()
+    const engine = createEngine({ platform, kdf: KDF, receiptPollMs: 20 })
+    await engine.ready
+    await engine.engine.vault.unlock({ password: PASSWORD })
+    return engine
+  }
+
+  it('refuses a re-send whose bytes differ, leaves the sheet alone, and still re-attaches the real one', async () => {
+    const first = await upToTheSheet()
+    const engine = await restart(first.platform, first.engine)
+    try {
+      const pending = engine.approvals.list()
+      expect(pending).toHaveLength(1)
+      const req = pending[0]
+      if (!req) throw new Error('the sheet did not survive the restart')
+
+      const page = dapp(engine, ORIGIN_A, PAGE)
+      const other = `0x${Buffer.from('something else entirely').toString('hex')}` as Hex
+      await expect(page.request('personal_sign', [other, first.address], 2)).rejects.toMatchObject({ code: -32002 })
+      // Untouched: same request, same id, still waiting for its human.
+      expect(engine.approvals.list().map((r) => r.id)).toEqual([req.id])
+
+      // The genuine re-send does re-attach, and signs what the sheet showed.
+      const again = dapp(engine, ORIGIN_A, PAGE)
+      const p = again.request('personal_sign', [MESSAGE, first.address], 2)
+      await new Promise((r) => setTimeout(r, 10))
+      expect(engine.approvals.list()).toHaveLength(1)
+      await engine.engine.approvals.decide({ id: req.id, approve: true })
+      const sig = (await p) as Hex
+      expect(await verifyMessage({ address: first.address, message: 'the message the sheet showed', signature: sig })).toBe(true)
+    } finally {
+      engine.dispose()
+      await first.rpc.close()
+    }
+  })
+
+  it('refuses a re-send on a chain the sheet was not built for', async () => {
+    const first = await upToTheSheet()
+    const engine = await restart(first.platform, first.engine)
+    try {
+      const req = engine.approvals.list()[0]
+      if (!req) throw new Error('the sheet did not survive the restart')
+      expect(req.chainId).toBe(TESTNET)
+      // The site moved its session chain, as §8.14 lets a connected site do.
+      await engine.engine.sites.setChain({ origin: ORIGIN_A, chainId: 52014 })
+      const page = dapp(engine, ORIGIN_A, PAGE)
+      await expect(page.request('personal_sign', [MESSAGE, first.address], 2)).rejects.toMatchObject({ code: -32002 })
+      expect(engine.approvals.list().map((r) => r.chainId)).toEqual([TESTNET])
+    } finally {
+      engine.dispose()
+      await first.rpc.close()
+    }
+  })
+
+  it('refuses a re-send seated on another account', async () => {
+    const first = await upToTheSheet()
+    const engine = await restart(first.platform, first.engine)
+    try {
+      const req = engine.approvals.list()[0]
+      if (!req) throw new Error('the sheet did not survive the restart')
+      expect(req.accountId).toBe(first.accountId)
+      const seeds = await engine.engine.accounts.list()
+      const derived = await engine.engine.accounts.derive({ seedId: seeds[0]?.seedId ?? '' })
+      await engine.engine.sites.setAccount({ origin: ORIGIN_A, accountId: derived.id })
+      const page = dapp(engine, ORIGIN_A, PAGE)
+      await expect(page.request('personal_sign', [MESSAGE, derived.address], 2)).rejects.toMatchObject({ code: -32002 })
+      expect(engine.approvals.list().map((r) => r.accountId)).toEqual([first.accountId])
+    } finally {
+      engine.dispose()
+      await first.rpc.close()
+    }
+  })
+})

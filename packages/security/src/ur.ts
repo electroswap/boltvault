@@ -148,6 +148,66 @@ export function decodeUniversalRouter(data: Hex): DecodedUniversalRouter | null 
   return { commands, deadline: deadline ?? null, allowRevert }
 }
 
+/** Any of the four swap commands — the ones with a path and two ends. */
+export type UrSwap = Extract<UrCommand, { type: `V${'2' | '3'}_SWAP_EXACT_${'IN' | 'OUT'}` }>
+
+export function isUrSwap(c: UrCommand): c is UrSwap {
+  return c.type === 'V2_SWAP_EXACT_IN' || c.type === 'V2_SWAP_EXACT_OUT' || c.type === 'V3_SWAP_EXACT_IN' || c.type === 'V3_SWAP_EXACT_OUT'
+}
+
+/**
+ * The tokens at each end of a router path, `[in, out]`.
+ *
+ * V2 carries an address array; V3 packs `token | fee | token | …` into bytes,
+ * and an exact-out path is encoded backwards. Returned as `'native'` when the
+ * path is too short to name one, which is how the explainer has always spelled
+ * "the chain's own coin".
+ */
+export function urPathTokens(c: UrSwap): ['native' | Hex, 'native' | Hex] {
+  if (Array.isArray(c.path)) {
+    const p = c.path as readonly Hex[]
+    return [p[0] ?? 'native', p[p.length - 1] ?? 'native']
+  }
+  const hex = (c.path as Hex).slice(2)
+  if (hex.length < 40) return ['native', 'native']
+  const tin = `0x${hex.slice(0, 40)}` as Hex
+  const tout = `0x${hex.slice(-40)}` as Hex
+  return c.type === 'V3_SWAP_EXACT_OUT' ? [tout, tin] : [tin, tout]
+}
+
+const eq = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
+
+/**
+ * Does anything after command `i` hand what the router is holding to the user?
+ *
+ * The router keeps whatever a swap sends to `ADDRESS_THIS`, and anyone may
+ * `SWEEP` it. A swap into the router's custody is therefore only half a swap:
+ * the other half is a later `SWEEP`, `UNWRAP_WETH` or `TRANSFER` that delivers
+ * it. `UNWRAP_WETH` counts whatever the token was — it can only be the wrapped
+ * native the swap produced, and it names no token to compare.
+ */
+export function urDeliveredAfter(commands: readonly UrCommand[], i: number, token: 'native' | Hex, isMine: (address: Hex) => boolean): boolean {
+  for (let j = i + 1; j < commands.length; j++) {
+    const c = commands[j]
+    if (!c) continue
+    if (c.type === 'UNWRAP_WETH' && isMine(c.recipient)) return true
+    if ((c.type === 'SWEEP' || c.type === 'TRANSFER') && isMine(c.recipient) && (token === 'native' || eq(c.token, token))) return true
+    /*
+      A mixed route is one command per contiguous same-protocol run, chained
+      through the router: every section after the first is paid from what the
+      router is holding, which is the previous section's output. That section
+      is not a leak — it is the rest of the swap — so it counts as having
+      consumed this balance, and whether the route ends anywhere useful is
+      decided on the last leg.
+    */
+    if (isUrSwap(c) && !c.payerIsUser && token !== 'native') {
+      const [tin] = urPathTokens(c)
+      if (tin !== 'native' && eq(tin, token)) return true
+    }
+  }
+  return false
+}
+
 export function urCommandName(byte: number): string {
   return NAMES[byte & 0x3f] ?? `0x${(byte & 0x3f).toString(16).padStart(2, '0')}`
 }

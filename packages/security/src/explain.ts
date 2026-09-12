@@ -7,7 +7,7 @@ import { feeRecipient } from '@boltvault/chains'
 import { formatUnits, type Hex } from 'viem'
 import { decodeCalldata, decodeMessage, type DecodedCall, type ParsedTypedData } from './decode'
 import { knownContract } from './registry'
-import { UR_MSG_SENDER, UR_ROUTER_SELF, type UrCommand } from './ur'
+import { UR_MSG_SENDER, UR_ROUTER_SELF, isUrSwap, urDeliveredAfter, urPathTokens, type UrCommand } from './ur'
 import type { AssessmentContext, SignRequest, Simulation, Statement } from './types'
 
 const DOMAIN_NAMES: Readonly<Record<number, string>> = { 52014: 'Electroneum', 1: 'Ethereum', 8453: 'Base', 43114: 'Avalanche' }
@@ -51,10 +51,17 @@ function who(ctx: AssessmentContext, chainId: number, address: string): string {
  * user's own accounts is "you" — so anything that is *not* "you" stands out,
  * which is the whole point of printing it.
  */
-function urWho(ctx: AssessmentContext, chainId: number, recipient: Hex): string {
+function urWho(ctx: AssessmentContext, chainId: number, recipient: Hex, swept = false): string {
   const r = recipient.toLowerCase()
   if (r === UR_MSG_SENDER.toLowerCase()) return 'you'
-  if (r === UR_ROUTER_SELF.toLowerCase()) return 'the router, to be swept below'
+  /*
+    "to be swept below" was said for every `ADDRESS_THIS` recipient, sweep or
+    no sweep — a sentence about a command that need not exist, and the most
+    reassuring thing on the sheet for calldata that strands the whole output
+    in the router for a searcher to take. It is only said when something
+    downstream actually delivers.
+  */
+  if (r === UR_ROUTER_SELF.toLowerCase()) return swept ? 'the router, to be swept below' : 'the router'
   if (ctx.own.some((a) => a.toLowerCase() === r)) return 'you'
   return who(ctx, chainId, recipient)
 }
@@ -64,20 +71,7 @@ function urWho(ctx: AssessmentContext, chainId: number, recipient: Hex): string 
  * symbol and decimals instead of as raw integers labelled "units".
  * V2 carries an address array; V3 packs `token | fee | token | …` into bytes.
  */
-function pathTokens(c: Extract<UrCommand, { type: `V${'2' | '3'}_SWAP_EXACT_${'IN' | 'OUT'}` }>): ['native' | Hex, 'native' | Hex] {
-  if (Array.isArray(c.path)) {
-    const p = c.path as readonly Hex[]
-    const first = p[0]
-    const last = p[p.length - 1]
-    return [first ?? 'native', last ?? 'native']
-  }
-  const hex = (c.path as Hex).slice(2)
-  if (hex.length < 40) return ['native', 'native']
-  const tin = `0x${hex.slice(0, 40)}` as Hex
-  const tout = `0x${hex.slice(-40)}` as Hex
-  // An exact-out path is encoded backwards: the output token comes first.
-  return c.type === 'V3_SWAP_EXACT_OUT' ? [tout, tin] : [tin, tout]
-}
+const pathTokens = urPathTokens
 
 function amount(ctx: AssessmentContext, token: 'native' | Hex, raw: bigint, chainId: number): string {
   const abs = raw < 0n ? -raw : raw
@@ -288,18 +282,22 @@ export function explainCall(decoded: DecodedCall, ctx: AssessmentContext, chainI
         is the opposite of what was about to happen.
       */
       const out: Statement[] = []
-      for (const c of decoded.decoded.commands) {
+      const cmds = decoded.decoded.commands
+      const mine = (a: Hex): boolean => a.toLowerCase() === UR_MSG_SENDER.toLowerCase() || ctx.own.some((o) => o.toLowerCase() === a.toLowerCase())
+      for (let ci = 0; ci < cmds.length; ci++) {
+        const c = cmds[ci]
+        if (!c) continue
         switch (c.type) {
           case 'V3_SWAP_EXACT_IN':
           case 'V2_SWAP_EXACT_IN': {
             const [tin, tout] = pathTokens(c)
-            out.push({ text: `Swap ${amount(ctx, tin, c.amountIn, chainId)} for at least ${amount(ctx, tout, c.amountOut, chainId)}, sent to ${urWho(ctx, chainId, c.recipient)}`, tone: 'neutral' })
+            out.push({ text: `Swap ${amount(ctx, tin, c.amountIn, chainId)} for at least ${amount(ctx, tout, c.amountOut, chainId)}, sent to ${urWho(ctx, chainId, c.recipient, urDeliveredAfter(cmds, ci, tout, mine))}`, tone: 'neutral' })
             break
           }
           case 'V3_SWAP_EXACT_OUT':
           case 'V2_SWAP_EXACT_OUT': {
             const [tin, tout] = pathTokens(c)
-            out.push({ text: `Swap at most ${amount(ctx, tin, c.amountIn, chainId)} for ${amount(ctx, tout, c.amountOut, chainId)}, sent to ${urWho(ctx, chainId, c.recipient)}`, tone: 'neutral' })
+            out.push({ text: `Swap at most ${amount(ctx, tin, c.amountIn, chainId)} for ${amount(ctx, tout, c.amountOut, chainId)}, sent to ${urWho(ctx, chainId, c.recipient, urDeliveredAfter(cmds, ci, tout, mine))}`, tone: 'neutral' })
             break
           }
           case 'PERMIT2_PERMIT':
@@ -366,14 +364,30 @@ export function explainTypedData(typed: ParsedTypedData | null, ctx: AssessmentC
     case 'dai_permit':
       return [{ text: d.allowed ? `Allow ${who(ctx, chainId, d.spender)} to move all of this token` : `Revoke ${who(ctx, chainId, d.spender)}'s allowance`, tone: d.allowed ? 'warn' : 'in' }]
     case 'seaport_order': {
-      const give = d.offer.map((o) => (o.itemType >= 2 ? `${who(ctx, chainId, o.token)} #${o.identifier.toString()}` : amount(ctx, o.token, o.amount, chainId))).join(', ')
-      const get = d.consideration.filter((c) => c.recipient.toLowerCase() === d.offerer.toLowerCase()).map((c) => (c.itemType >= 2 ? `${who(ctx, chainId, c.token)} #${c.identifier.toString()}` : amount(ctx, c.itemType === 0 ? 'native' : c.token, c.amount, chainId))).join(' + ')
-      return [{ text: `List ${give}`, tone: 'out' }, { text: get ? `You receive ${get}` : 'You receive nothing', tone: get ? 'in' : 'warn' }]
+      /*
+        One pair of lines per order. A `BulkOrder` authorises every leaf of its
+        tree with the one signature, so showing only the first was a statement
+        about a fraction of what was being signed. Long trees are capped so the
+        sheet stays readable, and the cap itself is stated.
+      */
+      const out: Statement[] = []
+      for (const o of d.orders.slice(0, SEAPORT_MAX_ORDERS_SHOWN)) {
+        const give = o.offer.map((x) => (x.itemType >= 2 ? `${who(ctx, chainId, x.token)} #${x.identifier.toString()}` : amount(ctx, x.token, x.amount, chainId))).join(', ')
+        const get = o.consideration.filter((c) => c.recipient.toLowerCase() === o.offerer.toLowerCase()).map((c) => (c.itemType >= 2 ? `${who(ctx, chainId, c.token)} #${c.identifier.toString()}` : amount(ctx, c.itemType === 0 ? 'native' : c.token, c.amount, chainId))).join(' + ')
+        out.push({ text: `List ${give}`, tone: 'out' })
+        out.push({ text: get ? `You receive ${get}` : 'You receive nothing', tone: get ? 'in' : 'warn' })
+      }
+      const rest = d.orders.length - SEAPORT_MAX_ORDERS_SHOWN
+      if (rest > 0) out.push({ text: `+${rest} more order${rest === 1 ? '' : 's'} in this signature`, tone: 'warn' })
+      return out
     }
     case 'unknown':
       return [{ text: `Sign a "${untrusted(d.primaryType)}" message${typed.domain.name ? ` for ${untrusted(typed.domain.name)}` : ''}`, tone: 'neutral' }]
   }
 }
+
+/** How many orders of a bulk tree the sheet spells out before it says "+N more". */
+const SEAPORT_MAX_ORDERS_SHOWN = 5
 
 function expiry(v: bigint): string {
   if (v === 0n) return 'revoked'

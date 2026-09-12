@@ -268,6 +268,66 @@ function floorToWei(floorEtn: number | null): bigint | null {
   }
 }
 
+/**
+ * A canonical fingerprint of what an approval asks to sign (§3.3).
+ *
+ * `approve()` re-attaches a re-sent request to a pending sheet by origin and
+ * the page-supplied `clientRequestId` — both of which the page chooses and
+ * neither of which says anything about the contents. A worker restart while a
+ * sheet is open is a supported, tested path, so the window is real: without
+ * this a site could move its session to another chain or another account,
+ * re-send, and have the user's "yes" to one thing sign another. Everything the
+ * sheet rendered goes into the digest, fee fields included — a re-send that
+ * changes them is a different request, and the gas editor is the only door
+ * that may change a price.
+ */
+function intentDigest(intent: ApprovalIntent): string {
+  const from = 'from' in intent ? intent.from.toLowerCase() : ''
+  const accountId = 'accountId' in intent ? intent.accountId : ''
+  const params = (): string => {
+    switch (intent.kind) {
+      case 'connect':
+      case 'switch_chain':
+      case 'add_chain':
+        return ''
+      case 'watch_asset':
+        return stableJson({ type: intent.type, options: intent.options })
+      case 'sign_message':
+        return intent.message.toLowerCase()
+      case 'eth_sign':
+        return intent.hash.toLowerCase()
+      case 'sign_typed_data':
+        return stableJson(typeof intent.typedData === 'string' ? safeJson(intent.typedData) : intent.typedData)
+      case 'send_transaction': {
+        const t = intent.tx
+        return stableJson({
+          to: t.to?.toLowerCase() ?? null,
+          value: t.value ?? null,
+          data: t.data ?? null,
+          nonce: t.nonce ?? null,
+          gas: t.gas ?? null,
+          gasPrice: t.gasPrice ?? null,
+          maxFeePerGas: t.maxFeePerGas ?? null,
+          maxPriorityFeePerGas: t.maxPriorityFeePerGas ?? null,
+          signOnly: intent.signOnly === true,
+        })
+      }
+    }
+  }
+  return [intent.kind, intent.chainId, accountId, from, params()].join('|')
+}
+
+/** JSON with object keys in a fixed order, so two equal requests digest alike. */
+function stableJson(v: unknown): string {
+  if (v === null || typeof v !== 'object') return JSON.stringify(v) ?? 'null'
+  if (Array.isArray(v)) return `[${v.map(stableJson).join(',')}]`
+  const o = v as Record<string, unknown>
+  return `{${Object.keys(o)
+    .sort()
+    .map((k) => `${JSON.stringify(k)}:${stableJson(o[k])}`)
+    .join(',')}}`
+}
+
 export class ProviderService {
   private remote: RemoteSigner | null = null
   /** Origins whose transport could not vouch for them (WalletConnect without Verify). */
@@ -601,6 +661,7 @@ export class ProviderService {
 
   private async approve(intent: ApprovalIntent): Promise<unknown> {
     const d = this.deps
+    const digest = intentDigest(intent)
     // Re-attach: a worker restart re-sends the request with the same client id.
     const existing = d.approvals.findPending(
       (r) =>
@@ -608,6 +669,23 @@ export class ProviderService {
         (r.payload as { clientRequestId?: string } | null)?.clientRequestId ===
           intent.clientRequestId,
     )
+    /*
+      …but only when it is the same request. The client id is the page's own
+      string and the sheet is already up, so adopting a pending request without
+      checking would let a site re-send different bytes, a different chain or a
+      different account under a sheet the user is reading. A mismatch is
+      refused outright and the pending request is left exactly as it was, for
+      the person to finish or reject on its own terms.
+    */
+    if (existing) {
+      const stored = (existing.payload as { intentDigest?: string } | null)?.intentDigest ?? ''
+      const wantedAccount = 'accountId' in intent ? intent.accountId : null
+      if (stored !== digest || existing.chainId !== intent.chainId || existing.accountId !== wantedAccount)
+        throw new RpcError(
+          RPC.RESOURCE_UNAVAILABLE,
+          'A different request from this site is already waiting. Finish it first.',
+        )
+    }
     let request = existing
     if (!request) {
       // An already-permitted site only needs the vault unlocked, not a new Connect.
@@ -620,7 +698,7 @@ export class ProviderService {
             return { accountId: account.id, addresses: [account.address], chainId: row.chainId }
         }
       }
-      const payload = await this.payloadFor(intent)
+      const payload = { ...(await this.payloadFor(intent)), intentDigest: digest }
       request = await d.approvals.create({
         kind: intent.kind === 'eth_sign' ? 'sign_message' : intent.kind,
         origin: intent.origin,
@@ -821,6 +899,7 @@ export class ProviderService {
         return {
           kind: 'send_transaction',
           tx: prepared.tx,
+          ...(intent.signOnly ? { signOnly: true as const } : {}),
           fee: {
             gasLimit: BigInt(prepared.tx.gas).toString(),
             maxTotalWei: (perGas * BigInt(prepared.tx.gas)).toString(),
@@ -1194,7 +1273,10 @@ export class ProviderService {
     if (!decoded || decoded.kind !== 'seaport_order') return {}
     const collections = [
       ...new Set(
-        decoded.offer
+        // Every leaf of a bulk tree, so the floor check covers the orders the
+        // signature authorises rather than only the one it shows first.
+        decoded.orders
+          .flatMap((o) => o.offer)
           .filter((o) => o.itemType === SEAPORT_ERC721 || o.itemType === SEAPORT_ERC1155)
           .map((o) => o.token.toLowerCase()),
       ),
@@ -1499,6 +1581,18 @@ export class ProviderService {
     data: unknown,
   ): Promise<unknown> {
     const d = this.deps
+    /*
+      Who, where and on whose behalf come from the record, never from the live
+      intent. The record is what the sheet rendered and the firewall assessed;
+      the intent can still be replaced after the sheet is up, because a re-sent
+      request re-attaches to a pending one. `approve()` now refuses a re-attach
+      that does not match, and this is the second half of the same guarantee:
+      even if one slipped through, the signature would still be taken on the
+      approved chain, for the approved account, in the approved origin's name.
+    */
+    const chainId = request.chainId ?? intent.chainId
+    const accountId = request.accountId ?? ('accountId' in intent ? intent.accountId : '')
+    const origin = request.origin
     switch (intent.kind) {
       case 'connect': {
         const parsed = ConnectDecisionDataSchema.safeParse(data)
@@ -1507,11 +1601,11 @@ export class ProviderService {
           ? accounts.find((a) => a.id === parsed.data.accountId)
           : ((await d.vault.active()) ?? accounts[0])
         if (!account) throw new RpcError(RPC.UNAUTHORIZED, 'No account to connect.')
-        const chainId =
+        const connectChainId =
           parsed.success && d.chains.known(parsed.data.chainId)
             ? parsed.data.chainId
-            : intent.chainId
-        return { accountId: account.id, addresses: [account.address], chainId }
+            : chainId
+        return { accountId: account.id, addresses: [account.address], chainId: connectChainId }
       }
       case 'switch_chain':
       case 'add_chain':
@@ -1525,9 +1619,9 @@ export class ProviderService {
             'wallet_watchAsset needs an ERC20 with a contract address.',
           )
         await d.watchAsset?.({
-          chainId: intent.chainId,
+          chainId,
           address: opts.data.address,
-          origin: intent.origin,
+          origin,
           claimed: {
             ...(opts.data.symbol ? { symbol: opts.data.symbol } : {}),
             ...(opts.data.decimals !== undefined ? { decimals: opts.data.decimals } : {}),
@@ -1535,17 +1629,11 @@ export class ProviderService {
         })
         return true
       }
-      /*
-        Every case below signs what the approval record holds, never what the
-        live intent holds. The record is the object the sheet rendered and the
-        firewall assessed; the intent can still be replaced after the sheet is
-        up, because `approve()` re-attaches to a pending request by the
-        page-supplied `clientRequestId`. Signing the intent would mean signing
-        something the user was never shown (§3.3, §3.4).
-      */
+      // Every case below signs the bytes the approval record holds, for the
+      // account and on the chain it names (§3.3, §3.4).
       case 'sign_message': {
         const payload = request.payload as Extract<ApprovalPayload, { kind: 'sign_message' }>
-        const account = await this.signer(intent.accountId)
+        const account = await this.signer(accountId)
         const message = { raw: payload.message as Hex }
         const signature = await account.signMessage({ message })
         ProviderService.assertSignedBy(
@@ -1557,7 +1645,7 @@ export class ProviderService {
       }
       case 'eth_sign': {
         const payload = request.payload as Extract<ApprovalPayload, { kind: 'eth_sign' }>
-        const account = await this.signer(intent.accountId)
+        const account = await this.signer(accountId)
         // A device never signs a raw hash (§4.6: eth_sign is 4200 for hardware accounts).
         if (!account.sign)
           throw new RpcError(RPC.UNSUPPORTED_METHOD, 'This account cannot sign a raw hash.')
@@ -1571,7 +1659,7 @@ export class ProviderService {
       }
       case 'sign_typed_data': {
         const payload = request.payload as Extract<ApprovalPayload, { kind: 'sign_typed_data' }>
-        const account = await this.signer(intent.accountId)
+        const account = await this.signer(accountId)
         const typed = normaliseTypedData(
           typeof payload.typedData === 'string' ? safeJson(payload.typedData) : payload.typedData,
         )
@@ -1599,8 +1687,10 @@ export class ProviderService {
         */
         const fee = applyGasDecision(payload.tx, data)
         const tx = fee ? { ...payload.tx, ...fee } : payload.tx
-        if (intent.signOnly) return this.signOnly(intent, tx)
-        return this.broadcast(intent, request, tx, payload.assessment)
+        // Sign-and-return versus broadcast is a property of the approved
+        // request, not of whatever re-sent it.
+        if (payload.signOnly === true) return this.signOnly(chainId, accountId, tx)
+        return this.broadcast({ chainId, accountId, origin }, request, tx, payload.assessment)
       }
     }
   }
@@ -1650,12 +1740,9 @@ export class ProviderService {
   }
 
   /** Remote sign, the signing side: the prepared fields exactly as the requester sent them, signed and returned raw (§6). */
-  private async signOnly(
-    intent: Extract<ApprovalIntent, { kind: 'send_transaction' }>,
-    tx: PreparedTx,
-  ): Promise<Hex> {
-    const account = await this.signer(intent.accountId)
-    const serialized = await account.signTransaction(toSerializable(intent.chainId, tx))
+  private async signOnly(chainId: number, accountId: string, tx: PreparedTx): Promise<Hex> {
+    const account = await this.signer(accountId)
+    const serialized = await account.signTransaction(toSerializable(chainId, tx))
     ProviderService.assertSignedBy(
       await recoverTransactionAddress({ serializedTransaction: serialized as never }),
       account.address,
@@ -1665,23 +1752,25 @@ export class ProviderService {
   }
 
   private async broadcast(
-    intent: Extract<ApprovalIntent, { kind: 'send_transaction' }>,
+    /** Chain, account and origin as the approved record names them — never the live intent's. */
+    bound: { readonly chainId: number; readonly accountId: string; readonly origin: string },
     request: ApprovalRequest,
     tx: PreparedTx,
     assessment: AssessmentView,
   ): Promise<Hex> {
     const d = this.deps
+    const { chainId, accountId, origin } = bound
     // Already broadcast before a restart? The write-ahead entry carries the hash.
     const prior = (
-      await d.activity.list({ chainId: intent.chainId }).catch(() => [] as ActivityEntry[])
+      await d.activity.list({ chainId: chainId }).catch(() => [] as ActivityEntry[])
     ).find((e) => e.id === request.id)
     if (prior?.hash) return prior.hash as Hex
-    const snapshot = this.takeSnapshot(ProviderService.snapshotKey(intent.chainId, tx))
+    const snapshot = this.takeSnapshot(ProviderService.snapshotKey(chainId, tx))
     const entry: ActivityEntry = {
       id: request.id,
       hash: null,
-      chainId: intent.chainId,
-      accountId: intent.accountId,
+      chainId: chainId,
+      accountId: accountId,
       to: tx.to,
       value: BigInt(tx.value).toString(),
       nonce: tx.nonce,
@@ -1689,8 +1778,8 @@ export class ProviderService {
       // higher fee; without it Speed up has nothing to repeat (§8.12).
       ...(tx.data && tx.data !== '0x' ? { data: tx.data } : {}),
       submittedAt: d.platform.now(),
-      origin: intent.origin,
-      category: categoryFor(assessment, tx, intent.origin),
+      origin: origin,
+      category: categoryFor(assessment, tx, origin),
       statements: assessment.statements.map((s) => s.text),
       riskCodes: assessment.rules.map((r) => r.code),
       status: 'pending',
@@ -1707,16 +1796,16 @@ export class ProviderService {
     if (!prior) await d.activity.append(entry)
     let raw: Hex
     try {
-      const account = await this.signer(intent.accountId)
+      const account = await this.signer(accountId)
       /*
         The queue may have moved while the sheet was open. Re-signing with a
         new nonce here would sign something the user never saw, so the request
         fails instead and can be raised again with a current one.
       */
-      const pending = parseInt(String(await d.chains.rpc(intent.chainId, 'eth_getTransactionCount', [tx.from, 'pending'])), 16)
+      const pending = parseInt(String(await d.chains.rpc(chainId, 'eth_getTransactionCount', [tx.from, 'pending'])), 16)
       if (Number.isFinite(pending) && pending > tx.nonce)
         throw new RpcError(RPC.INTERNAL, 'This transaction\u2019s place in the queue was taken while the sheet was open. Ask again.')
-      raw = await account.signTransaction(toSerializable(intent.chainId, tx))
+      raw = await account.signTransaction(toSerializable(chainId, tx))
       // Before it can be broadcast, it has to have come from the account we asked.
       ProviderService.assertSignedBy(
         await recoverTransactionAddress({ serializedTransaction: raw as never }),
@@ -1731,9 +1820,9 @@ export class ProviderService {
       throw err instanceof RpcError ? err : new RpcError(RPC.INTERNAL, reason)
     }
     try {
-      const sent = (await d.chains.rpc(intent.chainId, 'eth_sendRawTransaction', [raw])) as string
+      const sent = (await d.chains.rpc(chainId, 'eth_sendRawTransaction', [raw])) as string
       await d.activity.update(request.id, { hash: sent })
-      this.watch(intent.chainId, request.id, sent as Hex)
+      this.watch(chainId, request.id, sent as Hex)
       return sent as Hex
     } catch (err) {
       await d.activity.update(request.id, { status: 'failed' }).catch(() => undefined)

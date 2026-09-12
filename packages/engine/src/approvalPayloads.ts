@@ -62,6 +62,15 @@ export const PreparedTxSchema = z.object({
 })
 export type PreparedTx = z.infer<typeof PreparedTxSchema>
 
+/**
+ * `intentDigest` — a canonical fingerprint of the request as it arrived.
+ *
+ * A re-sent request re-attaches to a pending sheet by origin plus the
+ * page-supplied `clientRequestId`, which says nothing about what the request
+ * asks for. The digest is taken when the sheet is built and compared when one
+ * re-attaches, so a request that has quietly changed its chain, its account or
+ * its bytes cannot inherit a sheet raised for something else.
+ */
 export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('connect'),
@@ -69,10 +78,10 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
     /** The site was already permitted; the vault was just locked. Auto-approve after unlock. */
     reconnect: z.boolean(),
     firstTime: z.boolean(),
-    clientRequestId: z.string(),
+    clientRequestId: z.string(), intentDigest: z.string().optional(),
   }),
-  z.object({ kind: z.literal('sign_message'), from: AddressSchema, message: HexSchema, text: z.string().nullable(), assessment: AssessmentViewSchema, clientRequestId: z.string() }),
-  z.object({ kind: z.literal('eth_sign'), from: AddressSchema, hash: HexSchema, assessment: AssessmentViewSchema, clientRequestId: z.string() }),
+  z.object({ kind: z.literal('sign_message'), from: AddressSchema, message: HexSchema, text: z.string().nullable(), assessment: AssessmentViewSchema, clientRequestId: z.string(), intentDigest: z.string().optional() }),
+  z.object({ kind: z.literal('eth_sign'), from: AddressSchema, hash: HexSchema, assessment: AssessmentViewSchema, clientRequestId: z.string(), intentDigest: z.string().optional() }),
   z.object({
     kind: z.literal('sign_typed_data'),
     from: AddressSchema,
@@ -81,7 +90,7 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
     domainName: z.string().nullable(),
     primaryType: z.string(),
     assessment: AssessmentViewSchema,
-    clientRequestId: z.string(),
+    clientRequestId: z.string(), intentDigest: z.string().optional(),
   }),
   z.object({
     kind: z.literal('send_transaction'),
@@ -94,10 +103,17 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
       symbol: z.string(),
     }),
     assessment: AssessmentViewSchema,
-    clientRequestId: z.string(),
+    /**
+     * `device:` remote sign only: sign and hand the raw transaction back
+     * rather than broadcasting it. It lives on the record because that is
+     * what `execute()` reads — taking it from the live intent let a re-sent
+     * request flip a sheet the user approved as "sign" into a broadcast.
+     */
+    signOnly: z.boolean().optional(),
+    clientRequestId: z.string(), intentDigest: z.string().optional(),
   }),
-  z.object({ kind: z.literal('switch_chain'), chainId: z.number().int().positive(), clientRequestId: z.string() }),
-  z.object({ kind: z.literal('add_chain'), chainId: z.number().int().positive(), clientRequestId: z.string() }),
+  z.object({ kind: z.literal('switch_chain'), chainId: z.number().int().positive(), clientRequestId: z.string(), intentDigest: z.string().optional() }),
+  z.object({ kind: z.literal('add_chain'), chainId: z.number().int().positive(), clientRequestId: z.string(), intentDigest: z.string().optional() }),
   z.object({
     kind: z.literal('watch_asset'),
     type: z.string(),
@@ -108,7 +124,7 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
     decimals: z.number().int().nonnegative().nullable(),
     onChain: z.object({ name: z.string(), symbol: z.string(), decimals: z.number().int().nonnegative() }).nullable(),
     mismatch: z.boolean(),
-    clientRequestId: z.string(),
+    clientRequestId: z.string(), intentDigest: z.string().optional(),
   }),
 ])
 

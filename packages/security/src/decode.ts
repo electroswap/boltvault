@@ -291,13 +291,26 @@ export interface TypedDataJson {
   readonly message: Record<string, unknown>
 }
 
+/**
+ * One Seaport order. A plain `OrderComponents` message carries one; a
+ * `BulkOrder` carries a whole Merkle tree of them under a single signature,
+ * and every one of them is authorised by it — so the decoder returns all of
+ * them and the rules judge the message by its worst leaf.
+ */
+export interface DecodedSeaportOrder {
+  readonly offerer: Hex
+  readonly offer: ReadonlyArray<{ token: Hex; itemType: number; identifier: bigint; amount: bigint }>
+  readonly consideration: ReadonlyArray<{ token: Hex; itemType: number; identifier: bigint; amount: bigint; recipient: Hex }>
+  readonly zeroConsideration: boolean
+}
+
 export type DecodedTypedData =
   | { readonly kind: 'permit2_permit_single'; readonly spender: Hex; readonly token: Hex; readonly amount: bigint; readonly expiration: bigint; readonly sigDeadline: bigint; readonly unlimited: boolean }
   | { readonly kind: 'permit2_permit_batch'; readonly spender: Hex; readonly details: ReadonlyArray<{ token: Hex; amount: bigint; expiration: bigint; unlimited: boolean }> }
   | { readonly kind: 'permit2_transfer'; readonly spender: Hex; readonly transfers: ReadonlyArray<{ token: Hex; amount: bigint }>; readonly witness: boolean; readonly batch: boolean }
   | { readonly kind: 'erc2612_permit'; readonly owner: Hex; readonly spender: Hex; readonly value: bigint; readonly deadline: bigint; readonly unlimited: boolean }
   | { readonly kind: 'dai_permit'; readonly holder: Hex; readonly spender: Hex; readonly allowed: boolean; readonly expiry: bigint }
-  | { readonly kind: 'seaport_order'; readonly offerer: Hex; readonly offer: ReadonlyArray<{ token: Hex; itemType: number; identifier: bigint; amount: bigint }>; readonly consideration: ReadonlyArray<{ token: Hex; itemType: number; identifier: bigint; amount: bigint; recipient: Hex }>; readonly zeroConsideration: boolean }
+  | ({ readonly kind: 'seaport_order'; readonly orders: readonly DecodedSeaportOrder[] } & DecodedSeaportOrder)
   | { readonly kind: 'unknown'; readonly primaryType: string }
 
 export interface ParsedTypedData {
@@ -328,6 +341,42 @@ function obj(v: unknown): Record<string, unknown> {
 function arr(v: unknown): readonly unknown[] {
   if (Array.isArray(v)) return v
   throw new Error('not an array')
+}
+
+/**
+ * Seaport caps a bulk tree at height 24, but the sheet has to render what it
+ * finds and a crafted message should not be able to make the decoder chew on
+ * a million leaves. Past either bound the message reads as `unknown`, which
+ * shows the raw JSON and warns — the honest answer for something the wallet
+ * cannot summarise.
+ */
+const BULK_ORDER_MAX_DEPTH = 24
+const BULK_ORDER_MAX_LEAVES = 256
+
+/** Every leaf of a `BulkOrder` tree, in order; throws on anything malformed. */
+function bulkLeaves(v: unknown, depth = 0): Record<string, unknown>[] {
+  if (depth > BULK_ORDER_MAX_DEPTH) throw new Error('bulk order tree too deep')
+  const out: Record<string, unknown>[] = []
+  for (const node of arr(v)) {
+    if (Array.isArray(node)) out.push(...bulkLeaves(node, depth + 1))
+    else out.push(obj(node))
+    if (out.length > BULK_ORDER_MAX_LEAVES) throw new Error('bulk order tree too wide')
+  }
+  return out
+}
+
+function seaportOrder(order: Record<string, unknown>): DecodedSeaportOrder {
+  const offer = arr(order['offer']).map((x) => {
+    const o = obj(x)
+    return { token: addr(o['token']), itemType: Number(big(o['itemType'])), identifier: big(o['identifierOrCriteria']), amount: big(o['startAmount']) }
+  })
+  const consideration = arr(order['consideration']).map((x) => {
+    const o = obj(x)
+    return { token: addr(o['token']), itemType: Number(big(o['itemType'])), identifier: big(o['identifierOrCriteria']), amount: big(o['startAmount']), recipient: addr(o['recipient']) }
+  })
+  const offerer = addr(order['offerer'])
+  const toOfferer = consideration.filter((c) => c.recipient.toLowerCase() === offerer.toLowerCase()).reduce((s, c) => s + c.amount, 0n)
+  return { offerer, offer, consideration, zeroConsideration: offer.length > 0 && toOfferer === 0n }
 }
 
 /** Accepts the JSON string dApps send for eth_signTypedData_v4 or the parsed object. */
@@ -407,18 +456,22 @@ function decodeTypedMessage(t: TypedDataJson): DecodedTypedData {
       return { kind: 'erc2612_permit', owner: addr(m['owner']), spender: addr(m['spender']), value, deadline: big(m['deadline']), unlimited: isUnlimited(value) }
     }
     if (p === 'OrderComponents' || p === 'BulkOrder') {
-      const order = p === 'BulkOrder' ? obj(arr(m['tree'])[0]) : m
-      const offer = arr(order['offer']).map((x) => {
-        const o = obj(x)
-        return { token: addr(o['token']), itemType: Number(big(o['itemType'])), identifier: big(o['identifierOrCriteria']), amount: big(o['startAmount']) }
-      })
-      const consideration = arr(order['consideration']).map((x) => {
-        const o = obj(x)
-        return { token: addr(o['token']), itemType: Number(big(o['itemType'])), identifier: big(o['identifierOrCriteria']), amount: big(o['startAmount']), recipient: addr(o['recipient']) }
-      })
-      const offerer = addr(order['offerer'])
-      const toOfferer = consideration.filter((c) => c.recipient.toLowerCase() === offerer.toLowerCase()).reduce((s, c) => s + c.amount, 0n)
-      return { kind: 'seaport_order', offerer, offer, consideration, zeroConsideration: offer.length > 0 && toOfferer === 0n }
+      /*
+        A `BulkOrder` is one signature over a Merkle tree of orders, and the
+        proof lets the filler redeem any leaf in it. Reading `tree[0]` alone
+        showed the user a fair listing while the same signature gave away
+        everything else in the tree, so every leaf is decoded here and the
+        rules run over all of them. A leaf that cannot be read throws, which
+        falls through to `unknown` for the whole message rather than a
+        confident statement about the part that happened to parse.
+      */
+      const leaves = p === 'BulkOrder' ? bulkLeaves(m['tree']) : [m]
+      if (!leaves.length) throw new Error('empty bulk order')
+      const orders = leaves.map(seaportOrder)
+      // The single-order fields describe the message as a whole; a give-away
+      // leaf anywhere is what the sheet and the older callers must see.
+      const worst = orders.find((o) => o.zeroConsideration) ?? orders[0]!
+      return { kind: 'seaport_order', ...worst, orders }
     }
   } catch {
     return { kind: 'unknown', primaryType: p }

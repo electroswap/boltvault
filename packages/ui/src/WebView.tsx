@@ -18,9 +18,23 @@ export interface WebViewProps {
   readonly url: string
   /** Runs before any page script; the provider goes here. */
   readonly injectedScriptBeforeLoad: string
-  readonly onMessage: (data: string) => void
-  /** The committed navigation (never what the page claims). */
+  /**
+   * A message from the page, with the URL of the frame that posted it.
+   *
+   * The native bridge is reachable from every frame even though the provider
+   * script is injected into the main frame only, and the library knows which
+   * frame spoke — so the frame URL is carried here rather than dropped, and
+   * the host refuses anything that did not come from the committed origin.
+   */
+  readonly onMessage: (data: string, frameUrl: string | null) => void
+  /** A committed navigation — never a provisional one, and never what the page claims. */
   readonly onNavigate: (state: { url: string; canGoBack: boolean; canGoForward: boolean; loading: boolean; title: string }) => void
+  /**
+   * A navigation has begun. Nothing is committed yet: a page can start a
+   * cross-origin navigation and cancel it while staying loaded, so between
+   * this and `onNavigate` there is no origin the host may speak for.
+   */
+  readonly onNavigateStart?: () => void
   readonly onLoadEnd?: () => void
   readonly onError?: (message: string) => void
   readonly handleRef?: (handle: WebViewHandle | null) => void

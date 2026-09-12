@@ -469,8 +469,9 @@ export interface HardwareNamespace {
 
 /** External dApp transports (§2.7 S9): the in-app browser opens a session per committed origin and relays EIP-1193 messages. */
 export interface DappsNamespace {
-  open(input: { url: string; kind: 'webview' | 'walletconnect'; verified?: boolean }): Promise<DappSession>
-  request(input: { sessionId: string; id: number; method: string; params?: unknown }): Promise<{ result?: unknown; error?: { code: number; message: string; data?: unknown } }>
+  /** `channel` is the nonce the host injected into the committed document; every request must carry it back. */
+  open(input: { url: string; kind: 'webview' | 'walletconnect'; verified?: boolean; channel?: string }): Promise<DappSession>
+  request(input: { sessionId: string; channel?: string; id: number; method: string; params?: unknown }): Promise<{ result?: unknown; error?: { code: number; message: string; data?: unknown } }>
   close(input: { sessionId: string }): Promise<void>
   list(): Promise<DappSession[]>
 }
