@@ -39,10 +39,14 @@ import { fileURLToPath } from 'node:url'
  * suffixed sibling; a plain `pnpm build` still writes it into `.output/chrome-mv3`.
  * Say which is missing outright rather than opening a page that is not there.
  */
-const CANDIDATES = ['../.output/chrome-mv3-harness/', '../.output/chrome-mv3/'].map((p) => fileURLToPath(new URL(p, import.meta.url)))
+const CANDIDATES = ['../.output/chrome-mv3-harness/', '../.output/chrome-mv3/'].map((p) =>
+  fileURLToPath(new URL(p, import.meta.url)),
+)
 const EXTENSION_DIR = CANDIDATES.find((dir) => existsSync(join(dir, 'harness.html')))
 if (!EXTENSION_DIR) {
-  process.stderr.write(`no harness page in either build:\n${CANDIDATES.map((d) => `  ${join(d, 'harness.html')}`).join('\n')}\nRun \`pnpm build:harness\` first.\n`)
+  process.stderr.write(
+    `no harness page in either build:\n${CANDIDATES.map((d) => `  ${join(d, 'harness.html')}`).join('\n')}\nRun \`pnpm build:harness\` first.\n`,
+  )
   process.exit(2)
 }
 
@@ -61,6 +65,8 @@ export const SHOT_SCALE = 3
  * own, not a mocked one.
  */
 const AMOUNT_IN = '100000'
+/** The fixture vault's password (fixtureEngine.ts). */
+const FIXTURE_PASSWORD = 'fixture password'
 const BRIDGE_AMOUNT_IN = '250'
 
 const SCREENS = {
@@ -72,19 +78,16 @@ const SCREENS = {
       const amount = page.locator('input[inputmode="decimal"]').first()
       await amount.fill(AMOUNT_IN)
       await page.locator('body').click({ position: { x: 5, y: 5 } })
-      // Wait for the quote to SETTLE, not merely to arrive: the screen
-      // re-quotes on a timer and a shot taken mid-refresh shows "Re-quoting…"
-      // over a disabled key, which is a truthful picture of the wrong moment.
-      await page
-        .waitForFunction(
-          () => {
-            const t = document.body.innerText
-            return !t.includes('Re-quoting') && !/You receive\s*—/.test(t) && /Minimum received/.test(t)
-          },
-          undefined,
-          { timeout: 15_000 },
-        )
-        .catch(() => undefined)
+      /*
+        Wait for a quote that is BOTH present and fresh.
+
+        A quote is only fresh for QUOTE_STALE_MS, and the screen shows
+        "Re-quoting…" over a dead key once it lapses — so waiting on the wrong
+        marker does not merely fail, it spends the freshness window and
+        guarantees the stale frame. The rate row proves a quote arrived; the
+        absence of `swap-stale` proves it has not lapsed yet.
+      */
+      await waitForFreshQuote(page)
     },
   },
   farm: { screen: 'farm', scenario: 'funded' },
@@ -99,11 +102,34 @@ const SCREENS = {
       // The route has to price before the shutter, or the destination column
       // is a dash and the key is dead.
       await page
-        .waitForFunction(() => !/To\s*—/.test(document.body.innerText) && /Arrives at|Fees/.test(document.body.innerText), undefined, { timeout: 15_000 })
+        .waitForFunction(
+          () =>
+            !/To\s*—/.test(document.body.innerText) &&
+            /Arrives at|Fees/.test(document.body.innerText),
+          undefined,
+          { timeout: 15_000 },
+        )
         .catch(() => undefined)
     },
   },
   sign: { screen: 'sign', scenario: 'sign' },
+}
+
+/**
+ * Resolve once a priced, un-lapsed quote is on screen. Keyed off the rate row
+ * and the `swap-stale` marker rather than any copy that a redesign can move.
+ */
+async function waitForFreshQuote(page) {
+  await page
+    .waitForFunction(
+      () => {
+        const priced = /1\s+[A-Za-z]+\s*=\s*[\d.]/.test(document.body.innerText)
+        return priced && document.querySelector('[data-testid="swap-stale"]') === null
+      },
+      undefined,
+      { timeout: 12_000 },
+    )
+    .catch(() => undefined)
 }
 
 const arg = (name) => {
@@ -116,7 +142,9 @@ if (!out) {
   process.stderr.write('usage: node tools/landing-shots.mjs --out <dir> [--only id,id]\n')
   process.exit(2)
 }
-const only = arg('only')?.split(',').map((s) => s.trim())
+const only = arg('only')
+  ?.split(',')
+  .map((s) => s.trim())
 const wanted = Object.entries(SCREENS).filter(([id]) => !only || only.includes(id))
 
 await mkdir(out, { recursive: true })
@@ -139,21 +167,42 @@ for (const [name, c] of wanted) {
   const params = `scenario=${c.scenario}&screen=${c.screen}&body=mobile&motion=reduced${c.art ? '&art=on' : ''}${c.dapp ? `&dapp=${c.dapp}` : ''}`
   await page.goto(`chrome-extension://${id}/harness.html?${params}`)
   try {
-    await page.waitForFunction(() => document.documentElement.dataset['ready'] === '1', undefined, { timeout: 30_000 })
+    await page.waitForFunction(() => document.documentElement.dataset['ready'] === '1', undefined, {
+      timeout: 30_000,
+    })
   } catch {
     process.stdout.write(`${name}: never became ready\n`)
     failed += 1
     await page.close()
     continue
   }
+  // A fresh context opens locked, so any screen may land on Unlock first.
+  const password = page.locator('input[data-testid="unlock-password"]')
+  if (await password.count()) {
+    await password.fill(FIXTURE_PASSWORD)
+    await password.press('Enter')
+    await page
+      .waitForSelector('input[data-testid="unlock-password"]', {
+        state: 'detached',
+        timeout: 15_000,
+      })
+      .catch(() => undefined)
+    await page.waitForTimeout(600)
+  }
   if (c.prepare) await c.prepare(page)
   // Fonts, the Field's one still frame, and any artwork over the network.
   await page.waitForTimeout(c.art ? 2500 : 900)
   if (c.art) {
-    await page.waitForFunction(() => [...document.images].every((i) => i.complete), undefined, { timeout: 15_000 }).catch(() => undefined)
+    await page
+      .waitForFunction(() => [...document.images].every((i) => i.complete), undefined, {
+        timeout: 15_000,
+      })
+      .catch(() => undefined)
   }
   await page.screenshot({ path: join(out, `screen-${name}.png`) })
-  process.stdout.write(`screen-${name}.png  ${SHOT_WIDTH * SHOT_SCALE}x${SHOT_HEIGHT * SHOT_SCALE}\n`)
+  process.stdout.write(
+    `screen-${name}.png  ${SHOT_WIDTH * SHOT_SCALE}x${SHOT_HEIGHT * SHOT_SCALE}\n`,
+  )
   await page.close()
 }
 await context.close()
