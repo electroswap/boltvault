@@ -36,6 +36,15 @@ jobs:
       - run: pnpm audit --audit-level=critical --prod || (pnpm audit --json > audit.json; exit 1)
       - run: pnpm audit --json > audit.json || true
       - run: pnpm sbom
+      # Build integrity (§3.7, ATT-BV-008): nothing signed with the SDK's public
+      # debug key may leave this repository. The verifier is a no-op when the
+      # working tree holds no APK, and refuses outright when it holds one that
+      # names CN=Android Debug.
+      - name: no debug-signed APK in the tree
+        run: |
+          shopt -s nullglob globstar
+          apks=(build/**/*.apk apps/mobile/android/app/build/outputs/**/*.apk)
+          if [ ${#apks[@]} -eq 0 ]; then echo "no APK to check"; else node tools/verify-apk-signer.mjs "${apks[@]}"; fi
       - uses: actions/upload-artifact@v4
         with:
           name: sbom-and-audit

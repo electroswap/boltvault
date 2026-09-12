@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "bundle": "expo export --platform android --output-dir .expo-export",
-    "smoke:device": "bash scripts/device-smoke.sh"
+    "smoke:device": "bash scripts/device-smoke.sh",
+    "verify:apk": "node ../../tools/verify-apk-signer.mjs"
   },
   "dependencies": {
     "@boltvault/connect": "workspace:*",

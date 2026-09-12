@@ -181,7 +181,8 @@
       "./plugins/withUsbHost.js",
       "./plugins/withTaskIsolation.js",
       "./plugins/withNativeSplash.js",
-      "./plugins/withBuildTuning.js"
+      "./plugins/withBuildTuning.js",
+      "./plugins/withReleaseSigning.js"
     ],
     "extra": {
       "eas": {
