@@ -9,7 +9,7 @@
  * check → `fulfillOrder` with the ETN); the watchlist's alerts and nudges.
  */
 import { ELECTRONEUM_ADDRESSES } from '@boltvault/chains'
-import { DIVIDENDS_ABI, LAUNCHPAD_POOL_ABI, LEGENDS_ABI, MINTER_ABI, SEAPORT_ABI, YIELD_FARM_ABI, buildListing, orderHash, type MarketplaceConfig } from '@boltvault/electroswap'
+import { DIVIDENDS_ABI, LAUNCHPAD_POOL_ABI, LEGENDS_ABI, MINTER_ABI, SEAPORT_ABI, YIELD_FARM_ABI, buildListing, buildOffer, orderHash, type MarketplaceConfig, type OrderComponents } from '@boltvault/electroswap'
 import { createMemoryPlatform } from '@boltvault/platform/memory'
 import { parseTypedData } from '@boltvault/security'
 import { startMockRpc, type MockRpc } from '@boltvault/testing'
@@ -92,6 +92,8 @@ describe('the uber-app on the mainnet mock', () => {
   let price = 0.19
   let listingParams: Record<string, unknown> | null = null
   let listingSignature = '0x'
+  // A standing bid on a piece the account owns, as the API would store it (ES-BV-001).
+  let bidParams: Record<string, unknown> | null = null
   const legendsOwned = [12n, 13n]
   const registered = new Set<string>(['13'])
   let claimable = 3n * 10n ** 18n
@@ -116,7 +118,7 @@ describe('the uber-app on the mainnet mock', () => {
     if (query.startsWith('query NftAssetDetails')) {
       const tokenId = String(variables['tokenId'])
       if (tokenId === '77') return { nftAssetDetails: { tokenId: '77', name: 'Legend #77', ownerAddress: SELLER, nftContract: { address: LEGENDS, standard: 'ERC721' }, collection: { collectionId: LEGENDS, name: 'Electric Legends', listingFees: [{ payoutAddress: SELLER, basisPoints: 500 }] }, listings: { edges: listingParams ? [{ node: { type: 'LISTING', status: 'VALID', maker: SELLER, price: { value: 4.2 }, orderHash: '0xabc', signature: listingSignature, protocolParameters: JSON.stringify(listingParams) } }] : [] } } }
-      return { nftAssetDetails: { tokenId, name: `Legend #${tokenId}`, ownerAddress: address, nftContract: { address: LEGENDS, standard: 'ERC721' }, collection: { collectionId: LEGENDS, name: 'Electric Legends', listingFees: [{ payoutAddress: SELLER, basisPoints: 500 }] } } }
+      return { nftAssetDetails: { tokenId, name: `Legend #${tokenId}`, ownerAddress: address, nftContract: { address: LEGENDS, standard: 'ERC721' }, collection: { collectionId: LEGENDS, name: 'Electric Legends', listingFees: [{ payoutAddress: SELLER, basisPoints: 500 }] }, bids: { edges: bidParams ? [{ node: { type: 'OFFER', status: 'VALID', maker: SELLER, price: { value: 4.2 }, orderHash: '0xbid', signature: `0x${'ef'.repeat(65)}`, protocolParameters: JSON.stringify(bidParams) } }] : [] } } }
     }
     if (query.startsWith('query NftBids')) return { nftBids: { edges: [] } }
     if (query.startsWith('query NftBidObligation')) return { nftBidObligation: { wetnObligation: '0' } }
@@ -374,6 +376,34 @@ describe('the uber-app on the mainnet mock', () => {
       [A.nftFeeReceiver.toLowerCase(), ((price * 300n) / 10_000n).toString()],
     ])
     expect(done.hash).toBe(body.order_hash)
+  })
+
+  /*
+    ES-BV-001. A bid names the owner-at-bid-time as the WETN recipient and
+    stays valid after the piece is resold, so the piece's new owner sees a
+    live bid that would hand over the piece and pay the person they bought it
+    from. Matching the NFT item is not enough to tell the two apart.
+  */
+  it('marketplace: Accept refuses a bid whose proceeds pay a previous owner', async () => {
+    const json = (o: OrderComponents): Record<string, unknown> => ({ ...o, offer: o.offer.map((x) => ({ ...x, identifierOrCriteria: x.identifierOrCriteria.toString(), startAmount: x.startAmount.toString(), endAmount: x.endAmount.toString() })), consideration: o.consideration.map((c) => ({ ...c, identifierOrCriteria: c.identifierOrCriteria.toString(), startAmount: c.startAmount.toString(), endAmount: c.endAmount.toString() })), startTime: o.startTime.toString(), endTime: o.endTime.toString(), salt: o.salt.toString(), counter: '0', totalOriginalConsiderationItems: o.consideration.length })
+    const bid = (owner: Hex): OrderComponents => buildOffer({ config, bidder: SELLER, owner, token: LEGENDS, tokenId: 12n, priceWei: 4_200_000_000_000_000_000n, creatorFee: { payoutAddress: SELLER, basisPoints: 500 }, endTime: 4_000_000_000n, counter: 0n, salt: 9n, now: 1_757_000_000_000 })
+
+    // The bid was made while REFERRER held the piece; the account owns it now.
+    bidParams = json(bid(REFERRER))
+    const stale = await engine.engine.nft.asset({ chainId: CHAIN, address: LEGENDS, tokenId: '12', accountId })
+    expect(stale?.bids[0]?.paysPreviousOwner).toBe(true)
+    expect(stale?.bestBid).toBe(null)
+    const before = rpc.state.transactions.size
+    await expect(engine.engine.nft.accept({ accountId, chainId: CHAIN, address: LEGENDS, tokenId: '12', orderHash: '0xbid' })).rejects.toThrow(/previous owner/)
+    expect(rpc.state.transactions.size).toBe(before)
+
+    // The same bid made against the current owner is accepted as before.
+    bidParams = json(bid(address as Hex))
+    const live = await engine.engine.nft.asset({ chainId: CHAIN, address: LEGENDS, tokenId: '12', accountId })
+    expect(live?.bids[0]?.paysPreviousOwner).toBe(false)
+    expect(live?.bestBid?.orderHash).toBe('0xbid')
+    await expect(engine.engine.nft.accept({ accountId, chainId: CHAIN, address: LEGENDS, tokenId: '12', orderHash: '0xbid' })).resolves.toMatchObject({ flowId: expect.any(String) })
+    bidParams = null
   })
 
   it('marketplace: Buy checks the chain owner and fulfils the listing with the ETN', async () => {

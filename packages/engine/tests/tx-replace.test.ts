@@ -42,6 +42,7 @@ interface Submitted {
   accountId: string
   origin: string
   tx: Record<string, string | undefined>
+  replaces?: { nonce: number; hash: string | null } | null
 }
 
 function serviceWith(entries: ActivityEntry[], opts: { baseFee?: string | null } = {}) {
@@ -58,8 +59,8 @@ function serviceWith(entries: ActivityEntry[], opts: { baseFee?: string | null }
     },
     vault: { accounts: async () => [{ id: 'acct-1', address: ME }] },
     provider: {
-      submitInternal: async (intent: { chainId: number; accountId: string; origin: string; tx: Record<string, string | undefined> }) => {
-        sent.push({ chainId: intent.chainId, accountId: intent.accountId, origin: intent.origin, tx: intent.tx })
+      submitInternal: async (intent: { chainId: number; accountId: string; origin: string; tx: Record<string, string | undefined>; replaces?: { nonce: number; hash: string | null } | null }) => {
+        sent.push({ chainId: intent.chainId, accountId: intent.accountId, origin: intent.origin, tx: intent.tx, replaces: intent.replaces ?? null })
         return { requestId: `req-${sent.length}` }
       },
     },
@@ -101,6 +102,37 @@ describe('speeding up a stuck transaction', () => {
     await tx.speedUp({ id: 'row-1' })
     expect(sent[0]?.tx['maxFeePerGas']).toBeUndefined()
     expect(BigInt(sent[0]?.tx['gasPrice'] ?? '0x0')).toBeGreaterThan(BigInt('0x77359400'))
+  })
+
+  /*
+    ES-BV-025. The old bump read only the chain, so on a chain that has gone
+    quiet since the original went out the "replacement" came in below what the
+    stuck transaction already pays and a node refuses it as underpriced —
+    exactly the case in which somebody reaches for Speed up.
+  */
+  it('beats the replaced fees even when the chain has since gone quiet', async () => {
+    // The original paid far more than the chain is asking for now.
+    const expensive = row({ fees: { maxFeePerGas: '0x174876e800', maxPriorityFeePerGas: '0x2540be400' } })
+    const { tx, sent } = serviceWith([expensive])
+    await tx.speedUp({ id: 'row-1' })
+    expect(BigInt(sent[0]?.tx['maxPriorityFeePerGas'] ?? '0x0')).toBeGreaterThan(BigInt('0x2540be400'))
+    expect(BigInt(sent[0]?.tx['maxFeePerGas'] ?? '0x0')).toBeGreaterThan(BigInt('0x174876e800'))
+  })
+
+  it('tells the broadcaster this is a replacement, so the queue guard lets it through', async () => {
+    const { tx, sent } = serviceWith([row()])
+    await tx.speedUp({ id: 'row-1' })
+    expect(sent[0]?.replaces).toMatchObject({ nonce: 7, hash: '0xdead' })
+    const cancelled = serviceWith([row()])
+    await cancelled.tx.cancel({ id: 'row-1' })
+    expect(cancelled.sent[0]?.replaces).toMatchObject({ nonce: 7, hash: '0xdead' })
+  })
+
+  it('keeps a legacy-priced original on gasPrice rather than switching it to 1559', async () => {
+    const { tx, sent } = serviceWith([row({ fees: { gasPrice: '0x174876e800' } })])
+    await tx.speedUp({ id: 'row-1' })
+    expect(sent[0]?.tx['maxFeePerGas']).toBeUndefined()
+    expect(BigInt(sent[0]?.tx['gasPrice'] ?? '0x0')).toBeGreaterThan(BigInt('0x174876e800'))
   })
 
   it('can be found by transaction hash as well as by row id', async () => {

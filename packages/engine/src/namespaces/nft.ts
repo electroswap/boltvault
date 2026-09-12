@@ -29,6 +29,7 @@ import {
   orderIntakeBody,
   orderTypedData,
   parseProtocolParameters,
+  proceedsRecipient,
   saltFrom,
   toParameters,
   type AssetView as EsAsset,
@@ -115,12 +116,24 @@ export function marketplaceConfig(chainId: 52014 | 5201420): MarketplaceConfig {
   }
 }
 
-function orderView(o: EsOrder, components: OrderComponents | null): OrderView {
+function orderView(
+  o: EsOrder,
+  components: OrderComponents | null,
+  owner: string | null = null,
+): OrderView {
   const raw = components
     ? o.type === 'LISTING'
       ? listingPrice(components)
       : offerPrice(components)
     : null
+  /*
+    Who the money goes to, which is not always who is holding the piece
+    (ES-BV-001). A bid names the owner-at-bid-time as the seller recipient and
+    stays valid across a resale, so a bid in the new owner's inbox can pay the
+    old one. Carried on the view so the inbox can say so and the accept path
+    can refuse.
+  */
+  const proceedsTo = components ? proceedsRecipient(components) : null
   return {
     type: o.type,
     status: o.status,
@@ -131,6 +144,9 @@ function orderView(o: EsOrder, components: OrderComponents | null): OrderView {
     createdAt: o.createdAt,
     endAt: o.endAt,
     actionable: components !== null && !!o.signature,
+    proceedsTo,
+    paysPreviousOwner:
+      o.type !== 'LISTING' && owner !== null && proceedsTo !== null && !same(proceedsTo, owner),
   }
 }
 
@@ -186,7 +202,9 @@ export class NftService {
     const listingComponents = a.listing
       ? parseProtocolParameters(a.listing.protocolParameters)
       : null
-    const bids = a.bids.map((b) => orderView(b, parseProtocolParameters(b.protocolParameters)))
+    const bids = a.bids.map((b) =>
+      orderView(b, parseProtocolParameters(b.protocolParameters), a.owner),
+    )
     return {
       chainId,
       address: a.address,
@@ -209,7 +227,8 @@ export class NftService {
       traits: a.traits.map((t) => ({ name: t.name, value: t.value, rarity: t.rarity })),
       lastPriceEtn: a.lastPriceEtn,
       listing: a.listing ? orderView(a.listing, listingComponents) : null,
-      bestBid: bids[0] ?? null,
+      // The headline bid has to be one the owner could actually take (ES-BV-001).
+      bestBid: bids.find((b) => !b.paysPreviousOwner) ?? null,
       bids,
       dividendsWei: dividends === null ? null : dividends.toString(),
       paysDividends: same(a.address, legends),
@@ -894,6 +913,21 @@ export class NftService {
       piece.identifierOrCriteria !== BigInt(input.tokenId)
     )
       throw new EngineError('invalid_argument', 'That offer is for a different piece.')
+    /*
+      The proceeds have to reach the person giving up the piece (ES-BV-001).
+
+      A bid fixes the seller's WETN recipient to whoever owned the piece when
+      the bid was made and stays valid after the piece changes hands, so a
+      stale — or deliberately planted — bid in the new owner's inbox transfers
+      the piece to the bidder and the money to the previous owner. Matching the
+      piece is not enough; the only field that says who gets paid is the
+      recipient of the largest fungible consideration item.
+    */
+    const proceeds = proceedsRecipient(components)
+    if (!proceeds)
+      throw new EngineError('invalid_argument', 'This offer pays nothing for the piece.')
+    if (!same(proceeds, account.address))
+      throw new EngineError('invalid_argument', 'This offer pays a previous owner, not you.')
     const steps: FlowStepRun[] = []
     if (
       await this.needsCollectionApproval(

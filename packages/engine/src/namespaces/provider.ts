@@ -46,6 +46,7 @@ import {
   type TraceFrame,
 } from '@boltvault/security'
 import {
+  keccak256,
   parseUnits,
   recoverAddress,
   recoverMessageAddress,
@@ -323,6 +324,7 @@ function intentDigest(intent: ApprovalIntent): string {
           maxFeePerGas: t.maxFeePerGas ?? null,
           maxPriorityFeePerGas: t.maxPriorityFeePerGas ?? null,
           signOnly: intent.signOnly === true,
+          replaces: intent.replaces?.nonce ?? null,
         })
       }
     }
@@ -345,6 +347,54 @@ function isRetryable(err: unknown): boolean {
   // A Ledger says so in its code; Trezor and the rest say so in words.
   if ((err as { code?: unknown } | null)?.code === 'rejected') return true
   return err instanceof Error && /\brejected\b|\bdenied\b|\bcancell?ed\b/i.test(err.message)
+}
+
+/**
+ * An error that does not mean the transaction failed to leave (ES-BV-002).
+ *
+ * Two shapes matter. A transport that broke — a timeout, a dropped socket, a
+ * fetch that never returned — says nothing at all about what the node did with
+ * the bytes it already had. And a node that answers "already known", "nonce
+ * too low" or "replacement underpriced" is telling us it has *seen* this
+ * transaction or one at the same number, which is the normal answer from the
+ * second endpoint of a failover pair once the first one accepted it.
+ *
+ * Treating either as a failure is how the same send goes out twice.
+ */
+function possiblySent(err: unknown): boolean {
+  const text = `${(err as { message?: unknown } | null)?.message ?? ''} ${(err as { shortMessage?: unknown } | null)?.shortMessage ?? ''}`
+  return (
+    /timed?\s*out|timeout|aborted|network|failed to fetch|socket|econn|fetch failed|load failed/i.test(
+      text,
+    ) ||
+    /already\s*known|alreadyknown|known\s*transaction|already\s*in\s*(the\s*)?(pool|mempool)|duplicate\s*transaction/i.test(
+      text,
+    ) ||
+    /nonce\s*too\s*low|replacement\s*transaction\s*underpriced|transaction\s*underpriced/i.test(
+      text,
+    )
+  )
+}
+
+/**
+ * How long the wallet keeps asking the chain about a broadcast transaction
+ * before it admits it does not know (ES-BV-049). Twenty minutes outlasts a
+ * congested block or two on every chain the wallet speaks to; past that,
+ * "unknown — check the explorer" is a more honest row than "pending".
+ */
+const WATCH_BUDGET_MS = 20 * 60 * 1000
+/** Blocks between the first receipt and the row settling, so a reorg is caught. */
+const CONFIRM_DEPTH = 2
+/** A node may not report its own new transaction immediately; wait before calling it dropped. */
+const DROP_GRACE_MS = 30_000
+
+/** The transaction a speed-up or cancel is replacing (§8.12, ES-BV-025). */
+export interface ReplacedTx {
+  readonly nonce: number
+  readonly hash: string | null
+  readonly maxFeePerGas?: string | null
+  readonly maxPriorityFeePerGas?: string | null
+  readonly gasPrice?: string | null
 }
 
 function stableJson(v: unknown): string {
@@ -1028,7 +1078,13 @@ export class ProviderService {
                 },
               }
             : {}),
-          ...(intent.tx.nonce !== undefined
+          /*
+            A replacement deliberately sits on a used number, so saying "this
+            uses a used number" about a speed-up the user just pressed is noise
+            that trains people past the warning (ES-BV-025).
+          */
+          ...(intent.tx.nonce !== undefined &&
+          intent.replaces?.nonce !== parseInt(intent.tx.nonce, 16)
             ? { nonce: { theirs: parseInt(intent.tx.nonce, 16), next: prepared.nextNonce } }
             : {}),
         }
@@ -1051,6 +1107,7 @@ export class ProviderService {
           kind: 'send_transaction',
           tx: prepared.tx,
           ...(intent.signOnly ? { signOnly: true as const } : {}),
+          ...(intent.replaces ? { replaces: intent.replaces } : {}),
           fee: {
             gasLimit: BigInt(prepared.tx.gas).toString(),
             maxTotalWei: (perGas * BigInt(prepared.tx.gas)).toString(),
@@ -1726,6 +1783,8 @@ export class ProviderService {
   // ---- transactions ---------------------------------------------------------------
 
   /** (chain:account) → the nonces this wallet has handed out but not yet seen on chain. */
+  /** Activity rows with a live receipt watcher, so nothing is followed twice. */
+  private readonly watching = new Set<string>()
   private readonly reservedNonces = new Map<string, Array<{ nonce: number; at: number }>>()
 
   /**
@@ -2008,7 +2067,12 @@ export class ProviderService {
         // Sign-and-return versus broadcast is a property of the approved
         // request, not of whatever re-sent it.
         if (payload.signOnly === true) return this.signOnly(chainId, accountId, tx)
-        return this.broadcast({ chainId, accountId, origin }, request, tx, payload.assessment)
+        return this.broadcast(
+          { chainId, accountId, origin, replaces: payload.replaces ?? null },
+          request,
+          tx,
+          payload.assessment,
+        )
       }
     }
   }
@@ -2071,18 +2135,45 @@ export class ProviderService {
 
   private async broadcast(
     /** Chain, account and origin as the approved record names them — never the live intent's. */
-    bound: { readonly chainId: number; readonly accountId: string; readonly origin: string },
+    bound: {
+      readonly chainId: number
+      readonly accountId: string
+      readonly origin: string
+      readonly replaces?: ReplacedTx | null
+    },
     request: ApprovalRequest,
     tx: PreparedTx,
     assessment: AssessmentView,
   ): Promise<Hex> {
     const d = this.deps
     const { chainId, accountId, origin } = bound
+    const replaces = bound.replaces ?? null
     // Already broadcast before a restart? The write-ahead entry carries the hash.
-    const prior = (
-      await d.activity.list({ chainId: chainId }).catch(() => [] as ActivityEntry[])
-    ).find((e) => e.id === request.id)
+    const rows = await d.activity.list({ chainId: chainId }).catch(() => [] as ActivityEntry[])
+    const prior = rows.find((e) => e.id === request.id)
     if (prior?.hash) return prior.hash as Hex
+    /*
+      One unresolved transaction per number (ES-BV-002).
+
+      A row that is `pending` with a hash on it may well be on the chain, so
+      signing a second transaction at the same nonce is either a replacement —
+      which says so — or the double spend this finding is about. The in-memory
+      nonce reservation does not survive a restart; the rows do.
+    */
+    if (!replaces) {
+      const clash = rows.find(
+        (e) =>
+          e.id !== request.id &&
+          e.accountId === accountId &&
+          e.nonce === tx.nonce &&
+          (e.status === 'pending' || e.status === 'unknown'),
+      )
+      if (clash)
+        throw new RpcError(
+          RPC.INTERNAL,
+          'There is already an unresolved transaction at this position in the queue. Wait for it to settle, or speed it up, before sending another.',
+        )
+    }
     const snapshot = this.takeSnapshot(ProviderService.snapshotKey(chainId, tx))
     const entry: ActivityEntry = {
       id: request.id,
@@ -2109,6 +2200,12 @@ export class ProviderService {
         preview happened but never what it said.
       */
       ...(snapshot ? { simulation: snapshot } : {}),
+      // What a later speed-up has to beat (ES-BV-025).
+      fees: {
+        ...(tx.maxFeePerGas ? { maxFeePerGas: tx.maxFeePerGas } : {}),
+        ...(tx.maxPriorityFeePerGas ? { maxPriorityFeePerGas: tx.maxPriorityFeePerGas } : {}),
+        ...(tx.gasPrice ? { gasPrice: tx.gasPrice } : {}),
+      },
     }
     // Write-ahead (§3.4 step 7): the row exists before the signature, so a device refusal or a lost worker still leaves a trace.
     if (!prior) await d.activity.append(entry)
@@ -2124,10 +2221,22 @@ export class ProviderService {
         String(await d.chains.rpc(chainId, 'eth_getTransactionCount', [tx.from, 'pending'])),
         16,
       )
-      if (Number.isFinite(pending) && pending > tx.nonce)
+      /*
+        A replacement is *meant* to sit on a number the pool already holds
+        (ES-BV-025). While the original waits there the pending count reads
+        `nonce + 1`, so the plain "your place was taken" test fired on every
+        speed-up and cancel and neither could ever reach the node. For a
+        replacement the number has to still be un-mined, which is exactly
+        `pending === nonce + 1`; anything higher means the original (or
+        something else) already settled and there is nothing left to replace.
+      */
+      const ceiling = replaces ? tx.nonce + 1 : tx.nonce
+      if (Number.isFinite(pending) && pending > ceiling)
         throw new RpcError(
           RPC.INTERNAL,
-          'This transaction\u2019s place in the queue was taken while the sheet was open. Ask again.',
+          replaces
+            ? 'That transaction already settled, so there is nothing left to replace.'
+            : 'This transaction\u2019s place in the queue was taken while the sheet was open. Ask again.',
         )
       /*
         …and a hole below it is just as bad. Broadcasting behind a gap that
@@ -2140,7 +2249,11 @@ export class ProviderService {
         to fill. What is refused is a gap nothing holds — a number below this
         one that no live reservation of ours accounts for.
       */
-      if (Number.isFinite(pending) && this.nonceHole(chainId, tx.from as Hex, pending, tx.nonce))
+      if (
+        !replaces &&
+        Number.isFinite(pending) &&
+        this.nonceHole(chainId, tx.from as Hex, pending, tx.nonce)
+      )
         throw new RpcError(
           RPC.INTERNAL,
           'This transaction would wait behind one that was never sent. Ask again.',
@@ -2181,44 +2294,183 @@ export class ProviderService {
       */
       throw err instanceof RpcError || retryable ? err : new RpcError(RPC.INTERNAL, reason)
     }
+    /*
+      The hash exists before the send, not after it (ES-BV-002).
+
+      A signed transaction's hash is `keccak256` of its own bytes — the node
+      does not assign it, it only agrees. Writing it first means every error
+      from here on is about *delivery*, and there is always a hash to ask the
+      chain about. Before this the row carried `hash: null` and any error at
+      all wrote `failed`, so a response lost at the ten-second timeout after
+      the node had already accepted the bytes told the user nothing happened.
+      They sent again, and both mined.
+    */
+    const localHash = keccak256(raw)
+    await d.activity.update(request.id, { hash: localHash, status: 'pending' }).catch(() => undefined)
     try {
       const sent = (await d.chains.rpc(chainId, 'eth_sendRawTransaction', [raw])) as string
+      const hash = /^0x[0-9a-fA-F]{64}$/.test(String(sent)) ? (sent as Hex) : localHash
       // `status` back to pending along with the hash: a retry after a refusal
       // is a transaction that happened, whatever the last attempt wrote.
-      await d.activity.update(request.id, { hash: sent, status: 'pending' })
-      this.watch(chainId, request.id, sent as Hex)
-      return sent as Hex
+      await d.activity.update(request.id, { hash, status: 'pending' })
+      await this.markReplaced(replaces)
+      this.watch(chainId, request.id, hash)
+      return hash
     } catch (err) {
-      await d.activity.update(request.id, { status: 'failed' }).catch(() => undefined)
-      throw new RpcError(RPC.INTERNAL, err instanceof Error ? err.message : 'broadcast failed')
+      const reason = err instanceof Error ? err.message : 'broadcast failed'
+      /*
+        Three answers, not two.
+
+        "Possibly sent" is a transport that broke after the bytes left, or a
+        node that says it has seen this transaction before — which is what the
+        second endpoint of a failover pair says once the first one accepted it.
+        None of those mean the transaction did not happen, so the row stays
+        `pending` with its hash, the nonce reservation stays held, and the
+        watcher decides from the chain. Only an answer that names the bytes as
+        invalid is final, and even then the node is asked whether it knows the
+        hash before anything is written off.
+      */
+      if (possiblySent(err)) {
+        await d.activity
+          .update(request.id, { status: 'pending', statements: [...entry.statements, reason] })
+          .catch(() => undefined)
+        this.watch(chainId, request.id, localHash)
+        return localHash
+      }
+      if (await this.nodeKnows(chainId, localHash)) {
+        await d.activity
+          .update(request.id, { status: 'pending', statements: [...entry.statements, reason] })
+          .catch(() => undefined)
+        this.watch(chainId, request.id, localHash)
+        return localHash
+      }
+      // Definitively refused: say why on the row, the way a signing error does.
+      await d.activity
+        .update(request.id, { status: 'failed', statements: [...entry.statements, reason] })
+        .catch(() => undefined)
+      throw new RpcError(RPC.INTERNAL, reason)
     }
   }
 
-  /** Poll for the receipt at the chain's cadence; Activity moves pending → confirmed/failed. */
+  /** The row a successful replacement supersedes stops saying "pending". */
+  private async markReplaced(replaces: ReplacedTx | null): Promise<void> {
+    if (!replaces?.hash) return
+    const rows = await this.deps.activity.list({}).catch(() => [] as ActivityEntry[])
+    const old = rows.find((e) => e.hash === replaces.hash)
+    if (old && old.status === 'pending')
+      await this.deps.activity.update(old.id, { status: 'replaced' }).catch(() => undefined)
+  }
+
+  /** Does the node have this transaction, whatever it said about the send? */
+  private async nodeKnows(chainId: number, hash: Hex): Promise<boolean> {
+    for (let i = 0; i < 3; i += 1) {
+      const known = await this.deps.chains
+        .rpc(chainId, 'eth_getTransactionByHash', [hash])
+        .catch(() => null)
+      if (known) return true
+    }
+    return false
+  }
+
+  /**
+   * Follow a broadcast transaction to a settled row (ES-BV-049).
+   *
+   * Three things the fixed 120-poll loop could not say. A transaction the node
+   * has forgotten — evicted, or replaced by one of ours at the same nonce —
+   * left the row `pending` forever; it is now `dropped`. A receipt was taken
+   * as final on sight, so a row could read `confirmed` for a block that was
+   * then reorganised away; the receipt is re-read `CONFIRM_DEPTH` blocks later
+   * before the row settles. And running out of attempts said nothing at all;
+   * it now says `unknown`, which is a state the user can act on.
+   *
+   * The budget is wall-clock rather than a count, so the answer does not
+   * depend on how fast the chain's poll cadence happens to be.
+   */
   private watch(chainId: number, id: string, hash: Hex): void {
     const d = this.deps
+    // One watcher per row: a retry, a resume and a re-broadcast all land here.
+    if (this.watching.has(id)) return
+    this.watching.add(id)
     /*
       A receipt is worth asking for about once a block, and never faster than
       the wallet polls anything else — `blockTimeMs` alone had this asking
       Arbitrum every 250 ms, a hundred and twenty times, for one transaction.
     */
     const every = d.receiptPollMs ?? pollMs(chainId, 'foreground')
-    let attempts = 0
+    const deadline = d.platform.now() + WATCH_BUDGET_MS
+    const settle = async (patch: Partial<ActivityEntry>): Promise<void> => {
+      this.watching.delete(id)
+      await d.activity.update(id, patch).catch(() => undefined)
+    }
+    const receiptOf = async (): Promise<{ status?: string; blockNumber?: string } | null> =>
+      (await d.chains.rpc(chainId, 'eth_getTransactionReceipt', [hash]).catch(() => null)) as {
+        status?: string
+        blockNumber?: string
+      } | null
+    /*
+      A receipt is a claim about one branch of the chain.
+
+      The row settles on the first one, because making people stare at
+      "pending" for two more blocks to guard against something that almost
+      never happens is the wrong trade. But the watcher does not stop there:
+      once the head has moved `CONFIRM_DEPTH` blocks past it, it asks again,
+      and a receipt that has vanished puts the row back to `pending` and
+      resumes the search. That is the half a single read could not do.
+    */
+    const recheckAtDepth = async (block: number): Promise<void> => {
+      if (d.platform.now() >= deadline) {
+        this.watching.delete(id)
+        return
+      }
+      const head = await d.chains.head(chainId).catch(() => null)
+      if (!head || Number(head.blockNumber) < block + CONFIRM_DEPTH) {
+        setTimeout(() => void recheckAtDepth(block), every)
+        return
+      }
+      const again = await receiptOf()
+      if (again?.blockNumber) {
+        await settle({
+          status: again.status === '0x1' ? 'confirmed' : 'failed',
+          blockNumber: parseInt(again.blockNumber, 16),
+        })
+        return
+      }
+      // It was there and now it is not: the branch it sat on is gone.
+      await d.activity.update(id, { status: 'pending', blockNumber: null }).catch(() => undefined)
+      setTimeout(() => void tick(), every)
+    }
     const tick = async (): Promise<void> => {
-      attempts += 1
-      const receipt = (await d.chains
-        .rpc(chainId, 'eth_getTransactionReceipt', [hash])
-        .catch(() => null)) as { status?: string; blockNumber?: string } | null
+      const receipt = await receiptOf()
       if (receipt?.blockNumber) {
+        const block = parseInt(receipt.blockNumber, 16)
         await d.activity
           .update(id, {
             status: receipt.status === '0x1' ? 'confirmed' : 'failed',
-            blockNumber: parseInt(receipt.blockNumber, 16),
+            blockNumber: block,
           })
           .catch(() => undefined)
+        void recheckAtDepth(block)
         return
       }
-      if (attempts < 120) setTimeout(() => void tick(), every)
+      /*
+        No receipt. Does the node still have it at all? A `null` answer to
+        `eth_getTransactionByHash` after the transaction has had time to
+        propagate means it is gone from the pool — evicted for price, or
+        replaced by a speed-up at the same nonce — and the row should say so
+        rather than sit on "pending" until the user gives up on it.
+      */
+      const known = await d.chains
+        .rpc(chainId, 'eth_getTransactionByHash', [hash])
+        .catch(() => undefined)
+      if (known === null && d.platform.now() > deadline - WATCH_BUDGET_MS + DROP_GRACE_MS) {
+        await settle({ status: 'dropped' })
+        return
+      }
+      if (d.platform.now() >= deadline) {
+        await settle({ status: 'unknown' })
+        return
+      }
+      setTimeout(() => void tick(), every)
     }
     setTimeout(() => void tick(), every)
   }

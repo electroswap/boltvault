@@ -401,7 +401,12 @@ export const ActivityEntrySchema = z.object({
   /** The plain statements the user was shown at sign time (§3.4). */
   statements: z.array(z.string()),
   riskCodes: z.array(z.string()),
-  status: z.enum(['pending', 'confirmed', 'failed', 'replaced']),
+  /**
+   * `dropped` — the node no longer knows the hash (evicted, or replaced at the
+   * same nonce). `unknown` — broadcast with a hash, but no receipt inside the
+   * watcher's budget, so the wallet will not claim either way (ES-BV-049).
+   */
+  status: z.enum(['pending', 'confirmed', 'failed', 'replaced', 'dropped', 'unknown']),
   blockNumber: z.number().int().nonnegative().nullable(),
   /** Token contract for a token transfer ('native' or address); absent for other entries. */
   token: z.string().nullable().optional(),
@@ -420,6 +425,25 @@ export const ActivityEntrySchema = z.object({
    * preview to show.
    */
   simulation: SimulationSnapshotSchema.nullable().optional(),
+  /**
+   * What this transaction pays per unit of gas, as hex quantities (ES-BV-025).
+   *
+   * Speed up and Cancel have to beat the transaction they replace, not
+   * whatever the chain happens to be charging now: a chain that has gone quiet
+   * since produces a "bump" below the original and the node refuses it as
+   * underpriced. Absent on rows written before this field existed and on rows
+   * the wallet did not originate.
+   */
+  fees: z
+    .object({
+      maxFeePerGas: z.string().nullable().optional(),
+      maxPriorityFeePerGas: z.string().nullable().optional(),
+      gasPrice: z.string().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
+  /** The row this one replaces, when it is a speed-up or a cancel. */
+  replacesId: z.string().nullable().optional(),
 })
 export type ActivityEntry = z.infer<typeof ActivityEntrySchema>
 
@@ -875,6 +899,10 @@ export const OrderViewSchema = z.object({
   endAt: z.number().nullable(),
   /** True when the order can be fulfilled/cancelled from here (parameters + signature present). */
   actionable: z.boolean(),
+  /** Who the order's proceeds actually pay; null when the parameters are unreadable (ES-BV-001). */
+  proceedsTo: z.string().nullable(),
+  /** A bid whose proceeds name someone other than the current owner — do not accept it. */
+  paysPreviousOwner: z.boolean(),
 })
 export type OrderView = z.infer<typeof OrderViewSchema>
 

@@ -399,6 +399,56 @@ export const seaportOffererMismatch: Rule = ({ request, typed, account, context,
   }
 }
 
+/**
+ * A fulfilment whose proceeds pay somebody other than the signer (ES-BV-001).
+ *
+ * Seaport bids name the seller's recipient at bid time and stay valid after
+ * the piece changes hands, so the new owner's inbox can hold a perfectly valid
+ * bid that transfers the piece to the bidder and the money to the person who
+ * sold it to them. Fulfilling that costs the whole piece. The order is only
+ * safe to fill when the largest fungible consideration item — the proceeds,
+ * with the creator royalty and the marketplace cut necessarily smaller — names
+ * the signing account.
+ *
+ * Only for the sell side: when the signer is buying, the offer carries the
+ * piece and the consideration is the price they are paying out, which is meant
+ * to reach somebody else.
+ */
+export const seaportProceedsNotSelf: Rule = ({ request, decoded, account, context, chainId }) => {
+  if (request.kind !== 'transaction' || !decoded || decoded.kind !== 'seaport_fulfill') return null
+  // Buying: the item comes out of the offer, so the consideration is the price.
+  if (decoded.offer.some((o) => o.itemType === SEAPORT_ERC721 || o.itemType === SEAPORT_ERC1155))
+    return null
+  // Selling: the piece being given up is a consideration item.
+  if (
+    !decoded.consideration.some(
+      (c) => c.itemType === SEAPORT_ERC721 || c.itemType === SEAPORT_ERC1155,
+    )
+  )
+    return null
+  const fungible = decoded.consideration.filter(
+    (c) => c.itemType !== SEAPORT_ERC721 && c.itemType !== SEAPORT_ERC1155 && c.amount > 0n,
+  )
+  const proceeds = fungible.reduce<(typeof fungible)[number] | null>(
+    (best, c) => (!best || c.amount > best.amount ? c : best),
+    null,
+  )
+  if (!proceeds)
+    return {
+      code: 'SEAPORT_PROCEEDS_NOT_SELF',
+      severity: 'block',
+      title: 'This order pays you nothing',
+      detail: 'It takes the piece and sends no payment to any address.',
+    }
+  if (sameAddress(proceeds.recipient, account)) return null
+  return {
+    code: 'SEAPORT_PROCEEDS_NOT_SELF',
+    severity: 'block',
+    title: 'The money goes to someone else',
+    detail: `This order gives up the piece and pays ${label(context, chainId, proceeds.recipient)} (${proceeds.recipient}), not this account. A bid made before the piece changed hands still names the previous owner.`,
+  }
+}
+
 // ---- transactions ---------------------------------------------------------------------------
 
 export const authorizationList: Rule = ({ request }) => {
@@ -1373,6 +1423,7 @@ export const ALL_RULES: readonly Rule[] = [
   seaportRules,
   seaportUnderpriced,
   seaportOffererMismatch,
+  seaportProceedsNotSelf,
   authorizationList,
   chainMismatch,
   approveRules,

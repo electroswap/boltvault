@@ -157,6 +157,16 @@ export function explainCall(
   chainId: number,
   origin: string,
   depth = 0,
+  /*
+    The account that would sign this (ES-BV-001).
+
+    "You receive" is a claim about where money lands, and the only way to make
+    it true is to compare the consideration recipient with the signer. Optional
+    so the existing callers that explain a decoded call without a request still
+    compile; when it is absent the sell branch says who is paid by name rather
+    than claiming receipt.
+  */
+  signer: Hex | null = null,
 ): Statement[] {
   const site = siteName(origin)
   switch (decoded.kind) {
@@ -296,7 +306,7 @@ export function explainCall(
       const shown = decoded.calls.slice(0, 10)
       shown.forEach((c, i) => {
         const inner = decodeCalldata({ chainId, to: c.target, data: c.data, value: 0n })
-        for (const s of explainCall(inner, ctx, chainId, origin, depth + 1))
+        for (const s of explainCall(inner, ctx, chainId, origin, depth + 1, signer))
           out.push({ ...s, text: `${i + 1}. ${s.text}` })
       })
       if (decoded.calls.length > shown.length)
@@ -386,27 +396,48 @@ export function explainCall(
         ]
       }
       const paid = decoded.offer[0]
-      const yours = decoded.consideration.filter(
-        (c) =>
-          c.itemType !== 2 &&
-          c.itemType !== 3 &&
-          c.recipient.toLowerCase() !== decoded.offerer.toLowerCase(),
-      )
       const gross = paid ? paid.amount : 0n
-      const net = yours.length
-        ? yours.reduce((s, c) => s + c.amount, 0n) -
-          (decoded.consideration
-            .filter((c) => c.itemType !== 2 && c.itemType !== 3)
-            .reduce((s, c) => s + c.amount, 0n) -
-            (yours[0]?.amount ?? 0n))
-        : gross
+      /*
+        Who actually gets paid (ES-BV-001).
+
+        The old filter excluded the bidder and nothing else, so every remaining
+        consideration item counted as "yours" no matter whose address it named.
+        A bid fixes its seller item to the owner-at-bid-time and survives a
+        resale, so on a piece that has changed hands the sheet said "You
+        receive 485 WETN" for an order that pays the previous owner. The
+        proceeds are the largest fungible item; the sentence is only "you
+        receive" when that item names the signer.
+      */
+      const fungible = decoded.consideration.filter((c) => c.itemType !== 2 && c.itemType !== 3)
+      const proceeds = fungible.reduce<(typeof fungible)[number] | null>(
+        (best, c) => (!best || c.amount > best.amount ? c : best),
+        null,
+      )
+      const mine =
+        proceeds !== null &&
+        signer !== null &&
+        proceeds.recipient.toLowerCase() === signer.toLowerCase()
+      const sell: Statement = {
+        text: `Sell ${label} for ${paid ? amount(ctx, paid.token, gross, chainId) : 'the offer'}`,
+        tone: 'in',
+      }
+      if (!proceeds)
+        return [
+          sell,
+          { text: 'This order pays you nothing for the piece.', tone: 'warn' },
+        ]
+      if (!mine)
+        return [
+          sell,
+          {
+            text: `The ${amount(ctx, proceeds.token, proceeds.amount, chainId)} goes to ${proceeds.recipient}, not to you.`,
+            tone: 'warn',
+          },
+        ]
       return [
+        sell,
         {
-          text: `Sell ${label} for ${paid ? amount(ctx, paid.token, gross, chainId) : 'the offer'}`,
-          tone: 'in',
-        },
-        {
-          text: `You receive ${paid ? amount(ctx, paid.token, yours[0]?.amount ?? net, chainId) : 'the amount'} after the 3% marketplace fee and any creator royalty.`,
+          text: `You receive ${amount(ctx, proceeds.token, proceeds.amount, chainId)} after the 3% marketplace fee and any creator royalty.`,
           tone: 'neutral',
         },
       ]
@@ -770,7 +801,7 @@ export function explain(
 ): Statement[] {
   switch (request.kind) {
     case 'transaction':
-      return decoded ? explainCall(decoded, ctx, chainId, origin) : []
+      return decoded ? explainCall(decoded, ctx, chainId, origin, 0, request.tx.from) : []
     case 'message':
       return explainMessage(request.message)
     case 'typed_data':

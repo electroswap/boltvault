@@ -62,17 +62,37 @@ export class TxService {
     return row
   }
 
-  /** The fees the replacement must beat, read from the chain rather than from the old row. */
-  private async bumpedFees(chainId: number): Promise<{ maxFeePerGas?: Hex; maxPriorityFeePerGas?: Hex; gasPrice?: Hex }> {
+  /**
+   * The fees the replacement must beat (ES-BV-025).
+   *
+   * A node evicts the transaction in its pool only for one that pays at least
+   * 112.5 % of *its* fee fields. Reading the chain alone gave the wrong
+   * number in both directions: on a chain that has gone quiet since the
+   * original was sent, "two times base plus a bumped tip" comes out *below*
+   * what the stuck transaction already pays and the node refuses the
+   * replacement as underpriced — which is precisely the case where somebody
+   * reaches for Speed up. So the floor is the original's own fields bumped,
+   * and the chain's current price is allowed to raise that but never lower it.
+   */
+  private async bumpedFees(chainId: number, previous: ActivityEntry['fees']): Promise<{ maxFeePerGas?: Hex; maxPriorityFeePerGas?: Hex; gasPrice?: Hex }> {
     const rpc = (method: string, params: readonly unknown[]): Promise<unknown> => this.deps.chains.rpc(chainId, method, params)
+    const floor = (hex: string | null | undefined): bigint => (hex ? (BigInt(hex) * BUMP_NUMERATOR) / BUMP_DENOMINATOR + 1n : 0n)
+    const hex = (v: bigint): Hex => `0x${v.toString(16)}` as Hex
     const block = (await rpc('eth_getBlockByNumber', ['latest', false]).catch(() => null)) as { baseFeePerGas?: string } | null
-    if (block?.baseFeePerGas) {
+    // 1559 when the original was, or when the chain is and the original said nothing.
+    const wasLegacy = !!previous?.gasPrice && !previous?.maxFeePerGas
+    if (block?.baseFeePerGas && !wasLegacy) {
       const tip = String((await rpc('eth_maxPriorityFeePerGas', []).catch(() => '0x3b9aca00')) ?? '0x3b9aca00')
       const base = BigInt(block.baseFeePerGas)
-      const bumpedTip = bump(tip)
-      return { maxPriorityFeePerGas: bumpedTip, maxFeePerGas: `0x${(base * 2n + BigInt(bumpedTip)).toString(16)}` as Hex }
+      const tipFloor = floor(previous?.maxPriorityFeePerGas)
+      const capFloor = floor(previous?.maxFeePerGas)
+      const bumpedTip = BigInt(bump(tip)) > tipFloor ? BigInt(bump(tip)) : tipFloor
+      const fromChain = base * 2n + bumpedTip
+      return { maxPriorityFeePerGas: hex(bumpedTip), maxFeePerGas: hex(fromChain > capFloor ? fromChain : capFloor) }
     }
-    return { gasPrice: bump(String((await rpc('eth_gasPrice', [])) ?? '0x3b9aca00')) }
+    const chainPrice = BigInt(bump(String((await rpc('eth_gasPrice', []).catch(() => '0x3b9aca00')) ?? '0x3b9aca00')))
+    const priceFloor = floor(previous?.gasPrice ?? previous?.maxFeePerGas)
+    return { gasPrice: hex(chainPrice > priceFloor ? chainPrice : priceFloor) }
   }
 
   private async addressOf(accountId: string): Promise<Hex> {
@@ -97,8 +117,9 @@ export class TxService {
         data: (row.data ?? '0x') as Hex,
         value: `0x${BigInt(row.value).toString(16)}` as Hex,
         nonce: `0x${(row.nonce ?? 0).toString(16)}` as Hex,
-        ...(await this.bumpedFees(row.chainId)),
+        ...(await this.bumpedFees(row.chainId, row.fees)),
       },
+      replaces: { nonce: row.nonce ?? 0, hash: row.hash, ...(row.fees ?? {}) },
       clientRequestId: `speedup:${row.id}:${this.deps.platform.now()}`,
     })
   }
@@ -114,7 +135,8 @@ export class TxService {
       accountId: row.accountId,
       // To yourself, with no value and no calldata: the cheapest thing that can
       // occupy the nonce, and it cannot do anything if it lands.
-      tx: { from, to: from, data: '0x', value: '0x0', nonce: `0x${(row.nonce ?? 0).toString(16)}` as Hex, ...(await this.bumpedFees(row.chainId)) },
+      tx: { from, to: from, data: '0x', value: '0x0', nonce: `0x${(row.nonce ?? 0).toString(16)}` as Hex, ...(await this.bumpedFees(row.chainId, row.fees)) },
+      replaces: { nonce: row.nonce ?? 0, hash: row.hash, ...(row.fees ?? {}) },
       clientRequestId: `cancel:${row.id}:${this.deps.platform.now()}`,
     })
   }

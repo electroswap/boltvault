@@ -335,3 +335,29 @@ export function offerPrice(order: OrderComponents): bigint | null {
   const o = order.offer[0]
   return o && o.itemType === ItemType.ERC20 ? o.startAmount : null
 }
+
+/**
+ * The consideration item that pays the seller (ES-BV-001).
+ *
+ * A bid fixes its seller item to whoever owned the piece when the bid was
+ * made, and the bid stays valid after a resale. Every other fungible item in
+ * the order is a fee — the creator royalty and the marketplace cut — and both
+ * are, by construction, smaller than the seller's share. So the largest
+ * fungible item is the proceeds, and its `recipient` is the only thing that
+ * says who actually gets paid. `null` when the order pays nothing fungible at
+ * all, which is the give-away shape and equally not something to fulfil.
+ */
+export function sellerConsideration(order: OrderComponents): ConsiderationItem | null {
+  let best: ConsiderationItem | null = null
+  for (const c of order.consideration) {
+    if (c.itemType !== ItemType.NATIVE && c.itemType !== ItemType.ERC20) continue
+    if (c.startAmount <= 0n) continue
+    if (!best || c.startAmount > best.startAmount) best = c
+  }
+  return best
+}
+
+/** Who an order's proceeds actually pay, or null when it pays nothing fungible. */
+export function proceedsRecipient(order: OrderComponents): Hex | null {
+  return sellerConsideration(order)?.recipient ?? null
+}

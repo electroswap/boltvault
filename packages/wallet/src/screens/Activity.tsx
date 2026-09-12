@@ -308,9 +308,11 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
               </Column>
               {/* A status is a state, not a control: small, and never the
                   reason a line of text is cut. */}
-              <Chip flexShrink={0} height={20} paddingHorizontal={7} borderColor={e.status === 'pending' ? paint.arc : e.status === 'failed' ? paint.burn : undefined}>
-                <Body tone={e.status === 'pending' ? 'arc' : e.status === 'failed' ? 'burn' : e.status === 'confirmed' ? 'surge' : 'mute'} size="caption" fontSize={11} lineHeight={14} testID={`activity-status-${e.id}`}>
-                  {e.status === 'pending' ? t({ id: 'activity.pending', message: 'Pending' }) : e.status === 'failed' ? t({ id: 'activity.failed', message: 'Failed' }) : e.status === 'replaced' ? t({ id: 'activity.replaced', message: 'Replaced' }) : t({ id: 'activity.confirmed', message: 'Confirmed' })}
+              <Chip flexShrink={0} height={20} paddingHorizontal={7} borderColor={e.status === 'pending' ? paint.arc : e.status === 'failed' ? paint.burn : e.status === 'unknown' || e.status === 'dropped' ? paint.arc : undefined}>
+                <Body tone={e.status === 'pending' ? 'arc' : e.status === 'failed' ? 'burn' : e.status === 'confirmed' ? 'surge' : e.status === 'unknown' || e.status === 'dropped' ? 'arc' : 'mute'} size="caption" fontSize={11} lineHeight={14} testID={`activity-status-${e.id}`}>
+                  {/* `unknown` and `dropped` are honest answers, not failures: the
+                      wallet broadcast something and cannot say what became of it. */}
+                  {e.status === 'pending' ? t({ id: 'activity.pending', message: 'Pending' }) : e.status === 'failed' ? t({ id: 'activity.failed', message: 'Failed' }) : e.status === 'replaced' ? t({ id: 'activity.replaced', message: 'Replaced' }) : e.status === 'dropped' ? t({ id: 'activity.dropped', message: 'Dropped' }) : e.status === 'unknown' ? t({ id: 'activity.unknown', message: 'Unknown' }) : t({ id: 'activity.confirmed', message: 'Confirmed' })}
                 </Body>
               </Chip>
             </Row>
@@ -399,6 +401,25 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
               transaction there instead, so the original can never land. Only
               one of the two can win, and either way it costs a fee.
             */}
+            {/*
+              The wallet sent bytes and cannot say what became of them
+              (ES-BV-049). Saying so, with the hash to look up, beats a row
+              that sits on "pending" or claims a failure that may not be one.
+            */}
+            {open.status === 'unknown' || open.status === 'dropped' ? (
+              <Plate gap="$2" testID="activity-unresolved">
+                <Body size="caption">
+                  {open.status === 'dropped'
+                    ? t({ id: 'activity.dropped.title', message: 'No longer in the queue' })
+                    : t({ id: 'activity.unknown.title', message: 'We could not tell' })}
+                </Body>
+                <Body tone="mute" size="caption">
+                  {open.status === 'dropped'
+                    ? t({ id: 'activity.dropped.body', message: 'The network no longer has this transaction. It was either replaced at the same position or dropped for price. Nothing was spent.' })
+                    : t({ id: 'activity.unknown.body', message: 'This was broadcast but no block has reported it and we stopped asking. Check the hash on the explorer before sending again.' })}
+                </Body>
+              </Plate>
+            ) : null}
             {open.status === 'pending' && replace ? (
               <Plate gap="$2" testID="activity-replace">
                 <Body size="caption">{t({ id: 'activity.stuck', message: 'Still waiting' })}</Body>

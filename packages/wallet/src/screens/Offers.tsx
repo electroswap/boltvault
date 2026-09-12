@@ -84,8 +84,14 @@ export function Offers({ body, reducedMotion = false }: { body: BodyKind; reduce
                 {t({ id: 'offers.from', message: '{p} WETN from {a}', values: { p: offer.priceEtn ?? '—', a: shortAddress(offer.maker) } })}
                 {offer.endAt ? ` · ${t({ id: 'offers.expires', message: 'until {d}', values: { d: new Date(offer.endAt * 1000).toLocaleDateString('en-GB') } })}` : ''}
               </Body>
+              {/* A bid made before the piece changed hands still pays whoever held it then. */}
+              {offer.paysPreviousOwner ? (
+                <Body tone="burn" size="caption" testID={`offer-stale-${asset.tokenId}`}>
+                  {t({ id: 'offers.paysPrevious', message: 'Pays a previous owner, not you — this cannot be accepted.' })}
+                </Body>
+              ) : null}
             </Column>
-            {offer.actionable && offer.orderHash && active ? <Key label={t({ id: 'offers.accept', message: 'Accept' })} disabled={busy} onPress={() => void run(() => engine.nft.accept({ accountId: active.id, chainId: 52014, address: asset.address, tokenId: asset.tokenId, orderHash: offer.orderHash ?? '' }))} testID={`offer-accept-${asset.tokenId}`} /> : null}
+            {offer.actionable && offer.orderHash && active && !offer.paysPreviousOwner ? <Key label={t({ id: 'offers.accept', message: 'Accept' })} disabled={busy} onPress={() => void run(() => engine.nft.accept({ accountId: active.id, chainId: 52014, address: asset.address, tokenId: asset.tokenId, orderHash: offer.orderHash ?? '' }))} testID={`offer-accept-${asset.tokenId}`} /> : null}
           </Row>
         </Plate>
       ))}

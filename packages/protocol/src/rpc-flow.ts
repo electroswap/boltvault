@@ -111,6 +111,23 @@ export type ApprovalIntent =
         readonly hasCodeOnDestination: boolean | null
       } | null
       /** device:* only — sign and return the raw transaction; the requesting device broadcasts and records (§6). */ readonly signOnly?: boolean
+      /**
+       * internal:activity only — this replaces a transaction already in the
+       * pool at the same nonce (§8.12, ES-BV-025).
+       *
+       * Without it a replacement is indistinguishable from a transaction that
+       * has lost its place: the pending count already reads `nonce + 1`
+       * because the original is sitting there, so the "your place was taken"
+       * guard fires on every speed-up and cancel and neither can ever
+       * broadcast. The fees are the ones being replaced, so the bump can be
+       * measured against them instead of against the chain.
+       */ readonly replaces?: {
+        readonly nonce: number
+        readonly hash: string | null
+        readonly maxFeePerGas?: string | null
+        readonly maxPriorityFeePerGas?: string | null
+        readonly gasPrice?: string | null
+      } | null
     }
   | {
       readonly kind: 'watch_asset'

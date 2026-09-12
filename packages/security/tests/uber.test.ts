@@ -16,6 +16,7 @@ const A = ELECTRONEUM_ADDRESSES[52014]
 const ME = '0x3333333333333333333333333333333333333333' as Hex
 const OTHER = '0x4444444444444444444444444444444444444444' as Hex
 const POOL = '0x9999999999999999999999999999999999999999' as Hex
+const PREVIOUS = '0x5555555555555555555555555555555555555555' as Hex
 const tx = (to: Hex, data: Hex, value = 0n): SignRequest => ({ kind: 'transaction', tx: { from: ME, to, data, value, chainId: 52014 } })
 const run = (r: SignRequest) => assess({ origin: 'internal:farm', chainId: 52014, account: ME, request: r, context: emptyContext({ tokens: { [A.bolt!.toLowerCase()]: { symbol: 'BOLT', decimals: 18 } }, boltToken: A.bolt as Hex }) })
 
@@ -76,6 +77,24 @@ describe('marketplace', () => {
     const a = run(tx(A.seaport15 as Hex, data))
     expect(a.statements[0]?.text).toBe('Sell Electric Legends #12 for 4.2 WETN')
     expect(a.statements[1]?.text).toMatch(/^You receive 4.074 WETN/)
+  })
+  /*
+    ES-BV-001: a bid names the owner-at-bid-time as the seller recipient and
+    stays valid after the piece is resold, so the new owner's inbox can hold a
+    bid that takes the piece and pays the person they bought it from.
+  */
+  it('a bid whose proceeds pay someone else is blocked and never claims receipt', () => {
+    const stale = { ...listing, offerer: OTHER, offer: [item(1, A.wetn as Hex, 0n, price)], consideration: [{ ...item(1, A.wetn as Hex, 0n, price - fee), recipient: PREVIOUS }, { ...item(1, A.wetn as Hex, 0n, fee), recipient: A.nftFeeReceiver as Hex }, { ...item(2, A.electricLegends as Hex, 12n, 1n), recipient: OTHER }], totalOriginalConsiderationItems: 3n }
+    const data = encodeFunctionData({ abi: SEAPORT_ABI, functionName: 'fulfillOrder', args: [{ parameters: stale, signature: '0x' }, `0x${'00'.repeat(32)}` as Hex] })
+    const a = run(tx(A.seaport15 as Hex, data))
+    expect(a.rules.map((r) => r.code)).toContain('SEAPORT_PROCEEDS_NOT_SELF')
+    expect(a.presentation.blocked).toBe(true)
+    expect(a.statements.map((s) => s.text).join(' ')).not.toMatch(/You receive/)
+    expect(a.statements[1]?.text).toContain(PREVIOUS)
+  })
+  it('buying does not raise the proceeds rule — the consideration is the price', () => {
+    const data = encodeFunctionData({ abi: SEAPORT_ABI, functionName: 'fulfillOrder', args: [{ parameters: listing, signature: '0x' }, `0x${'00'.repeat(32)}` as Hex] })
+    expect(run(tx(A.seaport15 as Hex, data, price)).rules.map((r) => r.code)).not.toContain('SEAPORT_PROCEEDS_NOT_SELF')
   })
   it('cancel, dividends and mint', () => {
     const cancel = encodeFunctionData({ abi: SEAPORT_ABI, functionName: 'cancel', args: [[{ ...listing, counter: 0n }]] })

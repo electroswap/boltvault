@@ -151,6 +151,21 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
      * request flip a sheet the user approved as "sign" into a broadcast.
      */
     signOnly: z.boolean().optional(),
+    /**
+     * `internal:activity` only: the transaction this one replaces, at the same
+     * nonce. On the record for the same reason `signOnly` is — `execute()`
+     * reads it, and a re-sent request must not be able to turn an ordinary
+     * send into a replacement or the other way round.
+     */
+    replaces: z
+      .object({
+        nonce: z.number().int().nonnegative(),
+        hash: z.string().nullable(),
+        maxFeePerGas: z.string().nullable().optional(),
+        maxPriorityFeePerGas: z.string().nullable().optional(),
+        gasPrice: z.string().nullable().optional(),
+      })
+      .optional(),
     clientRequestId: z.string(),
     intentDigest: z.string().optional(),
     tabId: z.number().int().optional(),
