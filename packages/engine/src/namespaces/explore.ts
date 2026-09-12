@@ -6,12 +6,38 @@
  * everywhere else.
  */
 import { ELECTRONEUM_ADDRESSES } from '@boltvault/chains'
-import { fetchCollectionBalances, fetchCollections, fetchPriceHistory, fetchTokenDetail, fetchTopCollections, fetchTopTokens, type CollectionView as EsCollection, type ElectroSwapClient, type HistoryDuration } from '@boltvault/electroswap'
+import {
+  fetchCollectionBalances,
+  fetchCollections,
+  fetchPriceHistory,
+  fetchTokenDetail,
+  fetchTopCollections,
+  fetchTopTokens,
+  type CollectionView as EsCollection,
+  type ElectroSwapClient,
+  type HistoryDuration,
+} from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
 import { cacheKey, type Cached, type DocCache } from '../cache'
 import type { EventBus, NamespaceSpec } from '../host'
-import { CollectionWindowSchema, type CollectionWindow, AccountIdSchema, ChartDurationSchema, CollectionViewSchema, ExploreTokenSchema, LiquidityViewSchema, PriceHistoryViewSchema, TokenDetailViewSchema, type ChartDuration, type CollectionView, type ExploreToken, type LiquidityView, type PriceHistoryView, type TokenDetailView } from '../schema'
+import {
+  CollectionWindowSchema,
+  type CollectionWindow,
+  AccountIdSchema,
+  ChartDurationSchema,
+  CollectionViewSchema,
+  ExploreTokenSchema,
+  LiquidityViewSchema,
+  PriceHistoryViewSchema,
+  TokenDetailViewSchema,
+  type ChartDuration,
+  type CollectionView,
+  type ExploreToken,
+  type LiquidityView,
+  type PriceHistoryView,
+  type TokenDetailView,
+} from '../schema'
 import type { TokensService } from './tokens'
 import type { VaultManager } from './vault'
 import type { WatchlistService } from './watchlist'
@@ -32,15 +58,40 @@ export interface ExploreDeps {
 
 const TTL_MS = 60_000
 const DETAIL_TTL_MS = 60_000
-const TOKENS_SPEC = (chainId: number) => ({ key: cacheKey('explore', 'tokens', chainId), schema: z.array(ExploreTokenSchema) })
-const COLLECTIONS_SPEC = (chainId: number, accountId: string | undefined, window: CollectionWindow) => ({ key: cacheKey('explore', 'collections', chainId, accountId ?? '-', window), schema: z.array(CollectionViewSchema) })
-const DETAIL_SPEC = (chainId: number, address: string) => ({ key: cacheKey('explore', 'tokendetail', chainId, address), schema: TokenDetailViewSchema })
+const TOKENS_SPEC = (chainId: number) => ({
+  key: cacheKey('explore', 'tokens', chainId),
+  schema: z.array(ExploreTokenSchema),
+})
+const COLLECTIONS_SPEC = (
+  chainId: number,
+  accountId: string | undefined,
+  window: CollectionWindow,
+) => ({
+  key: cacheKey('explore', 'collections', chainId, accountId ?? '-', window),
+  schema: z.array(CollectionViewSchema),
+})
+const DETAIL_SPEC = (chainId: number, address: string) => ({
+  key: cacheKey('explore', 'tokendetail', chainId, address),
+  schema: TokenDetailViewSchema,
+})
 const HISTORY_TTL_MS = 5 * 60_000
-const HISTORY_SPEC = (chainId: number, address: string, duration: ChartDuration) => ({ key: cacheKey('explore', 'history', chainId, address, duration), schema: PriceHistoryViewSchema })
-const API_DURATION: Record<ChartDuration, HistoryDuration> = { '1D': 'DAY', '1W': 'WEEK', '1M': 'MONTH', '1Y': 'YEAR' }
+const HISTORY_SPEC = (chainId: number, address: string, duration: ChartDuration) => ({
+  key: cacheKey('explore', 'history', chainId, address, duration),
+  schema: PriceHistoryViewSchema,
+})
+const API_DURATION: Record<ChartDuration, HistoryDuration> = {
+  '1D': 'DAY',
+  '1W': 'WEEK',
+  '1M': 'MONTH',
+  '1Y': 'YEAR',
+}
 const LIQUIDITY_TTL_MS = 10 * 60_000
-const LIQUIDITY_SPEC = (chainId: number, address: string) => ({ key: cacheKey('explore', 'liquidity', chainId, address), schema: LiquidityViewSchema })
-const isEtn = (chainId: number): chainId is 52014 | 5201420 => chainId === 52014 || chainId === 5201420
+const LIQUIDITY_SPEC = (chainId: number, address: string) => ({
+  key: cacheKey('explore', 'liquidity', chainId, address),
+  schema: LiquidityViewSchema,
+})
+const isEtn = (chainId: number): chainId is 52014 | 5201420 =>
+  chainId === 52014 || chainId === 5201420
 
 export class ExploreService {
   /** The raw API rows behind `collections`, for `collection()` to reuse within a session. */
@@ -49,7 +100,12 @@ export class ExploreService {
   constructor(private readonly deps: ExploreDeps) {
     // A pin is applied at serve time, so a pin change is a cache change for the token list (pages re-read).
     deps.bus?.subscribe((e) => {
-      if (e.type === 'tokens.changed') deps.bus?.emit({ type: 'cache.changed', key: cacheKey('explore', 'tokens', e.chainId), observedAt: deps.platform.now() })
+      if (e.type === 'tokens.changed')
+        deps.bus?.emit({
+          type: 'cache.changed',
+          key: cacheKey('explore', 'tokens', e.chainId),
+          observedAt: deps.platform.now(),
+        })
     })
   }
 
@@ -70,7 +126,22 @@ export class ExploreService {
           .filter((r) => !r.spam)
           .map((r): ExploreToken => {
             const u = universe.find((x) => x.address.toLowerCase() === r.address.toLowerCase())
-            return { chainId, address: r.address, symbol: r.symbol, name: r.name, decimals: r.decimals, logoUri: u?.logoUri ?? r.logoUrl, price: r.price, change24h: r.change24h, change7d: r.change7d, volume24h: r.volume24h, tvl: r.tvl, marketCap: r.marketCap, safety: r.safety, pinned: false }
+            return {
+              chainId,
+              address: r.address,
+              symbol: r.symbol,
+              name: r.name,
+              decimals: r.decimals,
+              logoUri: u?.logoUri ?? r.logoUrl,
+              price: r.price,
+              change24h: r.change24h,
+              change7d: r.change7d,
+              volume24h: r.volume24h,
+              tvl: r.tvl,
+              marketCap: r.marketCap,
+              safety: r.safety,
+              pinned: false,
+            }
           })
       })
       return this.withPins(chainId, hit.value)
@@ -96,11 +167,17 @@ export class ExploreService {
     if (!d.electroswap || !isEtn(chainId)) return null
     const client = d.electroswap
     try {
-      return (await d.cache.through(DETAIL_SPEC(chainId, address), DETAIL_TTL_MS, async () => {
-        const v = await fetchTokenDetail(client, chainId, address === 'native' ? 'NATIVE' : address)
-        if (!v) throw new Error('no such token')
-        return { ...v, sparkline: [...v.sparkline] }
-      })).value
+      return (
+        await d.cache.through(DETAIL_SPEC(chainId, address), DETAIL_TTL_MS, async () => {
+          const v = await fetchTokenDetail(
+            client,
+            chainId,
+            address === 'native' ? 'NATIVE' : address,
+          )
+          if (!v) throw new Error('no such token')
+          return { ...v, sparkline: [...v.sparkline] }
+        })
+      ).value
     } catch {
       return null
     }
@@ -116,29 +193,49 @@ export class ExploreService {
     return (await this.tokenDetail(chainId, address))?.safety ?? null
   }
 
-  async cachedTokenDetail(chainId: number, address: string): Promise<Cached<TokenDetailView> | null> {
+  async cachedTokenDetail(
+    chainId: number,
+    address: string,
+  ): Promise<Cached<TokenDetailView> | null> {
     return this.deps.cache.read(DETAIL_SPEC(chainId, address))
   }
 
   /** One timeframe of price history (plan B5), five minutes stale-first, per duration. */
-  async priceHistory(chainId: number, address: string, duration: ChartDuration): Promise<PriceHistoryView | null> {
+  async priceHistory(
+    chainId: number,
+    address: string,
+    duration: ChartDuration,
+  ): Promise<PriceHistoryView | null> {
     const d = this.deps
     if (!d.electroswap || !isEtn(chainId)) return null
     const client = d.electroswap
     try {
       return (
-        await d.cache.through(HISTORY_SPEC(chainId, address, duration), HISTORY_TTL_MS, async () => {
-          const h = await fetchPriceHistory(client, chainId, address === 'native' ? 'NATIVE' : address, API_DURATION[duration])
-          if (!h) throw new Error('no market')
-          return { chainId, address, duration, points: [...h.points], high: h.high, low: h.low }
-        })
+        await d.cache.through(
+          HISTORY_SPEC(chainId, address, duration),
+          HISTORY_TTL_MS,
+          async () => {
+            const h = await fetchPriceHistory(
+              client,
+              chainId,
+              address === 'native' ? 'NATIVE' : address,
+              API_DURATION[duration],
+            )
+            if (!h) throw new Error('no market')
+            return { chainId, address, duration, points: [...h.points], high: h.high, low: h.low }
+          },
+        )
       ).value
     } catch {
       return null
     }
   }
 
-  async cachedPriceHistory(chainId: number, address: string, duration: ChartDuration): Promise<Cached<PriceHistoryView> | null> {
+  async cachedPriceHistory(
+    chainId: number,
+    address: string,
+    duration: ChartDuration,
+  ): Promise<Cached<PriceHistoryView> | null> {
     return this.deps.cache.read(HISTORY_SPEC(chainId, address, duration))
   }
 
@@ -152,7 +249,12 @@ export class ExploreService {
       return (
         await d.cache.through(LIQUIDITY_SPEC(chainId, address), LIQUIDITY_TTL_MS, async () => {
           const r = await client.liquidityLocks(chainId, target)
-          return { chainId, address, lockedPct: Math.min(100, Math.max(0, r.totalPercent)), lockCount: r.locks.length }
+          return {
+            chainId,
+            address,
+            lockedPct: Math.min(100, Math.max(0, r.totalPercent)),
+            lockCount: r.locks.length,
+          }
         })
       ).value
     } catch {
@@ -165,30 +267,44 @@ export class ExploreService {
   }
 
   /** Explore › Collections (§8.10; owner ask 2026-09-06): verified collections by default, ranked by the window's volume — the whole index with `all`; the user's custom collections join either way. */
-  async collections(chainId: number, accountId?: string, window: CollectionWindow = 'DAY'): Promise<CollectionView[]> {
+  async collections(
+    chainId: number,
+    accountId?: string,
+    window: CollectionWindow = 'DAY',
+  ): Promise<CollectionView[]> {
     const d = this.deps
     if (!d.electroswap || !isEtn(chainId)) return []
     const client = d.electroswap
     try {
-      const cached = await d.cache.through(COLLECTIONS_SPEC(chainId, accountId, window), TTL_MS, async () => {
-        // `listed: true` is the verified set — the flags are aligned in the API
-        // (listed:true → 20, all verified; listed:false → 50, all unverified),
-        // and it is what apps/interface asks for. The owner wants verified only.
-        const rows = await fetchTopCollections(client, chainId, 50, true, window)
-        this.collectionRows.set(chainId, [...(this.collectionRows.get(chainId) ?? []).filter((r) => !rows.some((x) => x.address.toLowerCase() === r.address.toLowerCase())), ...rows])
-        const owned = new Map<string, number>()
-        if (accountId) {
-          const account = (await d.vault.accounts()).find((a) => a.id === accountId)
-          if (account) {
-            try {
-              for (const c of await fetchCollectionBalances(client, chainId, account.address)) owned.set(c.address.toLowerCase(), c.balance)
-            } catch {
-              // no balances → 0
+      const cached = await d.cache.through(
+        COLLECTIONS_SPEC(chainId, accountId, window),
+        TTL_MS,
+        async () => {
+          // `listed: true` is the verified set — the flags are aligned in the API
+          // (listed:true → 20, all verified; listed:false → 50, all unverified),
+          // and it is what apps/interface asks for. The owner wants verified only.
+          const rows = await fetchTopCollections(client, chainId, 50, true, window)
+          this.collectionRows.set(chainId, [
+            ...(this.collectionRows.get(chainId) ?? []).filter(
+              (r) => !rows.some((x) => x.address.toLowerCase() === r.address.toLowerCase()),
+            ),
+            ...rows,
+          ])
+          const owned = new Map<string, number>()
+          if (accountId) {
+            const account = (await d.vault.accounts()).find((a) => a.id === accountId)
+            if (account) {
+              try {
+                for (const c of await fetchCollectionBalances(client, chainId, account.address))
+                  owned.set(c.address.toLowerCase(), c.balance)
+              } catch {
+                // no balances → 0
+              }
             }
           }
-        }
-        return this.toViews(chainId, rows, owned).filter((v) => v.verified)
-      })
+          return this.toViews(chainId, rows, owned).filter((v) => v.verified)
+        },
+      )
       return this.withCustoms(chainId, cached.value)
     } catch {
       // The network leg failed. The user's own collections are not part of it,
@@ -199,12 +315,24 @@ export class ExploreService {
   }
 
   /** Verified rows plus the user's explicitly-added collections, deduped. */
-  private async withCustoms(chainId: number, views: readonly CollectionView[]): Promise<CollectionView[]> {
+  private async withCustoms(
+    chainId: number,
+    views: readonly CollectionView[],
+  ): Promise<CollectionView[]> {
     const customs = await this.customViews(chainId)
-    return [...views.filter((v) => !customs.some((c) => c.address.toLowerCase() === v.address.toLowerCase())), ...customs]
+    return [
+      ...views.filter(
+        (v) => !customs.some((c) => c.address.toLowerCase() === v.address.toLowerCase()),
+      ),
+      ...customs,
+    ]
   }
 
-  async cachedCollections(chainId: number, accountId?: string, window: CollectionWindow = 'DAY'): Promise<Cached<CollectionView[]> | null> {
+  async cachedCollections(
+    chainId: number,
+    accountId?: string,
+    window: CollectionWindow = 'DAY',
+  ): Promise<Cached<CollectionView[]> | null> {
     const hit = await this.deps.cache.read(COLLECTIONS_SPEC(chainId, accountId, window))
     if (hit === null) return null
     // Customs are merged at serve time, not stored in the document, so the
@@ -215,12 +343,49 @@ export class ExploreService {
   /** The user's own collections as views (plan A3): what the chain told us, no market fields. */
   private async customViews(chainId: number): Promise<CollectionView[]> {
     const rows = this.deps.custom ? await this.deps.custom.list(chainId).catch(() => []) : []
-    return rows.map((c) => ({ chainId, address: c.address, name: c.name, description: null, verified: false, standard: c.standard, totalSupply: null, imageUrl: null, bannerUrl: null, creatorFee: null, floorEtn: null, volume24hEtn: null, totalVolumeEtn: null, owners: null, listed: null, percentListed: null, volumeEtn: null, volumeChangePct: null, floorChangePct: null, sales: null, traits: [], paysDividends: false, starred: false, owned: 0, custom: true }))
+    return rows.map((c) => ({
+      chainId,
+      address: c.address,
+      name: c.name,
+      description: null,
+      verified: false,
+      standard: c.standard,
+      totalSupply: null,
+      imageUrl: null,
+      bannerUrl: null,
+      creatorFee: null,
+      floorEtn: null,
+      volume24hEtn: null,
+      totalVolumeEtn: null,
+      owners: null,
+      listed: null,
+      percentListed: null,
+      volumeEtn: null,
+      volumeChangePct: null,
+      floorChangePct: null,
+      sales: null,
+      traits: [],
+      paysDividends: false,
+      starred: false,
+      owned: 0,
+      custom: true,
+    }))
   }
 
-  toViews(chainId: number, rows: readonly EsCollection[], owned: ReadonlyMap<string, number>): CollectionView[] {
-    const legends = isEtn(chainId) ? ELECTRONEUM_ADDRESSES[chainId].electricLegends.toLowerCase() : ''
-    const starred = new Set(this.deps.watchlist.cached().filter((w) => w.kind === 'collection').map((w) => `${w.chainId}:${w.address.toLowerCase()}`))
+  toViews(
+    chainId: number,
+    rows: readonly EsCollection[],
+    owned: ReadonlyMap<string, number>,
+  ): CollectionView[] {
+    const legends = isEtn(chainId)
+      ? ELECTRONEUM_ADDRESSES[chainId].electricLegends.toLowerCase()
+      : ''
+    const starred = new Set(
+      this.deps.watchlist
+        .cached()
+        .filter((w) => w.kind === 'collection')
+        .map((w) => `${w.chainId}:${w.address.toLowerCase()}`),
+    )
     const out = rows.map((r): CollectionView => ({
       chainId,
       address: r.address,
@@ -251,14 +416,22 @@ export class ExploreService {
     // Ranking by `volume24hEtn` ordered every window by yesterday, so a list of
     // weekly or lifetime volumes came back in the order of a single day's trade.
     const ranked = (c: CollectionView): number => c.volumeEtn ?? c.volume24hEtn ?? 0
-    out.sort((a, b) => (a.paysDividends === b.paysDividends ? ranked(b) - ranked(a) : a.paysDividends ? -1 : 1))
+    out.sort((a, b) =>
+      a.paysDividends === b.paysDividends ? ranked(b) - ranked(a) : a.paysDividends ? -1 : 1,
+    )
     return out
   }
 
-  async collection(chainId: number, address: string, accountId?: string): Promise<CollectionView | null> {
+  async collection(
+    chainId: number,
+    address: string,
+    accountId?: string,
+  ): Promise<CollectionView | null> {
     const d = this.deps
     if (!d.electroswap || !isEtn(chainId)) return null
-    const cached = this.collectionRows.get(chainId)?.find((r) => r.address.toLowerCase() === address.toLowerCase())
+    const cached = this.collectionRows
+      .get(chainId)
+      ?.find((r) => r.address.toLowerCase() === address.toLowerCase())
     let row = cached ?? null
     if (!row) {
       try {
@@ -267,16 +440,21 @@ export class ExploreService {
         row = null
       }
     }
-    const account = accountId ? ((await d.vault.accounts()).find((a) => a.id === accountId) ?? null) : null
+    const account = accountId
+      ? ((await d.vault.accounts()).find((a) => a.id === accountId) ?? null)
+      : null
     if (!row) {
       // Not on the indexer: a custom collection still gets a page (plan A3).
-      const custom = (await this.customViews(chainId)).find((c) => c.address.toLowerCase() === address.toLowerCase())
+      const custom = (await this.customViews(chainId)).find(
+        (c) => c.address.toLowerCase() === address.toLowerCase(),
+      )
       return custom ?? null
     }
     const owned = new Map<string, number>()
     if (account) {
       try {
-        for (const c of await fetchCollectionBalances(d.electroswap, chainId, account.address)) owned.set(c.address.toLowerCase(), c.balance)
+        for (const c of await fetchCollectionBalances(d.electroswap, chainId, account.address))
+          owned.set(c.address.toLowerCase(), c.balance)
       } catch {
         // 0
       }
@@ -284,19 +462,33 @@ export class ExploreService {
     const view = this.toViews(chainId, [row], owned)[0] ?? null
     if (!view) return null
     // The mint capability is read on the page only (plan C1, owner item N5).
-    const mint = this.deps.legends ? await this.deps.legends.mintInfo(chainId, address, account?.address ?? null).catch(() => null) : null
+    const mint = this.deps.legends
+      ? await this.deps.legends
+          .mintInfo(chainId, address, account?.address ?? null)
+          .catch(() => null)
+      : null
     return { ...view, mint }
   }
 
   /** One search field across tokens, collections and campaigns (§8.11). */
-  async search(chainId: number, query: string): Promise<{ tokens: ExploreToken[]; collections: CollectionView[] }> {
+  async search(
+    chainId: number,
+    query: string,
+  ): Promise<{ tokens: ExploreToken[]; collections: CollectionView[] }> {
     const q = query.trim().toLowerCase()
     if (!q) return { tokens: [], collections: [] }
-    const tokens = (await this.tokens(chainId)).filter((t) => t.symbol.toLowerCase().includes(q) || t.name.toLowerCase().includes(q) || t.address.toLowerCase() === q)
+    const tokens = (await this.tokens(chainId)).filter(
+      (t) =>
+        t.symbol.toLowerCase().includes(q) ||
+        t.name.toLowerCase().includes(q) ||
+        t.address.toLowerCase() === q,
+    )
     let collections: CollectionView[] = []
     if (this.deps.electroswap && isEtn(chainId)) {
       try {
-        const rows = /^0x[0-9a-f]{40}$/.test(q) ? await fetchCollections(this.deps.electroswap, chainId, { addresses: [q] }) : await fetchCollections(this.deps.electroswap, chainId, { nameQuery: query.trim() }, 20)
+        const rows = /^0x[0-9a-f]{40}$/.test(q)
+          ? await fetchCollections(this.deps.electroswap, chainId, { addresses: [q] })
+          : await fetchCollections(this.deps.electroswap, chainId, { nameQuery: query.trim() }, 20)
         collections = this.toViews(chainId, rows, new Map())
       } catch {
         collections = []
@@ -311,17 +503,101 @@ const Chain = z.object({ chainId: z.number().int().positive() })
 export function exploreNamespace(explore: ExploreService): NamespaceSpec {
   return {
     available: { handler: async () => explore.available },
-    tokens: { input: Chain, handler: (arg) => explore.tokens((arg as { chainId: number }).chainId) },
-    cachedTokens: { input: Chain, handler: (arg) => explore.cachedTokens((arg as { chainId: number }).chainId) },
-    tokenDetail: { input: Chain.extend({ address: z.string() }), handler: (arg) => explore.tokenDetail((arg as { chainId: number }).chainId, (arg as { address: string }).address) },
-    cachedTokenDetail: { input: Chain.extend({ address: z.string() }), handler: (arg) => explore.cachedTokenDetail((arg as { chainId: number }).chainId, (arg as { address: string }).address) },
-    priceHistory: { input: Chain.extend({ address: z.string(), duration: ChartDurationSchema }), handler: (arg) => explore.priceHistory((arg as { chainId: number }).chainId, (arg as { address: string }).address, (arg as { duration: ChartDuration }).duration) },
-    cachedPriceHistory: { input: Chain.extend({ address: z.string(), duration: ChartDurationSchema }), handler: (arg) => explore.cachedPriceHistory((arg as { chainId: number }).chainId, (arg as { address: string }).address, (arg as { duration: ChartDuration }).duration) },
-    liquidity: { input: Chain.extend({ address: z.string() }), handler: (arg) => explore.liquidity((arg as { chainId: number }).chainId, (arg as { address: string }).address) },
-    cachedLiquidity: { input: Chain.extend({ address: z.string() }), handler: (arg) => explore.cachedLiquidity((arg as { chainId: number }).chainId, (arg as { address: string }).address) },
-    collections: { input: Chain.extend({ accountId: AccountIdSchema.optional(), window: CollectionWindowSchema.optional() }), handler: (arg) => explore.collections((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId, (arg as { window?: CollectionWindow }).window ?? 'DAY') },
-    cachedCollections: { input: Chain.extend({ accountId: AccountIdSchema.optional(), window: CollectionWindowSchema.optional() }), handler: (arg) => explore.cachedCollections((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId, (arg as { window?: CollectionWindow }).window ?? 'DAY') },
-    collection: { input: Chain.extend({ address: z.string(), accountId: AccountIdSchema.optional() }), handler: (arg) => explore.collection((arg as { chainId: number }).chainId, (arg as { address: string }).address, (arg as { accountId?: string }).accountId) },
-    search: { input: Chain.extend({ query: z.string().max(120) }), handler: (arg) => explore.search((arg as { chainId: number }).chainId, (arg as { query: string }).query) },
+    tokens: {
+      input: Chain,
+      handler: (arg) => explore.tokens((arg as { chainId: number }).chainId),
+    },
+    cachedTokens: {
+      input: Chain,
+      handler: (arg) => explore.cachedTokens((arg as { chainId: number }).chainId),
+    },
+    tokenDetail: {
+      input: Chain.extend({ address: z.string() }),
+      handler: (arg) =>
+        explore.tokenDetail(
+          (arg as { chainId: number }).chainId,
+          (arg as { address: string }).address,
+        ),
+    },
+    cachedTokenDetail: {
+      input: Chain.extend({ address: z.string() }),
+      handler: (arg) =>
+        explore.cachedTokenDetail(
+          (arg as { chainId: number }).chainId,
+          (arg as { address: string }).address,
+        ),
+    },
+    priceHistory: {
+      input: Chain.extend({ address: z.string(), duration: ChartDurationSchema }),
+      handler: (arg) =>
+        explore.priceHistory(
+          (arg as { chainId: number }).chainId,
+          (arg as { address: string }).address,
+          (arg as { duration: ChartDuration }).duration,
+        ),
+    },
+    cachedPriceHistory: {
+      input: Chain.extend({ address: z.string(), duration: ChartDurationSchema }),
+      handler: (arg) =>
+        explore.cachedPriceHistory(
+          (arg as { chainId: number }).chainId,
+          (arg as { address: string }).address,
+          (arg as { duration: ChartDuration }).duration,
+        ),
+    },
+    liquidity: {
+      input: Chain.extend({ address: z.string() }),
+      handler: (arg) =>
+        explore.liquidity(
+          (arg as { chainId: number }).chainId,
+          (arg as { address: string }).address,
+        ),
+    },
+    cachedLiquidity: {
+      input: Chain.extend({ address: z.string() }),
+      handler: (arg) =>
+        explore.cachedLiquidity(
+          (arg as { chainId: number }).chainId,
+          (arg as { address: string }).address,
+        ),
+    },
+    collections: {
+      input: Chain.extend({
+        accountId: AccountIdSchema.optional(),
+        window: CollectionWindowSchema.optional(),
+      }),
+      handler: (arg) =>
+        explore.collections(
+          (arg as { chainId: number }).chainId,
+          (arg as { accountId?: string }).accountId,
+          (arg as { window?: CollectionWindow }).window ?? 'DAY',
+        ),
+    },
+    cachedCollections: {
+      input: Chain.extend({
+        accountId: AccountIdSchema.optional(),
+        window: CollectionWindowSchema.optional(),
+      }),
+      handler: (arg) =>
+        explore.cachedCollections(
+          (arg as { chainId: number }).chainId,
+          (arg as { accountId?: string }).accountId,
+          (arg as { window?: CollectionWindow }).window ?? 'DAY',
+        ),
+    },
+    collection: {
+      input: Chain.extend({ address: z.string(), accountId: AccountIdSchema.optional() }),
+      handler: (arg) =>
+        explore.collection(
+          (arg as { chainId: number }).chainId,
+          (arg as { address: string }).address,
+          (arg as { accountId?: string }).accountId,
+        ),
+    },
+    search: {
+      input: Chain.extend({ query: z.string().max(120) }),
+      handler: (arg) =>
+        explore.search((arg as { chainId: number }).chainId, (arg as { query: string }).query),
+    },
   }
 }

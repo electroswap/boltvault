@@ -30,6 +30,7 @@ import {
 import {
   assess,
   clampNewContractDays,
+  decodeCalldata,
   emptyContext,
   estimateSimulation,
   isFirstPartyOrigin,
@@ -363,7 +364,10 @@ export class ProviderService {
   private readonly senders = new Map<string, PortInfo>()
   private unverified = new Set<string>()
   /** What an attestation service said about an origin, and over which transport. */
-  private readonly verdicts = new Map<string, { verify: 'valid' | 'invalid' | 'unknown'; kind: 'content' | 'webview' | 'walletconnect' }>()
+  private readonly verdicts = new Map<
+    string,
+    { verify: 'valid' | 'invalid' | 'unknown'; kind: 'content' | 'webview' | 'walletconnect' }
+  >()
   /** Explorer answers by `chainId:address`; failures are cached too, so a dead explorer is asked once. */
   private readonly contractFactsCache = new Map<string, { at: number; facts: ContractFactsAt }>()
   /**
@@ -432,7 +436,11 @@ export class ProviderService {
   serve(channel: MessageChannelLike, origin: string, info: PortInfo = {}): () => void {
     if (info.verified === false) this.unverified.add(origin)
     else this.unverified.delete(origin)
-    if (info.verify || info.kind) this.verdicts.set(origin, { verify: info.verify ?? (info.verified === false ? 'unknown' : 'valid'), kind: info.kind ?? 'content' })
+    if (info.verify || info.kind)
+      this.verdicts.set(origin, {
+        verify: info.verify ?? (info.verified === false ? 'unknown' : 'valid'),
+        kind: info.kind ?? 'content',
+      })
     const onEvent = (event: ProviderEvent): void => {
       try {
         channel.post({ kind: 'event', event: event.event, payload: event.payload })
@@ -872,7 +880,9 @@ export class ProviderService {
           requestedChainId: intent.chainId,
           // `reconnect` is what the sheet auto-approves after an unlock. A
           // pairing is never that, whatever the origin already holds.
-          reconnect: !this.alwaysPrompt(intent.origin) && d.sites.registry.get(intent.origin)?.connected === true,
+          reconnect:
+            !this.alwaysPrompt(intent.origin) &&
+            d.sites.registry.get(intent.origin)?.connected === true,
           firstTime: d.sites.registry.isFirstTime(intent.origin),
           clientRequestId: intent.clientRequestId,
         }
@@ -1103,6 +1113,41 @@ export class ProviderService {
     const balances: Record<string, bigint> = {}
     const probe: Hex[] = []
     if (request.kind === 'transaction' && request.tx.to) probe.push(request.tx.to)
+    /*
+      …and whatever the call is actually about, when the decoder names it
+      separately: a launchpad pool, a bridge router, a farm, a marketplace.
+      `newContract` reads `context.contracts` for the age and the verified
+      flag, so a target nobody probed is a target the rule cannot judge.
+    */
+    if (request.kind === 'transaction') {
+      const inner = decodeCalldata({
+        chainId,
+        to: request.tx.to,
+        data: request.tx.data,
+        value: request.tx.value,
+      })
+      const named =
+        inner && 'to' in inner
+          ? null
+          : inner?.kind === 'launchpad'
+            ? inner.pool
+            : inner?.kind === 'limit_order'
+              ? inner.manager
+              : inner?.kind === 'farm_deposit' || inner?.kind === 'farm_withdraw'
+                ? inner.farm
+                : inner?.kind === 'seaport_fulfill'
+                  ? inner.marketplace
+                  : inner?.kind === 'dividends'
+                    ? inner.distributor
+                    : inner?.kind === 'nft_mint'
+                      ? inner.minter
+                      : inner?.kind === 'bridge'
+                        ? inner.router
+                        : inner?.kind === 'universal_router'
+                          ? inner.router
+                          : null
+      if (named && !probe.some((a) => a.toLowerCase() === named.toLowerCase())) probe.push(named)
+    }
     if (request.kind === 'typed_data') {
       const parsed = parseTypedData(request.typedData)
       const dec = parsed?.decoded
@@ -1218,7 +1263,9 @@ export class ProviderService {
       originBudget: this.originBudget(origin, activity),
       lastCopiedAddress: this.lastCopiedAddress(),
       originVerified: !this.unverified.has(origin),
-      ...(this.verdicts.get(origin) ? { originVerify: this.verdicts.get(origin)?.verify ?? null } : {}),
+      ...(this.verdicts.get(origin)
+        ? { originVerify: this.verdicts.get(origin)?.verify ?? null }
+        : {}),
       scamOrigins: d.statics?.scamOrigins() ?? [],
     })
     return assess({ origin, chainId, account, request, context, simulation })

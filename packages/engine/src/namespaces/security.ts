@@ -154,14 +154,21 @@ export class SecurityService {
       // an assessment reads is sealed under the DEK. So "no such account" and
       // "locked" arrive here as the same silence; the status tells them apart.
       const status = await d.vault.status()
-      if (status.exists && !status.unlocked) throw new EngineError('locked', 'Unlock BoltVault to preview a request.')
+      if (status.exists && !status.unlocked)
+        throw new EngineError('locked', 'Unlock BoltVault to preview a request.')
       throw new EngineError('not_found', 'no such account')
     }
-    if (!d.chains.known(input.chainId)) throw new EngineError('invalid_argument', `unknown chain ${input.chainId}`)
+    if (!d.chains.known(input.chainId))
+      throw new EngineError('invalid_argument', `unknown chain ${input.chainId}`)
     const from = account.address as Hex
     const payload = await d.payloadFor(await this.intentFor(input, from))
-    if (!('assessment' in payload)) throw new EngineError('internal', 'that request has no assessment')
-    return PreAssessmentSchema.parse({ ...payload.assessment, origin: PREVIEW_ORIGIN, advisory: true })
+    if (!('assessment' in payload))
+      throw new EngineError('internal', 'that request has no assessment')
+    return PreAssessmentSchema.parse({
+      ...payload.assessment,
+      origin: PREVIEW_ORIGIN,
+      advisory: true,
+    })
   }
 
   /** Settings › Spending as the firewall reads it, plus the ladder it drives (§3.4 points 5 and 6). */
@@ -176,18 +183,34 @@ export class SecurityService {
       txPreview: s.txPreview,
       steps: SEVERITIES.map((severity) => {
         const p = presentationFor(severity, PREVIEW_ORIGIN)
-        return { severity, delayMs: p.delayMs, typedConfirmation: p.typedConfirmation !== null, blocked: p.blocked }
+        return {
+          severity,
+          delayMs: p.delayMs,
+          typedConfirmation: p.typedConfirmation !== null,
+          blocked: p.blocked,
+        }
       }),
     })
   }
 
   private async intentFor(input: AssessInput, from: Hex): Promise<ApprovalIntent> {
-    const common = { origin: PREVIEW_ORIGIN, chainId: input.chainId, accountId: input.accountId, clientRequestId: `preview:${input.chainId}` }
+    const common = {
+      origin: PREVIEW_ORIGIN,
+      chainId: input.chainId,
+      accountId: input.accountId,
+      clientRequestId: `preview:${input.chainId}`,
+    }
     switch (input.request.kind) {
       case 'message':
         return { ...common, kind: 'sign_message', from, message: input.request.message as Hex }
       case 'typed_data':
-        return { ...common, kind: 'sign_typed_data', from, typedData: input.request.typedData, version: 'v4' }
+        return {
+          ...common,
+          kind: 'sign_typed_data',
+          from,
+          typedData: input.request.typedData,
+          version: 'v4',
+        }
       case 'transaction':
         return {
           ...common,
@@ -217,7 +240,9 @@ export class SecurityService {
   }
 
   private async pendingNonce(chainId: number, from: Hex): Promise<number> {
-    const raw = await this.deps.chains.rpc(chainId, 'eth_getTransactionCount', [from, 'pending']).catch(() => null)
+    const raw = await this.deps.chains
+      .rpc(chainId, 'eth_getTransactionCount', [from, 'pending'])
+      .catch(() => null)
     const n = typeof raw === 'string' ? Number.parseInt(raw, 16) : Number.NaN
     return Number.isInteger(n) && n >= 0 ? n : UNKNOWN_NONCE
   }
@@ -226,7 +251,10 @@ export class SecurityService {
 /** Wire amounts are decimal or hex strings; the intent wants a hex quantity. */
 function toHexQuantity(value: string): Hex {
   const trimmed = value.trim()
-  const n = trimmed.startsWith('0x') || trimmed.startsWith('0X') ? BigInt(trimmed) : BigInt(trimmed === '' ? '0' : trimmed)
+  const n =
+    trimmed.startsWith('0x') || trimmed.startsWith('0X')
+      ? BigInt(trimmed)
+      : BigInt(trimmed === '' ? '0' : trimmed)
   return `0x${n.toString(16)}`
 }
 
@@ -246,7 +274,11 @@ export function securityNamespace(security: SecurityService): NamespaceSpec {
   */
   const allow = ['ui', 'internal'] as const
   return {
-    assess: { input: AssessInputSchema, allow, handler: (arg) => security.assess(arg as AssessInput) },
+    assess: {
+      input: AssessInputSchema,
+      allow,
+      handler: (arg) => security.assess(arg as AssessInput),
+    },
     policy: { allow, handler: () => security.policy() },
   }
 }

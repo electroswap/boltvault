@@ -4,7 +4,12 @@
  * is fetched at most every 6 h and kept last-good; custom tokens are
  * verified against the chain (code + name/symbol/decimals) before they join.
  */
-import { ALL_CHAINS, ELECTRONEUM_ADDRESSES, HOME_CHAIN_ID, isElectroneumChainId } from '@boltvault/chains'
+import {
+  ALL_CHAINS,
+  ELECTRONEUM_ADDRESSES,
+  HOME_CHAIN_ID,
+  isElectroneumChainId,
+} from '@boltvault/chains'
 import type { Platform } from '@boltvault/platform'
 import { fetchTokenList, type CustomToken, type TokenEntry } from '@boltvault/token-catalog'
 import { getAddress, isAddress, parseAbi, type Hex } from 'viem'
@@ -50,7 +55,11 @@ const CUSTOM_ID = 'custom'
 const PREFS_ID = 'prefs'
 
 const LIST_TTL_MS = 6 * 60 * 60 * 1000
-const ERC20_META = parseAbi(['function name() view returns (string)', 'function symbol() view returns (string)', 'function decimals() view returns (uint8)'])
+const ERC20_META = parseAbi([
+  'function name() view returns (string)',
+  'function symbol() view returns (string)',
+  'function decimals() view returns (uint8)',
+])
 
 const key = (chainId: number, address: string): string => `${chainId}:${address.toLowerCase()}`
 
@@ -62,7 +71,8 @@ export interface TokenMetadata {
   readonly hasCode: boolean
 }
 
-const isEtnChain = (chainId: number): chainId is 52014 | 5201420 => chainId === 52014 || chainId === 5201420
+const isEtnChain = (chainId: number): chainId is 52014 | 5201420 =>
+  chainId === 52014 || chainId === 5201420
 
 /*
   A token's name and symbol are whatever its contract chose to return. They
@@ -95,12 +105,18 @@ export class TokensService {
     const cached = this.lists.get(chainId)
     if (cached) return cached
     const p = (async () => {
-      const { value } = await readDoc(this.platform.storage.local, listDoc(chainId), () => this.platform.now())
-      if (value.tokens.length > 0 && this.platform.now() - value.at < LIST_TTL_MS) return value.tokens
+      const { value } = await readDoc(this.platform.storage.local, listDoc(chainId), () =>
+        this.platform.now(),
+      )
+      if (value.tokens.length > 0 && this.platform.now() - value.at < LIST_TTL_MS)
+        return value.tokens
       try {
         const fetched = await fetchTokenList(chainId, { fetchImpl: this.fetchImpl })
         if (fetched.tokens.length > 0) {
-          await writeDoc(this.platform.storage.local, listDoc(chainId), { tokens: fetched.tokens, at: this.platform.now() })
+          await writeDoc(this.platform.storage.local, listDoc(chainId), {
+            tokens: fetched.tokens,
+            at: this.platform.now(),
+          })
           return fetched.tokens
         }
       } catch {
@@ -133,31 +149,72 @@ export class TokensService {
     // is why ETN showed a placeholder and never a logo. Ask for .svg; the UI
     // tries the sibling extension if it misses, and the 15 listed tokens plus
     // native are bundled anyway so they never reach the network.
-    if (address === 'native') return isEtnChain(chainId) ? `https://static.electroswap.io/tokens/images/${getAddress(ELECTRONEUM_ADDRESSES[chainId].wetn)}.svg` : null
-    if (isElectroneumChainId(chainId) && isAddress(address)) return `https://static.electroswap.io/tokens/images/${getAddress(address)}.svg`
+    if (address === 'native')
+      return isEtnChain(chainId)
+        ? `https://static.electroswap.io/tokens/images/${getAddress(ELECTRONEUM_ADDRESSES[chainId].wetn)}.svg`
+        : null
+    if (isElectroneumChainId(chainId) && isAddress(address))
+      return `https://static.electroswap.io/tokens/images/${getAddress(address)}.svg`
     return null
   }
 
   async universe(chainId: number): Promise<TokenView[]> {
     const def = ALL_CHAINS.find((c) => c.chainId === chainId)
     if (!def) throw new EngineError('invalid_argument', `unknown chain ${chainId}`)
-    const [list, custom, prefs] = await Promise.all([this.list(chainId), this.custom(), this.prefs()])
+    const [list, custom, prefs] = await Promise.all([
+      this.list(chainId),
+      this.custom(),
+      this.prefs(),
+    ])
     const pinned = new Set(prefs.pinned)
     const hidden = new Set(prefs.hidden)
     const out: TokenView[] = [
-      { chainId, address: 'native', symbol: def.nativeCurrency.symbol, name: def.nativeCurrency.name, decimals: def.nativeCurrency.decimals, logoUri: this.logoFor(chainId, 'native'), source: 'native', pinned: true, hidden: false, tags: [] },
+      {
+        chainId,
+        address: 'native',
+        symbol: def.nativeCurrency.symbol,
+        name: def.nativeCurrency.name,
+        decimals: def.nativeCurrency.decimals,
+        logoUri: this.logoFor(chainId, 'native'),
+        source: 'native',
+        pinned: true,
+        hidden: false,
+        tags: [],
+      },
     ]
     const seen = new Set<string>()
     for (const c of custom.filter((x) => x.chainId === chainId)) {
       const k = key(chainId, c.address)
       seen.add(k)
-      out.push({ chainId, address: getAddress(c.address), symbol: c.symbol, name: c.name, decimals: c.decimals, logoUri: this.logoFor(chainId, c.address, c.logoURI), source: c.source, pinned: pinned.has(k), hidden: hidden.has(k), tags: [] })
+      out.push({
+        chainId,
+        address: getAddress(c.address),
+        symbol: c.symbol,
+        name: c.name,
+        decimals: c.decimals,
+        logoUri: this.logoFor(chainId, c.address, c.logoURI),
+        source: c.source,
+        pinned: pinned.has(k),
+        hidden: hidden.has(k),
+        tags: [],
+      })
     }
     for (const t of list) {
       const k = key(chainId, t.address)
       if (seen.has(k)) continue
       seen.add(k)
-      out.push({ chainId, address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals, logoUri: this.logoFor(chainId, t.address, t.logoURI), source: 'list', pinned: pinned.has(k), hidden: hidden.has(k), tags: [...(t.tags ?? [])] })
+      out.push({
+        chainId,
+        address: t.address,
+        symbol: t.symbol,
+        name: t.name,
+        decimals: t.decimals,
+        logoUri: this.logoFor(chainId, t.address, t.logoURI),
+        source: 'list',
+        pinned: pinned.has(k),
+        hidden: hidden.has(k),
+        tags: [...(t.tags ?? [])],
+      })
     }
     return out
   }
@@ -172,10 +229,29 @@ export class TokensService {
     const q = query.trim().toLowerCase()
     const all = await this.universe(chainId)
     if (!q) return all.filter((t) => !t.hidden)
-    const hits = all.filter((t) => t.symbol.toLowerCase().includes(q) || t.name.toLowerCase().includes(q) || t.address.toLowerCase() === q)
+    const hits = all.filter(
+      (t) =>
+        t.symbol.toLowerCase().includes(q) ||
+        t.name.toLowerCase().includes(q) ||
+        t.address.toLowerCase() === q,
+    )
     if (hits.length === 0 && isAddress(query)) {
       const meta = await this.metadata(chainId, query).catch(() => null)
-      if (meta?.hasCode) return [{ chainId, address: meta.address, symbol: meta.symbol, name: meta.name, decimals: meta.decimals, logoUri: this.logoFor(chainId, meta.address), source: 'lookup', pinned: false, hidden: false, tags: [] }]
+      if (meta?.hasCode)
+        return [
+          {
+            chainId,
+            address: meta.address,
+            symbol: meta.symbol,
+            name: meta.name,
+            decimals: meta.decimals,
+            logoUri: this.logoFor(chainId, meta.address),
+            source: 'lookup',
+            pinned: false,
+            hidden: false,
+            tags: [],
+          },
+        ]
     }
     return hits
   }
@@ -184,32 +260,53 @@ export class TokensService {
   async metadata(chainId: number, address: string): Promise<TokenMetadata> {
     if (!isAddress(address)) throw new EngineError('invalid_argument', 'not an address')
     const checksummed = getAddress(address)
-    const code = (await this.chains.rpc(chainId, 'eth_getCode', [checksummed, 'latest']).catch(() => '0x')) as string
+    const code = (await this.chains
+      .rpc(chainId, 'eth_getCode', [checksummed, 'latest'])
+      .catch(() => '0x')) as string
     const hasCode = typeof code === 'string' && code.length > 2
-    if (!hasCode) return { address: checksummed, name: '', symbol: '', decimals: 18, hasCode: false }
+    if (!hasCode)
+      return { address: checksummed, name: '', symbol: '', decimals: 18, hasCode: false }
     const [name, symbol, decimals] = await readMany(this.chains, chainId, [
       { address: checksummed, abi: ERC20_META, functionName: 'name' },
       { address: checksummed, abi: ERC20_META, functionName: 'symbol' },
       { address: checksummed, abi: ERC20_META, functionName: 'decimals' },
     ])
-    if (!decimals?.ok) throw new EngineError('invalid_argument', 'this contract does not look like a token')
+    if (!decimals?.ok)
+      throw new EngineError('invalid_argument', 'this contract does not look like a token')
     return {
       address: checksummed,
-      name: (name?.ok && typeof name.value === 'string' ? label(name.value, 48) : '') || checksummed.slice(0, 10),
-      symbol: (symbol?.ok && typeof symbol.value === 'string' ? label(symbol.value, 12) : '') || '???',
+      name:
+        (name?.ok && typeof name.value === 'string' ? label(name.value, 48) : '') ||
+        checksummed.slice(0, 10),
+      symbol:
+        (symbol?.ok && typeof symbol.value === 'string' ? label(symbol.value, 12) : '') || '???',
       decimals: Number(decimals.value),
       hasCode: true,
     }
   }
 
   /** Add a custom token after verifying it on chain; a dApp's claim that disagrees with the chain loses. */
-  async addCustom(input: { chainId: number; address: string; source: 'user' | 'dapp'; origin?: string; claimed?: { symbol?: string; decimals?: number } }): Promise<TokenView> {
+  async addCustom(input: {
+    chainId: number
+    address: string
+    source: 'user' | 'dapp'
+    origin?: string
+    claimed?: { symbol?: string; decimals?: number }
+  }): Promise<TokenView> {
     const meta = await this.metadata(input.chainId, input.address)
     if (!meta.hasCode) throw new EngineError('invalid_argument', 'that address is not a contract')
     const custom = await this.custom()
     const k = key(input.chainId, meta.address)
     const next = custom.filter((c) => key(c.chainId, c.address) !== k)
-    next.push({ chainId: input.chainId, address: meta.address, name: meta.name, symbol: meta.symbol, decimals: meta.decimals, source: input.source, ...(input.origin ? { origin: input.origin } : {}) })
+    next.push({
+      chainId: input.chainId,
+      address: meta.address,
+      name: meta.name,
+      symbol: meta.symbol,
+      decimals: meta.decimals,
+      source: input.source,
+      ...(input.origin ? { origin: input.origin } : {}),
+    })
     await this.customTokens.set(CUSTOM_ID, next)
     this.lists.delete(input.chainId)
     this.bus.emit({ type: 'tokens.changed', chainId: input.chainId })
@@ -232,13 +329,26 @@ export class TokensService {
    * identity, so sync records the arrival as unconfirmed and keeps it out of
    * the firewall's "known token" map until the user confirms it here.
    */
-  async addSynced(input: { chainId: number; address: string; name: string; symbol: string; decimals: number }): Promise<void> {
+  async addSynced(input: {
+    chainId: number
+    address: string
+    name: string
+    symbol: string
+    decimals: number
+  }): Promise<void> {
     if (!isAddress(input.address)) throw new EngineError('invalid_argument', 'not an address')
     const address = getAddress(input.address)
     const custom = await this.custom()
     const k = key(input.chainId, address)
     const next = custom.filter((c) => key(c.chainId, c.address) !== k)
-    next.push({ chainId: input.chainId, address, name: label(input.name, 48) || address.slice(0, 10), symbol: label(input.symbol, 12) || '???', decimals: input.decimals, source: 'user' })
+    next.push({
+      chainId: input.chainId,
+      address,
+      name: label(input.name, 48) || address.slice(0, 10),
+      symbol: label(input.symbol, 12) || '???',
+      decimals: input.decimals,
+      source: 'user',
+    })
     await this.customTokens.set(CUSTOM_ID, next)
     this.lists.delete(input.chainId)
     this.bus.emit({ type: 'tokens.changed', chainId: input.chainId })
@@ -247,15 +357,26 @@ export class TokensService {
   async removeCustom(chainId: number, address: string): Promise<void> {
     const custom = await this.custom()
     const k = key(chainId, address)
-    await this.customTokens.set(CUSTOM_ID, custom.filter((c) => key(c.chainId, c.address) !== k))
+    await this.customTokens.set(
+      CUSTOM_ID,
+      custom.filter((c) => key(c.chainId, c.address) !== k),
+    )
     this.bus.emit({ type: 'tokens.changed', chainId })
   }
 
-  async setPrefs(chainId: number, address: string, patch: { pinned?: boolean; hidden?: boolean }): Promise<void> {
+  async setPrefs(
+    chainId: number,
+    address: string,
+    patch: { pinned?: boolean; hidden?: boolean },
+  ): Promise<void> {
     const prefs = await this.prefs()
     const k = key(chainId, address)
-    const toggle = (list: string[], on: boolean | undefined): string[] => (on === undefined ? list : on ? [...new Set([...list, k])] : list.filter((x) => x !== k))
-    await this.tokenPrefs.set(PREFS_ID, { pinned: toggle(prefs.pinned, patch.pinned), hidden: toggle(prefs.hidden, patch.hidden) })
+    const toggle = (list: string[], on: boolean | undefined): string[] =>
+      on === undefined ? list : on ? [...new Set([...list, k])] : list.filter((x) => x !== k)
+    await this.tokenPrefs.set(PREFS_ID, {
+      pinned: toggle(prefs.pinned, patch.pinned),
+      hidden: toggle(prefs.hidden, patch.hidden),
+    })
     this.bus.emit({ type: 'tokens.changed', chainId })
   }
 }
@@ -264,20 +385,66 @@ const ChainIdSchema = z.number().int().positive().default(HOME_CHAIN_ID)
 
 export function tokensNamespace(tokens: TokensService): NamespaceSpec {
   return {
-    universe: { input: z.object({ chainId: ChainIdSchema }), handler: (arg) => tokens.universe((arg as { chainId: number }).chainId) },
-    get: { input: z.object({ chainId: ChainIdSchema, address: z.string() }), handler: (arg) => tokens.get((arg as { chainId: number; address: string }).chainId, (arg as { address: string }).address) },
-    search: { input: z.object({ chainId: ChainIdSchema, query: z.string().max(200) }), handler: (arg) => tokens.search((arg as { chainId: number }).chainId, (arg as { query: string }).query) },
-    metadata: { input: z.object({ chainId: ChainIdSchema, address: z.string() }), handler: (arg) => tokens.metadata((arg as { chainId: number }).chainId, (arg as { address: string }).address) },
-    addCustom: {
-      input: z.object({ chainId: ChainIdSchema, address: z.string(), source: z.enum(['user', 'dapp']).default('user'), origin: z.string().optional() }),
-      handler: (arg) => tokens.addCustom(arg as { chainId: number; address: string; source: 'user' | 'dapp'; origin?: string }),
+    universe: {
+      input: z.object({ chainId: ChainIdSchema }),
+      handler: (arg) => tokens.universe((arg as { chainId: number }).chainId),
     },
-    removeCustom: { input: z.object({ chainId: ChainIdSchema, address: z.string() }), handler: (arg) => tokens.removeCustom((arg as { chainId: number }).chainId, (arg as { address: string }).address) },
+    get: {
+      input: z.object({ chainId: ChainIdSchema, address: z.string() }),
+      handler: (arg) =>
+        tokens.get(
+          (arg as { chainId: number; address: string }).chainId,
+          (arg as { address: string }).address,
+        ),
+    },
+    search: {
+      input: z.object({ chainId: ChainIdSchema, query: z.string().max(200) }),
+      handler: (arg) =>
+        tokens.search((arg as { chainId: number }).chainId, (arg as { query: string }).query),
+    },
+    metadata: {
+      input: z.object({ chainId: ChainIdSchema, address: z.string() }),
+      handler: (arg) =>
+        tokens.metadata((arg as { chainId: number }).chainId, (arg as { address: string }).address),
+    },
+    addCustom: {
+      input: z.object({
+        chainId: ChainIdSchema,
+        address: z.string(),
+        source: z.enum(['user', 'dapp']).default('user'),
+        origin: z.string().optional(),
+      }),
+      handler: (arg) =>
+        tokens.addCustom(
+          arg as { chainId: number; address: string; source: 'user' | 'dapp'; origin?: string },
+        ),
+    },
+    removeCustom: {
+      input: z.object({ chainId: ChainIdSchema, address: z.string() }),
+      handler: (arg) =>
+        tokens.removeCustom(
+          (arg as { chainId: number }).chainId,
+          (arg as { address: string }).address,
+        ),
+    },
     setPrefs: {
-      input: z.object({ chainId: ChainIdSchema, address: z.string(), pinned: z.boolean().optional(), hidden: z.boolean().optional() }),
+      input: z.object({
+        chainId: ChainIdSchema,
+        address: z.string(),
+        pinned: z.boolean().optional(),
+        hidden: z.boolean().optional(),
+      }),
       handler: (arg) => {
-        const { chainId, address, pinned, hidden } = arg as { chainId: number; address: string; pinned?: boolean; hidden?: boolean }
-        return tokens.setPrefs(chainId, address, { ...(pinned !== undefined ? { pinned } : {}), ...(hidden !== undefined ? { hidden } : {}) })
+        const { chainId, address, pinned, hidden } = arg as {
+          chainId: number
+          address: string
+          pinned?: boolean
+          hidden?: boolean
+        }
+        return tokens.setPrefs(chainId, address, {
+          ...(pinned !== undefined ? { pinned } : {}),
+          ...(hidden !== undefined ? { hidden } : {}),
+        })
       },
     },
   }

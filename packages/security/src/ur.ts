@@ -26,7 +26,9 @@ export const UR_COMMAND = {
   SEAPORT_V1_5: 0x10,
 } as const
 
-const NAMES: Record<number, string> = Object.fromEntries(Object.entries(UR_COMMAND).map(([k, v]) => [v, k]))
+const NAMES: Record<number, string> = Object.fromEntries(
+  Object.entries(UR_COMMAND).map(([k, v]) => [v, k]),
+)
 
 /** The `msg.sender` sentinel the router uses for recipients. */
 export const UR_MSG_SENDER = '0x0000000000000000000000000000000000000001'
@@ -34,14 +36,59 @@ export const UR_MSG_SENDER = '0x0000000000000000000000000000000000000001'
 export const UR_ROUTER_SELF = '0x0000000000000000000000000000000000000002'
 
 export type UrCommand =
-  | { readonly type: 'V3_SWAP_EXACT_IN' | 'V3_SWAP_EXACT_OUT'; readonly recipient: Hex; readonly amountIn: bigint; readonly amountOut: bigint; readonly path: Hex; readonly payerIsUser: boolean }
-  | { readonly type: 'V2_SWAP_EXACT_IN' | 'V2_SWAP_EXACT_OUT'; readonly recipient: Hex; readonly amountIn: bigint; readonly amountOut: bigint; readonly path: readonly Hex[]; readonly payerIsUser: boolean }
-  | { readonly type: 'PERMIT2_PERMIT'; readonly token: Hex; readonly amount: bigint; readonly expiration: number; readonly nonce: number; readonly spender: Hex; readonly sigDeadline: bigint; readonly signature: Hex }
-  | { readonly type: 'PERMIT2_PERMIT_BATCH'; readonly details: ReadonlyArray<{ token: Hex; amount: bigint; expiration: number }>; readonly spender: Hex }
-  | { readonly type: 'PERMIT2_TRANSFER_FROM'; readonly token: Hex; readonly recipient: Hex; readonly amount: bigint }
-  | { readonly type: 'PERMIT2_TRANSFER_FROM_BATCH'; readonly transfers: ReadonlyArray<{ from: Hex; to: Hex; amount: bigint; token: Hex }> }
-  | { readonly type: 'SWEEP' | 'TRANSFER' | 'BALANCE_CHECK_ERC20'; readonly token: Hex; readonly recipient: Hex; readonly amount: bigint }
-  | { readonly type: 'PAY_PORTION'; readonly token: Hex; readonly recipient: Hex; readonly bips: bigint }
+  | {
+      readonly type: 'V3_SWAP_EXACT_IN' | 'V3_SWAP_EXACT_OUT'
+      readonly recipient: Hex
+      readonly amountIn: bigint
+      readonly amountOut: bigint
+      readonly path: Hex
+      readonly payerIsUser: boolean
+    }
+  | {
+      readonly type: 'V2_SWAP_EXACT_IN' | 'V2_SWAP_EXACT_OUT'
+      readonly recipient: Hex
+      readonly amountIn: bigint
+      readonly amountOut: bigint
+      readonly path: readonly Hex[]
+      readonly payerIsUser: boolean
+    }
+  | {
+      readonly type: 'PERMIT2_PERMIT'
+      readonly token: Hex
+      readonly amount: bigint
+      readonly expiration: number
+      readonly nonce: number
+      readonly spender: Hex
+      readonly sigDeadline: bigint
+      readonly signature: Hex
+    }
+  | {
+      readonly type: 'PERMIT2_PERMIT_BATCH'
+      readonly details: ReadonlyArray<{ token: Hex; amount: bigint; expiration: number }>
+      readonly spender: Hex
+    }
+  | {
+      readonly type: 'PERMIT2_TRANSFER_FROM'
+      readonly token: Hex
+      readonly recipient: Hex
+      readonly amount: bigint
+    }
+  | {
+      readonly type: 'PERMIT2_TRANSFER_FROM_BATCH'
+      readonly transfers: ReadonlyArray<{ from: Hex; to: Hex; amount: bigint; token: Hex }>
+    }
+  | {
+      readonly type: 'SWEEP' | 'TRANSFER' | 'BALANCE_CHECK_ERC20'
+      readonly token: Hex
+      readonly recipient: Hex
+      readonly amount: bigint
+    }
+  | {
+      readonly type: 'PAY_PORTION'
+      readonly token: Hex
+      readonly recipient: Hex
+      readonly bips: bigint
+    }
   | { readonly type: 'WRAP_ETH' | 'UNWRAP_WETH'; readonly recipient: Hex; readonly amount: bigint }
   | { readonly type: 'SEAPORT_V1_5'; readonly value: bigint; readonly data: Hex }
   | { readonly type: 'UNKNOWN'; readonly byte: number; readonly input: Hex }
@@ -53,14 +100,24 @@ export interface DecodedUniversalRouter {
   readonly allowRevert: readonly number[]
 }
 
-const PERMIT_SINGLE = parseAbiParameters('((address token, uint160 amount, uint48 expiration, uint48 nonce) details, address spender, uint256 sigDeadline) permit, bytes sig')
-const PERMIT_BATCH = parseAbiParameters('((address token, uint160 amount, uint48 expiration, uint48 nonce)[] details, address spender, uint256 sigDeadline) permit, bytes sig')
-const V3_SWAP = parseAbiParameters('address recipient, uint256 amountIn, uint256 amountOut, bytes path, bool payerIsUser')
-const V2_SWAP = parseAbiParameters('address recipient, uint256 amountIn, uint256 amountOut, address[] path, bool payerIsUser')
+const PERMIT_SINGLE = parseAbiParameters(
+  '((address token, uint160 amount, uint48 expiration, uint48 nonce) details, address spender, uint256 sigDeadline) permit, bytes sig',
+)
+const PERMIT_BATCH = parseAbiParameters(
+  '((address token, uint160 amount, uint48 expiration, uint48 nonce)[] details, address spender, uint256 sigDeadline) permit, bytes sig',
+)
+const V3_SWAP = parseAbiParameters(
+  'address recipient, uint256 amountIn, uint256 amountOut, bytes path, bool payerIsUser',
+)
+const V2_SWAP = parseAbiParameters(
+  'address recipient, uint256 amountIn, uint256 amountOut, address[] path, bool payerIsUser',
+)
 const ADDR_ADDR_UINT = parseAbiParameters('address a, address b, uint256 c')
 const ADDR_UINT = parseAbiParameters('address a, uint256 b')
 const P2_TRANSFER = parseAbiParameters('address token, address recipient, uint160 amount')
-const P2_TRANSFER_BATCH = parseAbiParameters('(address from, address to, uint160 amount, address token)[] transfers')
+const P2_TRANSFER_BATCH = parseAbiParameters(
+  '(address from, address to, uint160 amount, address token)[] transfers',
+)
 const SEAPORT = parseAbiParameters('uint256 value, bytes data')
 
 export function decodeUrCommand(byte: number, input: Hex): UrCommand {
@@ -69,21 +126,58 @@ export function decodeUrCommand(byte: number, input: Hex): UrCommand {
     switch (type) {
       case UR_COMMAND.V3_SWAP_EXACT_IN:
       case UR_COMMAND.V3_SWAP_EXACT_OUT: {
-        const [recipient, amountIn, amountOut, path, payerIsUser] = decodeAbiParameters(V3_SWAP, input)
-        return { type: type === UR_COMMAND.V3_SWAP_EXACT_IN ? 'V3_SWAP_EXACT_IN' : 'V3_SWAP_EXACT_OUT', recipient, amountIn, amountOut, path, payerIsUser }
+        const [recipient, amountIn, amountOut, path, payerIsUser] = decodeAbiParameters(
+          V3_SWAP,
+          input,
+        )
+        return {
+          type: type === UR_COMMAND.V3_SWAP_EXACT_IN ? 'V3_SWAP_EXACT_IN' : 'V3_SWAP_EXACT_OUT',
+          recipient,
+          amountIn,
+          amountOut,
+          path,
+          payerIsUser,
+        }
       }
       case UR_COMMAND.V2_SWAP_EXACT_IN:
       case UR_COMMAND.V2_SWAP_EXACT_OUT: {
-        const [recipient, amountIn, amountOut, path, payerIsUser] = decodeAbiParameters(V2_SWAP, input)
-        return { type: type === UR_COMMAND.V2_SWAP_EXACT_IN ? 'V2_SWAP_EXACT_IN' : 'V2_SWAP_EXACT_OUT', recipient, amountIn, amountOut, path, payerIsUser }
+        const [recipient, amountIn, amountOut, path, payerIsUser] = decodeAbiParameters(
+          V2_SWAP,
+          input,
+        )
+        return {
+          type: type === UR_COMMAND.V2_SWAP_EXACT_IN ? 'V2_SWAP_EXACT_IN' : 'V2_SWAP_EXACT_OUT',
+          recipient,
+          amountIn,
+          amountOut,
+          path,
+          payerIsUser,
+        }
       }
       case UR_COMMAND.PERMIT2_PERMIT: {
         const [permit, signature] = decodeAbiParameters(PERMIT_SINGLE, input)
-        return { type: 'PERMIT2_PERMIT', token: permit.details.token, amount: permit.details.amount, expiration: permit.details.expiration, nonce: permit.details.nonce, spender: permit.spender, sigDeadline: permit.sigDeadline, signature }
+        return {
+          type: 'PERMIT2_PERMIT',
+          token: permit.details.token,
+          amount: permit.details.amount,
+          expiration: permit.details.expiration,
+          nonce: permit.details.nonce,
+          spender: permit.spender,
+          sigDeadline: permit.sigDeadline,
+          signature,
+        }
       }
       case UR_COMMAND.PERMIT2_PERMIT_BATCH: {
         const [permit] = decodeAbiParameters(PERMIT_BATCH, input)
-        return { type: 'PERMIT2_PERMIT_BATCH', details: permit.details.map((d) => ({ token: d.token, amount: d.amount, expiration: d.expiration })), spender: permit.spender }
+        return {
+          type: 'PERMIT2_PERMIT_BATCH',
+          details: permit.details.map((d) => ({
+            token: d.token,
+            amount: d.amount,
+            expiration: d.expiration,
+          })),
+          spender: permit.spender,
+        }
       }
       case UR_COMMAND.PERMIT2_TRANSFER_FROM: {
         const [token, recipient, amount] = decodeAbiParameters(P2_TRANSFER, input)
@@ -91,13 +185,31 @@ export function decodeUrCommand(byte: number, input: Hex): UrCommand {
       }
       case UR_COMMAND.PERMIT2_TRANSFER_FROM_BATCH: {
         const [transfers] = decodeAbiParameters(P2_TRANSFER_BATCH, input)
-        return { type: 'PERMIT2_TRANSFER_FROM_BATCH', transfers: transfers.map((t) => ({ from: t.from, to: t.to, amount: t.amount, token: t.token })) }
+        return {
+          type: 'PERMIT2_TRANSFER_FROM_BATCH',
+          transfers: transfers.map((t) => ({
+            from: t.from,
+            to: t.to,
+            amount: t.amount,
+            token: t.token,
+          })),
+        }
       }
       case UR_COMMAND.SWEEP:
       case UR_COMMAND.TRANSFER:
       case UR_COMMAND.BALANCE_CHECK_ERC20: {
         const [token, recipient, amount] = decodeAbiParameters(ADDR_ADDR_UINT, input)
-        return { type: type === UR_COMMAND.SWEEP ? 'SWEEP' : type === UR_COMMAND.TRANSFER ? 'TRANSFER' : 'BALANCE_CHECK_ERC20', token, recipient, amount }
+        return {
+          type:
+            type === UR_COMMAND.SWEEP
+              ? 'SWEEP'
+              : type === UR_COMMAND.TRANSFER
+                ? 'TRANSFER'
+                : 'BALANCE_CHECK_ERC20',
+          token,
+          recipient,
+          amount,
+        }
       }
       case UR_COMMAND.PAY_PORTION: {
         const [token, recipient, bips] = decodeAbiParameters(ADDR_ADDR_UINT, input)
@@ -106,7 +218,11 @@ export function decodeUrCommand(byte: number, input: Hex): UrCommand {
       case UR_COMMAND.WRAP_ETH:
       case UR_COMMAND.UNWRAP_WETH: {
         const [recipient, amount] = decodeAbiParameters(ADDR_UINT, input)
-        return { type: type === UR_COMMAND.WRAP_ETH ? 'WRAP_ETH' : 'UNWRAP_WETH', recipient, amount }
+        return {
+          type: type === UR_COMMAND.WRAP_ETH ? 'WRAP_ETH' : 'UNWRAP_WETH',
+          recipient,
+          amount,
+        }
       }
       case UR_COMMAND.SEAPORT_V1_5: {
         const [value, data] = decodeAbiParameters(SEAPORT, input)
@@ -124,7 +240,10 @@ export function decodeUrCommand(byte: number, input: Hex): UrCommand {
 export function decodeUniversalRouter(data: Hex): DecodedUniversalRouter | null {
   let decoded: { functionName: string; args: readonly unknown[] }
   try {
-    decoded = decodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, data }) as { functionName: string; args: readonly unknown[] }
+    decoded = decodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, data }) as {
+      functionName: string
+      args: readonly unknown[]
+    }
   } catch {
     return null
   }
@@ -152,7 +271,12 @@ export function decodeUniversalRouter(data: Hex): DecodedUniversalRouter | null 
 export type UrSwap = Extract<UrCommand, { type: `V${'2' | '3'}_SWAP_EXACT_${'IN' | 'OUT'}` }>
 
 export function isUrSwap(c: UrCommand): c is UrSwap {
-  return c.type === 'V2_SWAP_EXACT_IN' || c.type === 'V2_SWAP_EXACT_OUT' || c.type === 'V3_SWAP_EXACT_IN' || c.type === 'V3_SWAP_EXACT_OUT'
+  return (
+    c.type === 'V2_SWAP_EXACT_IN' ||
+    c.type === 'V2_SWAP_EXACT_OUT' ||
+    c.type === 'V3_SWAP_EXACT_IN' ||
+    c.type === 'V3_SWAP_EXACT_OUT'
+  )
 }
 
 /**
@@ -186,12 +310,22 @@ const eq = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase(
  * it. `UNWRAP_WETH` counts whatever the token was — it can only be the wrapped
  * native the swap produced, and it names no token to compare.
  */
-export function urDeliveredAfter(commands: readonly UrCommand[], i: number, token: 'native' | Hex, isMine: (address: Hex) => boolean): boolean {
+export function urDeliveredAfter(
+  commands: readonly UrCommand[],
+  i: number,
+  token: 'native' | Hex,
+  isMine: (address: Hex) => boolean,
+): boolean {
   for (let j = i + 1; j < commands.length; j++) {
     const c = commands[j]
     if (!c) continue
     if (c.type === 'UNWRAP_WETH' && isMine(c.recipient)) return true
-    if ((c.type === 'SWEEP' || c.type === 'TRANSFER') && isMine(c.recipient) && (token === 'native' || eq(c.token, token))) return true
+    if (
+      (c.type === 'SWEEP' || c.type === 'TRANSFER') &&
+      isMine(c.recipient) &&
+      (token === 'native' || eq(c.token, token))
+    )
+      return true
     /*
       A mixed route is one command per contiguous same-protocol run, chained
       through the router: every section after the first is paid from what the

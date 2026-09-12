@@ -584,6 +584,7 @@ export function createEngine(deps: EngineDeps): Engine {
     safety: { level: (chainId, address) => explore.safetyLevel(chainId, address) },
   })
   const limit = new LimitService({
+    statics,
     platform: deps.platform,
     bus: host.events,
     chains,
@@ -604,6 +605,7 @@ export function createEngine(deps: EngineDeps): Engine {
     watchlist: sealed.watchlist,
   })
   const legends = new LegendsService({
+    statics,
     platform: deps.platform,
     chains,
     vault,
@@ -630,6 +632,7 @@ export function createEngine(deps: EngineDeps): Engine {
     legends,
   })
   const nft = new NftService({
+    statics,
     platform: deps.platform,
     chains,
     vault,
@@ -643,6 +646,7 @@ export function createEngine(deps: EngineDeps): Engine {
     custom: customCollections,
   })
   const farm = new FarmService({
+    statics,
     platform: deps.platform,
     chains,
     tokens,
@@ -654,6 +658,7 @@ export function createEngine(deps: EngineDeps): Engine {
     cache,
   })
   const launchpad = new LaunchpadService({
+    statics,
     platform: deps.platform,
     chains,
     vault,

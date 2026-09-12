@@ -46,7 +46,10 @@ const FeedRowSchema = z.object({
   ),
 })
 
-const FEED_SPEC = (chainId: number, owner: string) => ({ key: cacheKey('activity', 'feed', chainId, owner), schema: z.array(FeedRowSchema) })
+const FEED_SPEC = (chainId: number, owner: string) => ({
+  key: cacheKey('activity', 'feed', chainId, owner),
+  schema: z.array(FeedRowSchema),
+})
 
 /** The API's activity types, mapped onto the categories Activity already draws. */
 const CATEGORIES: Readonly<Record<string, ActivityCategory>> = {
@@ -68,7 +71,9 @@ function categoryOf(row: FeedRow): ActivityCategory {
   if (mapped) return mapped
   // An unknown kind is still a transaction this account was party to. Reading
   // the direction is honest; guessing a category is not.
-  const direction = row.changes.find((c) => c.direction === 'IN' || c.direction === 'OUT')?.direction
+  const direction = row.changes.find(
+    (c) => c.direction === 'IN' || c.direction === 'OUT',
+  )?.direction
   return direction === 'IN' ? 'RECEIVE' : direction === 'OUT' ? 'SEND' : 'DAPP'
 }
 
@@ -83,9 +88,13 @@ function amountText(raw: string, symbol: string | null): string {
 function statementOf(row: FeedRow): string {
   const moved = row.changes.find((c) => c.amountRaw && c.amountRaw !== '0') ?? row.changes[0]
   if (!moved) return 'Transaction'
-  const amount = moved.amountRaw ? amountText(moved.amountRaw, moved.symbol) : (moved.symbol ?? 'an asset')
-  if (moved.direction === 'IN') return `Received ${amount}${moved.sender ? ` from ${moved.sender}` : ''}`
-  if (moved.direction === 'OUT') return `Sent ${amount}${moved.recipient ? ` to ${moved.recipient}` : ''}`
+  const amount = moved.amountRaw
+    ? amountText(moved.amountRaw, moved.symbol)
+    : (moved.symbol ?? 'an asset')
+  if (moved.direction === 'IN')
+    return `Received ${amount}${moved.sender ? ` from ${moved.sender}` : ''}`
+  if (moved.direction === 'OUT')
+    return `Sent ${amount}${moved.recipient ? ` to ${moved.recipient}` : ''}`
   return `Moved ${amount}`
 }
 
@@ -95,7 +104,8 @@ function statementOf(row: FeedRow): string {
  */
 export function entryOf(row: FeedRow, chainId: number, accountId: string): ActivityEntry {
   const native = row.changes.find((c) => c.standard === 'NATIVE')
-  const moved = row.changes.find((c) => c.amountRaw && c.amountRaw !== '0') ?? row.changes[0] ?? null
+  const moved =
+    row.changes.find((c) => c.amountRaw && c.amountRaw !== '0') ?? row.changes[0] ?? null
   const inbound = moved?.direction === 'IN'
   return {
     // Prefixed so a feed row can never collide with a locally written id, and
@@ -127,8 +137,13 @@ export function entryOf(row: FeedRow, chainId: number, accountId: string): Activ
  * version of the same transaction knows none of that, so it must never replace
  * it — only fill in what the wallet never saw.
  */
-export function mergeByHash(local: readonly ActivityEntry[], feed: readonly ActivityEntry[]): ActivityEntry[] {
-  const known = new Set(local.map((e) => e.hash).filter((h): h is string => typeof h === 'string' && h.length > 0))
+export function mergeByHash(
+  local: readonly ActivityEntry[],
+  feed: readonly ActivityEntry[],
+): ActivityEntry[] {
+  const known = new Set(
+    local.map((e) => e.hash).filter((h): h is string => typeof h === 'string' && h.length > 0),
+  )
   const extra = feed.filter((e) => typeof e.hash === 'string' && !known.has(e.hash))
   return [...local, ...extra].sort((a, b) => b.submittedAt - a.submittedAt)
 }
@@ -156,7 +171,11 @@ export class ActivityFeedService {
     const client = d.electroswap
     if (!client || !d.isEtn(chainId)) return []
     try {
-      return (await d.cache.through(FEED_SPEC(chainId, owner.toLowerCase()), TTL_MS, () => fetchWalletActivity(client, { chainId, owner, pageSize: PAGE_SIZE }))).value
+      return (
+        await d.cache.through(FEED_SPEC(chainId, owner.toLowerCase()), TTL_MS, () =>
+          fetchWalletActivity(client, { chainId, owner, pageSize: PAGE_SIZE }),
+        )
+      ).value
     } catch {
       return []
     }
@@ -166,7 +185,9 @@ export class ActivityFeedService {
    * Activity's list: the local log, plus anything the chain saw that this
    * wallet did not do itself.
    */
-  async list(filter: { accountId?: string; chainId?: number; limit?: number } = {}): Promise<ActivityEntry[]> {
+  async list(
+    filter: { accountId?: string; chainId?: number; limit?: number } = {},
+  ): Promise<ActivityEntry[]> {
     const local = await this.deps.activity.list(filter)
     const { accountId, chainId } = filter
     if (!accountId || chainId === undefined) return local

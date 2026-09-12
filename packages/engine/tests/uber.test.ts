@@ -188,9 +188,17 @@ describe('the uber-app on the mainnet mock', () => {
       if (d.functionName === 'getCounter') return u(0n)
       throw new Error('seaport: unhandled')
     })
+    /*
+      A pool answers as a pool. `contribute` sends native ETN to an
+      index-supplied address, so the engine reads the contract before it builds
+      the flow (ATT-BV-019) — an address with no code, or one that cannot
+      answer the pool interface, is not a campaign whatever the index says.
+    */
+    rpc.state.code.set(POOL.toLowerCase(), '0x6080')
     rpc.state.calls.set(POOL.toLowerCase(), ({ data }) => {
       const d = decodeFunctionData({ abi: LAUNCHPAD_POOL_ABI, data })
       if (d.functionName === 'status') return u(BigInt(poolStatus))
+      if (d.functionName === 'token') return encodeAbiParameters(parseAbiParameters('address'), [BOLT])
       if (d.functionName === 'totalEtnRaised') return u(1_000n * 10n ** 18n)
       if (d.functionName === 'maxContribution') return u(500n * 10n ** 18n)
       if (d.functionName === 'minEtnToLaunch') return u(5_000n * 10n ** 18n)

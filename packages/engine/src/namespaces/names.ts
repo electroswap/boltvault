@@ -15,7 +15,15 @@
 import type { Platform } from '@boltvault/platform'
 import { mainnet } from 'viem/chains'
 import { normalize } from 'viem/ens'
-import { bytesToHex, encodeFunctionData, isAddress, namehash, parseAbi, type Abi, type Hex } from 'viem'
+import {
+  bytesToHex,
+  encodeFunctionData,
+  isAddress,
+  namehash,
+  parseAbi,
+  type Abi,
+  type Hex,
+} from 'viem'
 import { z } from 'zod'
 import { untrusted } from '@boltvault/security'
 import { cacheKey, type CacheSpec, type DocCache } from '../cache'
@@ -137,8 +145,10 @@ const REGISTRARS: Record<number, EtnRegistrar> = {
 
 /** Why a chain cannot register, in the voice the plate will show. */
 function registrarReason(chainId: number): string {
-  if (chainId === 5201420) return 'Electroneum’s testnet has no name service, so there is nothing to register there.'
-  if (chainId === 1) return 'Registering a .eth name is not in this build: its registrar has not been verified from here, and BoltVault does not send money to an address it has not checked.'
+  if (chainId === 5201420)
+    return 'Electroneum’s testnet has no name service, so there is nothing to register there.'
+  if (chainId === 1)
+    return 'Registering a .eth name is not in this build: its registrar has not been verified from here, and BoltVault does not send money to an address it has not checked.'
   return 'Names are registered on Electroneum. Switch to Electroneum to claim one.'
 }
 
@@ -322,7 +332,8 @@ export class NamesService {
   chainFor(chainId: number, input: string): number | null {
     if (chainId === 5201420 || isAddress(input)) return null
     const name = input.trim().toLowerCase()
-    for (const [id, suffix] of Object.entries(SUFFIX)) if (name.endsWith(suffix) && name.length > suffix.length) return Number(id)
+    for (const [id, suffix] of Object.entries(SUFFIX))
+      if (name.endsWith(suffix) && name.length > suffix.length) return Number(id)
     return null
   }
 
@@ -355,19 +366,28 @@ export class NamesService {
    * written to disk, so an RPC outage cannot persist "this address has no
    * name" for six hours.
    */
-  private async reverseName(chainId: number, address: string, resolver: Hex): Promise<string | null> {
+  private async reverseName(
+    chainId: number,
+    address: string,
+    resolver: Hex,
+  ): Promise<string | null> {
     const k = `${chainId}:${address.toLowerCase()}`
     const hit = this.reverse.get(k)
     if (hit && this.now() - hit.at < CACHE_MS) return hit.name
     const load = async (): Promise<{ name: string | null }> => {
       const client = await this.deps.chains.client(chainId)
-      const raw = await client.getEnsName({ address: address as Hex, universalResolverAddress: resolver })
+      const raw = await client.getEnsName({
+        address: address as Hex,
+        universalResolverAddress: resolver,
+      })
       return { name: displayName(chainId, raw ?? null) }
     }
     let name: string | null = null
     try {
       const cache = this.deps.cache
-      name = cache ? (await cache.through(reverseSpec(chainId, address), REVERSE_TTL_MS, load)).value.name : (await load()).name
+      name = cache
+        ? (await cache.through(reverseSpec(chainId, address), REVERSE_TTL_MS, load)).value.name
+        : (await load()).name
     } catch {
       name = null
     }
@@ -382,7 +402,10 @@ export class NamesService {
     chainId = on
     const client = await this.deps.chains.client(chainId)
     try {
-      const address = await client.getEnsAddress({ name: normalize(name.trim()), universalResolverAddress: resolver })
+      const address = await client.getEnsAddress({
+        name: normalize(name.trim()),
+        universalResolverAddress: resolver,
+      })
       return address ?? null
     } catch {
       return null
@@ -395,7 +418,17 @@ export class NamesService {
   async registrar(chainId: number): Promise<RegistrarView> {
     const reg = REGISTRARS[chainId]
     if (!reg)
-      return { chainId, supported: false, reason: registrarReason(chainId), suffix: SUFFIX[chainId] ?? null, controller: null, resolver: null, minDurationSeconds: null, minCommitmentAgeSeconds: null, maxCommitmentAgeSeconds: null }
+      return {
+        chainId,
+        supported: false,
+        reason: registrarReason(chainId),
+        suffix: SUFFIX[chainId] ?? null,
+        controller: null,
+        resolver: null,
+        minDurationSeconds: null,
+        minCommitmentAgeSeconds: null,
+        maxCommitmentAgeSeconds: null,
+      }
     const ages = await this.agesFor(chainId, reg).catch(() => null)
     return {
       chainId,
@@ -413,26 +446,56 @@ export class NamesService {
   /** `valid()` and `available()` on the registrar itself — never a cached answer. */
   async availability(chainId: number, input: string): Promise<AvailabilityView> {
     const reg = REGISTRARS[chainId]
-    if (!reg) return { supported: false, reason: registrarReason(chainId), label: null, name: null, valid: false, available: false }
+    if (!reg)
+      return {
+        supported: false,
+        reason: registrarReason(chainId),
+        label: null,
+        name: null,
+        valid: false,
+        available: false,
+      }
     let label: string
     try {
       label = this.labelOf(chainId, input)
     } catch (err) {
-      return { supported: true, reason: err instanceof EngineError ? err.message : 'That is not a name this registrar can take.', label: null, name: null, valid: false, available: false }
+      return {
+        supported: true,
+        reason:
+          err instanceof EngineError ? err.message : 'That is not a name this registrar can take.',
+        label: null,
+        name: null,
+        valid: false,
+        available: false,
+      }
     }
     const [valid, available] = await Promise.all([
       this.read<boolean>(chainId, reg, 'valid', [label]),
       this.read<boolean>(chainId, reg, 'available', [label]),
     ])
-    return { supported: true, reason: null, label, name: `${label}${SUFFIX[chainId] ?? ''}`, valid, available }
+    return {
+      supported: true,
+      reason: null,
+      label,
+      name: `${label}${SUFFIX[chainId] ?? ''}`,
+      valid,
+      available,
+    }
   }
 
   async price(chainId: number, input: string, durationSeconds: number): Promise<PriceView> {
     const reg = this.requireRegistrar(chainId)
     const label = this.labelOf(chainId, input)
     const ages = await this.agesFor(chainId, reg)
-    if (durationSeconds < ages.minDuration) throw new EngineError('invalid_argument', `A name is registered for at least ${Math.round(ages.minDuration / 86_400)} days.`)
-    const [base, premium] = await this.read<readonly [bigint, bigint]>(chainId, reg, 'rentPrice', [label, BigInt(durationSeconds)])
+    if (durationSeconds < ages.minDuration)
+      throw new EngineError(
+        'invalid_argument',
+        `A name is registered for at least ${Math.round(ages.minDuration / 86_400)} days.`,
+      )
+    const [base, premium] = await this.read<readonly [bigint, bigint]>(chainId, reg, 'rentPrice', [
+      label,
+      BigInt(durationSeconds),
+    ])
     return {
       name: `${label}${SUFFIX[chainId] ?? ''}`,
       durationSeconds,
@@ -452,14 +515,31 @@ export class NamesService {
    * struct we encode a hair differently would only be found out after the
    * commit transaction had been paid for.
    */
-  async commit(input: { accountId: string; chainId: number; name: string; durationSeconds?: number; setPrimary?: boolean }): Promise<{ id: string; requestId: string; commitment: string; name: string; waitSeconds: number }> {
+  async commit(input: {
+    accountId: string
+    chainId: number
+    name: string
+    durationSeconds?: number
+    setPrimary?: boolean
+  }): Promise<{
+    id: string
+    requestId: string
+    commitment: string
+    name: string
+    waitSeconds: number
+  }> {
     const reg = this.requireRegistrar(input.chainId)
     const account = await this.account(input.accountId)
     const label = this.labelOf(input.chainId, input.name)
     const ages = await this.agesFor(input.chainId, reg)
     const duration = input.durationSeconds ?? DEFAULT_DURATION_SECONDS
-    if (duration < ages.minDuration) throw new EngineError('invalid_argument', `A name is registered for at least ${Math.round(ages.minDuration / 86_400)} days.`)
-    if (!(await this.read<boolean>(input.chainId, reg, 'available', [label]))) throw new EngineError('invalid_argument', 'That name is taken.')
+    if (duration < ages.minDuration)
+      throw new EngineError(
+        'invalid_argument',
+        `A name is registered for at least ${Math.round(ages.minDuration / 86_400)} days.`,
+      )
+    if (!(await this.read<boolean>(input.chainId, reg, 'available', [label])))
+      throw new EngineError('invalid_argument', 'That name is taken.')
 
     const owner = account.address as Hex
     const name = `${label}${SUFFIX[input.chainId] ?? ''}`
@@ -474,7 +554,9 @@ export class NamesService {
       // The forward record, set inside `register` so the name points at the
       // owner from the block it exists; without it a fresh name resolves to
       // nothing and the recipient field would refuse it.
-      data: [encodeFunctionData({ abi: RESOLVER_ABI, functionName: 'setAddr', args: [node, owner] })] as readonly Hex[],
+      data: [
+        encodeFunctionData({ abi: RESOLVER_ABI, functionName: 'setAddr', args: [node, owner] }),
+      ] as readonly Hex[],
       reverseRecord: input.setPrimary === false ? REVERSE_NONE : REVERSE_BOTH,
       referrer: `0x${'0'.repeat(64)}` as Hex,
     }
@@ -511,7 +593,16 @@ export class NamesService {
       origin: 'internal:names',
       chainId: input.chainId,
       accountId: input.accountId,
-      tx: { from: owner, to: reg.controller, value: '0x0', data: encodeFunctionData({ abi: CONTROLLER_ABI, functionName: 'commit', args: [commitment] }) },
+      tx: {
+        from: owner,
+        to: reg.controller,
+        value: '0x0',
+        data: encodeFunctionData({
+          abi: CONTROLLER_ABI,
+          functionName: 'commit',
+          args: [commitment],
+        }),
+      },
       clientRequestId: `names.commit:${commitment}`,
     })
     await this.putRecord({ ...record, commitRequestId: requestId })
@@ -534,20 +625,33 @@ export class NamesService {
    * every reason it would revert is checked here first — a reverted reveal
    * costs the gas and, worse, spends the commitment's window.
    */
-  async register(id: string): Promise<{ requestId: string; name: string; priceWei: string; valueWei: string }> {
+  async register(
+    id: string,
+  ): Promise<{ requestId: string; name: string; priceWei: string; valueWei: string }> {
     const record = (await this.loadRecords()).find((r) => r.id === id)
     if (!record) throw new EngineError('not_found', 'no such commitment')
     const reg = this.requireRegistrar(record.chainId)
     const state = await this.toPending(record)
-    if (state.state === 'unmined') throw new EngineError('invalid_argument', 'The commit transaction has not been mined yet.')
+    if (state.state === 'unmined')
+      throw new EngineError('invalid_argument', 'The commit transaction has not been mined yet.')
     if (state.state === 'waiting') {
       const seconds = Math.max(1, Math.ceil(((state.readyAt ?? 0) - this.now()) / 1000))
-      throw new EngineError('invalid_argument', `The commitment has to sit for another ${seconds}s before the name can be claimed.`)
+      throw new EngineError(
+        'invalid_argument',
+        `The commitment has to sit for another ${seconds}s before the name can be claimed.`,
+      )
     }
-    if (state.state === 'expired') throw new EngineError('expired', 'That commitment has expired. Start the claim again.')
-    if (!(await this.read<boolean>(record.chainId, reg, 'available', [record.label]))) throw new EngineError('invalid_argument', 'That name was taken while you waited.')
+    if (state.state === 'expired')
+      throw new EngineError('expired', 'That commitment has expired. Start the claim again.')
+    if (!(await this.read<boolean>(record.chainId, reg, 'available', [record.label])))
+      throw new EngineError('invalid_argument', 'That name was taken while you waited.')
 
-    const [base, premium] = await this.read<readonly [bigint, bigint]>(record.chainId, reg, 'rentPrice', [record.label, BigInt(record.durationSeconds)])
+    const [base, premium] = await this.read<readonly [bigint, bigint]>(
+      record.chainId,
+      reg,
+      'rentPrice',
+      [record.label, BigInt(record.durationSeconds)],
+    )
     const price = base + premium
     const value = price + (price * PRICE_HEADROOM_PERCENT) / 100n
     const node = namehash(record.name)
@@ -557,7 +661,13 @@ export class NamesService {
       duration: BigInt(record.durationSeconds),
       secret: record.secret as Hex,
       resolver: record.resolver as Hex,
-      data: [encodeFunctionData({ abi: RESOLVER_ABI, functionName: 'setAddr', args: [node, record.owner as Hex] })] as readonly Hex[],
+      data: [
+        encodeFunctionData({
+          abi: RESOLVER_ABI,
+          functionName: 'setAddr',
+          args: [node, record.owner as Hex],
+        }),
+      ] as readonly Hex[],
       reverseRecord: record.reverseRecord,
       referrer: record.referrer as Hex,
     }
@@ -566,7 +676,16 @@ export class NamesService {
       origin: 'internal:names',
       chainId: record.chainId,
       accountId: record.accountId,
-      tx: { from: record.owner as Hex, to: reg.controller, value: `0x${value.toString(16)}`, data: encodeFunctionData({ abi: CONTROLLER_ABI, functionName: 'register', args: [registration] }) },
+      tx: {
+        from: record.owner as Hex,
+        to: reg.controller,
+        value: `0x${value.toString(16)}`,
+        data: encodeFunctionData({
+          abi: CONTROLLER_ABI,
+          functionName: 'register',
+          args: [registration],
+        }),
+      },
       clientRequestId: `names.register:${record.commitment}`,
     })
     return { requestId, name: record.name, priceWei: price.toString(), valueWei: value.toString() }
@@ -583,12 +702,17 @@ export class NamesService {
    * The primary name — what every other wallet will show for this address
    * (§8.1). One transaction on the reverse registrar, through the same sheet.
    */
-  async setPrimary(input: { accountId: string; chainId: number; name: string }): Promise<{ requestId: string; name: string }> {
+  async setPrimary(input: {
+    accountId: string
+    chainId: number
+    name: string
+  }): Promise<{ requestId: string; name: string }> {
     const reg = this.requireRegistrar(input.chainId)
     const account = await this.account(input.accountId)
     const name = normalize(input.name.trim())
     const suffix = SUFFIX[input.chainId] ?? ''
-    if (!name.endsWith(suffix) || name.length <= suffix.length) throw new EngineError('invalid_argument', `A primary name on this chain ends in ${suffix}.`)
+    if (!name.endsWith(suffix) || name.length <= suffix.length)
+      throw new EngineError('invalid_argument', `A primary name on this chain ends in ${suffix}.`)
     /*
       The name has to resolve back to this account before it is worth setting:
       a reverse record pointing at a name whose forward record is somebody else
@@ -596,14 +720,24 @@ export class NamesService {
       transaction would cost a fee and change nothing anyone can see.
     */
     const forward = await this.resolve(input.chainId, name)
-    if (forward === null) throw new EngineError('invalid_argument', 'That name does not resolve to an address yet.')
-    if (forward.toLowerCase() !== account.address.toLowerCase()) throw new EngineError('invalid_argument', `${name} points at another address, so it cannot be this account’s primary name.`)
+    if (forward === null)
+      throw new EngineError('invalid_argument', 'That name does not resolve to an address yet.')
+    if (forward.toLowerCase() !== account.address.toLowerCase())
+      throw new EngineError(
+        'invalid_argument',
+        `${name} points at another address, so it cannot be this account’s primary name.`,
+      )
     const { requestId } = await this.deps.provider.submitInternal({
       kind: 'send_transaction',
       origin: 'internal:names',
       chainId: input.chainId,
       accountId: input.accountId,
-      tx: { from: account.address as Hex, to: reg.reverseRegistrar, value: '0x0', data: encodeFunctionData({ abi: REVERSE_ABI, functionName: 'setName', args: [name] }) },
+      tx: {
+        from: account.address as Hex,
+        to: reg.reverseRegistrar,
+        value: '0x0',
+        data: encodeFunctionData({ abi: REVERSE_ABI, functionName: 'setName', args: [name] }),
+      },
       clientRequestId: `names.setPrimary:${name}`,
     })
     // Both layers, or the display keeps showing the old answer — the session
@@ -626,10 +760,15 @@ export class NamesService {
     if (!account) {
       // A locked vault lists no accounts, so the two cases look the same here.
       const status = await this.deps.vault.status()
-      if (status.exists && !status.unlocked) throw new EngineError('locked', 'Unlock BoltVault to claim a name.')
+      if (status.exists && !status.unlocked)
+        throw new EngineError('locked', 'Unlock BoltVault to claim a name.')
       throw new EngineError('not_found', 'no such account')
     }
-    if (account.kind === 'watch') throw new EngineError('invalid_argument', 'Watch-only — import a key or pair a device to claim a name.')
+    if (account.kind === 'watch')
+      throw new EngineError(
+        'invalid_argument',
+        'Watch-only — import a key or pair a device to claim a name.',
+      )
     return account
   }
 
@@ -643,7 +782,8 @@ export class NamesService {
       throw new EngineError('invalid_argument', 'That name has characters a registrar cannot take.')
     }
     const label = suffix && name.endsWith(suffix) ? name.slice(0, -suffix.length) : name
-    if (label.length === 0 || label.includes('.')) throw new EngineError('invalid_argument', `Enter one name, like yourname${suffix}.`)
+    if (label.length === 0 || label.includes('.'))
+      throw new EngineError('invalid_argument', `Enter one name, like yourname${suffix}.`)
     return label
   }
 
@@ -671,30 +811,55 @@ export class NamesService {
   private async toPending(record: CommitmentRecord): Promise<PendingRegistration> {
     const reg = REGISTRARS[record.chainId]
     const setsPrimary = record.reverseRecord !== REVERSE_NONE
-    const base = { id: record.id, chainId: record.chainId, accountId: record.accountId, name: record.name, durationSeconds: record.durationSeconds, setsPrimary, commitRequestId: record.commitRequestId }
-    if (!reg) return { ...base, state: 'expired', committedAt: null, readyAt: null, expiresAt: null }
+    const base = {
+      id: record.id,
+      chainId: record.chainId,
+      accountId: record.accountId,
+      name: record.name,
+      durationSeconds: record.durationSeconds,
+      setsPrimary,
+      commitRequestId: record.commitRequestId,
+    }
+    if (!reg)
+      return { ...base, state: 'expired', committedAt: null, readyAt: null, expiresAt: null }
     const [seconds, ages] = await Promise.all([
-      this.read<bigint>(record.chainId, reg, 'commitments', [record.commitment as Hex]).catch(() => 0n),
+      this.read<bigint>(record.chainId, reg, 'commitments', [record.commitment as Hex]).catch(
+        () => 0n,
+      ),
       this.agesFor(record.chainId, reg).catch(() => null),
     ])
-    if (seconds === 0n || !ages) return { ...base, state: 'unmined', committedAt: null, readyAt: null, expiresAt: null }
+    if (seconds === 0n || !ages)
+      return { ...base, state: 'unmined', committedAt: null, readyAt: null, expiresAt: null }
     const committedAt = Number(seconds) * 1000
     const readyAt = committedAt + ages.min * 1000
     const expiresAt = committedAt + ages.max * 1000
     const now = this.now()
-    const state: CommitmentState = now >= expiresAt ? 'expired' : now >= readyAt ? 'ready' : 'waiting'
+    const state: CommitmentState =
+      now >= expiresAt ? 'expired' : now >= readyAt ? 'ready' : 'waiting'
     return { ...base, state, committedAt, readyAt, expiresAt }
   }
 
-  private async read<T>(chainId: number, reg: EtnRegistrar, functionName: string, args: readonly unknown[]): Promise<T> {
+  private async read<T>(
+    chainId: number,
+    reg: EtnRegistrar,
+    functionName: string,
+    args: readonly unknown[],
+  ): Promise<T> {
     const client = await this.deps.chains.client(chainId)
-    const result: unknown = await client.readContract({ address: reg.controller, abi: CONTROLLER_READ_ABI, functionName, args })
+    const result: unknown = await client.readContract({
+      address: reg.controller,
+      abi: CONTROLLER_READ_ABI,
+      functionName,
+      args,
+    })
     return result as T
   }
 
   private async loadRecords(): Promise<CommitmentRecord[]> {
     if (!this.records) {
-      const { value } = await readDoc(this.deps.platform.storage.local, COMMITMENTS_DOC, () => this.now())
+      const { value } = await readDoc(this.deps.platform.storage.local, COMMITMENTS_DOC, () =>
+        this.now(),
+      )
       this.records = value
     }
     const fresh = this.records.filter((r) => this.now() - r.createdAt < RECORD_TTL_MS)
@@ -722,11 +887,20 @@ export function namesNamespace(names: NamesService): NamespaceSpec {
   return {
     lookup: {
       input: z.object({ chainId: ChainIdSchema, addresses: z.array(z.string()).max(200) }),
-      handler: (arg) => names.lookup((arg as { chainId: number }).chainId, (arg as { addresses: string[] }).addresses),
+      handler: (arg) =>
+        names.lookup(
+          (arg as { chainId: number }).chainId,
+          (arg as { addresses: string[] }).addresses,
+        ),
     },
     resolve: {
       input: z.object({ chainId: ChainIdSchema, name: NameSchema }),
-      handler: async (arg) => ({ address: await names.resolve((arg as { chainId: number }).chainId, (arg as { name: string }).name) }),
+      handler: async (arg) => ({
+        address: await names.resolve(
+          (arg as { chainId: number }).chainId,
+          (arg as { name: string }).name,
+        ),
+      }),
     },
     registrar: {
       input: z.object({ chainId: ChainIdSchema }),
@@ -740,15 +914,48 @@ export function namesNamespace(names: NamesService): NamespaceSpec {
       },
     },
     price: {
-      input: z.object({ chainId: ChainIdSchema, name: NameSchema, durationSeconds: z.number().int().positive().max(100 * 365 * 24 * 60 * 60).optional() }),
+      input: z.object({
+        chainId: ChainIdSchema,
+        name: NameSchema,
+        durationSeconds: z
+          .number()
+          .int()
+          .positive()
+          .max(100 * 365 * 24 * 60 * 60)
+          .optional(),
+      }),
       handler: (arg) => {
-        const { chainId, name, durationSeconds } = arg as { chainId: number; name: string; durationSeconds?: number }
+        const { chainId, name, durationSeconds } = arg as {
+          chainId: number
+          name: string
+          durationSeconds?: number
+        }
         return names.price(chainId, name, durationSeconds ?? DEFAULT_DURATION_SECONDS)
       },
     },
     commit: {
-      input: z.object({ accountId: AccountIdSchema, chainId: ChainIdSchema, name: NameSchema, durationSeconds: z.number().int().positive().max(100 * 365 * 24 * 60 * 60).optional(), setPrimary: z.boolean().optional() }),
-      handler: (arg) => names.commit(arg as { accountId: string; chainId: number; name: string; durationSeconds?: number; setPrimary?: boolean }),
+      input: z.object({
+        accountId: AccountIdSchema,
+        chainId: ChainIdSchema,
+        name: NameSchema,
+        durationSeconds: z
+          .number()
+          .int()
+          .positive()
+          .max(100 * 365 * 24 * 60 * 60)
+          .optional(),
+        setPrimary: z.boolean().optional(),
+      }),
+      handler: (arg) =>
+        names.commit(
+          arg as {
+            accountId: string
+            chainId: number
+            name: string
+            durationSeconds?: number
+            setPrimary?: boolean
+          },
+        ),
     },
     pending: {
       input: z.object({ chainId: ChainIdSchema.optional() }).optional(),
@@ -764,7 +971,8 @@ export function namesNamespace(names: NamesService): NamespaceSpec {
     },
     setPrimary: {
       input: z.object({ accountId: AccountIdSchema, chainId: ChainIdSchema, name: NameSchema }),
-      handler: (arg) => names.setPrimary(arg as { accountId: string; chainId: number; name: string }),
+      handler: (arg) =>
+        names.setPrimary(arg as { accountId: string; chainId: number; name: string }),
     },
   }
 }

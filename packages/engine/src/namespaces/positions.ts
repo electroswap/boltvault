@@ -67,7 +67,14 @@ export class PositionsService {
     ])
     const farms = farmsAll.filter((f) => f.position !== null)
     // A campaign is a position while there is something left to do: claim tokens or a refund, referral rewards, or a contribution to a campaign still in flight (plan C1, owner item L1).
-    const campaigns = campaignsAll.filter((c) => c.keys.includes('claim_tokens') || c.keys.includes('claim_refund') || BigInt(c.referralClaimableWei) > 0n || ((c.phase === 'live' || c.phase === 'upcoming' || c.phase === 'awaiting_finalize') && BigInt(c.contributedWei) > 0n))
+    const campaigns = campaignsAll.filter(
+      (c) =>
+        c.keys.includes('claim_tokens') ||
+        c.keys.includes('claim_refund') ||
+        BigInt(c.referralClaimableWei) > 0n ||
+        ((c.phase === 'live' || c.phase === 'upcoming' || c.phase === 'awaiting_finalize') &&
+          BigInt(c.contributedWei) > 0n),
+    )
     /*
       Every standing thing, in the order Home should meet them.
 
@@ -79,17 +86,45 @@ export class PositionsService {
     */
     const accessories: Positions['accessories'] = []
     const claimable = legends ? BigInt(legends.claimableWei) : 0n
-    if (claimable > 0n) accessories.push({ kind: 'dividends', text: `${trim(Number(formatUnits(claimable, 18)).toFixed(2))} ETN in dividends to claim`, target: 'legends' })
+    if (claimable > 0n)
+      accessories.push({
+        kind: 'dividends',
+        text: `${trim(Number(formatUnits(claimable, 18)).toFixed(2))} ETN in dividends to claim`,
+        target: 'legends',
+      })
     const rewards = farms.reduce((s, f) => s + BigInt(f.position?.pendingRewards ?? '0'), 0n)
     if (rewards > 0n) {
       const first = farms.find((f) => BigInt(f.position?.pendingRewards ?? '0') > 0n)
-      accessories.push({ kind: 'collect', text: `${trim(Number(formatUnits(rewards, 18)).toFixed(2))} DYNO to collect`, target: `farm:${first?.id ?? 0}` })
+      accessories.push({
+        kind: 'collect',
+        text: `${trim(Number(formatUnits(rewards, 18)).toFixed(2))} DYNO to collect`,
+        target: `farm:${first?.id ?? 0}`,
+      })
     }
     const claimTokens = campaigns.find((c) => c.keys.includes('claim_tokens'))
-    if (claimTokens) accessories.push({ kind: 'claim_tokens', text: `${claimTokens.token.symbol} is ready to claim`, target: `campaign:${claimTokens.pool}` })
+    if (claimTokens)
+      accessories.push({
+        kind: 'claim_tokens',
+        text: `${claimTokens.token.symbol} is ready to claim`,
+        target: `campaign:${claimTokens.pool}`,
+      })
     const refund = campaigns.find((c) => c.keys.includes('claim_refund'))
-    if (refund) accessories.push({ kind: 'claim_refund', text: `A refund from ${refund.token.symbol} is waiting`, target: `campaign:${refund.pool}` })
-    const positions: Positions = { accountId, chainId, farms, legends, orders, campaigns, accessories, observedAt: d.platform.now() }
+    if (refund)
+      accessories.push({
+        kind: 'claim_refund',
+        text: `A refund from ${refund.token.symbol} is waiting`,
+        target: `campaign:${refund.pool}`,
+      })
+    const positions: Positions = {
+      accountId,
+      chainId,
+      farms,
+      legends,
+      orders,
+      campaigns,
+      accessories,
+      observedAt: d.platform.now(),
+    }
     await d.positions.set(this.key(accountId, chainId), positions).catch(() => undefined)
     d.bus.emit({ type: 'positions.changed', positions })
     return positions
@@ -100,7 +135,21 @@ const AccountChain = z.object({ accountId: AccountIdSchema, chainId: z.number().
 
 export function positionsNamespace(positions: PositionsService): NamespaceSpec {
   return {
-    cached: { input: AccountChain, handler: (arg) => positions.cached((arg as { accountId: string }).accountId, (arg as { chainId: number }).chainId) },
-    snapshot: { input: AccountChain, handler: (arg) => positions.snapshot((arg as { accountId: string }).accountId, (arg as { chainId: number }).chainId) },
+    cached: {
+      input: AccountChain,
+      handler: (arg) =>
+        positions.cached(
+          (arg as { accountId: string }).accountId,
+          (arg as { chainId: number }).chainId,
+        ),
+    },
+    snapshot: {
+      input: AccountChain,
+      handler: (arg) =>
+        positions.snapshot(
+          (arg as { accountId: string }).accountId,
+          (arg as { chainId: number }).chainId,
+        ),
+    },
   }
 }

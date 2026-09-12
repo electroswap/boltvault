@@ -52,7 +52,14 @@ import { z } from 'zod'
 import { EngineError } from '../errors'
 import type { SealedMap } from '../sealed'
 import type { EventBus, NamespaceSpec } from '../host'
-import { AccountIdSchema, AutoLockSchema, type AccountView, type AutoLock, type SeedView, type VaultStatus } from '../schema'
+import {
+  AccountIdSchema,
+  AutoLockSchema,
+  type AccountView,
+  type AutoLock,
+  type SeedView,
+  type VaultStatus,
+} from '../schema'
 import type { SettingsStore } from '../settingsStore'
 import { readDoc, writeDoc, type DocSpec } from '../storage'
 
@@ -74,7 +81,13 @@ const TOUCH_DEBOUNCE_MS = 30_000
 const KDF_DOC: DocSpec<Argon2idParams | null> = {
   key: 'vault.kdf',
   version: 1,
-  schema: z.object({ m: z.number().int().positive(), t: z.number().int().positive(), p: z.number().int().positive() }).nullable(),
+  schema: z
+    .object({
+      m: z.number().int().positive(),
+      t: z.number().int().positive(),
+      p: z.number().int().positive(),
+    })
+    .nullable(),
   defaultValue: () => null,
 }
 
@@ -85,7 +98,10 @@ function isV2(f: StoredFile): f is VaultFileV2 {
 }
 
 /** Which derivation tree a hardware path belongs to, and its index (plan C1): BIP-44 `m/44'/60'/0'/0/i`, Ledger Live `m/44'/60'/i'/0/0`. */
-export function schemeOf(path: string): { scheme: 'bip44' | 'live' | 'custom'; index: number | null } {
+export function schemeOf(path: string): {
+  scheme: 'bip44' | 'live' | 'custom'
+  index: number | null
+} {
   const bip44 = /^m\/44'\/60'\/0'\/0\/(\d+)$/.exec(path)
   if (bip44) return { scheme: 'bip44', index: Number(bip44[1]) }
   const live = /^m\/44'\/60'\/(\d+)'\/0\/0$/.exec(path)
@@ -102,7 +118,15 @@ export function toView(a: VaultAccountV2): AccountView {
     address: a.address,
     ...(a.index !== undefined ? { index: a.index } : {}),
     ...(a.seedId !== undefined ? { seedId: a.seedId } : {}),
-    ...(a.hardware && hw ? { hardware: { ...a.hardware, scheme: hw.scheme, ...(hw.index !== null ? { index: hw.index } : {}) } } : {}),
+    ...(a.hardware && hw
+      ? {
+          hardware: {
+            ...a.hardware,
+            scheme: hw.scheme,
+            ...(hw.index !== null ? { index: hw.index } : {}),
+          },
+        }
+      : {}),
     hasKey: a.kind === 'hd' || a.kind === 'imported',
     hidden: a.hidden,
     order: a.order,
@@ -135,11 +159,15 @@ export interface VaultManagerOptions {
  * Any one of the factors the vault is wrapped under (§3.2). Hex on the wire,
  * because the channel guard refuses raw bytes.
  */
-export type RevealFactor = { readonly password: string } | { readonly credentialId: string; readonly prfSecretHex: string } | { readonly keyId: string; readonly keyHex: string }
+export type RevealFactor =
+  | { readonly password: string }
+  | { readonly credentialId: string; readonly prfSecretHex: string }
+  | { readonly keyId: string; readonly keyHex: string }
 
 function unlockFor(input: RevealFactor): UnlockWith {
   if ('password' in input) return { password: input.password }
-  if ('prfSecretHex' in input) return { credentialId: input.credentialId, prfSecret: fromHex(input.prfSecretHex) }
+  if ('prfSecretHex' in input)
+    return { credentialId: input.credentialId, prfSecret: fromHex(input.prfSecretHex) }
   return { keyId: input.keyId, deviceKey: fromHex(input.keyHex) }
 }
 
@@ -197,7 +225,8 @@ export class VaultManager {
   private async requireV2(): Promise<VaultFileV2> {
     const f = await this.readFile()
     if (!f) throw new EngineError('no_vault', 'no vault exists yet')
-    if (!isV2(f)) throw new EngineError('locked', 'unlock once with your password to upgrade this vault')
+    if (!isV2(f))
+      throw new EngineError('locked', 'unlock once with your password to upgrade this vault')
     return f
   }
 
@@ -213,7 +242,8 @@ export class VaultManager {
 
   private async kdfParams(): Promise<Argon2idParams> {
     if (this.opts.kdf) return this.opts.kdf
-    const stored = (await readDoc(this.platform.storage.local, KDF_DOC, () => this.platform.now())).value
+    const stored = (await readDoc(this.platform.storage.local, KDF_DOC, () => this.platform.now()))
+      .value
     if (stored) return stored
     /*
       Prove the chosen cost before writing it into the envelope.
@@ -226,7 +256,14 @@ export class VaultManager {
     let calibrated = await calibrateArgon2(this.crypto)
     for (;;) {
       try {
-        await this.crypto.argon2id({ password: new TextEncoder().encode('calibration-probe'), salt: this.platform.random(16), memoryKiB: calibrated.m, iterations: calibrated.t, parallelism: calibrated.p, hashLength: 32 })
+        await this.crypto.argon2id({
+          password: new TextEncoder().encode('calibration-probe'),
+          salt: this.platform.random(16),
+          memoryKiB: calibrated.m,
+          iterations: calibrated.t,
+          parallelism: calibrated.p,
+          hashLength: 32,
+        })
         break
       } catch {
         if (calibrated.m <= 64 * 1024) break
@@ -265,7 +302,11 @@ export class VaultManager {
       this.settings.get(),
     ])
     const unlocked = dekHex !== null
-    const wraps = file ? (isV2(file) ? file.wraps.map((w) => ({ by: w.by, id: w.id })) : [{ by: 'password' as const, id: 'password' }]) : []
+    const wraps = file
+      ? isV2(file)
+        ? file.wraps.map((w) => ({ by: w.by, id: w.id }))
+        : [{ by: 'password' as const, id: 'password' }]
+      : []
     let seeds: SeedView[] = []
     if (unlocked && file && isV2(file)) {
       const pt = openVaultV2(file, fromHex(dekHex))
@@ -284,14 +325,21 @@ export class VaultManager {
   }
 
   private seedView(s: VaultSeed, pt: VaultPlaintextV2): SeedView {
-    return { id: s.id, label: s.label, backedUp: s.backedUpAt !== null, accountCount: pt.accounts.filter((a) => a.seedId === s.id).length, hasPassphrase: !!s.passphrase }
+    return {
+      id: s.id,
+      label: s.label,
+      backedUp: s.backedUpAt !== null,
+      accountCount: pt.accounts.filter((a) => a.seedId === s.id).length,
+      hasPassphrase: !!s.passphrase,
+    }
   }
 
   // ---- create / import / unlock / lock ----------------------------------------------
 
   private seedFromMnemonic(mnemonic: string, label: string, passphrase?: string): VaultSeed {
     const m = normaliseMnemonic(mnemonic)
-    if (!validateMnemonicStr(m)) throw new EngineError('invalid_mnemonic', 'that is not a valid recovery phrase')
+    if (!validateMnemonicStr(m))
+      throw new EngineError('invalid_mnemonic', 'that is not a valid recovery phrase')
     const seed: VaultSeed = {
       id: toHex(this.platform.random(8)),
       label,
@@ -305,14 +353,29 @@ export class VaultManager {
 
   private hdAccount(seed: VaultSeed, index: number, label: string, order: number): VaultAccountV2 {
     const d = deriveAccount(seed.seedHex, index)
-    return { id: newAccountId(), kind: 'hd', label, address: d.address, seedId: seed.id, index, hidden: false, order, createdAt: this.platform.now() }
+    return {
+      id: newAccountId(),
+      kind: 'hd',
+      label,
+      address: d.address,
+      seedId: seed.id,
+      index,
+      hidden: false,
+      order,
+      createdAt: this.platform.now(),
+    }
   }
 
   private async createFromSeed(seed: VaultSeed, password: string): Promise<AccountView[]> {
     if (await this.readFile()) throw new EngineError('invalid_argument', 'a vault already exists')
     const first = this.hdAccount(seed, 0, 'Account 1', 0)
     const pt: VaultPlaintextV2 = { v: 2, seeds: [seed], importedKeys: {}, accounts: [first] }
-    const { file, dek } = await createVaultV2(this.crypto, { password, plaintext: pt, kdf: await this.kdfParams(), now: this.platform.now() })
+    const { file, dek } = await createVaultV2(this.crypto, {
+      password,
+      plaintext: pt,
+      kdf: await this.kdfParams(),
+      now: this.platform.now(),
+    })
     await this.writeFile(file)
     return this.unlockWithDek(dek, pt, first.id)
   }
@@ -321,7 +384,12 @@ export class VaultManager {
   async createEmpty(input: { password: string }): Promise<VaultStatus> {
     if (await this.readFile()) throw new EngineError('invalid_argument', 'a vault already exists')
     const pt: VaultPlaintextV2 = { v: 2, seeds: [], importedKeys: {}, accounts: [] }
-    const { file, dek } = await createVaultV2(this.crypto, { password: input.password, plaintext: pt, kdf: await this.kdfParams(), now: this.platform.now() })
+    const { file, dek } = await createVaultV2(this.crypto, {
+      password: input.password,
+      plaintext: pt,
+      kdf: await this.kdfParams(),
+      now: this.platform.now(),
+    })
     await this.writeFile(file)
     await this.unlockWithDek(dek, pt)
     return this.status()
@@ -347,20 +415,33 @@ export class VaultManager {
     return { mnemonic: generateEntropy(input.bits ?? 128).mnemonic }
   }
 
-  async create(input: { password: string; bits?: 128 | 256; label?: string }): Promise<{ accounts: AccountView[]; mnemonic: string; seedId: string }> {
+  async create(input: {
+    password: string
+    bits?: 128 | 256
+    label?: string
+  }): Promise<{ accounts: AccountView[]; mnemonic: string; seedId: string }> {
     const entropy = generateEntropy(input.bits ?? 128)
     const seed = this.seedFromMnemonic(entropy.mnemonic, input.label ?? 'Seed 1')
     const accounts = await this.createFromSeed(seed, input.password)
     return { accounts, mnemonic: seed.mnemonic, seedId: seed.id }
   }
 
-  async import(input: { mnemonic: string; password: string; passphrase?: string; label?: string }): Promise<{ accounts: AccountView[]; seedId: string }> {
+  async import(input: {
+    mnemonic: string
+    password: string
+    passphrase?: string
+    label?: string
+  }): Promise<{ accounts: AccountView[]; seedId: string }> {
     const seed = this.seedFromMnemonic(input.mnemonic, input.label ?? 'Seed 1', input.passphrase)
     const accounts = await this.createFromSeed(seed, input.password)
     return { accounts, seedId: seed.id }
   }
 
-  private async unlockWithDek(dek: Uint8Array, pt: VaultPlaintextV2, seat?: string | null): Promise<AccountView[]> {
+  private async unlockWithDek(
+    dek: Uint8Array,
+    pt: VaultPlaintextV2,
+    seat?: string | null,
+  ): Promise<AccountView[]> {
     const session = this.platform.storage.session
     await session.set(KEY_DEK, toHex(dek))
     await session.set(KEY_UNLOCKED_AT, String(this.platform.now()))
@@ -378,7 +459,13 @@ export class VaultManager {
     if (!file) throw new EngineError('no_vault', 'no vault exists yet')
     if (!isV2(file)) {
       // First unlock after the upgrade: migrate v1 → v2 in place.
-      const migrated = await migrateV1(this.crypto, file, input.password, await this.kdfParams(), this.platform.now())
+      const migrated = await migrateV1(
+        this.crypto,
+        file,
+        input.password,
+        await this.kdfParams(),
+        this.platform.now(),
+      )
       if (!migrated) throw new EngineError('wrong_password', 'wrong password')
       await this.writeFile(migrated.file)
       const pt = openVaultV2(migrated.file, migrated.dek)
@@ -392,18 +479,30 @@ export class VaultManager {
     return { accounts: await this.unlockWithDek(dek, pt) }
   }
 
-  async unlockWithPasskey(input: { credentialId: string; prfSecretHex: string }): Promise<{ accounts: AccountView[] }> {
+  async unlockWithPasskey(input: {
+    credentialId: string
+    prfSecretHex: string
+  }): Promise<{ accounts: AccountView[] }> {
     const file = await this.requireV2()
-    const dek = await unwrapDek(this.crypto, file, { credentialId: input.credentialId, prfSecret: fromHex(input.prfSecretHex) })
+    const dek = await unwrapDek(this.crypto, file, {
+      credentialId: input.credentialId,
+      prfSecret: fromHex(input.prfSecretHex),
+    })
     if (!dek) throw new EngineError('unauthorized', 'this passkey does not unlock the vault')
     const pt = openVaultV2(file, dek)
     if (!pt) throw new EngineError('internal', 'the vault could not be opened')
     return { accounts: await this.unlockWithDek(dek, pt) }
   }
 
-  async unlockWithDevice(input: { keyId: string; keyHex: string }): Promise<{ accounts: AccountView[] }> {
+  async unlockWithDevice(input: {
+    keyId: string
+    keyHex: string
+  }): Promise<{ accounts: AccountView[] }> {
     const file = await this.requireV2()
-    const dek = await unwrapDek(this.crypto, file, { keyId: input.keyId, deviceKey: fromHex(input.keyHex) })
+    const dek = await unwrapDek(this.crypto, file, {
+      keyId: input.keyId,
+      deviceKey: fromHex(input.keyHex),
+    })
     if (!dek) throw new EngineError('unauthorized', 'this device key does not unlock the vault')
     const pt = openVaultV2(file, dek)
     if (!pt) throw new EngineError('internal', 'the vault could not be opened')
@@ -469,7 +568,11 @@ export class VaultManager {
       collected. Short auto-lock remains the control that actually matters.
     */
     await session.set(KEY_DEK, '0'.repeat(64))
-    await Promise.all([session.remove(KEY_DEK), session.remove(KEY_UNLOCKED_AT), session.remove(KEY_LOCK_AT)])
+    await Promise.all([
+      session.remove(KEY_DEK),
+      session.remove(KEY_UNLOCKED_AT),
+      session.remove(KEY_LOCK_AT),
+    ])
     await this.platform.alarms.cancel(AUTOLOCK_ALARM)
     this.bus.emit({ type: 'vault.status', status: await this.status() })
     this.bus.emit({ type: 'accounts.changed', accounts: [], activeId: null })
@@ -485,17 +588,24 @@ export class VaultManager {
     which sends someone to re-type a password that was right all along, on a
     vault that is fine. Say which it was.
   */
-  private async unwrap(file: VaultFileV2, unlock: Parameters<typeof unwrapDek>[2]): Promise<Uint8Array | null> {
+  private async unwrap(
+    file: VaultFileV2,
+    unlock: Parameters<typeof unwrapDek>[2],
+  ): Promise<Uint8Array | null> {
     try {
       return await unwrapDek(this.crypto, file, unlock)
     } catch {
-      throw new EngineError('internal', 'This device could not allocate enough memory to open the vault. Close some tabs or apps and try again.')
+      throw new EngineError(
+        'internal',
+        'This device could not allocate enough memory to open the vault. Close some tabs or apps and try again.',
+      )
     }
   }
 
   private async verifyPassword(password: string): Promise<VaultFileV2> {
     const file = await this.requireV2()
-    if (!(await this.unwrap(file, { password }))) throw new EngineError('wrong_password', 'wrong password')
+    if (!(await this.unwrap(file, { password })))
+      throw new EngineError('wrong_password', 'wrong password')
     return file
   }
 
@@ -506,13 +616,18 @@ export class VaultManager {
    * device key and never had a memorable one to type; the vault file has
    * supported all three wraps since v2 and only this method insisted.
    */
-  async reveal(input: { seedId: string } & RevealFactor): Promise<{ mnemonic: string; passphraseSet: boolean }> {
+  async reveal(
+    input: { seedId: string } & RevealFactor,
+  ): Promise<{ mnemonic: string; passphraseSet: boolean }> {
     const file = await this.requireV2()
     // One KDF pass, not two: this used to verify by unwrapping, throw the
     // result away, and then unwrap a second time — a second Argon2id run for
     // nothing on the slowest operation the wallet performs.
     const dek = await unwrapDek(this.crypto, file, unlockFor(input))
-    if (!dek) throw 'password' in input ? new EngineError('wrong_password', 'wrong password') : new EngineError('unauthorized', 'that factor does not unlock the vault')
+    if (!dek)
+      throw 'password' in input
+        ? new EngineError('wrong_password', 'wrong password')
+        : new EngineError('unauthorized', 'that factor does not unlock the vault')
     const pt = openVaultV2(file, dek)
     const seed = pt?.seeds.find((s) => s.id === input.seedId)
     if (!seed) throw new EngineError('not_found', 'no such seed')
@@ -522,7 +637,16 @@ export class VaultManager {
   async changePassword(input: { current: string; next: string }): Promise<VaultStatus> {
     const file = await this.verifyPassword(input.current)
     const dek = await this.dek()
-    await this.writeFile(await changePasswordV2(this.crypto, file, dek, input.next, await this.kdfParams(), this.platform.now()))
+    await this.writeFile(
+      await changePasswordV2(
+        this.crypto,
+        file,
+        dek,
+        input.next,
+        await this.kdfParams(),
+        this.platform.now(),
+      ),
+    )
     return this.emitStatus()
   }
 
@@ -538,10 +662,22 @@ export class VaultManager {
     The DEK is still what the new wrap is built from; the password is what
     proves the person asking is entitled to hand it out.
   */
-  async enrolPasskey(input: { credentialId: string; prfSecretHex: string; password: string }): Promise<VaultStatus> {
+  async enrolPasskey(input: {
+    credentialId: string
+    prfSecretHex: string
+    password: string
+  }): Promise<VaultStatus> {
     const file = await this.verifyPassword(input.password)
     const dek = await this.dek()
-    await this.writeFile(await addWrap(this.crypto, file, dek, { by: 'prf', credentialId: input.credentialId, prfSecret: fromHex(input.prfSecretHex) }, this.platform.now()))
+    await this.writeFile(
+      await addWrap(
+        this.crypto,
+        file,
+        dek,
+        { by: 'prf', credentialId: input.credentialId, prfSecret: fromHex(input.prfSecretHex) },
+        this.platform.now(),
+      ),
+    )
     return this.emitStatus()
   }
 
@@ -551,10 +687,22 @@ export class VaultManager {
     return this.emitStatus()
   }
 
-  async enrolDevice(input: { keyId: string; keyHex: string; password: string }): Promise<VaultStatus> {
+  async enrolDevice(input: {
+    keyId: string
+    keyHex: string
+    password: string
+  }): Promise<VaultStatus> {
     const file = await this.verifyPassword(input.password)
     const dek = await this.dek()
-    await this.writeFile(await addWrap(this.crypto, file, dek, { by: 'device', keyId: input.keyId, deviceKey: fromHex(input.keyHex) }, this.platform.now()))
+    await this.writeFile(
+      await addWrap(
+        this.crypto,
+        file,
+        dek,
+        { by: 'device', keyId: input.keyId, deviceKey: fromHex(input.keyHex) },
+        this.platform.now(),
+      ),
+    )
     return this.emitStatus()
   }
 
@@ -595,15 +743,23 @@ export class VaultManager {
     return { positions: [...positions].sort((a, b) => a - b), wordCount: words.length }
   }
 
-  async confirmBackup(input: { seedId: string; answers: Array<{ position: number; word: string }> }): Promise<{ ok: boolean; status: VaultStatus }> {
+  async confirmBackup(input: {
+    seedId: string
+    answers: Array<{ position: number; word: string }>
+  }): Promise<{ ok: boolean; status: VaultStatus }> {
     const { pt } = await this.plaintext()
     const seed = pt.seeds.find((s) => s.id === input.seedId)
     if (!seed) throw new EngineError('not_found', 'no such seed')
     const words = seed.mnemonic.split(' ')
-    const ok = input.answers.length >= 3 && input.answers.every((a) => words[a.position - 1] === a.word.trim().toLowerCase())
+    const ok =
+      input.answers.length >= 3 &&
+      input.answers.every((a) => words[a.position - 1] === a.word.trim().toLowerCase())
     if (ok) {
       const now = this.platform.now()
-      await this.mutate((p) => ({ ...p, seeds: p.seeds.map((s) => (s.id === seed.id ? { ...s, backedUpAt: now } : s)) }))
+      await this.mutate((p) => ({
+        ...p,
+        seeds: p.seeds.map((s) => (s.id === seed.id ? { ...s, backedUpAt: now } : s)),
+      }))
     }
     return { ok, status: await this.status() }
   }
@@ -611,7 +767,10 @@ export class VaultManager {
   /** A hardware/export verification counts as a backup (§8.1). */
   async markBackedUp(seedId: string): Promise<void> {
     const now = this.platform.now()
-    await this.mutate((p) => ({ ...p, seeds: p.seeds.map((s) => (s.id === seedId ? { ...s, backedUpAt: now } : s)) }))
+    await this.mutate((p) => ({
+      ...p,
+      seeds: p.seeds.map((s) => (s.id === seedId ? { ...s, backedUpAt: now } : s)),
+    }))
   }
 
   // ---- export / import (air-gapped) ---------------------------------------------------
@@ -626,30 +785,57 @@ export class VaultManager {
    * KDF, was not that. The caller may still supply one, but it has to be at
    * least as long as what we would have generated.
    */
-  async export(input: { password: string; code?: string }): Promise<{ frames: string[]; code: string }> {
+  async export(input: {
+    password: string
+    code?: string
+  }): Promise<{ frames: string[]; code: string }> {
     await this.verifyPassword(input.password)
     const supplied = (input.code ?? '').trim()
     if (supplied && supplied.split(/\s+/).filter(Boolean).length < EXPORT_CODE_WORDS)
-      throw new EngineError('invalid_argument', `A phrase you choose must be at least ${EXPORT_CODE_WORDS} words. Leave it blank and BoltVault will make one.`)
+      throw new EngineError(
+        'invalid_argument',
+        `A phrase you choose must be at least ${EXPORT_CODE_WORDS} words. Leave it blank and BoltVault will make one.`,
+      )
     const code = supplied || mintExportCode((n) => this.platform.random(n))
     const { pt } = await this.plaintext()
-    const env = await exportVaultV2(this.crypto, pt, code, await this.kdfParams(), this.platform.now())
+    const env = await exportVaultV2(
+      this.crypto,
+      pt,
+      code,
+      await this.kdfParams(),
+      this.platform.now(),
+    )
     return { frames: chunkForQr(JSON.stringify(env)), code }
   }
 
-  async importExport(input: { frames: string[]; code: string; password: string }): Promise<{ accounts: AccountView[] }> {
-    if (await this.readFile()) throw new EngineError('invalid_argument', 'a vault already exists on this device')
+  async importExport(input: {
+    frames: string[]
+    code: string
+    password: string
+  }): Promise<{ accounts: AccountView[] }> {
+    if (await this.readFile())
+      throw new EngineError('invalid_argument', 'a vault already exists on this device')
     const payload = assembleQrFrames(input.frames)
-    if (!payload) throw new EngineError('invalid_argument', 'the export is incomplete — keep scanning')
+    if (!payload)
+      throw new EngineError('invalid_argument', 'the export is incomplete — keep scanning')
     let env: unknown
     try {
       env = JSON.parse(payload)
     } catch {
       throw new EngineError('invalid_argument', 'the export could not be read')
     }
-    const pt = await openVaultExport(this.crypto, env as Parameters<typeof openVaultExport>[1], input.code)
+    const pt = await openVaultExport(
+      this.crypto,
+      env as Parameters<typeof openVaultExport>[1],
+      input.code,
+    )
     if (!pt) throw new EngineError('unauthorized', 'wrong code')
-    const { file, dek } = await createVaultV2(this.crypto, { password: input.password, plaintext: pt, kdf: await this.kdfParams(), now: this.platform.now() })
+    const { file, dek } = await createVaultV2(this.crypto, {
+      password: input.password,
+      plaintext: pt,
+      kdf: await this.kdfParams(),
+      now: this.platform.now(),
+    })
     await this.writeFile(file)
     return { accounts: await this.unlockWithDek(dek, pt, pt.accounts[0]?.id ?? null) }
   }
@@ -668,7 +854,9 @@ export class VaultManager {
 
   async active(): Promise<AccountView | null> {
     const [accounts, id] = await Promise.all([this.accounts(), this.activeId()])
-    return accounts.find((a) => a.id === id) ?? accounts.find((a) => !a.hidden) ?? accounts[0] ?? null
+    return (
+      accounts.find((a) => a.id === id) ?? accounts.find((a) => !a.hidden) ?? accounts[0] ?? null
+    )
   }
 
   async setActive(id: string): Promise<AccountView> {
@@ -680,9 +868,13 @@ export class VaultManager {
     return found
   }
 
-  private async updateAccount(id: string, fn: (a: VaultAccountV2) => VaultAccountV2): Promise<AccountView> {
+  private async updateAccount(
+    id: string,
+    fn: (a: VaultAccountV2) => VaultAccountV2,
+  ): Promise<AccountView> {
     const pt = await this.mutate((p) => {
-      if (!p.accounts.some((a) => a.id === id)) throw new EngineError('not_found', 'no such account')
+      if (!p.accounts.some((a) => a.id === id))
+        throw new EngineError('not_found', 'no such account')
       return { ...p, accounts: p.accounts.map((a) => (a.id === id ? fn(a) : a)) }
     })
     const a = pt.accounts.find((x) => x.id === id)
@@ -713,24 +905,36 @@ export class VaultManager {
   async reorder(ids: string[]): Promise<AccountView[]> {
     const pt = await this.mutate((p) => {
       const known = new Set(p.accounts.map((a) => a.id))
-      if (ids.length !== known.size || !ids.every((id) => known.has(id))) throw new EngineError('invalid_argument', 'reorder must list every account exactly once')
+      if (ids.length !== known.size || !ids.every((id) => known.has(id)))
+        throw new EngineError('invalid_argument', 'reorder must list every account exactly once')
       const order = new Map(ids.map((id, i) => [id, i]))
-      return { ...p, accounts: p.accounts.map((a) => ({ ...a, order: order.get(a.id) ?? a.order })) }
+      return {
+        ...p,
+        accounts: p.accounts.map((a) => ({ ...a, order: order.get(a.id) ?? a.order })),
+      }
     })
     return [...pt.accounts].sort((a, b) => a.order - b.order).map(toView)
   }
 
-  private async addAccount(build: (pt: VaultPlaintextV2, order: number) => { account: VaultAccountV2; importedKey?: `0x${string}`; seed?: VaultSeed }): Promise<AccountView> {
+  private async addAccount(
+    build: (
+      pt: VaultPlaintextV2,
+      order: number,
+    ) => { account: VaultAccountV2; importedKey?: `0x${string}`; seed?: VaultSeed },
+  ): Promise<AccountView> {
     let created: VaultAccountV2 | null = null
     await this.mutate((p) => {
       const order = p.accounts.reduce((m, a) => Math.max(m, a.order), -1) + 1
       const { account, importedKey, seed } = build(p, order)
-      if (p.accounts.some((a) => a.address.toLowerCase() === account.address.toLowerCase())) throw new EngineError('invalid_argument', 'that address is already in this vault')
+      if (p.accounts.some((a) => a.address.toLowerCase() === account.address.toLowerCase()))
+        throw new EngineError('invalid_argument', 'that address is already in this vault')
       created = account
       return {
         ...p,
         seeds: seed ? [...p.seeds, seed] : p.seeds,
-        importedKeys: importedKey ? { ...p.importedKeys, [account.id]: importedKey } : p.importedKeys,
+        importedKeys: importedKey
+          ? { ...p.importedKeys, [account.id]: importedKey }
+          : p.importedKeys,
         accounts: [...p.accounts, account],
       }
     })
@@ -748,37 +952,76 @@ export class VaultManager {
     })
   }
 
-  async addSeed(input: { mnemonic: string; label?: string; passphrase?: string }): Promise<{ seedId: string; account: AccountView }> {
+  async addSeed(input: {
+    mnemonic: string
+    label?: string
+    passphrase?: string
+  }): Promise<{ seedId: string; account: AccountView }> {
     const { pt } = await this.plaintext()
-    const seed = this.seedFromMnemonic(input.mnemonic, input.label ?? `Seed ${pt.seeds.length + 1}`, input.passphrase)
-    if (pt.seeds.some((s) => s.seedHex === seed.seedHex)) throw new EngineError('invalid_argument', 'that recovery phrase is already in this vault')
-    const account = await this.addAccount((_p, order) => ({ account: this.hdAccount(seed, 0, `${seed.label} · Account 1`, order), seed }))
+    const seed = this.seedFromMnemonic(
+      input.mnemonic,
+      input.label ?? `Seed ${pt.seeds.length + 1}`,
+      input.passphrase,
+    )
+    if (pt.seeds.some((s) => s.seedHex === seed.seedHex))
+      throw new EngineError('invalid_argument', 'that recovery phrase is already in this vault')
+    const account = await this.addAccount((_p, order) => ({
+      account: this.hdAccount(seed, 0, `${seed.label} · Account 1`, order),
+      seed,
+    }))
     return { seedId: seed.id, account }
   }
 
   addImported(input: { privateKey: string; label?: string }): Promise<AccountView> {
-    const key = (input.privateKey.startsWith('0x') ? input.privateKey : `0x${input.privateKey}`).toLowerCase()
-    if (!/^0x[0-9a-f]{64}$/.test(key)) throw new EngineError('invalid_argument', 'a private key is 32 bytes of hex')
+    const key = (
+      input.privateKey.startsWith('0x') ? input.privateKey : `0x${input.privateKey}`
+    ).toLowerCase()
+    if (!/^0x[0-9a-f]{64}$/.test(key))
+      throw new EngineError('invalid_argument', 'a private key is 32 bytes of hex')
     const privateKey = key as `0x${string}`
     const address = privateKeyToAddress(privateKey)
     return this.addAccount((_p, order) => ({
-      account: { id: newAccountId(), kind: 'imported', label: input.label ?? 'Imported key', address, hidden: false, order, createdAt: this.platform.now() },
+      account: {
+        id: newAccountId(),
+        kind: 'imported',
+        label: input.label ?? 'Imported key',
+        address,
+        hidden: false,
+        order,
+        createdAt: this.platform.now(),
+      },
       importedKey: privateKey,
     }))
   }
 
   addWatch(input: { address: string; label?: string }): Promise<AccountView> {
     const raw = input.address.startsWith('0x') ? input.address : `0x${input.address}`
-    if (!isAddress(raw, { strict: false })) throw new EngineError('invalid_argument', 'that is not an address')
+    if (!isAddress(raw, { strict: false }))
+      throw new EngineError('invalid_argument', 'that is not an address')
     const address = getAddress(raw)
     return this.addAccount((_p, order) => ({
-      account: { id: newAccountId(), kind: 'watch', label: input.label ?? 'Watch address', address, hidden: false, order, createdAt: this.platform.now() },
+      account: {
+        id: newAccountId(),
+        kind: 'watch',
+        label: input.label ?? 'Watch address',
+        address,
+        hidden: false,
+        order,
+        createdAt: this.platform.now(),
+      },
     }))
   }
 
-  addHardware(input: { kind: 'ledger' | 'trezor' | 'keystone'; address: string; path: string; deviceId?: string; label?: string }): Promise<AccountView> {
+  addHardware(input: {
+    kind: 'ledger' | 'trezor' | 'keystone'
+    address: string
+    path: string
+    deviceId?: string
+    label?: string
+  }): Promise<AccountView> {
     const raw = input.address.startsWith('0x') ? input.address : `0x${input.address}`
-    if (!isAddress(raw, { strict: false })) throw new EngineError('invalid_argument', 'that is not an address')
+    if (!isAddress(raw, { strict: false }))
+      throw new EngineError('invalid_argument', 'that is not an address')
     const address = getAddress(raw)
     return this.addAccount((_p, order) => ({
       account: {
@@ -798,7 +1041,8 @@ export class VaultManager {
     await this.mutate((p) => {
       const a = p.accounts.find((x) => x.id === id)
       if (!a) throw new EngineError('not_found', 'no such account')
-      if (a.kind === 'hd') throw new EngineError('invalid_argument', 'hide seed accounts instead of removing them')
+      if (a.kind === 'hd')
+        throw new EngineError('invalid_argument', 'hide seed accounts instead of removing them')
       const { [id]: _dropped, ...importedKeys } = p.importedKeys
       return { ...p, importedKeys, accounts: p.accounts.filter((x) => x.id !== id) }
     })
@@ -811,9 +1055,13 @@ export class VaultManager {
     await this.opts.purgeAccount?.(id)
   }
 
-  previewDerivations(input: { mnemonic: string; passphrase?: string; count?: number }): { bip44: string[]; ledgerLive: string[] } {
+  previewDerivations(input: { mnemonic: string; passphrase?: string; count?: number }): {
+    bip44: string[]
+    ledgerLive: string[]
+  } {
     const m = normaliseMnemonic(input.mnemonic)
-    if (!validateMnemonicStr(m)) throw new EngineError('invalid_mnemonic', 'that is not a valid recovery phrase')
+    if (!validateMnemonicStr(m))
+      throw new EngineError('invalid_mnemonic', 'that is not a valid recovery phrase')
     const seedHex = seedHexFromMnemonic(m, input.passphrase)
     const n = Math.min(Math.max(input.count ?? 3, 1), 10)
     const root = HDKey.fromMasterSeed(fromHex(seedHex))
@@ -874,23 +1122,42 @@ const HexSchema = z.string().regex(/^[0-9a-fA-F]+$/)
 export function vaultNamespace(vault: VaultManager, settings: SettingsStore): NamespaceSpec {
   return {
     status: { handler: () => vault.status() },
-    createEmpty: { input: z.object({ password: PasswordSchema }), handler: (arg) => vault.createEmpty(arg as { password: string }) },
+    createEmpty: {
+      input: z.object({ password: PasswordSchema }),
+      handler: (arg) => vault.createEmpty(arg as { password: string }),
+    },
     propose: {
       input: z.object({ bits: z.union([z.literal(128), z.literal(256)]).optional() }),
       handler: (arg) => vault.propose(arg as { bits?: 128 | 256 }),
     },
     create: {
-      input: z.object({ password: PasswordSchema, bits: z.union([z.literal(128), z.literal(256)]).optional(), label: z.string().max(64).optional() }),
+      input: z.object({
+        password: PasswordSchema,
+        bits: z.union([z.literal(128), z.literal(256)]).optional(),
+        label: z.string().max(64).optional(),
+      }),
       handler: (arg) => vault.create(arg as { password: string; bits?: 128 | 256; label?: string }),
     },
     import: {
-      input: z.object({ mnemonic: z.string().min(1).max(2048), password: PasswordSchema, passphrase: z.string().max(256).optional(), label: z.string().max(64).optional() }),
-      handler: (arg) => vault.import(arg as { mnemonic: string; password: string; passphrase?: string; label?: string }),
+      input: z.object({
+        mnemonic: z.string().min(1).max(2048),
+        password: PasswordSchema,
+        passphrase: z.string().max(256).optional(),
+        label: z.string().max(64).optional(),
+      }),
+      handler: (arg) =>
+        vault.import(
+          arg as { mnemonic: string; password: string; passphrase?: string; label?: string },
+        ),
     },
-    unlock: { input: z.object({ password: PasswordSchema }), handler: (arg) => vault.unlock(arg as { password: string }) },
+    unlock: {
+      input: z.object({ password: PasswordSchema }),
+      handler: (arg) => vault.unlock(arg as { password: string }),
+    },
     unlockWithPasskey: {
       input: z.object({ credentialId: z.string().min(1), prfSecretHex: HexSchema }),
-      handler: (arg) => vault.unlockWithPasskey(arg as { credentialId: string; prfSecretHex: string }),
+      handler: (arg) =>
+        vault.unlockWithPasskey(arg as { credentialId: string; prfSecretHex: string }),
     },
     unlockWithDevice: {
       input: z.object({ keyId: z.string().min(1), keyHex: HexSchema }),
@@ -907,15 +1174,27 @@ export function vaultNamespace(vault: VaultManager, settings: SettingsStore): Na
       handler: (arg) => vault.changePassword(arg as { current: string; next: string }),
     },
     enrolPasskey: {
-      input: z.object({ credentialId: z.string().min(1), prfSecretHex: HexSchema, password: PasswordSchema }),
-      handler: (arg) => vault.enrolPasskey(arg as { credentialId: string; prfSecretHex: string; password: string }),
+      input: z.object({
+        credentialId: z.string().min(1),
+        prfSecretHex: HexSchema,
+        password: PasswordSchema,
+      }),
+      handler: (arg) =>
+        vault.enrolPasskey(arg as { credentialId: string; prfSecretHex: string; password: string }),
     },
-    removePasskey: { input: z.object({ credentialId: z.string().min(1), password: PasswordSchema }), handler: (arg) => vault.removePasskey(arg as { credentialId: string; password: string }) },
+    removePasskey: {
+      input: z.object({ credentialId: z.string().min(1), password: PasswordSchema }),
+      handler: (arg) => vault.removePasskey(arg as { credentialId: string; password: string }),
+    },
     enrolDevice: {
       input: z.object({ keyId: z.string().min(1), keyHex: HexSchema, password: PasswordSchema }),
-      handler: (arg) => vault.enrolDevice(arg as { keyId: string; keyHex: string; password: string }),
+      handler: (arg) =>
+        vault.enrolDevice(arg as { keyId: string; keyHex: string; password: string }),
     },
-    removeDevice: { input: z.object({ keyId: z.string().min(1), password: PasswordSchema }), handler: (arg) => vault.removeDevice(arg as { keyId: string; password: string }) },
+    removeDevice: {
+      input: z.object({ keyId: z.string().min(1), password: PasswordSchema }),
+      handler: (arg) => vault.removeDevice(arg as { keyId: string; password: string }),
+    },
     setAutoLock: {
       input: z.object({ autoLock: AutoLockSchema }),
       handler: async (arg) => {
@@ -923,19 +1202,38 @@ export function vaultNamespace(vault: VaultManager, settings: SettingsStore): Na
         return vault.applyAutoLock()
       },
     },
-    hidePreview: { input: z.object({ hide: z.boolean() }), handler: (arg) => vault.hidePreview(arg as { hide: boolean }) },
-    backupQuiz: { input: z.object({ seedId: z.string() }), handler: (arg) => vault.backupQuiz(arg as { seedId: string }) },
+    hidePreview: {
+      input: z.object({ hide: z.boolean() }),
+      handler: (arg) => vault.hidePreview(arg as { hide: boolean }),
+    },
+    backupQuiz: {
+      input: z.object({ seedId: z.string() }),
+      handler: (arg) => vault.backupQuiz(arg as { seedId: string }),
+    },
     confirmBackup: {
-      input: z.object({ seedId: z.string(), answers: z.array(z.object({ position: z.number().int().positive(), word: z.string() })).min(3) }),
-      handler: (arg) => vault.confirmBackup(arg as { seedId: string; answers: Array<{ position: number; word: string }> }),
+      input: z.object({
+        seedId: z.string(),
+        answers: z
+          .array(z.object({ position: z.number().int().positive(), word: z.string() }))
+          .min(3),
+      }),
+      handler: (arg) =>
+        vault.confirmBackup(
+          arg as { seedId: string; answers: Array<{ position: number; word: string }> },
+        ),
     },
     export: {
       input: z.object({ password: PasswordSchema, code: z.string().optional() }),
       handler: (arg) => vault.export(arg as { password: string; code?: string }),
     },
     importExport: {
-      input: z.object({ frames: z.array(z.string()).min(1), code: z.string().min(8), password: PasswordSchema }),
-      handler: (arg) => vault.importExport(arg as { frames: string[]; code: string; password: string }),
+      input: z.object({
+        frames: z.array(z.string()).min(1),
+        code: z.string().min(8),
+        password: PasswordSchema,
+      }),
+      handler: (arg) =>
+        vault.importExport(arg as { frames: string[]; code: string; password: string }),
     },
   }
 }
@@ -944,7 +1242,10 @@ export function accountsNamespace(vault: VaultManager): NamespaceSpec {
   return {
     list: { handler: () => vault.accounts() },
     active: { handler: () => vault.active() },
-    setActive: { input: z.object({ id: AccountIdSchema }), handler: (arg) => vault.setActive((arg as { id: string }).id) },
+    setActive: {
+      input: z.object({ id: AccountIdSchema }),
+      handler: (arg) => vault.setActive((arg as { id: string }).id),
+    },
     rename: {
       input: z.object({ id: AccountIdSchema, label: z.string().trim().min(1).max(64) }),
       handler: (arg) => {
@@ -959,7 +1260,10 @@ export function accountsNamespace(vault: VaultManager): NamespaceSpec {
         return vault.setHidden(id, hidden)
       },
     },
-    reorder: { input: z.object({ ids: z.array(AccountIdSchema) }), handler: (arg) => vault.reorder((arg as { ids: string[] }).ids) },
+    reorder: {
+      input: z.object({ ids: z.array(AccountIdSchema) }),
+      handler: (arg) => vault.reorder((arg as { ids: string[] }).ids),
+    },
     renameSeed: {
       input: z.object({ seedId: z.string(), label: z.string().trim().min(1).max(64) }),
       handler: (arg) => {
@@ -975,25 +1279,59 @@ export function accountsNamespace(vault: VaultManager): NamespaceSpec {
       },
     },
     addSeed: {
-      input: z.object({ mnemonic: z.string().min(1).max(2048), label: z.string().max(64).optional(), passphrase: z.string().max(256).optional() }),
-      handler: (arg) => vault.addSeed(arg as { mnemonic: string; label?: string; passphrase?: string }),
+      input: z.object({
+        mnemonic: z.string().min(1).max(2048),
+        label: z.string().max(64).optional(),
+        passphrase: z.string().max(256).optional(),
+      }),
+      handler: (arg) =>
+        vault.addSeed(arg as { mnemonic: string; label?: string; passphrase?: string }),
     },
     addImported: {
-      input: z.object({ privateKey: z.string().min(64).max(66), label: z.string().max(64).optional() }),
+      input: z.object({
+        privateKey: z.string().min(64).max(66),
+        label: z.string().max(64).optional(),
+      }),
       handler: (arg) => vault.addImported(arg as { privateKey: string; label?: string }),
     },
     addWatch: {
-      input: z.object({ address: z.string().min(40).max(42), label: z.string().max(64).optional() }),
+      input: z.object({
+        address: z.string().min(40).max(42),
+        label: z.string().max(64).optional(),
+      }),
       handler: (arg) => vault.addWatch(arg as { address: string; label?: string }),
     },
     addHardware: {
-      input: z.object({ kind: z.enum(['ledger', 'trezor', 'keystone']), address: z.string().min(40).max(42), path: z.string().min(1), deviceId: z.string().optional(), label: z.string().max(64).optional() }),
-      handler: (arg) => vault.addHardware(arg as { kind: 'ledger' | 'trezor' | 'keystone'; address: string; path: string; deviceId?: string; label?: string }),
+      input: z.object({
+        kind: z.enum(['ledger', 'trezor', 'keystone']),
+        address: z.string().min(40).max(42),
+        path: z.string().min(1),
+        deviceId: z.string().optional(),
+        label: z.string().max(64).optional(),
+      }),
+      handler: (arg) =>
+        vault.addHardware(
+          arg as {
+            kind: 'ledger' | 'trezor' | 'keystone'
+            address: string
+            path: string
+            deviceId?: string
+            label?: string
+          },
+        ),
     },
-    remove: { input: z.object({ id: AccountIdSchema }), handler: (arg) => vault.remove((arg as { id: string }).id) },
+    remove: {
+      input: z.object({ id: AccountIdSchema }),
+      handler: (arg) => vault.remove((arg as { id: string }).id),
+    },
     previewDerivations: {
-      input: z.object({ mnemonic: z.string().min(1).max(2048), passphrase: z.string().max(256).optional(), count: z.number().int().min(1).max(10).optional() }),
-      handler: async (arg) => vault.previewDerivations(arg as { mnemonic: string; passphrase?: string; count?: number }),
+      input: z.object({
+        mnemonic: z.string().min(1).max(2048),
+        passphrase: z.string().max(256).optional(),
+        count: z.number().int().min(1).max(10).optional(),
+      }),
+      handler: async (arg) =>
+        vault.previewDerivations(arg as { mnemonic: string; passphrase?: string; count?: number }),
     },
   }
 }

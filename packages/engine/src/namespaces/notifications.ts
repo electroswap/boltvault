@@ -66,7 +66,10 @@ export class NotificationsService {
   private async persist(items: NotificationView[]): Promise<void> {
     this.items = items.slice(0, MAX)
     await this.inbox.set(INBOX_ID, this.items)
-    this.bus.emit({ type: 'notifications.changed', unread: this.items.filter((n) => !n.read).length })
+    this.bus.emit({
+      type: 'notifications.changed',
+      unread: this.items.filter((n) => !n.read).length,
+    })
   }
 
   async list(): Promise<NotificationView[]> {
@@ -74,7 +77,8 @@ export class NotificationsService {
   }
 
   async unread(): Promise<number> {
-    return this.mine(await this.hydrate(), await this.activeAccountId()).filter((n) => !n.read).length
+    return this.mine(await this.hydrate(), await this.activeAccountId()).filter((n) => !n.read)
+      .length
   }
 
   /**
@@ -89,13 +93,30 @@ export class NotificationsService {
    * standing note is one row that is brought back up to date and unread,
    * carrying the current amount, instead of a new row beside the old ones.
    */
-  async push(input: { id: string; kind: NotificationView['kind']; title: string; body: string; target?: string | null; accountId?: string | null; renew?: boolean }): Promise<boolean> {
+  async push(input: {
+    id: string
+    kind: NotificationView['kind']
+    title: string
+    body: string
+    target?: string | null
+    accountId?: string | null
+    renew?: boolean
+  }): Promise<boolean> {
     const items = await this.hydrate()
     // Ids are scoped too: the same dividends notice for two accounts is two
     // notes, not one that the second account silently swallows as a duplicate.
     const accountId = input.accountId !== undefined ? input.accountId : await this.activeAccountId()
     const id = accountId === null ? input.id : `${accountId}:${input.id}`
-    const note: NotificationView = { id, kind: input.kind, title: input.title, body: input.body, target: input.target ?? null, at: this.platform.now(), read: false, accountId }
+    const note: NotificationView = {
+      id,
+      kind: input.kind,
+      title: input.title,
+      body: input.body,
+      target: input.target ?? null,
+      at: this.platform.now(),
+      read: false,
+      accountId,
+    }
     if (items.some((n) => n.id === id)) {
       if (input.renew !== true) return false
       await this.persist([note, ...items.filter((n) => n.id !== id)])
@@ -126,7 +147,10 @@ export class NotificationsService {
  * hold one row per account. An alert crossing a threshold is news each time it
  * happens; "you have dividends to claim" is the same sentence until you claim.
  */
-const STANDING: ReadonlySet<NotificationView['kind']> = new Set<NotificationView['kind']>(['collect', 'dividends'])
+const STANDING: ReadonlySet<NotificationView['kind']> = new Set<NotificationView['kind']>([
+  'collect',
+  'dividends',
+])
 
 /**
  * At most one standing note per account and kind, newest kept.
@@ -155,7 +179,10 @@ export function notificationsNamespace(n: NotificationsService): NamespaceSpec {
   return {
     list: { handler: () => n.list() },
     unread: { handler: () => n.unread() },
-    markRead: { input: z.object({ ids: z.array(z.string()).optional() }).optional(), handler: (arg) => n.markRead((arg as { ids?: string[] } | undefined)?.ids) },
+    markRead: {
+      input: z.object({ ids: z.array(z.string()).optional() }).optional(),
+      handler: (arg) => n.markRead((arg as { ids?: string[] } | undefined)?.ids),
+    },
     clear: { handler: () => n.clear() },
   }
 }

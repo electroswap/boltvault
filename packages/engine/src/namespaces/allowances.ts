@@ -19,9 +19,18 @@ import type { ProviderService } from './provider'
 import type { TokensService } from './tokens'
 import type { VaultManager } from './vault'
 
-const ERC20 = parseAbi(['function allowance(address owner, address spender) view returns (uint256)', 'function approve(address spender, uint256 amount) returns (bool)'])
-const PERMIT2 = parseAbi(['function allowance(address owner, address token, address spender) view returns (uint160 amount, uint48 expiration, uint48 nonce)', 'function approve(address token, address spender, uint160 amount, uint48 expiration)'])
-const ERC721 = parseAbi(['function isApprovedForAll(address owner, address operator) view returns (bool)', 'function setApprovalForAll(address operator, bool approved)'])
+const ERC20 = parseAbi([
+  'function allowance(address owner, address spender) view returns (uint256)',
+  'function approve(address spender, uint256 amount) returns (bool)',
+])
+const PERMIT2 = parseAbi([
+  'function allowance(address owner, address token, address spender) view returns (uint160 amount, uint48 expiration, uint48 nonce)',
+  'function approve(address token, address spender, uint160 amount, uint48 expiration)',
+])
+const ERC721 = parseAbi([
+  'function isApprovedForAll(address owner, address operator) view returns (bool)',
+  'function setApprovalForAll(address operator, bool approved)',
+])
 const APPROVAL_TOPIC = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925'
 const LOG_WINDOW = 50_000
 const LOG_CHUNK = 10_000
@@ -49,7 +58,11 @@ export class AllowancesService {
     return (await this.deps.allowances.get(allowanceId(accountId, chainId))) ?? { rows: [], at: 0 }
   }
 
-  async scan(accountId: string, chainId: number, opts: { logs?: boolean } = {}): Promise<AllowanceView[]> {
+  async scan(
+    accountId: string,
+    chainId: number,
+    opts: { logs?: boolean } = {},
+  ): Promise<AllowanceView[]> {
     const d = this.deps
     const account = (await d.vault.accounts()).find((a) => a.id === accountId)
     if (!account) throw new EngineError('not_found', 'no such account')
@@ -63,19 +76,47 @@ export class AllowancesService {
 
     // ERC-20 grid: every token × every known spender.
     const grid: Array<{ token: Hex; spender: Hex }> = []
-    for (const t of universe) for (const s of spenders) grid.push({ token: t.address as Hex, spender: s.address })
+    for (const t of universe)
+      for (const s of spenders) grid.push({ token: t.address as Hex, spender: s.address })
     // Unknown spenders from the bounded Approval log scan join the grid.
     if (opts.logs !== false) {
       for (const pair of await this.approvalLogs(chainId, owner)) {
-        if (!grid.some((g) => g.token.toLowerCase() === pair.token.toLowerCase() && g.spender.toLowerCase() === pair.spender.toLowerCase())) grid.push(pair)
+        if (
+          !grid.some(
+            (g) =>
+              g.token.toLowerCase() === pair.token.toLowerCase() &&
+              g.spender.toLowerCase() === pair.spender.toLowerCase(),
+          )
+        )
+          grid.push(pair)
       }
     }
-    const results = await readMany(d.chains, chainId, grid.map((g) => ({ address: g.token, abi: ERC20, functionName: 'allowance', args: [owner, g.spender] })))
+    const results = await readMany(
+      d.chains,
+      chainId,
+      grid.map((g) => ({
+        address: g.token,
+        abi: ERC20,
+        functionName: 'allowance',
+        args: [owner, g.spender],
+      })),
+    )
     grid.forEach((g, i) => {
       const r = results[i]
       if (!r?.ok || typeof r.value !== 'bigint' || r.value === 0n) return
       const known = knownContract(chainId, g.spender)
-      rows.push({ chainId, token: g.token, tokenSymbol: symbols.get(g.token.toLowerCase()) ?? null, decimals: decimalsOf.get(g.token.toLowerCase()) ?? null, spender: g.spender, spenderName: known?.name ?? null, known: known !== null, standard: 'erc20', amount: r.value >= UNLIMITED ? 'unlimited' : r.value.toString(), expiration: null })
+      rows.push({
+        chainId,
+        token: g.token,
+        tokenSymbol: symbols.get(g.token.toLowerCase()) ?? null,
+        decimals: decimalsOf.get(g.token.toLowerCase()) ?? null,
+        spender: g.spender,
+        spenderName: known?.name ?? null,
+        known: known !== null,
+        standard: 'erc20',
+        amount: r.value >= UNLIMITED ? 'unlimited' : r.value.toString(),
+        expiration: null,
+      })
     })
 
     // Permit2: token × the routers that spend through it.
@@ -83,8 +124,18 @@ export class AllowancesService {
     if (permit2) {
       const p2 = spenders.filter((s) => s.address.toLowerCase() !== permit2.toLowerCase())
       const calls: Array<{ token: Hex; spender: Hex }> = []
-      for (const t of universe) for (const s of p2) calls.push({ token: t.address as Hex, spender: s.address })
-      const res = await readMany(d.chains, chainId, calls.map((c) => ({ address: permit2, abi: PERMIT2, functionName: 'allowance', args: [owner, c.token, c.spender] })))
+      for (const t of universe)
+        for (const s of p2) calls.push({ token: t.address as Hex, spender: s.address })
+      const res = await readMany(
+        d.chains,
+        chainId,
+        calls.map((c) => ({
+          address: permit2,
+          abi: PERMIT2,
+          functionName: 'allowance',
+          args: [owner, c.token, c.spender],
+        })),
+      )
       calls.forEach((c, i) => {
         const r = res[i]
         if (!r?.ok || !Array.isArray(r.value)) return
@@ -92,7 +143,18 @@ export class AllowancesService {
         if (amount === 0n) return
         if (expiration !== 0 && expiration * 1000 < d.platform.now()) return
         const known = knownContract(chainId, c.spender)
-        rows.push({ chainId, token: c.token, tokenSymbol: symbols.get(c.token.toLowerCase()) ?? null, decimals: decimalsOf.get(c.token.toLowerCase()) ?? null, spender: c.spender, spenderName: known?.name ?? null, known: known !== null, standard: 'permit2', amount: amount >= UNLIMITED_160 ? 'unlimited' : amount.toString(), expiration: expiration === 0 ? null : expiration })
+        rows.push({
+          chainId,
+          token: c.token,
+          tokenSymbol: symbols.get(c.token.toLowerCase()) ?? null,
+          decimals: decimalsOf.get(c.token.toLowerCase()) ?? null,
+          spender: c.spender,
+          spenderName: known?.name ?? null,
+          known: known !== null,
+          standard: 'permit2',
+          amount: amount >= UNLIMITED_160 ? 'unlimited' : amount.toString(),
+          expiration: expiration === 0 ? null : expiration,
+        })
       })
     }
 
@@ -100,12 +162,33 @@ export class AllowancesService {
     const collections = knownSpenders(chainId, ['nft'])
     const operators = knownSpenders(chainId, ['conduit', 'marketplace'])
     const nftCalls: Array<{ token: Hex; operator: Hex }> = []
-    for (const c of collections) for (const o of operators) nftCalls.push({ token: c.address, operator: o.address })
-    const nftRes = await readMany(d.chains, chainId, nftCalls.map((c) => ({ address: c.token, abi: ERC721, functionName: 'isApprovedForAll', args: [owner, c.operator] })))
+    for (const c of collections)
+      for (const o of operators) nftCalls.push({ token: c.address, operator: o.address })
+    const nftRes = await readMany(
+      d.chains,
+      chainId,
+      nftCalls.map((c) => ({
+        address: c.token,
+        abi: ERC721,
+        functionName: 'isApprovedForAll',
+        args: [owner, c.operator],
+      })),
+    )
     nftCalls.forEach((c, i) => {
       const r = nftRes[i]
       if (!r?.ok || r.value !== true) return
-      rows.push({ chainId, token: c.token, tokenSymbol: knownContract(chainId, c.token)?.name ?? null, decimals: 0, spender: c.operator, spenderName: knownContract(chainId, c.operator)?.name ?? null, known: true, standard: 'erc721', amount: 'all', expiration: null })
+      rows.push({
+        chainId,
+        token: c.token,
+        tokenSymbol: knownContract(chainId, c.token)?.name ?? null,
+        decimals: 0,
+        spender: c.operator,
+        spenderName: knownContract(chainId, c.operator)?.name ?? null,
+        known: true,
+        standard: 'erc721',
+        amount: 'all',
+        expiration: null,
+      })
     })
 
     rows.sort((a, b) => rank(b) - rank(a))
@@ -114,7 +197,10 @@ export class AllowancesService {
     return rows
   }
 
-  private async approvalLogs(chainId: number, owner: Hex): Promise<Array<{ token: Hex; spender: Hex }>> {
+  private async approvalLogs(
+    chainId: number,
+    owner: Hex,
+  ): Promise<Array<{ token: Hex; spender: Hex }>> {
     const d = this.deps
     const head = Number((await d.chains.head(chainId).catch(() => null))?.blockNumber ?? 0)
     if (!head) return []
@@ -123,38 +209,74 @@ export class AllowancesService {
     for (let start = from; start <= head; start += LOG_CHUNK) {
       const end = Math.min(head, start + LOG_CHUNK - 1)
       const logs = (await d.chains
-        .rpc(chainId, 'eth_getLogs', [{ fromBlock: `0x${start.toString(16)}`, toBlock: `0x${end.toString(16)}`, topics: [APPROVAL_TOPIC, pad(owner, { size: 32 })] }])
+        .rpc(chainId, 'eth_getLogs', [
+          {
+            fromBlock: `0x${start.toString(16)}`,
+            toBlock: `0x${end.toString(16)}`,
+            topics: [APPROVAL_TOPIC, pad(owner, { size: 32 })],
+          },
+        ])
         .catch(() => [])) as Array<{ address: Hex; topics: Hex[] }>
       for (const log of logs) {
         const spenderTopic = log.topics[2]
         if (!spenderTopic) continue
         const spender = `0x${spenderTopic.slice(26)}` as Hex
-        pairs.set(`${log.address.toLowerCase()}:${spender.toLowerCase()}`, { token: log.address, spender })
+        pairs.set(`${log.address.toLowerCase()}:${spender.toLowerCase()}`, {
+          token: log.address,
+          spender,
+        })
       }
     }
     return [...pairs.values()]
   }
 
   /** Revoke = zero the allowance, through the internal approval path. */
-  async revoke(accountId: string, row: { chainId: number; token: string; spender: string; standard: 'erc20' | 'permit2' | 'erc721' }): Promise<{ requestId: string }> {
+  async revoke(
+    accountId: string,
+    row: {
+      chainId: number
+      token: string
+      spender: string
+      standard: 'erc20' | 'permit2' | 'erc721'
+    },
+  ): Promise<{ requestId: string }> {
     const d = this.deps
     const permit2 = permit2Address(row.chainId)
     let to: Hex
     let data: Hex
     if (row.standard === 'erc20') {
       to = row.token as Hex
-      data = encodeFunctionData({ abi: ERC20, functionName: 'approve', args: [row.spender as Hex, 0n] })
+      data = encodeFunctionData({
+        abi: ERC20,
+        functionName: 'approve',
+        args: [row.spender as Hex, 0n],
+      })
     } else if (row.standard === 'permit2') {
       if (!permit2) throw new EngineError('invalid_argument', 'no Permit2 on this chain')
       to = permit2
-      data = encodeFunctionData({ abi: PERMIT2, functionName: 'approve', args: [row.token as Hex, row.spender as Hex, 0n, 0] })
+      data = encodeFunctionData({
+        abi: PERMIT2,
+        functionName: 'approve',
+        args: [row.token as Hex, row.spender as Hex, 0n, 0],
+      })
     } else {
       to = row.token as Hex
-      data = encodeFunctionData({ abi: ERC721, functionName: 'setApprovalForAll', args: [row.spender as Hex, false] })
+      data = encodeFunctionData({
+        abi: ERC721,
+        functionName: 'setApprovalForAll',
+        args: [row.spender as Hex, false],
+      })
     }
     const account = (await d.vault.accounts()).find((a) => a.id === accountId)
     if (!account) throw new EngineError('not_found', 'no such account')
-    return d.provider.submitInternal({ kind: 'send_transaction', origin: 'internal:approvals', chainId: row.chainId, accountId, tx: { from: account.address as Hex, to, data, value: '0x0' }, clientRequestId: `revoke:${row.token}:${row.spender}:${d.platform.now()}` })
+    return d.provider.submitInternal({
+      kind: 'send_transaction',
+      origin: 'internal:approvals',
+      chainId: row.chainId,
+      accountId,
+      tx: { from: account.address as Hex, to, data, value: '0x0' },
+      clientRequestId: `revoke:${row.token}:${row.spender}:${d.platform.now()}`,
+    })
   }
 }
 
@@ -166,18 +288,45 @@ const StandardSchema = z.enum(['erc20', 'permit2', 'erc721'])
 
 export function allowancesNamespace(allowances: AllowancesService): NamespaceSpec {
   return {
-    cached: { input: z.object({ accountId: AccountIdSchema, chainId: z.number().int().positive() }), handler: (arg) => allowances.cached((arg as { accountId: string }).accountId, (arg as { chainId: number }).chainId) },
+    cached: {
+      input: z.object({ accountId: AccountIdSchema, chainId: z.number().int().positive() }),
+      handler: (arg) =>
+        allowances.cached(
+          (arg as { accountId: string }).accountId,
+          (arg as { chainId: number }).chainId,
+        ),
+    },
     scan: {
-      input: z.object({ accountId: AccountIdSchema, chainId: z.number().int().positive(), logs: z.boolean().optional() }),
+      input: z.object({
+        accountId: AccountIdSchema,
+        chainId: z.number().int().positive(),
+        logs: z.boolean().optional(),
+      }),
       handler: (arg) => {
-        const { accountId, chainId, logs } = arg as { accountId: string; chainId: number; logs?: boolean }
+        const { accountId, chainId, logs } = arg as {
+          accountId: string
+          chainId: number
+          logs?: boolean
+        }
         return allowances.scan(accountId, chainId, logs === undefined ? {} : { logs })
       },
     },
     revoke: {
-      input: z.object({ accountId: AccountIdSchema, chainId: z.number().int().positive(), token: z.string(), spender: z.string(), standard: StandardSchema }),
+      input: z.object({
+        accountId: AccountIdSchema,
+        chainId: z.number().int().positive(),
+        token: z.string(),
+        spender: z.string(),
+        standard: StandardSchema,
+      }),
       handler: (arg) => {
-        const { accountId, ...row } = arg as { accountId: string; chainId: number; token: string; spender: string; standard: 'erc20' | 'permit2' | 'erc721' }
+        const { accountId, ...row } = arg as {
+          accountId: string
+          chainId: number
+          token: string
+          spender: string
+          standard: 'erc20' | 'permit2' | 'erc721'
+        }
         return allowances.revoke(accountId, row)
       },
     },

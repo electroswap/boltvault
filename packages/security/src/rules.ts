@@ -5,12 +5,25 @@
  */
 import { feeRecipient } from '@boltvault/chains'
 import { formatUnits, type Hex } from 'viem'
-import { decodeCalldata, decodeMessage, parseTypedData, type DecodedCall, type ParsedTypedData } from './decode'
+import {
+  decodeCalldata,
+  decodeMessage,
+  parseTypedData,
+  type DecodedCall,
+  type ParsedTypedData,
+} from './decode'
 import { typosquat, hostOf, isScamOrigin } from './origin'
 import { clipboardCheck } from './clipboard'
 import { inSet, poisonCheck, sameAddress } from './poison'
 import { isKnownSpender, knownContract } from './registry'
-import { UR_MSG_SENDER, UR_ROUTER_SELF, isUrSwap, urDeliveredAfter, urPathTokens, type UrCommand } from './ur'
+import {
+  UR_MSG_SENDER,
+  UR_ROUTER_SELF,
+  isUrSwap,
+  urDeliveredAfter,
+  urPathTokens,
+  type UrCommand,
+} from './ur'
 import type { AssessmentContext, RiskRule, SignRequest, Simulation } from './types'
 
 export interface RuleInput {
@@ -226,7 +239,8 @@ export const permit2Rules: Rule = ({ request, typed, chainId, context }) => {
         code: 'PERMIT2_UNLIMITED',
         severity: 'warn',
         title: 'Unlimited allowance',
-        detail: 'ElectroSwap only needs the amount of one swap. You can make approvals exact in Settings › Spending.',
+        detail:
+          'ElectroSwap only needs the amount of one swap. You can make approvals exact in Settings › Spending.',
       }
   }
   return null
@@ -343,7 +357,8 @@ export const seaportUnderpriced: Rule = ({ request, typed, context, chainId }) =
     if (d.offer.length !== 1) continue
     const item = d.offer[0]
     if (!item || (item.itemType !== SEAPORT_ERC721 && item.itemType !== SEAPORT_ERC1155)) continue
-    if (!d.consideration.length || d.consideration.some((c) => c.itemType !== SEAPORT_NATIVE)) continue
+    if (!d.consideration.length || d.consideration.some((c) => c.itemType !== SEAPORT_NATIVE))
+      continue
     const floor = context.nftFloors[item.token.toLowerCase()]
     if (floor === undefined || floor <= 0n) continue
     // Every consideration item is a share of one price (seller + creator + platform).
@@ -481,7 +496,8 @@ export const feeSinkRules: Rule = ({ request, decoded, origin, context }) => {
         code: 'FEE_TIER_MISMATCH',
         severity: 'block',
         title: 'This swap would pay the fee twice',
-        detail: 'The fee is being taken from what you are spending and from what you receive. BoltVault will not sign it.',
+        detail:
+          'The fee is being taken from what you are spending and from what you receive. BoltVault will not sign it.',
       }
     const paid = decoded.decoded.commands.filter(
       (c) =>
@@ -495,7 +511,8 @@ export const feeSinkRules: Rule = ({ request, decoded, origin, context }) => {
         code: 'FEE_SINK_MISMATCH',
         severity: 'block',
         title: 'The wallet fee is missing',
-        detail: 'This swap does not pay the wallet fee to the pinned recipient. BoltVault will not sign it.',
+        detail:
+          'This swap does not pay the wallet fee to the pinned recipient. BoltVault will not sign it.',
       }
     const amount = one.type === 'PERMIT2_TRANSFER_FROM' || one.type === 'TRANSFER' ? one.amount : 0n
     if (amount !== onInput.amount)
@@ -503,7 +520,8 @@ export const feeSinkRules: Rule = ({ request, decoded, origin, context }) => {
         code: 'FEE_TIER_MISMATCH',
         severity: 'block',
         title: 'The fee does not match your tier',
-        detail: 'The amount this swap would pay the wallet is not the amount your tier says. Re-quote and try again.',
+        detail:
+          'The amount this swap would pay the wallet is not the amount your tier says. Re-quote and try again.',
       }
     return null
   }
@@ -615,7 +633,9 @@ export const dappTipsThirdParty: Rule = ({ request, decoded, origin, chainId, co
   return {
     code: 'DAPP_TIPS_THIRD_PARTY',
     severity: big ? 'danger' : 'warn',
-    title: big ? 'This swap pays most of its output to a third party' : 'This swap pays a fee to a third party',
+    title: big
+      ? 'This swap pays most of its output to a third party'
+      : 'This swap pays a fee to a third party',
     detail: many
       ? `${strangers.length} portions totalling ${(Number(total) / 100).toFixed(2)}% of the output go elsewhere, the largest ${(Number(worst.bips) / 100).toFixed(2)}% to ${label(context, chainId, worst.recipient)}. That is not BoltVault's fee.`
       : `${(Number(worst.bips) / 100).toFixed(2)}% of the output goes to ${label(context, chainId, worst.recipient)}. That is the site's fee, not BoltVault's.`,
@@ -688,14 +708,54 @@ export function clampNewContractDays(served: number | null | undefined): number 
   return Math.min(NEW_CONTRACT_MAX_DAYS, Math.max(NEW_CONTRACT_DEFAULT_DAYS, Math.floor(served)))
 }
 
+/**
+ * The contract a decoded call is actually about.
+ *
+ * `'to' in decoded` covers the plain shapes, and the Universal Router names
+ * its own `router` — but the decoder gives the richer kinds a field of their
+ * own (`pool`, `manager`, `farm`, `marketplace`, `distributor`, `minter`), and
+ * those are what the transaction talks to. Reading only `to` meant the age and
+ * verification check could not fire for a launchpad pool, a bridge router, a
+ * limit-order manager, a farm, a marketplace order, dividends or a mint —
+ * precisely the kinds whose target comes from an index rather than from the
+ * user, and so precisely the ones worth age-checking.
+ */
+function targetOf(decoded: DecodedCall): Hex | null {
+  if ('to' in decoded) return decoded.to
+  switch (decoded.kind) {
+    case 'universal_router':
+      return decoded.router
+    case 'launchpad':
+      return decoded.pool
+    case 'limit_order':
+      return decoded.manager
+    case 'farm_deposit':
+    case 'farm_withdraw':
+      return decoded.farm
+    case 'seaport_fulfill':
+      return decoded.marketplace
+    case 'dividends':
+      return decoded.distributor
+    case 'nft_mint':
+      return decoded.minter
+    case 'bridge':
+      return decoded.router
+    default:
+      return null
+  }
+}
+
 export const newContract: Rule = ({ request, decoded, chainId, context }) => {
   if (request.kind !== 'transaction' || !decoded) return null
-  const target =
-    'to' in decoded ? decoded.to : decoded.kind === 'universal_router' ? decoded.router : null
+  const target = targetOf(decoded)
   if (!target || knownContract(chainId, target)) return null
   const info = context.contracts[target.toLowerCase()]
   if (!info || !info.hasCode) return null
-  if (info.ageDays !== undefined && info.ageDays !== null && info.ageDays < context.newContractAfterDays)
+  if (
+    info.ageDays !== undefined &&
+    info.ageDays !== null &&
+    info.ageDays < context.newContractAfterDays
+  )
     return {
       code: 'NEW_CONTRACT',
       severity: 'warn',
@@ -755,12 +815,16 @@ export const multicallOpaque: Rule = ({ decoded, chainId }) => {
     code: 'MULTICALL_OPAQUE',
     severity: 'warn',
     title: 'Part of this batch could not be read',
-    detail: 'At least one call inside this batch is a function BoltVault does not recognise, so what it does cannot be shown.',
+    detail:
+      'At least one call inside this batch is a function BoltVault does not recognise, so what it does cannot be shown.',
   }
 }
 
 /** The router's two stand-ins for an address; neither is a third party. */
-const UR_SENTINELS = new Set(['0x0000000000000000000000000000000000000001', '0x0000000000000000000000000000000000000002'])
+const UR_SENTINELS = new Set([
+  '0x0000000000000000000000000000000000000001',
+  '0x0000000000000000000000000000000000000002',
+])
 
 /**
  * T1: a router call whose output lands anywhere but the user's own account.
@@ -795,7 +859,12 @@ export const urRecipientNotSelf: Rule = ({ decoded, context, chainId, account })
   const pinnedSink = feeRecipient(chainId)
   const recipients: Hex[] = []
   for (const c of decoded.decoded.commands) {
-    if (feeSink && (c.type === 'PERMIT2_TRANSFER_FROM' || c.type === 'TRANSFER') && sameAddress(c.recipient, feeSink)) continue
+    if (
+      feeSink &&
+      (c.type === 'PERMIT2_TRANSFER_FROM' || c.type === 'TRANSFER') &&
+      sameAddress(c.recipient, feeSink)
+    )
+      continue
     if (c.type === 'PAY_PORTION') {
       if (!(pinnedSink && sameAddress(c.recipient, pinnedSink))) recipients.push(c.recipient)
       continue
@@ -857,14 +926,16 @@ export const urOutputStranded: Rule = ({ decoded, context, chainId, account }) =
   if (decoded?.kind !== 'universal_router') return null
   const cmds = decoded.decoded.commands
   const own = [account, ...context.own]
-  const mine = (a: Hex): boolean => a.toLowerCase() === UR_MSG_SENDER.toLowerCase() || own.some((o) => sameAddress(o, a))
+  const mine = (a: Hex): boolean =>
+    a.toLowerCase() === UR_MSG_SENDER.toLowerCase() || own.some((o) => sameAddress(o, a))
   const stranded = (): string | null => {
     for (let i = 0; i < cmds.length; i++) {
       const c = cmds[i]
       if (!c || !isUrSwap(c)) continue
       if (c.recipient.toLowerCase() !== UR_ROUTER_SELF.toLowerCase()) continue
       const [, tout] = urPathTokens(c)
-      if (!urDeliveredAfter(cmds, i, tout, mine)) return tout === 'native' ? 'the output' : label(context, chainId, tout)
+      if (!urDeliveredAfter(cmds, i, tout, mine))
+        return tout === 'native' ? 'the output' : label(context, chainId, tout)
     }
     /*
       The other half of the same hole: an exact-out swap paid for with wrapped
@@ -872,7 +943,12 @@ export const urOutputStranded: Rule = ({ decoded, context, chainId, account }) =
       unless an `UNWRAP_WETH` refunds it.
     */
     const wrapped = cmds.findIndex((c) => c.type === 'WRAP_ETH')
-    if (wrapped >= 0 && cmds.some((c) => c.type === 'V2_SWAP_EXACT_OUT' || c.type === 'V3_SWAP_EXACT_OUT') && !cmds.some((c, i) => i > wrapped && c.type === 'UNWRAP_WETH' && mine(c.recipient))) return 'the change from what was wrapped'
+    if (
+      wrapped >= 0 &&
+      cmds.some((c) => c.type === 'V2_SWAP_EXACT_OUT' || c.type === 'V3_SWAP_EXACT_OUT') &&
+      !cmds.some((c, i) => i > wrapped && c.type === 'UNWRAP_WETH' && mine(c.recipient))
+    )
+      return 'the change from what was wrapped'
     return null
   }
   const what = stranded()
@@ -911,7 +987,9 @@ const UR_CONTRACT_BALANCE = 1n << 255n
  */
 export const swapMinOutImplausible: Rule = ({ decoded, context, account, chainId }) => {
   if (decoded?.kind !== 'universal_router') return null
-  const swaps = decoded.decoded.commands.filter((c) => c.type === 'V2_SWAP_EXACT_IN' || c.type === 'V3_SWAP_EXACT_IN')
+  const swaps = decoded.decoded.commands.filter(
+    (c) => c.type === 'V2_SWAP_EXACT_IN' || c.type === 'V3_SWAP_EXACT_IN',
+  )
   const first = swaps[0]
   const last = swaps[swaps.length - 1]
   if (first?.type !== 'V2_SWAP_EXACT_IN' && first?.type !== 'V3_SWAP_EXACT_IN') return null
@@ -953,7 +1031,10 @@ export const swapMinOutImplausible: Rule = ({ decoded, context, account, chainId
   */
   const own = [account, ...context.own]
   const r = last.recipient.toLowerCase()
-  const deliverable = r === UR_MSG_SENDER.toLowerCase() || r === UR_ROUTER_SELF.toLowerCase() || own.some((o) => sameAddress(o, last.recipient))
+  const deliverable =
+    r === UR_MSG_SENDER.toLowerCase() ||
+    r === UR_ROUTER_SELF.toLowerCase() ||
+    own.some((o) => sameAddress(o, last.recipient))
   if (!deliverable) return null
   // minOut / 10^dOut <= (amountIn / 10^dIn) × 10^-6, in integers.
   if (last.amountOut * 10n ** BigInt(dIn) * 1_000_000n <= first.amountIn * 10n ** BigInt(dOut))
@@ -961,7 +1042,8 @@ export const swapMinOutImplausible: Rule = ({ decoded, context, account, chainId
       code: 'SWAP_MIN_OUT_IMPLAUSIBLE',
       severity: 'danger',
       title: 'This swap accepts almost nothing in return',
-      detail: 'The smallest amount this swap will accept is so far below what you are putting in that it offers no protection at all. This is a rule of thumb, not a price check.',
+      detail:
+        'The smallest amount this swap will accept is so far below what you are putting in that it offers no protection at all. This is a rule of thumb, not a price check.',
     }
   return null
 }
@@ -1027,7 +1109,8 @@ export const DEFAULT_LARGE_SEND_PERCENT = 10
 export const largeSend: Rule = ({ request, decoded, context }) => {
   if (request.kind !== 'transaction' || !decoded) return null
   const percent = BigInt(context.spendPolicy?.largeSendPercent ?? DEFAULT_LARGE_SEND_PERCENT)
-  const over = (amount: bigint, balance: bigint | undefined): boolean => balance !== undefined && balance > 0n && amount * 100n > percent * balance
+  const over = (amount: bigint, balance: bigint | undefined): boolean =>
+    balance !== undefined && balance > 0n && amount * 100n > percent * balance
   const moved =
     decoded.kind === 'native_transfer'
       ? { amount: decoded.value, balance: context.balances['native'] }
@@ -1058,7 +1141,13 @@ export const sendAllowList: Rule = ({ request, decoded, context }) => {
   if (request.kind !== 'transaction' || !decoded) return null
   const policy = context.spendPolicy
   if (!policy?.allowListOnly) return null
-  if (decoded.kind !== 'native_transfer' && decoded.kind !== 'erc20_transfer' && decoded.kind !== 'erc721_transfer' && decoded.kind !== 'erc1155_transfer') return null
+  if (
+    decoded.kind !== 'native_transfer' &&
+    decoded.kind !== 'erc20_transfer' &&
+    decoded.kind !== 'erc721_transfer' &&
+    decoded.kind !== 'erc1155_transfer'
+  )
+    return null
   const to = recipientOf(decoded)
   if (!to) return null
   if (inSet(to, [...policy.allowList, ...context.own])) return null
@@ -1066,7 +1155,8 @@ export const sendAllowList: Rule = ({ request, decoded, context }) => {
     code: 'RECIPIENT_NOT_ALLOWED',
     severity: 'block',
     title: 'This address is not on your send list',
-    detail: 'You asked BoltVault to send only to addresses you have listed. Add this one in Settings › Spending if you meant it, or turn the list off there.',
+    detail:
+      'You asked BoltVault to send only to addresses you have listed. Add this one in Settings › Spending if you meant it, or turn the list off there.',
   }
 }
 
@@ -1177,7 +1267,8 @@ export const simulationRules: Rule = ({ request, simulation, decoded }) => {
       code: 'SIM_INCOMPLETE',
       severity: 'warn',
       title: 'Balance changes could not be simulated',
-      detail: 'This network could not preview the result, so only the revert check ran. What is listed above is read from the transaction itself.',
+      detail:
+        'This network could not preview the result, so only the revert check ran. What is listed above is read from the transaction itself.',
     }
   }
   return null
@@ -1240,7 +1331,10 @@ export const nonceNotNext: Rule = ({ request, context }) => {
   return {
     code: 'NONCE_NOT_NEXT',
     severity: 'warn',
-    title: n.theirs > n.next ? 'This transaction would wait its turn' : 'This transaction uses a used number',
+    title:
+      n.theirs > n.next
+        ? 'This transaction would wait its turn'
+        : 'This transaction uses a used number',
     detail:
       n.theirs > n.next
         ? `The site asked for position ${n.theirs} in this account's queue; the next free one is ${n.next}. It will not execute until ${n.theirs - n.next} more transaction${n.theirs - n.next === 1 ? '' : 's'} from this account have gone out — which could be a long time from now, at a price nobody is watching.`

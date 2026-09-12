@@ -19,7 +19,12 @@ export function poisonCheck(recipient: string, reference: readonly Hex[]): Poiso
   for (const known of reference) {
     const k = known.trim().toLowerCase().replace(/^0x/, '')
     if (r === k) continue
-    if (r.length === 40 && k.length === 40 && r.slice(0, 4) === k.slice(0, 4) && r.slice(-4) === k.slice(-4)) {
+    if (
+      r.length === 40 &&
+      k.length === 40 &&
+      r.slice(0, 4) === k.slice(0, 4) &&
+      r.slice(-4) === k.slice(-4)
+    ) {
       const differing: number[] = []
       for (let i = 0; i < 40; i++) if (r[i] !== k[i]) differing.push(i)
       return { hit: true, match: known, differing }

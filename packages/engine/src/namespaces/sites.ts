@@ -110,7 +110,9 @@ export class SitesService {
   ) {
     const store: SitesStore = {
       load: async () => {
-        const publicRows = (await readDoc(platform.storage.local, SITES_PUBLIC_DOC, () => platform.now())).value
+        const publicRows = (
+          await readDoc(platform.storage.local, SITES_PUBLIC_DOC, () => platform.now())
+        ).value
         // `{}` while locked — the public half alone still answers chainIdFor.
         const sealedRows = await sealed.entries()
         const out: Record<string, ConnectedSite> = {}
@@ -124,7 +126,8 @@ export class SitesService {
       },
       save: async (sites) => {
         const publicRows: Record<string, { chainId: number }> = {}
-        for (const [origin, row] of Object.entries(sites)) publicRows[origin] = { chainId: row.chainId }
+        for (const [origin, row] of Object.entries(sites))
+          publicRows[origin] = { chainId: row.chainId }
         await writeDoc(platform.storage.local, SITES_PUBLIC_DOC, publicRows)
         // Sealed writes are skipped while locked (`whenLocked: 'skip'`): nothing
         // that lives in this half can change without an unlocked vault, and a
@@ -152,7 +155,8 @@ export class SitesService {
   }
 
   async setChain(origin: string, chainId: number): Promise<SiteView> {
-    if (!ALL_CHAINS.some((c) => c.chainId === chainId)) throw new EngineError('invalid_argument', `unknown chain ${chainId}`)
+    if (!ALL_CHAINS.some((c) => c.chainId === chainId))
+      throw new EngineError('invalid_argument', `unknown chain ${chainId}`)
     if (!this.registry.get(origin)) throw new EngineError('not_found', 'that site is not connected')
     await this.registry.setChain(origin, chainId)
     this.emit()
@@ -185,7 +189,8 @@ export class SitesService {
     */
     if (!row?.connected) throw new EngineError('not_found', 'that site is not connected')
     if (row.accountId === accountId) return toView(row)
-    if (!(await this.registry.setAccount(origin, accountId))) throw new EngineError('not_found', 'that site is not connected')
+    if (!(await this.registry.setAccount(origin, accountId)))
+      throw new EngineError('not_found', 'that site is not connected')
     this.emit()
     for (const l of this.changeListeners) l({ origin, kind: 'account', accountId })
     const next = this.registry.get(origin)
@@ -215,7 +220,10 @@ export class SitesService {
    */
   async setBudget(origin: string, budget: string | null): Promise<SiteView> {
     if (budget !== null && !/^\d+$/.test(budget))
-      throw new EngineError('invalid_argument', 'A budget is an amount in the chain’s own units, as a whole number.')
+      throw new EngineError(
+        'invalid_argument',
+        'A budget is an amount in the chain’s own units, as a whole number.',
+      )
     await this.registry.setBudget(origin, budget)
     this.emit()
     const row = this.registry.get(origin)
@@ -271,7 +279,10 @@ export function sitesNamespace(sites: SitesService): NamespaceSpec {
       },
     },
     setBudget: {
-      input: z.object({ origin: OriginSchema, budget: z.string().regex(/^\d+$/).max(40).nullable() }),
+      input: z.object({
+        origin: OriginSchema,
+        budget: z.string().regex(/^\d+$/).max(40).nullable(),
+      }),
       handler: (arg) => {
         const { origin, budget } = arg as { origin: string; budget: string | null }
         return sites.setBudget(origin, budget)

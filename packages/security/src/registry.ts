@@ -62,8 +62,18 @@ for (const chainId of [52014, 5201420] as const) {
 }
 // Mainnet-only addresses from the master plan §8.13 spender registry.
 add(52014, '0xcA11bde05977b3631167028862bE2a173976CA11', 'Multicall3', 'multicall')
-add(52014, '0x16ca736c8B181772009e598F37f137e9cD36AFAE', 'ElectroSwap V2 liquidity locker', 'locker')
-add(52014, '0xfdB0d62Fc929fD53D266B969Bfe4250b205D0899', 'ElectroSwap V3 liquidity locker', 'locker')
+add(
+  52014,
+  '0x16ca736c8B181772009e598F37f137e9cD36AFAE',
+  'ElectroSwap V2 liquidity locker',
+  'locker',
+)
+add(
+  52014,
+  '0xfdB0d62Fc929fD53D266B969Bfe4250b205D0899',
+  'ElectroSwap V3 liquidity locker',
+  'locker',
+)
 // Hyperlane warp routers (§8.7): keyed by chain because the Avalanche collateral router shares the ETN synthetic's address.
 add(52014, '0x3187deAd7A2Bd6770F5Fe81495D1B715926AAe6e', 'Hyperlane USDC', 'warp_router') // the synthetic is the router
 add(52014, '0x48E722f1458b253c2FB0E573F939318D7Dbd54e7', 'Hyperlane USDT', 'warp_router')
@@ -76,14 +86,22 @@ for (const chainId of [1, 56, 8453, 42161, 10, 137, 43114, 59144, 130]) {
   add(chainId, '0x000000000022D473030F116dDEE9F6B43aC78BA3', 'Permit2', 'permit2')
   add(chainId, '0xcA11bde05977b3631167028862bE2a173976CA11', 'Multicall3', 'multicall')
   // The aggregators deploy at one address everywhere (CREATE2); the wallet never routes through them — they are spenders users already have.
-  add(chainId, '0x111111125421cA6dc452d289314280a0f8842A65', '1inch Aggregation Router v6', 'router')
+  add(
+    chainId,
+    '0x111111125421cA6dc452d289314280a0f8842A65',
+    '1inch Aggregation Router v6',
+    'router',
+  )
   add(chainId, '0xDef1C0ded9bec7F1a1670819833240f027b25EfF', '0x Exchange Proxy', 'router')
 }
 // Uniswap Universal Router where the address is pinned from the deployments list; other chains stay unverified and show as unknown.
 add(1, '0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af', 'Uniswap Universal Router', 'router')
 add(8453, '0x6fF5693b99212Da76ad316178A184AB56D299b43', 'Uniswap Universal Router', 'router')
 
-export function knownContract(chainId: number, address: string | null | undefined): KnownContract | null {
+export function knownContract(
+  chainId: number,
+  address: string | null | undefined,
+): KnownContract | null {
   if (!address) return null
   return KNOWN.get(key(chainId, address)) ?? null
 }
@@ -92,12 +110,39 @@ export function knownContract(chainId: number, address: string | null | undefine
 export function isKnownSpender(chainId: number, address: string): boolean {
   const c = knownContract(chainId, address)
   if (!c) return false
-  return c.role === 'router' || c.role === 'permit2' || c.role === 'marketplace' || c.role === 'conduit' || c.role === 'farm' || c.role === 'locker' || c.role === 'launchpad' || c.role === 'limit_orders' || c.role === 'position_manager' || c.role === 'warp_router'
+  return (
+    c.role === 'router' ||
+    c.role === 'permit2' ||
+    c.role === 'marketplace' ||
+    c.role === 'conduit' ||
+    c.role === 'farm' ||
+    c.role === 'locker' ||
+    c.role === 'launchpad' ||
+    c.role === 'limit_orders' ||
+    c.role === 'position_manager' ||
+    c.role === 'warp_router'
+  )
 }
 
 /** Known contracts on a chain by role (defaults to the spender roles). */
-export function knownSpenders(chainId: number, roles?: readonly ContractRole[]): Array<{ address: Hex; name: string; role: ContractRole }> {
-  const wanted = roles ?? (['router', 'permit2', 'marketplace', 'conduit', 'farm', 'locker', 'launchpad', 'limit_orders', 'position_manager', 'warp_router'] as const)
+export function knownSpenders(
+  chainId: number,
+  roles?: readonly ContractRole[],
+): Array<{ address: Hex; name: string; role: ContractRole }> {
+  const wanted =
+    roles ??
+    ([
+      'router',
+      'permit2',
+      'marketplace',
+      'conduit',
+      'farm',
+      'locker',
+      'launchpad',
+      'limit_orders',
+      'position_manager',
+      'warp_router',
+    ] as const)
   const out: Array<{ address: Hex; name: string; role: ContractRole }> = []
   for (const [k, v] of KNOWN) {
     if (!k.startsWith(`${chainId}:`) || !wanted.includes(v.role)) continue
@@ -114,6 +159,10 @@ export function permit2Address(chainId: number): Hex | null {
 }
 
 /** Register a contract at runtime (custom tokens, signed spender lists §9.4). */
-export function registerKnownContract(chainId: number, address: string, contract: KnownContract): void {
+export function registerKnownContract(
+  chainId: number,
+  address: string,
+  contract: KnownContract,
+): void {
   KNOWN.set(key(chainId, address), { ...contract, address: address as Hex })
 }

@@ -16,10 +16,19 @@ import type { VaultManager } from './vault'
 
 /** What the checks read — handed in by `createEngine` as adapters, so this service depends on no other. */
 export interface WatchSources {
-  tokens(chainId: number): Promise<ReadonlyArray<{ readonly address: string; readonly price: number | null }>>
-  collections(chainId: number): Promise<ReadonlyArray<{ readonly address: string; readonly floorEtn: number | null }>>
-  campaigns(chainId: number): Promise<ReadonlyArray<{ readonly pool: string; readonly phase: string }>>
-  accessory(accountId: string, chainId: number): Promise<{ readonly kind: string; readonly text: string } | null>
+  tokens(
+    chainId: number,
+  ): Promise<ReadonlyArray<{ readonly address: string; readonly price: number | null }>>
+  collections(
+    chainId: number,
+  ): Promise<ReadonlyArray<{ readonly address: string; readonly floorEtn: number | null }>>
+  campaigns(
+    chainId: number,
+  ): Promise<ReadonlyArray<{ readonly pool: string; readonly phase: string }>>
+  accessory(
+    accountId: string,
+    chainId: number,
+  ): Promise<{ readonly kind: string; readonly text: string } | null>
 }
 
 export interface WatchlistDeps {
@@ -52,7 +61,9 @@ export class WatchlistService {
   }
 
   private schedule(): void {
-    void this.deps.platform.alarms.schedule(WATCH_ALARM, this.deps.platform.now() + CHECK_EVERY_MS).catch(() => undefined)
+    void this.deps.platform.alarms
+      .schedule(WATCH_ALARM, this.deps.platform.now() + CHECK_EVERY_MS)
+      .catch(() => undefined)
   }
 
   /**
@@ -93,17 +104,39 @@ export class WatchlistService {
     return `${kind}:${chainId}:${address.toLowerCase()}`
   }
 
-  async star(input: { kind: WatchItem['kind']; chainId: number; address: string; label: string }): Promise<WatchItem[]> {
+  async star(input: {
+    kind: WatchItem['kind']
+    chainId: number
+    address: string
+    label: string
+  }): Promise<WatchItem[]> {
     await this.hydrate()
     const k = this.key(input.kind, input.chainId, input.address)
     if (!this.items.some((i) => this.key(i.kind, i.chainId, i.address) === k)) {
-      this.items = [...this.items, { kind: input.kind, chainId: input.chainId, address: input.address, label: input.label.slice(0, 64), above: null, below: null, onLive: input.kind === 'campaign', addedAt: this.deps.platform.now(), lastValue: null }]
+      this.items = [
+        ...this.items,
+        {
+          kind: input.kind,
+          chainId: input.chainId,
+          address: input.address,
+          label: input.label.slice(0, 64),
+          above: null,
+          below: null,
+          onLive: input.kind === 'campaign',
+          addedAt: this.deps.platform.now(),
+          lastValue: null,
+        },
+      ]
       await this.persist()
     }
     return this.items
   }
 
-  async unstar(input: { kind: WatchItem['kind']; chainId: number; address: string }): Promise<WatchItem[]> {
+  async unstar(input: {
+    kind: WatchItem['kind']
+    chainId: number
+    address: string
+  }): Promise<WatchItem[]> {
     await this.hydrate()
     const k = this.key(input.kind, input.chainId, input.address)
     this.items = this.items.filter((i) => this.key(i.kind, i.chainId, i.address) !== k)
@@ -111,10 +144,21 @@ export class WatchlistService {
     return this.items
   }
 
-  async setAlert(input: { kind: WatchItem['kind']; chainId: number; address: string; above: number | null; below: number | null; onLive: boolean }): Promise<WatchItem[]> {
+  async setAlert(input: {
+    kind: WatchItem['kind']
+    chainId: number
+    address: string
+    above: number | null
+    below: number | null
+    onLive: boolean
+  }): Promise<WatchItem[]> {
     await this.hydrate()
     const k = this.key(input.kind, input.chainId, input.address)
-    this.items = this.items.map((i) => (this.key(i.kind, i.chainId, i.address) === k ? { ...i, above: input.above, below: input.below, onLive: input.onLive } : i))
+    this.items = this.items.map((i) =>
+      this.key(i.kind, i.chainId, i.address) === k
+        ? { ...i, above: input.above, below: input.below, onLive: input.onLive }
+        : i,
+    )
     await this.persist()
     return this.items
   }
@@ -138,30 +182,59 @@ export class WatchlistService {
     const chainIds = [...new Set(this.items.map((i) => i.chainId))]
     let changed = false
     for (const chainId of chainIds) {
-      const tokens = this.items.some((i) => i.kind === 'token' && i.chainId === chainId) ? await s.tokens(chainId) : []
-      const collections = this.items.some((i) => i.kind === 'collection' && i.chainId === chainId) ? await s.collections(chainId) : []
-      const campaigns = this.items.some((i) => i.kind === 'campaign' && i.chainId === chainId && i.onLive) ? await s.campaigns(chainId) : []
+      const tokens = this.items.some((i) => i.kind === 'token' && i.chainId === chainId)
+        ? await s.tokens(chainId)
+        : []
+      const collections = this.items.some((i) => i.kind === 'collection' && i.chainId === chainId)
+        ? await s.collections(chainId)
+        : []
+      const campaigns = this.items.some(
+        (i) => i.kind === 'campaign' && i.chainId === chainId && i.onLive,
+      )
+        ? await s.campaigns(chainId)
+        : []
       this.items = await Promise.all(
         this.items.map(async (i) => {
           if (i.chainId !== chainId) return i
           let value: number | null = i.lastValue
-          if (i.kind === 'token') value = tokens.find((t) => t.address.toLowerCase() === i.address.toLowerCase())?.price ?? i.lastValue
-          else if (i.kind === 'collection') value = collections.find((c) => c.address.toLowerCase() === i.address.toLowerCase())?.floorEtn ?? i.lastValue
+          if (i.kind === 'token')
+            value =
+              tokens.find((t) => t.address.toLowerCase() === i.address.toLowerCase())?.price ??
+              i.lastValue
+          else if (i.kind === 'collection')
+            value =
+              collections.find((c) => c.address.toLowerCase() === i.address.toLowerCase())
+                ?.floorEtn ?? i.lastValue
           else {
             const c = campaigns.find((x) => x.pool.toLowerCase() === i.address.toLowerCase())
             value = c ? (c.phase === 'live' ? 1 : 0) : i.lastValue
           }
           if (value !== i.lastValue) changed = true
           if (i.kind === 'campaign') {
-            if (i.onLive && value === 1 && i.lastValue !== 1) await notify(`${i.label} is live`, 'The campaign is taking contributions now.', `live:${i.address}`)
+            if (i.onLive && value === 1 && i.lastValue !== 1)
+              await notify(
+                `${i.label} is live`,
+                'The campaign is taking contributions now.',
+                `live:${i.address}`,
+              )
             return { ...i, lastValue: value }
           }
           const prev = i.lastValue
           if (value !== null && prev !== null) {
             const unit = i.kind === 'token' ? '$' : ''
             const suffix = i.kind === 'token' ? '' : ' ETN'
-            if (i.above !== null && prev < i.above && value >= i.above) await notify(`${i.label} above ${unit}${i.above}${suffix}`, `Now ${unit}${value}${suffix}.`, `above:${i.kind}:${i.address}`)
-            if (i.below !== null && prev > i.below && value <= i.below) await notify(`${i.label} below ${unit}${i.below}${suffix}`, `Now ${unit}${value}${suffix}.`, `below:${i.kind}:${i.address}`)
+            if (i.above !== null && prev < i.above && value >= i.above)
+              await notify(
+                `${i.label} above ${unit}${i.above}${suffix}`,
+                `Now ${unit}${value}${suffix}.`,
+                `above:${i.kind}:${i.address}`,
+              )
+            if (i.below !== null && prev > i.below && value <= i.below)
+              await notify(
+                `${i.label} below ${unit}${i.below}${suffix}`,
+                `Now ${unit}${value}${suffix}.`,
+                `below:${i.kind}:${i.address}`,
+              )
           }
           return { ...i, lastValue: value }
         }),
@@ -176,7 +249,11 @@ export class WatchlistService {
         const key = `${acc.kind}:${active.id}`
         const last = this.nudgedAt[key] ?? 0
         if (this.deps.platform.now() - last > NUDGE_EVERY_MS) {
-          await notify(acc.kind === 'collect' ? 'Rewards to collect' : 'Dividends to claim', acc.text, key)
+          await notify(
+            acc.kind === 'collect' ? 'Rewards to collect' : 'Dividends to claim',
+            acc.text,
+            key,
+          )
           this.nudgedAt = { ...this.nudgedAt, [key]: this.deps.platform.now() }
           changed = true
         }
@@ -187,14 +264,45 @@ export class WatchlistService {
   }
 }
 
-const Key = z.object({ kind: z.enum(['token', 'collection', 'campaign']), chainId: z.number().int().positive(), address: z.string() })
+const Key = z.object({
+  kind: z.enum(['token', 'collection', 'campaign']),
+  chainId: z.number().int().positive(),
+  address: z.string(),
+})
 
 export function watchlistNamespace(watchlist: WatchlistService): NamespaceSpec {
   return {
     list: { handler: () => watchlist.list() },
-    star: { input: Key.extend({ label: z.string().max(64) }), handler: (arg) => watchlist.star(arg as { kind: WatchItem['kind']; chainId: number; address: string; label: string }) },
-    unstar: { input: Key, handler: (arg) => watchlist.unstar(arg as { kind: WatchItem['kind']; chainId: number; address: string }) },
-    setAlert: { input: Key.extend({ above: z.number().nullable(), below: z.number().nullable(), onLive: z.boolean() }), handler: (arg) => watchlist.setAlert(arg as { kind: WatchItem['kind']; chainId: number; address: string; above: number | null; below: number | null; onLive: boolean }) },
+    star: {
+      input: Key.extend({ label: z.string().max(64) }),
+      handler: (arg) =>
+        watchlist.star(
+          arg as { kind: WatchItem['kind']; chainId: number; address: string; label: string },
+        ),
+    },
+    unstar: {
+      input: Key,
+      handler: (arg) =>
+        watchlist.unstar(arg as { kind: WatchItem['kind']; chainId: number; address: string }),
+    },
+    setAlert: {
+      input: Key.extend({
+        above: z.number().nullable(),
+        below: z.number().nullable(),
+        onLive: z.boolean(),
+      }),
+      handler: (arg) =>
+        watchlist.setAlert(
+          arg as {
+            kind: WatchItem['kind']
+            chainId: number
+            address: string
+            above: number | null
+            below: number | null
+            onLive: boolean
+          },
+        ),
+    },
     check: { handler: () => watchlist.check() },
   }
 }

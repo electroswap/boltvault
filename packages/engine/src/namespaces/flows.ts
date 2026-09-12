@@ -82,7 +82,9 @@ export class FlowStore {
   }
 
   list(accountId?: string): SwapFlow[] {
-    return [...this.flows.values()].filter((f) => !accountId || f.accountId === accountId).sort((a, b) => b.startedAt - a.startedAt)
+    return [...this.flows.values()]
+      .filter((f) => !accountId || f.accountId === accountId)
+      .sort((a, b) => b.startedAt - a.startedAt)
   }
 
   private emit(flow: SwapFlow): void {
@@ -106,7 +108,10 @@ export class FlowStore {
   }
 
   /** Tell the caller a step failed, and never let that telling become the failure. */
-  private notifyFailed(onFailed: ((failure: FlowStepFailure) => void) | undefined, failure: FlowStepFailure): void {
+  private notifyFailed(
+    onFailed: ((failure: FlowStepFailure) => void) | undefined,
+    failure: FlowStepFailure,
+  ): void {
     if (!onFailed) return
     try {
       onFailed(failure)
@@ -138,7 +143,12 @@ export class FlowStore {
         if (e.status === 'failed' || e.status === 'replaced') {
           clearTimeout(timer)
           off?.()
-          reject(new FlowReceiptError(e.status === 'failed' ? 'The network refused this step.' : 'This step was replaced.', e))
+          reject(
+            new FlowReceiptError(
+              e.status === 'failed' ? 'The network refused this step.' : 'This step was replaced.',
+              e,
+            ),
+          )
           return true
         }
         return false
@@ -182,7 +192,12 @@ export class FlowStore {
       kind: input.kind,
       accountId: input.accountId,
       chainId: input.chainId,
-      steps: input.steps.map((s) => ({ step: s.step, requestId: null, status: 'pending' as const, hash: null })),
+      steps: input.steps.map((s) => ({
+        step: s.step,
+        requestId: null,
+        status: 'pending' as const,
+        hash: null,
+      })),
       status: 'running',
       error: null,
       hash: null,
@@ -209,7 +224,15 @@ export class FlowStore {
               flow failed, and rethrowing keeps that behaviour exactly; this
               only makes sure the step is named before it does.
             */
-            this.notifyFailed(input.onFailed, { step: s.step, index: i, phase: 'run', error: err, rejected: isRejection(err instanceof Error ? err.message : String(err)), requestId: null, hash: null })
+            this.notifyFailed(input.onFailed, {
+              step: s.step,
+              index: i,
+              phase: 'run',
+              error: err,
+              rejected: isRejection(err instanceof Error ? err.message : String(err)),
+              requestId: null,
+              hash: null,
+            })
             throw err
           }
           const { requestId, result } = started
@@ -221,20 +244,45 @@ export class FlowStore {
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err)
             const rejected = isRejection(message)
-            this.notifyFailed(input.onFailed, { step: s.step, index: i, phase: 'result', error: err, rejected, requestId, hash: null })
+            this.notifyFailed(input.onFailed, {
+              step: s.step,
+              index: i,
+              phase: 'result',
+              error: err,
+              rejected,
+              requestId,
+              hash: null,
+            })
             this.patchStep(id, i, { status: rejected ? 'rejected' : 'failed' })
-            this.patch(id, { status: rejected ? 'rejected' : 'failed', error: rejected ? null : message })
+            this.patch(id, {
+              status: rejected ? 'rejected' : 'failed',
+              error: rejected ? null : message,
+            })
             return
           }
-          const hash = typeof value === 'string' && value.startsWith('0x') && value.length === 66 ? value : null
+          const hash =
+            typeof value === 'string' && value.startsWith('0x') && value.length === 66
+              ? value
+              : null
           this.patchStep(id, i, { status: 'submitted', hash })
           if (s.waitReceipt && hash && requestId) {
             try {
               await this.waitReceipt(requestId)
             } catch (err) {
-              this.notifyFailed(input.onFailed, { step: s.step, index: i, phase: 'receipt', error: err, rejected: false, requestId, hash })
+              this.notifyFailed(input.onFailed, {
+                step: s.step,
+                index: i,
+                phase: 'receipt',
+                error: err,
+                rejected: false,
+                requestId,
+                hash,
+              })
               this.patchStep(id, i, { status: 'failed' })
-              this.patch(id, { status: 'failed', error: err instanceof Error ? err.message : String(err) })
+              this.patch(id, {
+                status: 'failed',
+                error: err instanceof Error ? err.message : String(err),
+              })
               return
             }
           }
@@ -242,10 +290,23 @@ export class FlowStore {
           const last = i === input.steps.length - 1
           const cur = this.flows.get(id)
           if (!cur) return
-          this.patch(id, { steps: cur.steps.map((st, j) => (j === i ? { ...st, status: 'confirmed' as const } : st)), ...(last ? { status: 'done' as const, hash: hash ?? (typeof value === 'string' ? value : null) } : {}) })
+          this.patch(id, {
+            steps: cur.steps.map((st, j) =>
+              j === i ? { ...st, status: 'confirmed' as const } : st,
+            ),
+            ...(last
+              ? {
+                  status: 'done' as const,
+                  hash: hash ?? (typeof value === 'string' ? value : null),
+                }
+              : {}),
+          })
         }
       } catch (err) {
-        this.patch(id, { status: 'failed', error: err instanceof Error ? err.message : String(err) })
+        this.patch(id, {
+          status: 'failed',
+          error: err instanceof Error ? err.message : String(err),
+        })
       } finally {
         firstReady()
       }

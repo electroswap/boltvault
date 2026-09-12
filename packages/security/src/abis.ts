@@ -19,7 +19,15 @@
  * because `approve(address,uint256)` and `transferFrom(address,address,uint256)`
  * are claimed by more than one standard and mean different things in each.
  */
-import { parseAbi, parseAbiItem, toFunctionSelector, toFunctionSignature, type Abi, type AbiFunction, type Hex } from 'viem'
+import {
+  parseAbi,
+  parseAbiItem,
+  toFunctionSelector,
+  toFunctionSignature,
+  type Abi,
+  type AbiFunction,
+  type Hex,
+} from 'viem'
 import FOUR_BYTE from '../data/four-byte.json'
 import { ARTIFACT_ABIS, artifactAbi } from './generated/abis'
 import type { ContractRole } from './registry'
@@ -50,7 +58,9 @@ const ERC20_EXTENSIONS_ABI = parseAbi([
   and §2.7 S6 pins its shape: `transferRemote(uint32 destination, bytes32
   recipient, uint256 amountOrId)` paid with `quoteGasPayment(destination)`.
 */
-export const WARP_ROUTER_ABI = parseAbi(['function transferRemote(uint32 _destination, bytes32 _recipient, uint256 _amountOrId) payable returns (bytes32 messageId)'])
+export const WARP_ROUTER_ABI = parseAbi([
+  'function transferRemote(uint32 _destination, bytes32 _recipient, uint256 _amountOrId) payable returns (bytes32 messageId)',
+])
 
 // ---- the registry -----------------------------------------------------------------
 
@@ -64,11 +74,25 @@ export interface RegistryEntry {
 }
 
 const HAND_WRITTEN: readonly RegistryEntry[] = [
-  { name: 'ERC20Extensions', abi: ERC20_EXTENSIONS_ABI, sha256: null, source: 'hand-written: not part of ERC-20, and eip_2612.json declares no permit' },
-  { name: 'HyperlaneTokenRouter', abi: WARP_ROUTER_ABI, sha256: null, source: 'hand-written: no Hyperlane contracts are vendored (§2.7 S6 pins the registry, not the Solidity)' },
+  {
+    name: 'ERC20Extensions',
+    abi: ERC20_EXTENSIONS_ABI,
+    sha256: null,
+    source: 'hand-written: not part of ERC-20, and eip_2612.json declares no permit',
+  },
+  {
+    name: 'HyperlaneTokenRouter',
+    abi: WARP_ROUTER_ABI,
+    sha256: null,
+    source:
+      'hand-written: no Hyperlane contracts are vendored (§2.7 S6 pins the registry, not the Solidity)',
+  },
 ]
 
-export const ABI_REGISTRY: readonly RegistryEntry[] = [...ARTIFACT_ABIS.map((a) => ({ name: a.name, abi: a.abi, sha256: a.sha256, source: a.source })), ...HAND_WRITTEN]
+export const ABI_REGISTRY: readonly RegistryEntry[] = [
+  ...ARTIFACT_ABIS.map((a) => ({ name: a.name, abi: a.abi, sha256: a.sha256, source: a.source })),
+  ...HAND_WRITTEN,
+]
 
 function fragments(abi: Abi): readonly AbiFunction[] {
   return abi.filter((item): item is AbiFunction => item.type === 'function')
@@ -119,11 +143,17 @@ export const FOT_DETECTOR_ABI: Abi = artifactAbi('FeeOnTransferDetector')
  * Launchpad pools are one contract per campaign and the referral rewards live
  * on a second contract, so the launchpad "ABI" is both (§8.9).
  */
-export const LAUNCHPAD_ABI: Abi = mergeAbis(artifactAbi('LaunchpadPresalePool'), artifactAbi('LaunchpadAffiliateRewards'))
+export const LAUNCHPAD_ABI: Abi = mergeAbis(
+  artifactAbi('LaunchpadPresalePool'),
+  artifactAbi('LaunchpadAffiliateRewards'),
+)
 
 /** Registry names the decoder groups, for the selector lookups below. */
 export const ERC20_CONTRACTS: readonly string[] = ['ERC20', 'ERC20Extensions']
-export const LAUNCHPAD_CONTRACTS: readonly string[] = ['LaunchpadPresalePool', 'LaunchpadAffiliateRewards']
+export const LAUNCHPAD_CONTRACTS: readonly string[] = [
+  'LaunchpadPresalePool',
+  'LaunchpadAffiliateRewards',
+]
 
 /** Event topic0 hashes the simulator reads from traces. */
 export const TOPICS = {
@@ -164,7 +194,12 @@ const ROLE_CONTRACTS: Partial<Record<ContractRole, readonly string[]>> = {
   marketplace: ['Seaport15'],
   farm: ['YieldFarm'],
   locker: ['LockerV2', 'LockerV3'],
-  launchpad: ['LaunchpadPresalePool', 'LaunchpadAffiliateRewards', 'LaunchpadManager', 'LaunchpadLpFeeProcessor'],
+  launchpad: [
+    'LaunchpadPresalePool',
+    'LaunchpadAffiliateRewards',
+    'LaunchpadManager',
+    'LaunchpadLpFeeProcessor',
+  ],
   limit_orders: ['LimitOrders'],
   wrapped_native: ['WETH9'],
   warp_token: ['HyperlaneTokenRouter', 'ERC20'],
@@ -175,7 +210,17 @@ const ROLE_CONTRACTS: Partial<Record<ContractRole, readonly string[]>> = {
   minter: ['EsMinterV2'],
 }
 
-const STANDARDS_FIRST: readonly string[] = ['ERC20', 'ERC20Extensions', 'ERC721', 'ERC1155', 'Permit2', 'WETH9', 'UniversalRouter', 'Multicall3', 'Seaport15']
+const STANDARDS_FIRST: readonly string[] = [
+  'ERC20',
+  'ERC20Extensions',
+  'ERC721',
+  'ERC1155',
+  'Permit2',
+  'WETH9',
+  'UniversalRouter',
+  'Multicall3',
+  'Seaport15',
+]
 
 function rank(contract: string): number {
   const i = STANDARDS_FIRST.indexOf(contract)
@@ -188,7 +233,13 @@ const BY_CONTRACT = new Map<string, SelectorClaim>()
 for (const entry of ABI_REGISTRY) {
   for (const fragment of fragments(entry.abi)) {
     const selector = toFunctionSelector(fragment)
-    const claim: SelectorClaim = { contract: entry.name, selector, signature: toFunctionSignature(fragment), name: fragment.name, abi: [fragment] }
+    const claim: SelectorClaim = {
+      contract: entry.name,
+      selector,
+      signature: toFunctionSignature(fragment),
+      name: fragment.name,
+      abi: [fragment],
+    }
     const bucket = BY_SELECTOR.get(selector)
     if (bucket) bucket.push(claim)
     else BY_SELECTOR.set(selector, [claim])
@@ -197,7 +248,8 @@ for (const entry of ABI_REGISTRY) {
     if (!BY_CONTRACT.has(key)) BY_CONTRACT.set(key, claim)
   }
 }
-for (const bucket of BY_SELECTOR.values()) bucket.sort((a, b) => rank(a.contract) - rank(b.contract) || a.contract.localeCompare(b.contract))
+for (const bucket of BY_SELECTOR.values())
+  bucket.sort((a, b) => rank(a.contract) - rank(b.contract) || a.contract.localeCompare(b.contract))
 
 function normalise(selector: Hex): string {
   return selector.toLowerCase()

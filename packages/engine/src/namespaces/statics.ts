@@ -5,7 +5,14 @@
  * against the baked-in key, refused when unsigned or older than what is
  * held, and kept as last-good across restarts. Flags only ever disable.
  */
-import { DEFAULT_FLAGS, FlagsSchema, ScamOriginsSchema, semverAtLeast, verifyStatic, type Flags } from '@boltvault/core'
+import {
+  DEFAULT_FLAGS,
+  FlagsSchema,
+  ScamOriginsSchema,
+  semverAtLeast,
+  verifyStatic,
+  type Flags,
+} from '@boltvault/core'
 import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
 import type { EventBus, NamespaceSpec } from '../host'
@@ -29,11 +36,27 @@ export interface StaticsDeps {
 }
 
 // Stored flags are always the parsed shape; validating with a predicate keeps the doc's input and output types the same.
-const FLAGS_DOC: DocSpec<{ flags: Flags; fetchedAt: number | null }> = { key: 'statics.flags', version: 1, schema: z.object({ flags: z.custom<Flags>((v) => FlagsSchema.safeParse(v).success), fetchedAt: z.number().nullable() }), defaultValue: () => ({ flags: DEFAULT_FLAGS, fetchedAt: null }) }
-const SCAM_DOC: DocSpec<{ issuedAt: number; origins: string[] }> = { key: 'statics.scam', version: 1, schema: z.object({ issuedAt: z.number(), origins: z.array(z.string()) }), defaultValue: () => ({ issuedAt: 0, origins: [] }) }
+const FLAGS_DOC: DocSpec<{ flags: Flags; fetchedAt: number | null }> = {
+  key: 'statics.flags',
+  version: 1,
+  schema: z.object({
+    flags: z.custom<Flags>((v) => FlagsSchema.safeParse(v).success),
+    fetchedAt: z.number().nullable(),
+  }),
+  defaultValue: () => ({ flags: DEFAULT_FLAGS, fetchedAt: null }),
+}
+const SCAM_DOC: DocSpec<{ issuedAt: number; origins: string[] }> = {
+  key: 'statics.scam',
+  version: 1,
+  schema: z.object({ issuedAt: z.number(), origins: z.array(z.string()) }),
+  defaultValue: () => ({ issuedAt: 0, origins: [] }),
+}
 
 export class StaticsService {
-  private flagsState: { flags: Flags; fetchedAt: number | null } = { flags: DEFAULT_FLAGS, fetchedAt: null }
+  private flagsState: { flags: Flags; fetchedAt: number | null } = {
+    flags: DEFAULT_FLAGS,
+    fetchedAt: null,
+  }
   private scam: { issuedAt: number; origins: string[] } = { issuedAt: 0, origins: [] }
   private hydrated = false
   private problem: string | null = null
@@ -45,7 +68,9 @@ export class StaticsService {
   }
 
   private schedule(): void {
-    void this.deps.platform.alarms.schedule(STATICS_ALARM, this.deps.platform.now() + REFRESH_MS).catch(() => undefined)
+    void this.deps.platform.alarms
+      .schedule(STATICS_ALARM, this.deps.platform.now() + REFRESH_MS)
+      .catch(() => undefined)
   }
 
   async hydrate(): Promise<void> {
@@ -60,7 +85,10 @@ export class StaticsService {
   /** Fetch a document and its detached signature; null unless the signature verifies. */
   private async fetchSigned(name: string): Promise<{ bytes: Uint8Array; json: unknown } | null> {
     const base = this.deps.baseUrl ?? STATICS_BASE
-    const [doc, sig] = await Promise.all([this.deps.fetch(`${base}/${name}`, { cache: 'no-store' }), this.deps.fetch(`${base}/${name}.sig`, { cache: 'no-store' })])
+    const [doc, sig] = await Promise.all([
+      this.deps.fetch(`${base}/${name}`, { cache: 'no-store' }),
+      this.deps.fetch(`${base}/${name}.sig`, { cache: 'no-store' }),
+    ])
     if (!doc.ok) throw new Error(`${name}: ${doc.status}`)
     const bytes = new Uint8Array(await doc.arrayBuffer())
     // No signature, or one that does not verify: refused (§3.7), never taken on trust.
@@ -71,9 +99,15 @@ export class StaticsService {
   }
 
   /** Refresh both files; a bad signature or an older file changes nothing. */
-  async refresh(): Promise<{ flags: 'updated' | 'kept' | 'refused'; scam: 'updated' | 'kept' | 'refused' }> {
+  async refresh(): Promise<{
+    flags: 'updated' | 'kept' | 'refused'
+    scam: 'updated' | 'kept' | 'refused'
+  }> {
     await this.hydrate()
-    const out = { flags: 'kept' as 'updated' | 'kept' | 'refused', scam: 'kept' as 'updated' | 'kept' | 'refused' }
+    const out = {
+      flags: 'kept' as 'updated' | 'kept' | 'refused',
+      scam: 'kept' as 'updated' | 'kept' | 'refused',
+    }
     this.problem = null
     try {
       const f = await this.fetchSigned('flags.json')
@@ -112,7 +146,14 @@ export class StaticsService {
   view(): FlagsView {
     const f = this.flagsState.flags
     const min = this.deps.body === 'extension' ? f.minVersion.extension : f.minVersion.mobile
-    return { flags: f, fetchedAt: this.flagsState.fetchedAt, updateRequired: !!min && !semverAtLeast(this.version(), min), minVersion: min ?? null, problem: this.problem, scamOriginsCount: this.scam.origins.length }
+    return {
+      flags: f,
+      fetchedAt: this.flagsState.fetchedAt,
+      updateRequired: !!min && !semverAtLeast(this.version(), min),
+      minVersion: min ?? null,
+      problem: this.problem,
+      scamOriginsCount: this.scam.origins.length,
+    }
   }
 
   scamOrigins(): readonly string[] {
