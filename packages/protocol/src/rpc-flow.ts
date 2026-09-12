@@ -58,6 +58,12 @@ export interface RpcContext {
   /** The account and addresses a connected origin sees; null when not connected. */
   session(origin: string): Promise<{ accountId: string; addresses: readonly string[] } | null>
   knownChain(chainId: number): boolean
+  /**
+   * Must a connect for this origin raise a sheet even when the origin already
+   * has a session? True for a WalletConnect pairing (§5.3): a proposal is a
+   * new peer asking, whatever some other transport has already agreed.
+   */
+  alwaysPrompt?(origin: string): boolean
   /** Read-only passthrough on the origin's chain. */
   executeSafe(chainId: number, method: string, params: readonly unknown[]): Promise<unknown>
   /** Put the intent in front of the user and, if approved, execute it. Throws RpcError 4001 on reject. */
@@ -288,7 +294,7 @@ export class RpcFlow {
   }
 
   private async connect(origin: string, chainId: number, method: string, clientRequestId: string): Promise<unknown> {
-    const existing = await this.ctx.session(origin)
+    const existing = this.ctx.alwaysPrompt?.(origin) ? null : await this.ctx.session(origin)
     if (existing) {
       await this.ctx.sites.touch(origin, this.ctx.now())
       return method === 'wallet_requestPermissions' ? permissions(origin, existing.addresses, this.ctx.now()) : [...existing.addresses]

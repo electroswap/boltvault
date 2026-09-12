@@ -184,14 +184,18 @@ describe("the wallet fee on ElectroSwap's own site", () => {
   */
   it('says the same thing over WalletConnect', async () => {
     /*
-      No Connect sheet here, and that is the correct behaviour rather than a
-      gap in the test: the browser already connected this origin above, and a
-      proposal for an origin that has a session is an `eth_requestAccounts`
-      that finds one. Sessions are keyed by origin across every transport,
-      which is the same property `connect.ts` refuses to let an *unverified*
-      peer exploit by naming an origin it cannot prove.
+      A Connect sheet, even though the browser already connected this origin
+      above (ATT-BV-024).
+
+      Sessions are keyed by origin across every transport, and a proposal for
+      an origin that already has one used to be an `eth_requestAccounts` that
+      found it — so scanning a pairing URI for a connected first-party origin
+      completed silently and handed the peer the address. A pairing is a new
+      peer asking, whatever some other transport has already agreed, so it asks.
     */
     await engine.engine.connect.pair({ uri: 'wc:1234@2?relay-protocol=irn&symKey=ab' })
+    const pairing = await approvalOn(engine, (r) => r.kind === 'connect')
+    await engine.engine.approvals.decide({ id: pairing.id, approve: true })
     for (let i = 0; i < 200 && kit.sessions.size === 0; i++) await new Promise((r) => setTimeout(r, 10))
     expect(kit.sessions.size).toBe(1)
     const topic = [...kit.sessions.keys()][0] ?? ''

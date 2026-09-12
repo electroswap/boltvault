@@ -37,7 +37,12 @@ import {
 import { PairedDeviceRowSchema, type PairedDeviceRow } from './namespaces/sync'
 import { CustomTokenSchema } from './namespaces/tokens'
 import { SiteSchema } from './namespaces/sites'
-import { CustomCollectionSchema, NftMetadataSchema, type CustomCollection, type NftMetadata } from './namespaces/nftCustom'
+import {
+  CustomCollectionSchema,
+  NftMetadataSchema,
+  type CustomCollection,
+  type NftMetadata,
+} from './namespaces/nftCustom'
 import { SealedMap } from './sealed'
 
 /** "Since you last looked" — the total at the previous first open. */
@@ -99,6 +104,17 @@ export interface SealedStores {
    */
   readonly syncMeta: SealedMap<{ label: string | null; applied: Record<string, number> }>
   /**
+   * `topic → { origin, verified }` for live WalletConnect sessions (§5.3).
+   *
+   * A restored session used to be re-keyed to a synthetic
+   * `<topic>.walletconnect.invalid` origin, which orphaned the real site row
+   * and put `ORIGIN_UNVERIFIED` on every signature it made afterwards — on
+   * every restart, for every live session. What Verify said at pairing is
+   * written down instead. Sealed because it names the sites this wallet is
+   * connected to.
+   */
+  readonly wcSessions: SealedMap<{ origin: string; verified: boolean }>
+  /**
    * Drop every entry belonging to one account. Removing an account used to
    * leave its portfolio, positions, allowances, scan cursors and site rows
    * behind forever — orphaned, unreachable from the UI, and still on disk.
@@ -113,11 +129,34 @@ const AllowanceRowsSchema = z.object({
   at: z.number().int().nonnegative(),
 }) as unknown as z.ZodType<{ rows: AllowanceView[]; at: number }>
 
-const BridgeItemsSchema = z.object({ items: z.array(BridgeStatusSchema) }) as unknown as z.ZodType<{ items: BridgeStatus[] }>
-const BlockSchema = z.object({ block: z.number().int().nonnegative() }) as unknown as z.ZodType<{ block: number }>
-const ActiveSchema = z.object({ id: z.string().nullable() }) as unknown as z.ZodType<{ id: string | null }>
+const BridgeItemsSchema = z.object({ items: z.array(BridgeStatusSchema) }) as unknown as z.ZodType<{
+  items: BridgeStatus[]
+}>
+const BlockSchema = z.object({ block: z.number().int().nonnegative() }) as unknown as z.ZodType<{
+  block: number
+}>
+const ActiveSchema = z.object({ id: z.string().nullable() }) as unknown as z.ZodType<{
+  id: string | null
+}>
 
-export function createSealedStores(platform: Platform, dek: () => Promise<Uint8Array>): SealedStores {
+const WcSessionSchema = z.object({
+  origin: z.string(),
+  verified: z.boolean(),
+}) as unknown as z.ZodType<{ origin: string; verified: boolean }>
+
+export function createSealedStores(
+  platform: Platform,
+  dek: () => Promise<Uint8Array>,
+): SealedStores {
+  const wcSessions = new SealedMap<{ origin: string; verified: boolean }>(platform, dek, {
+    key: 'wc-sessions.blob',
+    info: 'bv/wc-sessions',
+    aad: 'boltvault.wc-sessions.v1',
+    schema: WcSessionSchema,
+    // A person does not hold dozens of live WalletConnect sessions; the cap is
+    // there so a peer that re-pairs in a loop cannot grow the blob.
+    cap: 32,
+  })
   const portfolio = new SealedMap<PortfolioSnapshot>(platform, dek, {
     key: 'portfolio.blob',
     info: 'bv/portfolio',
@@ -197,22 +236,35 @@ export function createSealedStores(platform: Platform, dek: () => Promise<Uint8A
     key: 'launchpad.ref.blob',
     info: 'bv/launchpad/ref',
     aad: 'boltvault.launchpad.ref.v1',
-    schema: z.object({ referrer: z.string(), at: z.number() }) as unknown as z.ZodType<{ referrer: string; at: number }>,
-  })
-  const watchlist = new SealedMap<{ items: WatchItem[]; nudgedAt: Record<string, number> }>(platform, dek, {
-    key: 'watchlist.blob',
-    info: 'bv/watchlist',
-    aad: 'boltvault.watchlist.v1',
-    schema: z.object({ items: z.array(WatchItemSchema), nudgedAt: z.record(z.string(), z.number()) }) as unknown as z.ZodType<{
-      items: WatchItem[]
-      nudgedAt: Record<string, number>
+    schema: z.object({ referrer: z.string(), at: z.number() }) as unknown as z.ZodType<{
+      referrer: string
+      at: number
     }>,
   })
+  const watchlist = new SealedMap<{ items: WatchItem[]; nudgedAt: Record<string, number> }>(
+    platform,
+    dek,
+    {
+      key: 'watchlist.blob',
+      info: 'bv/watchlist',
+      aad: 'boltvault.watchlist.v1',
+      schema: z.object({
+        items: z.array(WatchItemSchema),
+        nudgedAt: z.record(z.string(), z.number()),
+      }) as unknown as z.ZodType<{
+        items: WatchItem[]
+        nudgedAt: Record<string, number>
+      }>,
+    },
+  )
   const tokenPrefs = new SealedMap<{ pinned: string[]; hidden: string[] }>(platform, dek, {
     key: 'tokens.prefs.blob',
     info: 'bv/tokens/prefs',
     aad: 'boltvault.tokens.prefs.v1',
-    schema: z.object({ pinned: z.array(z.string()), hidden: z.array(z.string()) }) as unknown as z.ZodType<{ pinned: string[]; hidden: string[] }>,
+    schema: z.object({
+      pinned: z.array(z.string()),
+      hidden: z.array(z.string()),
+    }) as unknown as z.ZodType<{ pinned: string[]; hidden: string[] }>,
   })
   const tokensCustom = new SealedMap<CustomToken[]>(platform, dek, {
     key: 'tokens.custom.blob',
@@ -237,7 +289,11 @@ export function createSealedStores(platform: Platform, dek: () => Promise<Uint8A
     key: 'sync.identity.blob',
     info: 'bv/sync/identity',
     aad: 'boltvault.sync.identity.v1',
-    schema: z.object({ deviceId: z.string(), signingPrivateKey: z.string(), signingPublicKey: z.string() }) as unknown as z.ZodType<DeviceIdentity>,
+    schema: z.object({
+      deviceId: z.string(),
+      signingPrivateKey: z.string(),
+      signingPublicKey: z.string(),
+    }) as unknown as z.ZodType<DeviceIdentity>,
   })
   const syncDevices = new SealedMap<PairedDeviceRow[]>(platform, dek, {
     key: 'sync.devices.blob',
@@ -245,16 +301,45 @@ export function createSealedStores(platform: Platform, dek: () => Promise<Uint8A
     aad: 'boltvault.sync.devices.v1',
     schema: z.array(PairedDeviceRowSchema) as unknown as z.ZodType<PairedDeviceRow[]>,
   })
-  const syncMeta = new SealedMap<{ label: string | null; applied: Record<string, number> }>(platform, dek, {
-    key: 'sync.meta.blob',
-    info: 'bv/sync/meta',
-    aad: 'boltvault.sync.meta.v1',
-    schema: z.object({ label: z.string().nullable(), applied: z.record(z.string(), z.number()) }) as unknown as z.ZodType<{
-      label: string | null
-      applied: Record<string, number>
-    }>,
-  })
-  const all = [portfolio, looks, allowances, positions, scan, scanSummary, bridge, notifications, sites, active, legends, launchpadRef, watchlist, tokenPrefs, tokensCustom, nftCustom, nftMeta, syncIdentity, syncDevices, syncMeta]
+  const syncMeta = new SealedMap<{ label: string | null; applied: Record<string, number> }>(
+    platform,
+    dek,
+    {
+      key: 'sync.meta.blob',
+      info: 'bv/sync/meta',
+      aad: 'boltvault.sync.meta.v1',
+      schema: z.object({
+        label: z.string().nullable(),
+        applied: z.record(z.string(), z.number()),
+      }) as unknown as z.ZodType<{
+        label: string | null
+        applied: Record<string, number>
+      }>,
+    },
+  )
+  const all = [
+    portfolio,
+    looks,
+    allowances,
+    positions,
+    scan,
+    scanSummary,
+    bridge,
+    notifications,
+    sites,
+    active,
+    legends,
+    launchpadRef,
+    watchlist,
+    tokenPrefs,
+    tokensCustom,
+    nftCustom,
+    nftMeta,
+    syncIdentity,
+    syncDevices,
+    syncMeta,
+    wcSessions,
+  ]
   return {
     portfolio,
     looks,
@@ -276,6 +361,7 @@ export function createSealedStores(platform: Platform, dek: () => Promise<Uint8A
     syncIdentity,
     syncMeta,
     syncDevices,
+    wcSessions,
     purgeAccount: async (accountId: string) => {
       const needle = accountId.toLowerCase()
       const names = (id: string): boolean => id.toLowerCase().includes(needle)

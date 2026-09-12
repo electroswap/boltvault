@@ -10,6 +10,8 @@ type Listeners = { session_proposal: Set<(p: SessionProposal) => void>; session_
 export interface FakeWalletKitOptions {
   readonly peer?: PeerMetadata
   readonly verified?: VerifyValidation
+  /** Verify's scam verdict, separate from validation (ATT-BV-023). */
+  readonly isScam?: boolean | null
   readonly required?: string[]
   readonly optional?: string[]
 }
@@ -26,10 +28,13 @@ export class FakeWalletKit implements WalletKitLike {
   verified: VerifyValidation
   required: string[]
   optional: string[]
+  /** Verify's scam verdict, which is a different question from validation. */
+  isScam: boolean | null
 
   constructor(opts: FakeWalletKitOptions = {}) {
     this.peer = opts.peer ?? { name: 'ElectroSwap', description: 'The Electroneum DEX', url: 'https://app.electroswap.io', icons: [] }
     this.verified = opts.verified ?? 'VALID'
+    this.isScam = opts.isScam ?? null
     this.required = opts.required ?? ['eip155:52014']
     this.optional = opts.optional ?? ['eip155:1', 'eip155:8453']
   }
@@ -37,7 +42,7 @@ export class FakeWalletKit implements WalletKitLike {
   async pair(input: { uri: string }): Promise<void> {
     this.log.push(`pair:${input.uri.slice(0, 12)}`)
     const id = this.nextId++
-    const proposal = SessionProposalSchema.parse({ id, pairingTopic: `pairing-${id}`, proposer: this.peer, requiredNamespaces: { eip155: { chains: this.required, methods: ['eth_sendTransaction', 'personal_sign'], events: ['chainChanged', 'accountsChanged'] } }, optionalNamespaces: { eip155: { chains: this.optional, methods: [], events: [] } }, verified: this.verified, verifiedOrigin: this.verified === 'VALID' ? new URL(this.peer.url).origin : null })
+    const proposal = SessionProposalSchema.parse({ id, pairingTopic: `pairing-${id}`, proposer: this.peer, requiredNamespaces: { eip155: { chains: this.required, methods: ['eth_sendTransaction', 'personal_sign'], events: ['chainChanged', 'accountsChanged'] } }, optionalNamespaces: { eip155: { chains: this.optional, methods: [], events: [] } }, verified: this.verified, verifiedOrigin: this.verified === 'VALID' ? new URL(this.peer.url).origin : null, isScam: this.isScam })
     queueMicrotask(() => {
       for (const l of this.listeners.session_proposal) l(proposal)
     })

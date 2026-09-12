@@ -14,7 +14,14 @@ export const WALLETCONNECT_PROJECT_ID = process.env['EXPO_PUBLIC_WALLETCONNECT_P
 
 const METADATA = { name: 'BoltVault', description: 'The Electroneum wallet and ElectroSwap uber-app.', url: 'https://wallet.electroswap.io', icons: ['https://wallet.electroswap.io/icon.png'] }
 
-const Verify = z.object({ verified: z.object({ validation: z.enum(['VALID', 'INVALID', 'UNKNOWN']).optional(), origin: z.string().optional() }).optional() }).optional()
+/*
+  `isScam` is read as well as `validation`. They answer different questions —
+  one whether the metadata matches the domain it was registered from, the other
+  whether that domain is on Reown's malicious list — and only the first was
+  parsed, so a proposal Verify had flagged outright reached the Connect sheet
+  as merely "unverified".
+*/
+const Verify = z.object({ verified: z.object({ validation: z.enum(['VALID', 'INVALID', 'UNKNOWN']).optional(), origin: z.string().optional(), isScam: z.boolean().optional() }).optional() }).optional()
 const ProposalEvent = z.object({ id: z.number(), params: z.object({ pairingTopic: z.string().optional(), proposer: z.object({ metadata: z.object({ name: z.string().optional(), description: z.string().optional(), url: z.string().optional(), icons: z.array(z.string()).optional() }) }), requiredNamespaces: z.record(z.string(), z.object({ chains: z.array(z.string()).optional(), methods: z.array(z.string()).optional(), events: z.array(z.string()).optional() })).optional(), optionalNamespaces: z.record(z.string(), z.object({ chains: z.array(z.string()).optional(), methods: z.array(z.string()).optional(), events: z.array(z.string()).optional() })).optional() }), verifyContext: Verify })
 const RequestEvent = z.object({ id: z.number(), topic: z.string(), params: z.object({ request: z.object({ method: z.string(), params: z.unknown() }), chainId: z.string() }), verifyContext: Verify })
 const SessionStruct = z.object({ topic: z.string(), expiry: z.number(), peer: z.object({ metadata: z.object({ name: z.string().optional(), description: z.string().optional(), url: z.string().optional(), icons: z.array(z.string()).optional() }) }), namespaces: z.record(z.string(), z.object({ chains: z.array(z.string()).optional(), accounts: z.array(z.string()) })) })
@@ -63,7 +70,7 @@ export async function createWalletKit(): Promise<WalletKitLike | null> {
         if (event === 'session_proposal') {
           const p = ProposalEvent.safeParse(payload)
           if (!p.success) return
-          const proposal: SessionProposal = SessionProposalSchema.parse({ id: p.data.id, pairingTopic: p.data.params.pairingTopic, proposer: { name: p.data.params.proposer.metadata.name ?? '', description: p.data.params.proposer.metadata.description ?? '', url: p.data.params.proposer.metadata.url ?? '', icons: p.data.params.proposer.metadata.icons ?? [] }, requiredNamespaces: p.data.params.requiredNamespaces ?? {}, optionalNamespaces: p.data.params.optionalNamespaces ?? {}, verified: p.data.verifyContext?.verified?.validation ?? 'UNKNOWN', verifiedOrigin: p.data.verifyContext?.verified?.validation === 'VALID' ? (p.data.verifyContext.verified.origin ?? null) : null })
+          const proposal: SessionProposal = SessionProposalSchema.parse({ id: p.data.id, pairingTopic: p.data.params.pairingTopic, proposer: { name: p.data.params.proposer.metadata.name ?? '', description: p.data.params.proposer.metadata.description ?? '', url: p.data.params.proposer.metadata.url ?? '', icons: p.data.params.proposer.metadata.icons ?? [] }, requiredNamespaces: p.data.params.requiredNamespaces ?? {}, optionalNamespaces: p.data.params.optionalNamespaces ?? {}, verified: p.data.verifyContext?.verified?.validation ?? 'UNKNOWN', verifiedOrigin: p.data.verifyContext?.verified?.validation === 'VALID' ? (p.data.verifyContext.verified.origin ?? null) : null, isScam: p.data.verifyContext?.verified?.isScam ?? null })
           ;(listener as (p: SessionProposal) => void)(proposal)
         } else if (event === 'session_request') {
           const r = RequestEvent.safeParse(payload)

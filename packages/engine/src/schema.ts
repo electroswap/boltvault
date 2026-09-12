@@ -1201,6 +1201,14 @@ export const WcProposalViewSchema = z.object({
   icon: z.string().nullable(),
   origin: z.string(),
   verified: z.boolean(),
+  /**
+   * The site the peer's CLAIMED url looks like, when it looks like one it is
+   * not (§3.6). Null otherwise. The claim is never the origin — only Verify
+   * can supply one — but it is the single thing the peer says about itself,
+   * and it went unread: a typosquat of a first-party domain reached the sheet
+   * as an anonymous "unverified" line.
+   */
+  claimLooksLike: z.string().nullable().default(null),
   requiredChains: z.array(z.string()),
   optionalChains: z.array(z.string()),
 })

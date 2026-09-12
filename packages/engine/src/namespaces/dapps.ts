@@ -44,7 +44,7 @@ export class DappsService {
   constructor(private readonly deps: DappsDeps) {}
 
   /** Open a session for an origin the host observed. `url` is normalised to its registrable origin. */
-  open(input: { url: string; kind: 'webview' | 'walletconnect'; verified?: boolean; channel?: string }): DappSession {
+  open(input: { url: string; kind: 'webview' | 'walletconnect'; verified?: boolean; channel?: string; verify?: 'valid' | 'invalid' | 'unknown' }): DappSession {
     const origin = registrableOrigin(input.url)
     if (!origin) throw new EngineError('invalid_argument', 'Only http(s) pages can connect.')
     const sessionId = Array.from(this.deps.random(8), (b) => b.toString(16).padStart(2, '0')).join('')
@@ -80,7 +80,7 @@ export class DappsService {
         }
       },
     }
-    live.stop = this.deps.provider.serve(channel, origin, { kind: input.kind, verified: live.view.verified })
+    live.stop = this.deps.provider.serve(channel, origin, { kind: input.kind, verified: live.view.verified, ...(input.verify ? { verify: input.verify } : {}) })
     this.sessions.set(sessionId, live)
     return live.view
   }
@@ -125,7 +125,7 @@ export class DappsService {
 
 export function dappsNamespace(dapps: DappsService): NamespaceSpec {
   return {
-    open: { input: z.object({ url: z.string().min(1), kind: z.enum(['webview', 'walletconnect']), verified: z.boolean().optional(), channel: z.string().min(1).max(128).optional() }), handler: async (arg) => dapps.open(arg as { url: string; kind: 'webview' | 'walletconnect'; verified?: boolean; channel?: string }) },
+    open: { input: z.object({ url: z.string().min(1), kind: z.enum(['webview', 'walletconnect']), verified: z.boolean().optional(), channel: z.string().min(1).max(128).optional(), verify: z.enum(['valid', 'invalid', 'unknown']).optional() }), handler: async (arg) => dapps.open(arg as { url: string; kind: 'webview' | 'walletconnect'; verified?: boolean; channel?: string }) },
     request: { input: z.object({ sessionId: z.string(), channel: z.string().min(1).max(128).optional(), id: z.number(), method: z.string().min(1).max(64), params: z.unknown().optional() }), handler: (arg) => dapps.request(arg as { sessionId: string; channel?: string; id: number; method: string; params?: unknown }) },
     close: { input: z.object({ sessionId: z.string() }), handler: async (arg) => dapps.close(arg as { sessionId: string }) },
     list: { handler: async () => dapps.list() },

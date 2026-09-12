@@ -10,7 +10,7 @@ export { LedgerError, buildApdu, unwrapResponse, errorForStatus, statusWord, con
 export { LedgerEthApp, eip155TailOffset, type ApduTransport, type AppConfiguration, type RawSignature } from './ledger/eth'
 export { ledgerAccount, type LedgerAccountInput } from './ledger/account'
 export { pathFor, pathToBytes, schemeOf, type PathScheme } from './ledger/paths'
-export { yParityFromLedgerV, legacyV } from './ledger/v'
+export { yParityFromLedgerV, yParityByRecovery, legacyV } from './ledger/v'
 export { FakeLedgerDevice, FakeEthApp, fakeHidProvider, type FakeLedgerOptions } from './ledger/fake'
 export { hidLedgerProvider, hidDeviceId, type HidProvider, type LedgerTransportProvider, type LedgerDeviceInfo } from './ledger/provider'
 

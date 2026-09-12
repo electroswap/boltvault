@@ -67,6 +67,26 @@ export const originScam: Rule = ({ origin, context }) => {
   }
 }
 
+/**
+ * Verify said the peer's domain does not match the app it claims to be (§5.3).
+ *
+ * Reown's Verify answers VALID, INVALID or UNKNOWN, and only the first was
+ * read: everything else became "unverified", which is `warn` and a
+ * second-and-a-half of waiting. UNKNOWN deserves exactly that — Verify is
+ * best-effort and is often simply unreachable. INVALID is a different
+ * sentence: something checked, and disagreed.
+ */
+export const originVerifyMismatch: Rule = ({ origin, context }) => {
+  if (isInternal(origin) || context.originVerify !== 'invalid') return null
+  return {
+    code: 'ORIGIN_VERIFY_MISMATCH',
+    severity: 'danger',
+    title: 'This app is not where it says it is',
+    detail:
+      'WalletConnect checked the domain this app claims and found it does not match. That is the shape of a page pretending to be one you know.',
+  }
+}
+
 export const originTyposquat: Rule = ({ origin }) => {
   if (isInternal(origin)) return null
   const host = hostOf(origin)
@@ -1244,6 +1264,7 @@ export const ALL_RULES: readonly Rule[] = [
   originScam,
   originTyposquat,
   originUnverified,
+  originVerifyMismatch,
   originFirstTime,
   ethSignBlocked,
   personalSignLooksLikeTx,

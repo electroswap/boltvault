@@ -10,9 +10,10 @@
 import type { SyncRecord } from '@boltvault/core'
 import type { Platform } from '@boltvault/platform'
 import type { ApprovalIntent } from '@boltvault/protocol'
-import type { Hex, TransactionSerializable, TypedDataDefinition } from 'viem'
+import { parseTransaction, verifyMessage, verifyTypedData, type Hex, type TransactionSerializable, type TypedDataDefinition } from 'viem'
 import { toAccount, type LocalAccount } from 'viem/accounts'
 import { z } from 'zod'
+import { GAS_CEILING_PERCENT, GAS_FLOOR_PERCENT } from '../approvalPayloads'
 import { EngineError } from '../errors'
 import type { EventBus, NamespaceSpec } from '../host'
 import { RemoteRequestSchema, type AccountView, type RemoteRequest } from '../schema'
@@ -48,6 +49,53 @@ const ResponseValue = z.object({ id: z.string(), signature: z.string().nullable(
 const TxPayload = z.object({ to: z.string().nullable(), value: z.string(), data: z.string(), nonce: z.string(), gas: z.string(), type: z.enum(['legacy', 'eip1559']), gasPrice: z.string().optional(), maxFeePerGas: z.string().optional(), maxPriorityFeePerGas: z.string().optional() })
 
 const hex = (n: bigint | number | undefined): string => `0x${BigInt(n ?? 0).toString(16)}`
+
+/**
+ * What a paired device is allowed to change about what it was asked to sign:
+ * the price of gas, within the same band the local fee editor uses (§6).
+ *
+ * The requester used to resolve its promise with whatever string came back and
+ * then only recover the signer's address — so a compromised laptop could answer
+ * a phone's request with a signature over different calldata to the same
+ * contract, and the phone would broadcast it and record the statements of the
+ * transaction it had asked for. Recovering the address proves who signed, never
+ * what.
+ */
+export function assertSignedTheTransaction(asked: TransactionSerializable, raw: Hex): void {
+  let got: ReturnType<typeof parseTransaction>
+  try {
+    got = parseTransaction(raw)
+  } catch {
+    throw new EngineError('invalid_argument', 'The paired device answered with something that is not a signed transaction.')
+  }
+  const same =
+    (got.chainId ?? 0) === (asked.chainId ?? 0) &&
+    (got.nonce ?? 0) === (asked.nonce ?? 0) &&
+    (got.to ?? null)?.toLowerCase() === (asked.to ?? null)?.toLowerCase() &&
+    (got.value ?? 0n) === (asked.value ?? 0n) &&
+    (got.data ?? '0x').toLowerCase() === (asked.data ?? '0x').toLowerCase() &&
+    (got.gas ?? 0n) === (asked.gas ?? 0n)
+  if (!same) throw new EngineError('invalid_argument', 'The paired device signed a different transaction from the one it was asked to sign.')
+  /*
+    The fee may move — a device with a fresher view of the chain is allowed to
+    price it — but only inside the same 50–400 % band the local editor works
+    in, measured against what was asked for.
+  */
+  const wanted = asked.type === 'eip1559' || (asked as { maxFeePerGas?: bigint }).maxFeePerGas !== undefined ? ((asked as { maxFeePerGas?: bigint }).maxFeePerGas ?? 0n) : ((asked as { gasPrice?: bigint }).gasPrice ?? 0n)
+  const paid = got.maxFeePerGas ?? got.gasPrice ?? 0n
+  if (wanted > 0n && (paid * 100n < wanted * BigInt(GAS_FLOOR_PERCENT) || paid * 100n > wanted * BigInt(GAS_CEILING_PERCENT)))
+    throw new EngineError('invalid_argument', 'The paired device priced the transaction well outside what it was asked to pay.')
+}
+
+export async function assertSignedTheMessage(address: Hex, raw: Hex, signature: Hex): Promise<void> {
+  const ok = await verifyMessage({ address, message: { raw }, signature }).catch(() => false)
+  if (!ok) throw new EngineError('invalid_argument', 'The paired device signed a different message from the one it was asked to sign.')
+}
+
+export async function assertSignedTheTypedData(address: Hex, typedData: TypedDataDefinition, signature: Hex): Promise<void> {
+  const ok = await verifyTypedData({ ...(typedData as Record<string, unknown>), address, signature } as never).catch(() => false)
+  if (!ok) throw new EngineError('invalid_argument', 'The paired device signed different typed data from what it was asked to sign.')
+}
 
 export class RemoteSignService {
   private outgoing = new Map<string, RemoteRequest & { resolve: (sig: string) => void; reject: (err: Error) => void }>()
@@ -90,15 +138,23 @@ export class RemoteSignService {
       address,
       signMessage: async ({ message }) => {
         const raw = typeof message === 'string' ? `0x${Array.from(new TextEncoder().encode(message), (b) => b.toString(16).padStart(2, '0')).join('')}` : typeof message.raw === 'string' ? message.raw : `0x${Array.from(message.raw, (b) => b.toString(16).padStart(2, '0')).join('')}`
-        return ask('message', raw, 0)
+        const signature = await ask('message', raw, 0)
+        await assertSignedTheMessage(address, raw as Hex, signature)
+        return signature
       },
       signTransaction: async (transaction) => {
         const tx = transaction as TransactionSerializable
         const legacy = !tx.type || tx.type === 'legacy'
         const payload = { to: tx.to ?? null, value: hex(tx.value), data: tx.data ?? '0x', nonce: hex(tx.nonce), gas: hex(tx.gas), type: legacy ? 'legacy' : 'eip1559', ...(legacy ? { gasPrice: hex((tx as { gasPrice?: bigint }).gasPrice) } : { maxFeePerGas: hex((tx as { maxFeePerGas?: bigint }).maxFeePerGas), maxPriorityFeePerGas: hex((tx as { maxPriorityFeePerGas?: bigint }).maxPriorityFeePerGas) }) }
-        return ask('transaction', payload, tx.chainId ?? 0)
+        const raw = await ask('transaction', payload, tx.chainId ?? 0)
+        assertSignedTheTransaction(tx, raw)
+        return raw
       },
-      signTypedData: async (typedData) => ask('typed_data', JSON.stringify(typedData, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)), Number((typedData as TypedDataDefinition).domain?.chainId ?? 0)),
+      signTypedData: async (typedData) => {
+        const signature = await ask('typed_data', JSON.stringify(typedData, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)), Number((typedData as TypedDataDefinition).domain?.chainId ?? 0))
+        await assertSignedTheTypedData(address, typedData as TypedDataDefinition, signature)
+        return signature
+      },
       sign: async () => {
         throw new EngineError('not_implemented', 'Raw hashes are never signed on another device.')
       },

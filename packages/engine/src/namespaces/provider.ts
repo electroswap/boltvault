@@ -160,6 +160,12 @@ export interface PortInfo {
   /** 'content' ports are verified by construction (the sender's URL); a WebView is the committed URL; WalletConnect only when Verify said VALID (§2.7 S9). */
   readonly kind?: 'content' | 'webview' | 'walletconnect'
   readonly verified?: boolean
+  /**
+   * What an attestation service said, where one spoke — `verified` is the one
+   * bit, and this is the sentence behind it. "Nobody could tell" and "the
+   * domain does not match" are different findings on the sheet (§5.3).
+   */
+  readonly verify?: 'valid' | 'invalid' | 'unknown'
 }
 
 /**
@@ -356,6 +362,8 @@ export class ProviderService {
   /** `clientRequestId` → the port that is asking, while it is asking. */
   private readonly senders = new Map<string, PortInfo>()
   private unverified = new Set<string>()
+  /** What an attestation service said about an origin, and over which transport. */
+  private readonly verdicts = new Map<string, { verify: 'valid' | 'invalid' | 'unknown'; kind: 'content' | 'webview' | 'walletconnect' }>()
   /** Explorer answers by `chainId:address`; failures are cached too, so a dead explorer is asked once. */
   private readonly contractFactsCache = new Map<string, { at: number; facts: ContractFactsAt }>()
   /**
@@ -424,6 +432,7 @@ export class ProviderService {
   serve(channel: MessageChannelLike, origin: string, info: PortInfo = {}): () => void {
     if (info.verified === false) this.unverified.add(origin)
     else this.unverified.delete(origin)
+    if (info.verify || info.kind) this.verdicts.set(origin, { verify: info.verify ?? (info.verified === false ? 'unknown' : 'valid'), kind: info.kind ?? 'content' })
     const onEvent = (event: ProviderEvent): void => {
       try {
         channel.post({ kind: 'event', event: event.event, payload: event.payload })
@@ -467,6 +476,21 @@ export class ProviderService {
       stop()
       offDisconnect()
     }
+  }
+
+  /**
+   * Does a connect for this origin have to put a sheet in front of somebody,
+   * even when the origin is already connected?
+   *
+   * Over WalletConnect, yes. A proposal ran `eth_requestAccounts` through the
+   * virtual session and `RpcFlow.connect()` answered from the existing
+   * session — so scanning a pairing URI for an origin the user had already
+   * connected in the in-app browser completed silently, handing the peer the
+   * address and a second live session under a first-party name. One extra tap
+   * per pairing is the whole cost.
+   */
+  alwaysPrompt(origin: string): boolean {
+    return this.verdicts.get(origin)?.kind === 'walletconnect'
   }
 
   isPending(origin: string): boolean {
@@ -586,6 +610,7 @@ export class ProviderService {
         },
       },
       knownChain: (chainId) => d.chains.known(chainId),
+      alwaysPrompt: (origin) => this.alwaysPrompt(origin),
       session: (origin) => this.sessionFor(origin),
       executeSafe: (chainId, method, params) => d.chains.rpc(chainId, method, params),
       approve: (intent) => this.approve(intent),
@@ -744,7 +769,8 @@ export class ProviderService {
     let request = existing
     if (!request) {
       // An already-permitted site only needs the vault unlocked, not a new Connect.
-      if (intent.kind === 'connect') {
+      // Except over WalletConnect: see `alwaysPrompt`.
+      if (intent.kind === 'connect' && !this.alwaysPrompt(intent.origin)) {
         const row = d.sites.registry.get(intent.origin)
         const status = await d.vault.status()
         if (row?.connected && status.unlocked) {
@@ -844,7 +870,9 @@ export class ProviderService {
         return {
           kind: 'connect',
           requestedChainId: intent.chainId,
-          reconnect: d.sites.registry.get(intent.origin)?.connected === true,
+          // `reconnect` is what the sheet auto-approves after an unlock. A
+          // pairing is never that, whatever the origin already holds.
+          reconnect: !this.alwaysPrompt(intent.origin) && d.sites.registry.get(intent.origin)?.connected === true,
           firstTime: d.sites.registry.isFirstTime(intent.origin),
           clientRequestId: intent.clientRequestId,
         }
@@ -1190,6 +1218,7 @@ export class ProviderService {
       originBudget: this.originBudget(origin, activity),
       lastCopiedAddress: this.lastCopiedAddress(),
       originVerified: !this.unverified.has(origin),
+      ...(this.verdicts.get(origin) ? { originVerify: this.verdicts.get(origin)?.verify ?? null } : {}),
       scamOrigins: d.statics?.scamOrigins() ?? [],
     })
     return assess({ origin, chainId, account, request, context, simulation })

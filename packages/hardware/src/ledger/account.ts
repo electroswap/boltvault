@@ -8,7 +8,7 @@ import { getTypesForEIP712Domain, hashDomain, hashStruct, hexToBytes, serializeT
 import { toAccount, type LocalAccount } from 'viem/accounts'
 import { LedgerError } from './apdu'
 import type { LedgerEthApp } from './eth'
-import { legacyV, yParityFromLedgerV } from './v'
+import { legacyV, yParityByRecovery, yParityFromLedgerV } from './v'
 
 export interface LedgerAccountInput {
   readonly address: Hex
@@ -38,9 +38,12 @@ export function ledgerAccount(input: LedgerAccountInput): LocalAccount {
       const serialize = options?.serializer ?? serializeTransaction
       const unsigned = await serialize(tx)
       const sig = await app.signTransaction(path, hexToBytes(unsigned), chainId)
-      const yParity = yParityFromLedgerV(sig.v, { chainId, legacy })
-      const v = legacy ? (chainId === 0 ? 27n + BigInt(yParity) : legacyV(chainId, yParity)) : BigInt(yParity)
-      return serialize(tx, { r: sig.r, s: sig.s, v, yParity })
+      const build = async (yParity: 0 | 1): Promise<Hex> => {
+        const v = legacy ? (chainId === 0 ? 27n + BigInt(yParity) : legacyV(chainId, yParity)) : BigInt(yParity)
+        return serialize(tx, { r: sig.r, s: sig.s, v, yParity })
+      }
+      // Recovered, not interpreted: see `yParityByRecovery`.
+      return build(await yParityByRecovery(build, input.address, yParityFromLedgerV(sig.v, { chainId, legacy })))
     },
     async signTypedData(typedData) {
       const td = typedData as TypedDataDefinition

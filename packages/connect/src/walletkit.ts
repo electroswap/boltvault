@@ -34,6 +34,14 @@ export const SessionProposalSchema = z.object({
   verified: VerifyValidationSchema.default('UNKNOWN'),
   /** The origin Verify attested (when VALID) — the registrable origin the firewall sees. */
   verifiedOrigin: z.string().nullable().default(null),
+  /**
+   * Verify's own scam verdict, which is a different question from validation:
+   * `VALID` says the metadata matches the domain it was registered from, while
+   * `isScam` says that domain is on Reown's malicious list. Collapsing the two
+   * into "unverified" turned a block-class signal into a 1.5-second delay.
+   * Null when the field was absent — an older kit, or Verify unreachable.
+   */
+  isScam: z.boolean().nullable().default(null),
 })
 export type SessionProposal = z.infer<typeof SessionProposalSchema>
 

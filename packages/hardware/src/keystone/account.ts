@@ -6,7 +6,7 @@
  */
 import { getTypesForEIP712Domain, hexToBytes, serializeTransaction, toHex, type Hex, type TransactionSerializable, type TypedDataDefinition } from 'viem'
 import { toAccount, type LocalAccount } from 'viem/accounts'
-import { yParityFromLedgerV } from '../ledger/v'
+import { yParityByRecovery, yParityFromLedgerV } from '../ledger/v'
 import { asUuidBytes, encodeSignRequest, type KeystoneDataType } from './ur'
 
 export type { KeystoneDataType }
@@ -72,9 +72,18 @@ export function keystoneAccount(input: KeystoneAccountInput): LocalAccount {
       const serialize = options?.serializer ?? serializeTransaction
       const unsigned = await serialize(tx)
       const sig = await ask(legacy ? 'transaction' : 'typed_transaction', hexToBytes(unsigned), chainId)
-      const { r, s, yParity } = split(sig, { chainId, legacy })
-      const v = legacy ? BigInt(chainId) * 2n + 35n + BigInt(yParity) : BigInt(yParity)
-      return serialize(tx, { r, s, v, yParity })
+      const { r, s, yParity: hint } = split(sig, { chainId, legacy })
+      const build = async (yParity: 0 | 1): Promise<Hex> => {
+        const v = legacy ? BigInt(chainId) * 2n + 35n + BigInt(yParity) : BigInt(yParity)
+        return serialize(tx, { r, s, v, yParity })
+      }
+      /*
+        The legacy `v` convention is assumed here, not verified — the fake
+        encodes exactly what this reads, so the suite only ever proved the two
+        agree with each other. Trying both bits and keeping the one that
+        recovers to this account removes the assumption entirely.
+      */
+      return build(await yParityByRecovery(build, input.address, hint))
     },
     async signTypedData(typedData) {
       /*

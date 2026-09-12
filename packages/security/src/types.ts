@@ -53,6 +53,7 @@ export type RiskCode =
   | 'WALLET_FEE_OVERCHARGE'
   | 'DAPP_TIPS_THIRD_PARTY'
   | 'ORIGIN_UNVERIFIED'
+  | 'ORIGIN_VERIFY_MISMATCH'
   | 'ORIGIN_TYPOSQUAT'
   | 'ORIGIN_SCAM'
   | 'ORIGIN_FIRST_TIME'
@@ -137,6 +138,17 @@ export interface AssessmentContext {
   readonly firstTimeOrigin: boolean
   /** False for a WalletConnect peer without Verify (§5.3). */
   readonly originVerified: boolean
+  /**
+   * What an attestation service actually said about the peer's domain, where
+   * one spoke (§5.3).
+   *
+   * `originVerified` is one bit and collapsed two different answers into it:
+   * "nobody could tell" and "the domain does not match what this app says it
+   * is" both came out as `ORIGIN_UNVERIFIED` at `warn`. The second is a much
+   * stronger signal than the first and gets its own finding. Absent when
+   * nothing attested either way, which is every transport but WalletConnect.
+   */
+  readonly originVerify?: 'valid' | 'invalid' | 'unknown' | null
   readonly scamOrigins: readonly string[]
   readonly contracts: Readonly<Record<string, ContractInfo>>
   readonly tokens: Readonly<Record<string, TokenInfo>>

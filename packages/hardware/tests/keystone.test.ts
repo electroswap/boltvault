@@ -69,6 +69,60 @@ describe('signing round trips', () => {
     }
   })
 
+  /*
+    ATT-BV-017. The legacy `v` convention was assumed, not verified: this
+    file's fake encodes exactly what `split()` reads back, so the suite proved
+    the two agreed with each other and nothing about the firmware. If a device
+    answers a legacy transaction with the bare recovery id instead, the
+    interpreted parity is wrong for about half of all sends and `assertSignedBy`
+    refuses them as "signed by a different account" — fail-closed, and
+    unfixable by the person holding the device.
+
+    Here the device deliberately uses the other convention. The parity is now
+    found by trying both and keeping the one that recovers, so the signature is
+    still this account's whichever way byte 64 is written.
+  */
+  it('assembles a legacy signature whatever convention the device writes the v byte in', async () => {
+    const contrarian = new FakeKeystone()
+    const contraryBridge: KeystoneBridge = {
+      random: (n) => new Uint8Array(n).map((_v, i) => (i * 11 + 3) & 0xff),
+      async request(req: KeystoneRequest) {
+        const frames = await contrarian.answer(req.frames)
+        const { signature, requestId } = decodeSignature(frames)
+        // Rewrite byte 64 as the raw recovery id, the way the audit supposes
+        // some firmware might, rather than as the EIP-155 value.
+        const parsed = decodeSignRequest(req.frames)
+        const chainId = parsed.chainId ?? 0
+        const asWritten = signature[64] ?? 0
+        const parity = (asWritten - ((chainId * 2 + 35) % 256) + 256) % 256
+        const rewritten = Uint8Array.from(signature)
+        rewritten[64] = parity & 1
+        void requestId
+        return rewritten
+      },
+    }
+    const other = contrarian.addressAt(1)
+    const contraryAccount = keystoneAccount({ address: other, path: "m/44'/60'/0'/0/1", xfp: contrarian.xfp, bridge: contraryBridge })
+    for (const nonce of [0, 1, 2, 3, 4, 5, 6, 7]) {
+      const raw = await contraryAccount.signTransaction({ chainId: 52014, nonce, to: '0x1111111111111111111111111111111111111111', value: 1n, gas: 21_000n, gasPrice: 10n ** 9n, type: 'legacy' })
+      expect(await recoverTransactionAddress({ serializedTransaction: raw as TransactionSerialized })).toBe(other)
+      expect(parseTransaction(raw).chainId).toBe(52014)
+    }
+  })
+
+  it('refuses a signature that belongs to no parity of this account', async () => {
+    const wrongKey: KeystoneBridge = {
+      random: (n) => new Uint8Array(n).map((_v, i) => (i * 5 + 1) & 0xff),
+      async request(req: KeystoneRequest) {
+        // A well-formed signature — from somebody else's key.
+        const stranger = new FakeKeystone({ seed: new Uint8Array(64).fill(9) })
+        return decodeSignature(await stranger.answer(req.frames)).signature
+      },
+    }
+    const acct = keystoneAccount({ address: device.addressAt(1), path: "m/44'/60'/0'/0/1", xfp: device.xfp, bridge: wrongKey })
+    await expect(acct.signTransaction({ chainId: 52014, nonce: 0, to: '0x1111111111111111111111111111111111111111', value: 1n, gas: 21_000n, gasPrice: 10n ** 9n, type: 'legacy' })).rejects.toThrow(/does not belong to this account/)
+  })
+
   it('shows a 1559 transaction as a typed-transaction request and assembles the bare-parity answer', async () => {
     const raw = await account.signTransaction({ chainId: 8453, nonce: 0, to: '0x2222222222222222222222222222222222222222', value: 1n, gas: 30_000n, maxFeePerGas: 3n * 10n ** 9n, maxPriorityFeePerGas: 10n ** 9n, type: 'eip1559', data: '0x1234' })
     expect(await recoverTransactionAddress({ serializedTransaction: raw as TransactionSerialized })).toBe(address)

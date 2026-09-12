@@ -701,6 +701,8 @@ export function createEngine(deps: EngineDeps): Engine {
     vault,
     sites,
     bus: host.events,
+    scamOrigins: () => statics?.scamOrigins() ?? [],
+    sessions: sealed.wcSessions,
   })
   connect.init()
   const bridge = new BridgeService({
