@@ -163,7 +163,16 @@ export default function App() {
   useEffect(() => {
     if (!engine) return
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') return
+      /*
+        `background` only, never `inactive` (ES-BV-067).
+
+        iOS reports `inactive` for a Face ID sheet, the control centre, an
+        incoming call banner and the app switcher's first frame. Locking on it
+        would tear the vault down underneath the biometric prompt that is
+        unlocking it, and underneath a hardware signature in progress. The
+        state that means the user left is `background`.
+      */
+      if (state !== 'background') return
       void engine.engine.settings
         .get()
         .then((s) => (s.autoLock === 'background' ? engine.engine.vault.lock() : undefined))

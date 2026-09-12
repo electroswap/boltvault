@@ -9,7 +9,7 @@
 import type { AutoLock, BoltVaultSettings, ConnectedSite } from '@boltvault/core'
 import { DEFAULT_SETTINGS } from '@boltvault/core'
 
-const AUTO_LOCKS: readonly AutoLock[] = ['5min', '15min', '60min', 'never']
+const AUTO_LOCKS: readonly AutoLock[] = ['background', '5min', '15min', '60min', 'never']
 /** Pre-idle-timer values (absolute timers, every one shorter than the user meant): one notch up. */
 export const LEGACY_AUTO_LOCK: Readonly<Record<string, AutoLock>> = { immediately: '5min', '1min': '5min', '30min': '60min' }
 const CURRENCIES = ['USD', 'ETN'] as const
@@ -23,7 +23,7 @@ const SCENES = ['circuit', 'grid', 'off'] as const
  */
 export function normalizeSettings(
   raw: string | Record<string, unknown> | null | undefined,
-  os: { reducedMotion?: boolean } = {},
+  os: { reducedMotion?: boolean; body?: 'extension' | 'mobile' } = {},
 ): BoltVaultSettings {
   let obj: Record<string, unknown>
   if (raw == null) obj = {}
@@ -43,10 +43,19 @@ export function normalizeSettings(
   }
 
   const autoLockRaw = obj['autoLock']
+  /*
+    A phone's default is "on leaving" (ES-BV-041).
+
+    An idle timer is the extension's control, where a closing popup is not the
+    user walking away. On a phone the moment that matters is the app leaving
+    the foreground, and a wallet left open on a table should not be waiting out
+    fifteen minutes.
+  */
+  const fallbackAutoLock: AutoLock = os.body === 'mobile' ? 'background' : DEFAULT_SETTINGS.autoLock
   const autoLock: AutoLock =
     typeof autoLockRaw === 'string' && (AUTO_LOCKS as readonly string[]).includes(autoLockRaw)
       ? (autoLockRaw as AutoLock)
-      : (typeof autoLockRaw === 'string' && LEGACY_AUTO_LOCK[autoLockRaw]) || DEFAULT_SETTINGS.autoLock
+      : (typeof autoLockRaw === 'string' && LEGACY_AUTO_LOCK[autoLockRaw]) || fallbackAutoLock
 
   const curRaw = obj['displayCurrency']
   const displayCurrency =

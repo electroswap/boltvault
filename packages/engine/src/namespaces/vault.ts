@@ -68,16 +68,37 @@ export const AUTOLOCK_ALARM = 'vault.autolock'
 
 const AUTO_LOCK_MS: Record<AutoLock, number> = {
   /*
-    A timer of zero: `arm` schedules it, and on mobile `platform.lockOnBackground`
-    fires it the moment the app leaves the foreground rather than waiting
-    (ES-BV-041). On the extension, where a popup closing is not the user
-    walking away, it behaves as the shortest timer.
+    "On leaving" is not a timer, and it is certainly not a timer of zero
+    (ES-BV-067).
+
+    It was written as `0`, which `arm()` reads as a deadline of *now*: had the
+    setting ever reached the vault, `expireIfDue` would have locked the wallet
+    on the first status call after every unlock. It never did reach the vault,
+    because the settings normaliser clamped the value away — one bug hiding
+    the other. `armMs` below decides what it means, and on a phone the answer
+    is "nothing here"; the app's own foreground transition does the locking.
   */
-  background: 0,
+  background: Number.POSITIVE_INFINITY,
   '5min': 300_000,
   '15min': 900_000,
   '60min': 3_600_000,
   never: Number.POSITIVE_INFINITY,
+}
+
+/**
+ * How long the idle timer should run for, given the setting and the body.
+ *
+ * Two values have no timer on a phone: `background`, which the app's own
+ * `AppState` transition handles, and `never`, which a phone may not have at
+ * all — an unattended phone is unattended from the second it is put down, so
+ * a mobile `never` (a legacy row, or one arriving over sync from a desktop) is
+ * read as "on leaving" rather than honoured. On the extension `background` has
+ * no foreground to leave, so it falls back to the shortest real timer instead
+ * of becoming `never` by accident.
+ */
+function armMs(autoLock: AutoLock, body: 'extension' | 'mobile'): number {
+  if (body === 'mobile') return autoLock === 'background' || autoLock === 'never' ? Number.POSITIVE_INFINITY : AUTO_LOCK_MS[autoLock]
+  return autoLock === 'background' ? AUTO_LOCK_MS['5min'] : AUTO_LOCK_MS[autoLock]
 }
 /** A touch within this long of the last one is a no-op (the alarm is not rescheduled on every keystroke). */
 const TOUCH_DEBOUNCE_MS = 30_000
@@ -182,6 +203,12 @@ export interface VaultManagerOptions {
   readonly active: SealedMap<{ id: string | null }>
   /** Drop every sealed entry belonging to a removed account. */
   readonly purgeAccount?: (accountId: string) => Promise<void>
+  /**
+   * Which body this is. The auto-lock policy differs (ES-BV-067): a phone
+   * locks on leaving the foreground and may not be set to never lock; the
+   * extension runs an idle timer.
+   */
+  readonly body?: 'extension' | 'mobile'
 }
 
 /**
@@ -540,7 +567,7 @@ export class VaultManager {
   /** Push the idle deadline out. `force` ignores the debounce (unlock, a settings change). */
   private async arm(force: boolean): Promise<{ lockAt: number | null }> {
     const { autoLock } = await this.settings.get()
-    const ms = AUTO_LOCK_MS[autoLock]
+    const ms = armMs(autoLock, this.opts.body ?? 'extension')
     if (!Number.isFinite(ms)) {
       await this.platform.alarms.cancel(AUTOLOCK_ALARM)
       await this.platform.storage.session.remove(KEY_LOCK_AT)
@@ -571,6 +598,20 @@ export class VaultManager {
     if (!status.unlocked) return
     const accounts = await this.accounts().catch(() => [])
     this.bus.emit({ type: 'accounts.changed', accounts, activeId: await this.activeId() })
+  }
+
+  /**
+   * Store an auto-lock choice, with the one refusal a phone gets (ES-BV-067).
+   *
+   * `never` on a phone is not a setting the product offers, and it is not one
+   * the engine should take from a paired desktop or an older build either: it
+   * would leave the key in process memory for the life of the app, which on a
+   * phone is days. It is stored as "on leaving" instead, which is what the
+   * picker there offers and what `armMs` already enforces.
+   */
+  async setAutoLock(autoLock: AutoLock): Promise<void> {
+    const mobile = (this.opts.body ?? 'extension') === 'mobile'
+    await this.settings.set({ autoLock: mobile && autoLock === 'never' ? 'background' : autoLock })
   }
 
   async applyAutoLock(): Promise<VaultStatus> {
@@ -1235,7 +1276,7 @@ export function vaultNamespace(vault: VaultManager, settings: SettingsStore): Na
     setAutoLock: {
       input: z.object({ autoLock: AutoLockSchema }),
       handler: async (arg) => {
-        await settings.set({ autoLock: (arg as { autoLock: AutoLock }).autoLock })
+        await vault.setAutoLock((arg as { autoLock: AutoLock }).autoLock)
         return vault.applyAutoLock()
       },
     },

@@ -210,7 +210,9 @@ export function createEngine(deps: EngineDeps): Engine {
   */
   const rpcFetch: typeof fetch = governedFetch(realFetch, governor)
   let staticsRef: StaticsService | null = null
-  const settings = new SettingsStore(deps.platform, host.events, deps.os)
+  // The body reaches the settings default because a phone's auto-lock default
+  // is "on leaving" rather than an idle timer (ES-BV-041, ES-BV-067).
+  const settings = new SettingsStore(deps.platform, host.events, { ...(deps.os ?? { reducedMotion: false }), ...(deps.body ? { body: deps.body } : {}) })
   // The DEK accessor is needed by every sealed store below, so it is built
   // before them. `VaultManager.dek()` is the same lookup but private.
   const dek = async (): Promise<Uint8Array> => {
@@ -290,6 +292,7 @@ export function createEngine(deps: EngineDeps): Engine {
   }
   const vault = new VaultManager(deps.platform, host.events, settings, {
     active: sealed.active,
+    ...(deps.body ? { body: deps.body } : {}),
     purgeAccount: async (id) => {
       await sealed.purgeAccount(id)
       await cache.forgetAccount(id)

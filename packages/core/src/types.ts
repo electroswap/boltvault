@@ -128,8 +128,17 @@ export interface CustomTokenStoreEntry {
   readonly origin?: string
 }
 
-/** Idle timeout: the timer restarts on every interaction; the vault always locks when the browser closes. */
-export type AutoLock = '5min' | '15min' | '60min' | 'never'
+/**
+ * Idle timeout: the timer restarts on every interaction; the vault always locks
+ * when the browser closes.
+ *
+ * `background` is the phone's answer and has no timer at all — the app locks
+ * when it leaves the foreground (ES-BV-041). It lived only in the engine's own
+ * schema for one release, so every write of it was clamped back to fifteen
+ * minutes by `normalizeSettings` and the setting the user picked was not the
+ * setting they got (ES-BV-067). It is a stored value like any other now.
+ */
+export type AutoLock = 'background' | '5min' | '15min' | '60min' | 'never'
 
 export interface BoltVaultSettings {
   /** 'BoltVault is default wallet' — the only window.ethereum writer. */

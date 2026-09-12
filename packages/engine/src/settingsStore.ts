@@ -46,11 +46,16 @@ function spendPolicy(raw: Partial<Settings> | null | undefined): Pick<Settings, 
   }
 }
 
-const SETTINGS_DOC: DocSpec<Settings> = {
+/**
+ * The document spec, built per store because the default depends on the body
+ * (ES-BV-041): a phone's default auto-lock is "on leaving", not an idle timer,
+ * and an absent document must land on that rather than on the shared default.
+ */
+const settingsDoc = (os: NormalizeOptions): DocSpec<Settings> => ({
   key: 'settings',
   version: 2,
   schema: SettingsSchema,
-  defaultValue: () => ({ ...normalizeSettings(null), ...spendPolicy(null) }),
+  defaultValue: () => ({ ...normalizeSettings(null, os), ...spendPolicy(null) }),
   migrate: (data, from) => {
     if (from !== 1 || typeof data !== 'object' || data === null) return data
     const d: Record<string, unknown> = { ...(data as Record<string, unknown>) }
@@ -62,23 +67,28 @@ const SETTINGS_DOC: DocSpec<Settings> = {
     d['reducedMotion'] = false
     return d
   },
-}
+})
+
+type NormalizeOptions = { reducedMotion: boolean; body?: 'extension' | 'mobile' }
 
 export class SettingsStore {
   private cached: Settings | null = null
+  private readonly doc: DocSpec<Settings>
 
   constructor(
     private readonly platform: Platform,
     private readonly bus: EventBus,
-    private readonly os: { reducedMotion: boolean } = { reducedMotion: false },
-  ) {}
+    private readonly os: NormalizeOptions = { reducedMotion: false },
+  ) {
+    this.doc = settingsDoc(os)
+  }
 
   async get(): Promise<Settings> {
     if (this.cached) return this.cached
-    const { value, migrated } = await readDoc(this.platform.storage.local, SETTINGS_DOC, () => this.platform.now())
+    const { value, migrated } = await readDoc(this.platform.storage.local, this.doc, () => this.platform.now())
     const normalized = { ...normalizeSettings(value, this.os), ...spendPolicy(value) }
     this.cached = normalized
-    if (migrated) await writeDoc(this.platform.storage.local, SETTINGS_DOC, normalized)
+    if (migrated) await writeDoc(this.platform.storage.local, this.doc, normalized)
     return normalized
   }
 
@@ -87,7 +97,7 @@ export class SettingsStore {
     const merged = { ...current, ...patch }
     const next = { ...normalizeSettings(merged, this.os), ...spendPolicy(merged) }
     this.cached = next
-    await writeDoc(this.platform.storage.local, SETTINGS_DOC, next)
+    await writeDoc(this.platform.storage.local, this.doc, next)
     this.bus.emit({ type: 'settings.changed', settings: next })
     return next
   }
