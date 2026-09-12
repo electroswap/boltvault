@@ -178,7 +178,13 @@ export function assertRelayAllowed(relayUrl: string, allowed: string | null | un
     and nothing to leak.
   */
   if (url.protocol === 'memory:') return
-  const loopback = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '::1'
+  /*
+    `URL` keeps the brackets on an IPv6 host, so `http://[::1]:3007` answers
+    `[::1]` and the bare comparison never matched it. A development build on
+    an IPv6 loopback was refused as an unencrypted stranger.
+  */
+  const host = url.hostname.replace(/^\[|\]$/g, '')
+  const loopback = host === 'localhost' || host === '127.0.0.1' || host === '::1'
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback))
     throw new EngineError(
       'invalid_argument',

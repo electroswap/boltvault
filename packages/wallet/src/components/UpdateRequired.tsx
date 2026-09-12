@@ -17,42 +17,16 @@
  *
  * `blocked` is what the shell reads to decide which screens get the plate.
  */
-import { Body, Column, Key, Plate } from '@boltvault/ui'
+import { Body, Column, Key, Plate, Row } from '@boltvault/ui'
 import type { FlagsView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
-import type { ScreenId, TabId } from '../navigation/registry'
-
-/**
- * What a stale build may not do.
- *
- * Everything that talks to the chain, a dApp or the routing service on the
- * user's behalf: those are the paths where old code can be wrong about money.
- * Settings, Security, Backup, Reveal, Export, Devices, Accounts and Activity
- * are not on it — reading what you already have, and getting your own key out,
- * is exactly what a wallet must keep doing.
- */
-const BLOCKED: ReadonlySet<string> = new Set<string>([
-  'home',
-  'swap',
-  'send',
-  'bridge',
-  'browser',
-  'token',
-  'nft',
-  'rack',
-  'farm',
-  'launchpad',
-  'campaign',
-  'limit',
-  'explore',
-  'collection',
-  'piece',
-  'offers',
-  'approval',
-])
+import { useRouter } from '../navigation/router'
+// The blocked set lives in its own module so it can be read without pulling
+// React Native in behind it (ES-BV-007).
+export { isBlockedByUpdate } from '../updateGate'
 
 export function useUpdateRequired(): boolean {
   const engine = useEngine()
@@ -66,14 +40,11 @@ export function useUpdateRequired(): boolean {
   return flags?.updateRequired === true
 }
 
-export function isBlockedByUpdate(screen: ScreenId | TabId | null | undefined): boolean {
-  return typeof screen === 'string' && BLOCKED.has(screen)
-}
-
 /** The plate itself, rendered in place of a blocked screen's content. */
 export function UpdateRequired() {
   const engine = useEngine()
   const host = useHost()
+  const router = useRouter()
   const [flags, setFlags] = useState<FlagsView | null>(null)
   useEffect(() => {
     engine.flags.get().then(setFlags, () => undefined)
@@ -108,7 +79,26 @@ export function UpdateRequired() {
             message: 'Settings, your recovery phrase, export and your activity are still open — nothing signed by us can take those away from you.',
           })}
         </Body>
-        <Key label={t({ id: 'update.key', message: 'Get the update' })} onPress={() => void host.openUrl?.(store)} testID="update-key" />
+        {/*
+          …and a way to get there (ES-BV-007).
+
+          The copy above says Settings, the recovery phrase and export are
+          still open, and they are — but `home` is on the blocked set and the
+          product's only navigation to Settings is the icon on Home, so on a
+          phone the sentence was true and unreachable at the same time. Deep
+          links do not help: they reach home, swap, explore, activity, bridge,
+          receive and browser, and nothing else. A key on the plate is the
+          shortest honest fix.
+        */}
+        <Row gap="$2" flexWrap="wrap">
+          <Key label={t({ id: 'update.key', message: 'Get the update' })} onPress={() => void host.openUrl?.(store)} testID="update-key" />
+          <Key
+            label={t({ id: 'update.settings', message: 'Open Settings' })}
+            kind="secondary"
+            onPress={() => router.navigate('settings')}
+            testID="update-settings"
+          />
+        </Row>
       </Plate>
     </Column>
   )

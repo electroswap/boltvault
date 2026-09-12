@@ -37,6 +37,7 @@ import {
   type PreparedTx,
   type StatementView,
 } from '@boltvault/engine'
+import { untrusted } from '@boltvault/security'
 import { parseUnits } from 'viem'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ScreenFooter } from '../components/ScreenFooter'
@@ -112,8 +113,17 @@ function siteOf(origin: string): { host: string; internal: boolean } {
     parses happily and answers an empty one, so the origin line on a remote-sign
     sheet was blank. It is named the way `explain.ts siteName()` names it.
   */
+  /*
+    A paired device's own name for itself, stripped (ES-BV-014, ES-BV-061).
+
+    It is a string the peer chose and it becomes the origin line on a
+    remote-sign sheet, so an unbounded one pushes the verb off the screen and a
+    bidi override reorders the line around it. The engine bounds it at pairing
+    and on every read of the row, and this is the render site, which is where
+    the same rule has to hold whatever reached it.
+  */
   if (origin.startsWith('device:'))
-    return { host: `your ${origin.slice(7)} (paired device)`, internal: true }
+    return { host: `your ${untrusted(origin.slice(7), 32) || 'paired device'} (paired device)`, internal: true }
   try {
     return { host: new URL(origin).host || origin, internal: false }
   } catch {
