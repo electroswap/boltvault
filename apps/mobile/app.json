@@ -2,6 +2,7 @@
   "expo": {
     "name": "BoltVault",
     "slug": "boltvault",
+    "owner": "electroswap_io",
     "scheme": "boltvault",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -236,7 +237,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+        "projectId": "e1856a8c-c926-4050-a047-c1150c7a3936"
       }
     },
     "runtimeVersion": {
