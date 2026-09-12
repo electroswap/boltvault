@@ -17,6 +17,16 @@ export interface KeyProps {
   readonly icon?: ReactNode
   /** Icon above the label — the stacked keys of a narrow body. */
   readonly stacked?: boolean
+  /**
+   * The label one step up (20 px rather than 15), for a card's own closing
+   * verb.
+   *
+   * The interface sets its swap button's text well above body size, and on the
+   * swap card the key is the largest thing after the amounts — at `$3` it read
+   * like a caption on a very wide button. Only `regular`, non-stacked keys have
+   * the height to carry it.
+   */
+  readonly loud?: boolean
 }
 
 /**
@@ -24,7 +34,7 @@ export interface KeyProps {
  * the current (blue into violet) with a glow; the secondary is glass with a
  * lit rim; danger is copper.
  */
-export function Key({ label, onPress, kind = 'primary', size = 'regular', disabled = false, testID, icon, stacked = false }: KeyProps) {
+export function Key({ label, onPress, kind = 'primary', size = 'regular', disabled = false, testID, icon, stacked = false, loud = false }: KeyProps) {
   const compact = size === 'compact'
   const r = compact ? 12 : radius.key
   const reduced = useReducedMotionPref()
@@ -59,7 +69,7 @@ export function Key({ label, onPress, kind = 'primary', size = 'regular', disabl
       {/* A positioned layer: on the web an absolute SVG paints above in-flow text whatever the order. */}
       <Row flexDirection={stacked ? 'column' : 'row'} alignItems="center" justifyContent="center" gap={stacked ? 2 : compact ? 6 : 8} zIndex={1}>
         {icon}
-        <KeyLabel fontSize={stacked || compact ? '$2' : '$3'}>{label}</KeyLabel>
+        <KeyLabel fontSize={stacked || compact ? '$2' : loud ? '$5' : '$3'}>{label}</KeyLabel>
       </Row>
     </KeyFrame>
   )

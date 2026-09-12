@@ -45,13 +45,23 @@ describe('the account under the title', () => {
     })
   }
 
-  it('Swap says it at caption scale, under the title and above the chain', () => {
+  /*
+    The chain used to be a third line under the account, and this asserted that
+    order. It is a pill on the title's own line now — owner: "Chain selector
+    moves to where the slippage settings currently is" — which buys back the
+    line that made the top of the screen feel crowded and gives the account the
+    full width, so it stops truncating an already-shortened address.
+
+    What is still worth holding is the rest of it: the account sits under the
+    title, at caption scale, in the shared descriptor.
+  */
+  it('Swap says it at caption scale under the title, with the chain beside the title', () => {
     const title = SWAP.indexOf("id: 'swap.title'")
+    const chain = SWAP.indexOf('testID="swap-chain"')
     const account = SWAP.indexOf("id: 'from.account'")
-    const chain = SWAP.indexOf('<ChainCaption')
     expect(title).toBeGreaterThan(-1)
-    expect(account).toBeGreaterThan(title)
-    expect(chain).toBeGreaterThan(account)
+    expect(chain).toBeGreaterThan(title)
+    expect(account).toBeGreaterThan(chain)
     expect(SWAP).toContain('<Body tone="mute" size="caption" numberOfLines={1} testID="swap-account">')
   })
 })

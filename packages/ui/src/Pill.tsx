@@ -68,9 +68,20 @@ export function Pill({ label, icon, chevron = false, selected = false, tone, siz
           the `selected` treatment, which the bible says is the one and only
           selected style.
         */
-        ...(strong && !disabled
-          ? { shadowColor: glow.tab, shadowRadius: 12, shadowOpacity: 1, shadowOffset: { width: 0, height: 0 } }
-          : {}),
+        /*
+          `boxShadow`, not the `shadow*` quartet.
+
+          Android draws nothing for `shadowColor`/`shadowRadius`/`shadowOpacity`
+          on a View — those are iOS and web only; Android's own shadow is
+          `elevation`, which is a grey drop shadow under the box rather than a
+          coloured halo around it. So the glow this has claimed to draw since it
+          was written has never appeared on a phone, which is where the owner
+          reads it: "Token selectors should have a small glow like the web
+          interface." `boxShadow` is one declaration that renders on all three
+          (React Native 0.76+, and CSS on the web), so the halo is the same
+          halo everywhere.
+        */
+        ...(strong && !disabled ? { boxShadow: `0px 0px 12px ${glow.tab}` } : {}),
         transitionProperty: ['backgroundColor', 'borderColor'],
         transitionDuration: reduced ? 0 : motion.micro,
         transitionTimingFunction: 'ease-out',

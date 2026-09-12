@@ -10,7 +10,7 @@
  * Confirming runs a flow of sheets (approve → permit → swap) and the
  * Discharge lands the result here.
  */
-import { Body, Chip, Column, Discharge, Icon, Key, Pill, Plate, Pressable, Rim, Row, ScrollView, Segmented, TokenAvatar, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
+import { Body, ChainMark, Chip, Column, Discharge, Icon, IconButton, Key, Pill, Plate, Pressable, Rim, Row, ScrollView, Segmented, TokenAvatar, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
 import { cacheKey, type ExploreToken, type LimitOrderView, type LimitQuote, type LiquidityView, type SwapArgs, type SwapQuote, type TokenView } from '@boltvault/engine'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { SlippageSheet } from '../components/SlippageSheet'
@@ -29,7 +29,7 @@ import { t } from '../i18n'
 import { swapFlowStore, useSwapFlow } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
 import { AmountWell } from '../components/AmountWell'
-import { ChainCaption } from '../components/ChainSelect'
+import { useRouter } from '../navigation/router'
 import { FeeScheduleSheet } from './FeeScheduleSheet'
 import { statusLabel, stepLabel } from '../components/FlowPlate'
 
@@ -47,8 +47,47 @@ const ETN = 52014
  */
 const GUTTER = 8
 
-/** The air above and below every line of the details card. */
-const ROW_PAD = 9
+/**
+ * The one vertical gap inside the console.
+ *
+ * Pay → receive, receive → details, details → key: all this. Measured off the
+ * owner's screenshot the three were 13, 5.5 and 11.5 dp, which is what "the
+ * gaps look wrong" turns out to mean; the interface runs a single
+ * `AutoColumn gap="xs"` (4 px) through the whole card.
+ */
+const GAP = 6
+
+/**
+ * What the seam row takes back so the two wells sit `GAP` apart like everything
+ * else.
+ *
+ * The controls are a 44 px row between two wells in a `gap: GAP` column, so
+ * left alone they push the wells `GAP + 44 + GAP` apart — three times any other
+ * gap on the card. Pulling `(44 + GAP) / 2` off each side makes the row's own
+ * contribution `-GAP`, and the two gaps either side then add back to exactly
+ * `GAP`. The circles still overflow into both wells, which is the whole point
+ * of a seam control (`MidButtonWrapper` does the same with `margin: -18px 0`).
+ */
+const SEAM_PULL = -(44 + GAP) / 2
+
+/**
+ * The air above the card, which the details reclaim when they open.
+ *
+ * Owner wants the dialog lower on the page, and also not to have to scroll once
+ * the details are showing. Those pull opposite ways, so the space is only there
+ * while it is free.
+ */
+const TOP_AIR = 48
+
+/**
+ * The air above and below every line of the details card.
+ *
+ * Owner: "reduce the gap between line items in the details section." It was 9,
+ * which put 18 px between two captions and made four short rows as tall as a
+ * terminal. The rows still clear a 44 px tap target where one is pressable —
+ * that is set on the `Pressable`, not here.
+ */
+const ROW_PAD = 5
 const QUOTE_STALE_MS = 8_000
 const DURATIONS = [
   { id: '86400', label: '1 day' },
@@ -67,6 +106,7 @@ export interface SwapProps {
 
 export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMotion = false }: SwapProps) {
   const engine = useEngine()
+  const router = useRouter()
   const { active } = useWalletState()
   /*
     Which account is spending, the way every other money screen says it.
@@ -387,7 +427,16 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   */
   const lockedPct = mode === 'swap' && liquidity.value ? liquidity.value.lockedPct : 0
   const lockPaint = lockedPct > 0 ? (lockTone === 'surge' ? paint.surge : paint.ember) : null
-  const lockRim = lockPaint ? (`${lockPaint}8c` as const) : null
+  /*
+    The lock rim at full strength.
+
+    It was the surge green at 55% alpha (`…8c`), which over the well's navy
+    measured rgb(39,133,111) against the interface's rgb(65,245,172) for the
+    same border — the same hue, a third of the light. Owner: "Green border
+    around the input/output looks too dark." `SwapSection locked` there takes
+    `theme.success` flat, so this does too.
+  */
+  const lockRim = lockPaint
   const problem = mode === 'swap' ? (quote?.problems[0] ?? null) : (limitQuote?.problems[0] ?? null)
   /*
     A blocked token takes the key away on either side of the trade: buying one
@@ -399,6 +448,22 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   const canSwap = blockedSide === null && (mode === 'swap' ? !!quote?.ok && fresh && !busy : !!limitQuote?.ok && !busy)
   const priced = quote && quote.amountOutRaw !== '0'
   const receiveText = priced ? formatRaw(quote.receiveRaw, quote.decimalsOut) : '—'
+  /*
+    Which token "Details" is about.
+
+    The pair's subject is what you are buying, so it is the output side — except
+    when the output is ETN or its wrapper, where "details" would be a page about
+    the chain's own coin and the interesting half of the trade is what you are
+    selling. Owner: "Details takes the user to the token details page (of the
+    output token, unless the output is ETN/WETN, in which case Details goes to
+    the input token)."
+
+    WETN is spotted by symbol rather than by address: `@boltvault/chains` holds
+    the address but is not a dependency of this package, and the token universe
+    this screen already has says the same thing.
+  */
+  const isEtnSide = (address: string, view: TokenView | null): boolean => address === 'native' || view?.symbol?.toUpperCase() === 'WETN'
+  const detailsToken = !isEtnSide(tokenOut, outView) ? tokenOut : !isEtnSide(tokenIn, inView) ? tokenIn : null
   const keyLabel = mode === 'swap' ? (quote && quote.priceImpactPct !== null && quote.priceImpactPct > 15 ? t({ id: 'swap.key.anyway', message: 'Swap anyway' }) : t({ id: 'swap.key', message: 'Swap' })) : t({ id: 'swap.limit.key', message: 'Place order' })
 
   return (
@@ -418,9 +483,22 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
       */}
       <ScrollView contentContainerStyle={{ paddingHorizontal: GUTTER, paddingVertical: inset, gap: 10 }} testID="swap">
         <Column width="100%" maxWidth={metrics.dialog} alignSelf="center" gap={10}>
-        {/* Title row: Swap (or Swap · Limit) and the slippage pill (owner item W2). */}
-        {/* `metrics.header` so the home key below fits without moving anything. */}
-        <Row justifyContent="space-between" alignItems="center" minHeight={metrics.header} gap="$2">
+        {/*
+          The screen header, one line shorter than it was.
+
+          It carried the title, the account, the chain on its own third line AND
+          the slippage pill — four things stacked above a card that starts with
+          four more. Owner: "the top of the screen feels very crowded." The
+          chain takes the slippage's old place on the right (owner: "Chain
+          selector moves to where the slippage settings currently is"), which
+          buys back the third line, and slippage moves inside the card where the
+          interface keeps it.
+
+          It is a mark, not a control: this screen is Electroneum-only, so a
+          chevron would promise a choice that does not exist. `Pill` without
+          `onPress` is exactly that — a static mark with no button role.
+        */}
+        <Row alignItems="flex-start" minHeight={metrics.header} gap="$2">
           <HomeKey />
           {limitOn ? (
             <Column width={180}>
@@ -436,25 +514,82 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
               />
             </Column>
           ) : (
-            <Column alignItems="flex-start" flexShrink={1} minWidth={0}>
-              <Body size="title">{t({ id: 'swap.title', message: 'Swap' })}</Body>
+            /*
+              The chain rides on the TITLE's line, not on the row, so the
+              account gets the full width underneath it.
+
+              Sharing one row three ways left the caption about 200 px on a
+              narrow body and it truncated an already-shortened address into
+              "0x9858……". The title is two words; the chain pill is three; they
+              fit together, and the line that has to hold a label and an address
+              then has the card's whole width to do it in.
+            */
+            <Column flex={1} minWidth={0} gap={2}>
+              <Row justifyContent="space-between" alignItems="center" gap="$2">
+                <Body size="title">{t({ id: 'swap.title', message: 'Swap' })}</Body>
+                <Pill label="Electroneum" icon={<ChainMark chainId={ETN} size={14} />} size="sm" tone="ink" testID="swap-chain" />
+              </Row>
               {active ? (
                 <Body tone="mute" size="caption" numberOfLines={1} testID="swap-account">
                   {t({ id: 'from.account', message: 'from {a}', values: { a: `${active.label} · ${accountName ?? shortAddress(active.address)}` } })}
                 </Body>
               ) : null}
-              <ChainCaption chainId={ETN} name="Electroneum" testID="swap-chain" />
             </Column>
           )}
-          {mode === 'swap' ? <Pill icon={<Icon name="tune" size={14} color={paint.mute} />} label={formatPct(effectiveSlippage)} size="sm" onPress={() => setSlippageOpen(true)} accessibilityLabel={t({ id: 'swap.slippage', message: 'Slippage {p}', values: { p: formatPct(effectiveSlippage) } })} testID="swap-slippage" /> : null}
         </Row>
+
+        {/*
+          Air above the card, given back when the details open.
+
+          Owner: "I want the whole dialog to be moved down so the top of the
+          page feels less crowded" — and then: "When details is expanded, any
+          extra space above the swap dialog should be reclaimed if needed to
+          hopefully not have to scroll on the page." So the air is exactly that:
+          a spacer that exists while the card is short and collapses the moment
+          it grows.
+        */}
+        <Column height={details ? 0 : TOP_AIR} />
 
         {/*
           The console: two wells, the seam controls between them, the details
           row and the key, all in one panel — `SwapWrapper` holds exactly this
           set, and its inner padding is 8, not 10.
+
+          One `gap` for every child, so the distance from pay to receive, from
+          receive to the details row, and from the details row to the key are
+          the same number. Owner: "Vertical gap between the input container,
+          output container, details, and swap button should be made
+          consistent." The seam is what made that hard, and `SEAM_PULL` is what
+          settles it — see there.
         */}
-        <Plate role="console" gap="$1" padding={8} testID="swap-console">
+        <Plate role="console" gap={GAP} padding={8} testID="swap-console">
+          {/*
+            The card's own header, as the interface has it: "Swap  Details" at
+            the left and the gear at the right (`SwapHeader`). Swap is a label,
+            not a tab — this screen is the swap — and Details opens the token's
+            page, which is where the interface's own Details tab goes.
+          */}
+          {mode === 'swap' ? (
+            <Row justifyContent="space-between" alignItems="center" paddingLeft={6} minHeight={metrics.hit}>
+              <Row gap="$3" alignItems="center">
+                <Body size="title">{t({ id: 'swap.title', message: 'Swap' })}</Body>
+                {detailsToken ? (
+                  <Pressable
+                    onPress={() => router.navigate('token', { chainId: ETN, address: detailsToken })}
+                    accessibilityRole="button"
+                    accessibilityLabel={t({ id: 'swap.tokenDetails.a11y', message: 'Token details' })}
+                    style={{ minHeight: metrics.hit, justifyContent: 'center' }}
+                    testID="swap-token-details"
+                  >
+                    <Body size="title" tone="mute">
+                      {t({ id: 'swap.details.tab', message: 'Details' })}
+                    </Body>
+                  </Pressable>
+                ) : null}
+              </Row>
+              <IconButton icon="settings" label={t({ id: 'swap.slippage', message: 'Slippage {p}', values: { p: formatPct(effectiveSlippage) } })} onPress={() => setSlippageOpen(true)} testID="swap-slippage" />
+            </Row>
+          ) : null}
           <AmountWell
             label={t({ id: 'swap.pay', message: 'You pay' })}
             value={amount}
@@ -478,7 +613,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
             than laid on top of it (`MidButtonWrapper`: `border: 4px solid
             theme.surface1`).
           */}
-          <Row justifyContent="center" alignItems="center" gap={2} marginVertical={-20} zIndex={2}>
+          <Row justifyContent="center" alignItems="center" gap={2} marginVertical={SEAM_PULL} zIndex={2}>
             {/*
               The lock opens the details, where the figure it stands for lives.
               The interface's opens a tooltip carrying the lock's end date; ours
@@ -573,7 +708,13 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
             >
               <Row justifyContent="space-between" alignItems="center" gap="$2" minHeight={40}>
                 <Body tone={fresh ? 'ink' : 'mute'} size="caption" fontWeight="600" flexShrink={1} numberOfLines={1} testID="swap-rate">
-                  {quote && quote.amountOutRaw !== '0' ? (formatRate(quote.rate, quote.symbolIn, quote.symbolOut) ?? '') : t({ id: 'swap.details', message: 'Details' })}
+                  {/*
+                    "Rate", not "Details" — the card's own header now has a
+                    Details link, and one card saying Details twice, three rows
+                    apart, meaning two different things, is worse than a
+                    placeholder that says what the row will hold.
+                  */}
+                  {quote && quote.amountOutRaw !== '0' ? (formatRate(quote.rate, quote.symbolIn, quote.symbolOut) ?? '') : t({ id: 'swap.rate.idle', message: 'Rate' })}
                 </Body>
                 <Row gap="$1" alignItems="center" flexShrink={0}>
                   <Row gap="$1" alignItems="center" testID="swap-route">
@@ -649,17 +790,15 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
           )}
 
           {/*
-            The key, and whatever has to be read before pressing it.
+            Whatever has to be read before the key is pressed.
 
-            `ButtonError`/`ButtonPrimary` is the last child of the interface's
-            own card, directly under the details row, and that is the whole of
-            the owner's "bring the swap button up": it used to hang off
-            `ScreenFooter`, pinned to the bottom of the window, which on a phone
-            left most of a screen of nothing between the figures and the verb.
-            The warnings come with it — a caption about a blocked token belongs
-            beside the key it disables, not at the other end of the page.
+            Its own child of the console now, rather than a box wrapping the key
+            as well: the key has to be exactly as wide as the terminals above it
+            (owner: "the button should be the same width as the input/output
+            containers"), and it cannot be while it sits inside something with
+            side padding of its own. Text keeps the padding; the key does not.
           */}
-          <Column gap="$2" paddingHorizontal={4} paddingTop={6} testID="swap-act">
+          <Column gap="$2" paddingHorizontal={4} testID="swap-act">
             {blockedSide ? (
               <Body tone="burn" size="caption" testID="swap-blocked">
                 {t({
@@ -689,8 +828,19 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
                 {t({ id: 'swap.stale', message: 'Re-quoting…' })}
               </Body>
             ) : null}
-            <Key label={keyLabel} disabled={!canSwap} onPress={run} testID="swap-key" />
           </Column>
+
+          {/*
+            The verb, flush with the terminals and reading like one.
+
+            `ButtonError`/`ButtonPrimary` is the last child of the interface's
+            own card, directly under the details row, and its label is set well
+            above body size. Owner: "I want the 'Swap' text in the button to be
+            a bit bigger, and the button should be the same width as the
+            input/output containers" — so it is a direct child of the console,
+            taking the console's padding as its margin exactly as the wells do.
+          */}
+          <Key label={keyLabel} loud disabled={!canSwap} onPress={run} testID="swap-key" />
         </Plate>
 
         {mode === 'limit' && limitQuote ? (

@@ -126,11 +126,20 @@ test('quote with the fee stack, then approve → permit → swap through the she
     await expect(popup.getByTestId('swap-route')).toContainText('V3 0.3%')
     await expect(popup.getByTestId('swap-min')).toContainText('USDC')
     await expect(popup.getByTestId('swap-locks')).toContainText(/No lock/)
-    // Slippage is a sheet: a preset changes the pill; Done closes it.
+    /*
+      Slippage is a sheet: a preset changes the control; Done closes it.
+
+      The control is the interface's gear now, inside the card, rather than a
+      pill printing the percentage — owner: "pull the slippage settings into the
+      swap dialog card … on the right side (like the gears) on the
+      web-interface." So the figure it carries is its accessible name, which is
+      the only place a gear can say what it is set to. Still the same assertion:
+      pick 1.00%, and the control says 1.00%.
+    */
     await popup.getByTestId('swap-slippage').click()
     await popup.getByTestId('swap-slippage-100').click()
     await popup.getByTestId('swap-slippage-done').click()
-    await expect(popup.getByTestId('swap-slippage')).toContainText('1.00%')
+    await expect(popup.getByTestId('swap-slippage')).toHaveAttribute('aria-label', /1\.00%/)
     // The fee line opens the schedule sheet.
     await popup.getByTestId('swap-fee-line').click()
     await expect(popup.getByTestId('fee-sheet')).toBeVisible()
