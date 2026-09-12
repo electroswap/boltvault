@@ -100,17 +100,46 @@ if (harness.length) {
 */
 const NOT_AN_ORIGIN = /^https?:\/\/(www\.w3\.org|www\.inkscape\.org|purl\.org|ns\.adobe\.com|schemas\.|creativecommons\.org|sodipodi\.sourceforge\.net|xmlns\.)/i
 
+// Nor are these anywhere a request can go: the http match pattern out of our
+// own manifest's content_scripts, and a bare scheme that something tests a
+// string against. (Line comments on purpose — the pattern ends in `*` `/`,
+// which closes a block comment.)
+const NOT_A_REQUEST = new Set(['http://', 'http://*/*'])
+
+/*
+  Four cleartext strings that are neither ours nor reachable, and that stopped
+  every store package from being built at all.
+
+  @trezor/connect-webextension is bundled in and carries its own development
+  constants: ports 8000 and 8088 sit in the list of origins its popup accepts
+  messages from, and `getSuiteUrl()` compares `connectSrc` against the bare
+  `http://localhost` before falling back to a Trezor host. The wallet never sets
+  `connectSrc`, so that branch cannot be taken, and the two ports are upstream's
+  own dev servers.
+
+  Excused by exact string, and only while Trezor's own origin list is still in
+  the same file — so the exemption leaves when the dependency does, rather than
+  outliving it as a hole. `http://localhost:4000` (services/api) and
+  `http://localhost:3007` (services/quoter-api) — the two this gate exists to
+  catch, because `.env` can bake either into the bundle — still fail, as does
+  any other host or port.
+*/
+const TREZOR_DEV_ORIGINS = new Set(['http://localhost', 'http://localhost:8000', 'http://localhost:8000/connect-popup', 'http://localhost:8088'])
+const TREZOR_MARKER = 'https://connect.trezor.io'
+
 for (const name of files) {
   if (!name.endsWith('.js')) continue
   const text = await readFile(join(dir, name), 'utf8')
-  if (text.includes('http://localhost') || text.includes('http://127.0.0.1')) {
-    console.error(`Refusing to package: ${name} carries a localhost origin. Build with a production WXT_BOLTVAULT_API.`)
-    process.exit(1)
-  }
-  for (const m of text.matchAll(/["'`](http:\/\/[^"'`\s]+)["'`]/g)) {
-    const url = m[1]
-    if (NOT_AN_ORIGIN.test(url)) continue
-    console.error(`Refusing to package: ${name} carries a cleartext origin ${url}.`)
+  const trezor = text.includes(TREZOR_MARKER)
+  // Unquoted as well as quoted: a concatenated origin is still an origin, and
+  // the quoted-only match was why `127.0.0.1` needed its own substring check
+  // standing beside it.
+  for (const m of text.matchAll(/http:\/\/[^\s"'`)\\,;<>]*/g)) {
+    const url = m[0]
+    if (NOT_AN_ORIGIN.test(url) || NOT_A_REQUEST.has(url)) continue
+    if (trezor && TREZOR_DEV_ORIGINS.has(url)) continue
+    const hint = /localhost|127\.0\.0\.1/.test(url) ? ' Build with a production WXT_BOLTVAULT_API.' : ''
+    console.error(`Refusing to package: ${name} carries a cleartext origin ${url}.${hint}`)
     process.exit(1)
   }
 }
