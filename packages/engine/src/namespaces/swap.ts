@@ -46,7 +46,7 @@ import {
   type TaxProbe,
 } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
-import { formatUnits, maxUint256, parseUnits, type Abi, type Hex } from 'viem'
+import { formatUnits, maxUint256, type Abi, type Hex } from 'viem'
 import { z } from 'zod'
 import type {
   ClientFailureInput,
@@ -217,6 +217,41 @@ const BIPS_CEILING = 10_000
 /** How long a gas price stays good enough for a fee reserve. */
 const GAS_PRICE_CACHE_MS = 15_000
 const MAX_EFFECTIVE_SLIPPAGE_BPS = 9_900
+/**
+ * How far the chain may beat the served figure before the served one is
+ * treated as wrong rather than merely stale (ES-BV-003). A router's model and
+ * a simulated swap a moment later disagree by a few basis points; a percent is
+ * something else.
+ */
+const CONFIRM_DIVERGENCE_BIPS = 100n
+
+/**
+ * The quote to encode, given what the chain said about the very same route
+ * (ES-BV-003).
+ *
+ * The served figure stands when the chain agrees, when the chain is worse (the
+ * service is the better router and is trusted for route *selection*), and when
+ * the difference is inside `CONFIRM_DIVERGENCE_BIPS` — ordinary drift between
+ * a router's model and a simulated swap a moment later. Beyond that the
+ * service is stale or wrong about its own route, and the floor in the calldata
+ * should not be the low number: the quote is rebuilt from the chain's figure,
+ * with the minimum recomputed from it and nothing else about the trade
+ * touched.
+ */
+export function rebuiltFromChain(quote: SwapQuoteView, onChainOut: bigint): SwapQuoteView {
+  const served = BigInt(quote.amountOutRaw)
+  if (served <= 0n || onChainOut <= served) return quote
+  const betterBips = ((onChainOut - served) * 10_000n) / served
+  if (betterBips <= CONFIRM_DIVERGENCE_BIPS) return quote
+  const effective = Math.min(quote.slippageBips + quote.taxBips, MAX_EFFECTIVE_SLIPPAGE_BPS)
+  const minimumOutRaw = deliveredMinimumOut(onChainOut, quote.fee.onInput ? 0 : quote.fee.bips, effective)
+  return {
+    ...quote,
+    amountOutRaw: onChainOut.toString(),
+    minimumOutRaw: minimumOutRaw.toString(),
+    route: { ...quote.route, source: 'onchain' },
+  }
+}
 const hex = (n: bigint): Hex => `0x${n.toString(16)}`
 const isEtn = (chainId: number): chainId is 52014 | 5201420 =>
   chainId === 52014 || chainId === 5201420
@@ -347,6 +382,36 @@ export class SwapService {
       return (await this.deps.safety.level(chainId, address)) === 'BLOCKED'
     } catch {
       return false
+    }
+  }
+
+  /**
+   * Price the served route on chain, once, before it is encoded (ES-BV-003).
+   *
+   * Returns the quote to use: the original when the chain agrees, cannot
+   * answer, or is worse (the service is the better router and is trusted for
+   * route *selection*); a rebuilt one when the chain's figure for the very
+   * same path is better than what was served by more than the bound. A service
+   * that under-quotes its own route is either stale or lying, and either way
+   * the floor in the calldata should not be the low number.
+   */
+  private async confirmServedQuote(quote: SwapQuoteView, chainId: 52014 | 5201420, amountIn: bigint): Promise<SwapQuoteView | null> {
+    try {
+      const read = readerFor(this.deps.chains, chainId)
+      const addresses = quoteAddresses(chainId)
+      const hops = quote.route.hops.map((h) => encodableHop(h))
+      const kind: 'v2' | 'v3' | 'mixed' = hops.every((h) => h.kind === 'v2')
+        ? 'v2'
+        : hops.every((h) => h.kind === 'v3')
+          ? 'v3'
+          : 'mixed'
+      const onChain = await quoteOne({ route: { hops }, kind, label: quote.route.label }, amountIn, addresses, read)
+      if (!onChain) return quote
+      return rebuiltFromChain(quote, onChain.amountOut)
+    } catch {
+      // A chain that cannot answer is not a reason to refuse a swap the user
+      // has already agreed to; the served figure and its provenance stand.
+      return quote
     }
   }
 
@@ -1216,6 +1281,32 @@ export class SwapService {
               )
           }
           d.flows.setQuote(flowId, quote)
+        }
+        /*
+          One confirming call to the chain, at the moment it matters
+          (ES-BV-003).
+
+          The served `amountOut` flows straight into `deliveredMinimumOut`,
+          which is the `amountOutMinimum` written into the calldata — so a
+          compromised, stale or simply wrong routing service sets the floor the
+          user signs, and the price-impact plates compare the served figure
+          against a probe on the *same served route*, which agrees with it by
+          construction. The owner's decision to drop the per-keystroke check
+          stands: this is one `eth_call`, once, on a swap the user has already
+          said yes to, and it does not touch the typing path at all.
+
+          If the chain can do better than the service said by more than
+          `CONFIRM_DIVERGENCE_BIPS`, the quote is rebuilt from the chain's
+          figure before anything is encoded. If the chain cannot answer, the
+          served figure stands and the sheet's provenance already says where it
+          came from.
+        */
+        if (quote.route.source === 'api' && !exactOut) {
+          const confirmed = await this.confirmServedQuote(quote, chainId, amountIn)
+          if (confirmed && confirmed !== quote) {
+            quote = confirmed
+            d.flows.setQuote(flowId, quote)
+          }
         }
         // From here the quote is settled and everything left is building bytes:
         // a report about what follows describes the trade that was encoded, not

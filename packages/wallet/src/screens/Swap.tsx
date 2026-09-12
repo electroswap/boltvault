@@ -779,6 +779,22 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
             <>
             <FeeRow label={t({ id: 'swap.impact', message: 'Price impact' })} value={quote?.priceImpactPct !== null && quote?.priceImpactPct !== undefined ? `${quote.priceImpactPct.toFixed(2)}%` : '—'} tone={impactTone} testID="swap-impact" />
             {/*
+              Where the price came from (ES-BV-003).
+
+              The served `amountOut` sets the floor written into the calldata,
+              and the price-impact figure above is measured against a probe on
+              that same served route — so it agrees with the service by
+              construction. Saying which of the two priced this swap is the
+              cheapest honest thing the screen can do about that; the
+              confirming on-chain call happens when the user says yes.
+            */}
+            <FeeRow
+              label={t({ id: 'swap.priced', message: 'Priced by' })}
+              value={quote?.route.source === 'api' ? t({ id: 'swap.priced.api', message: 'ElectroSwap routing' }) : t({ id: 'swap.priced.chain', message: 'On chain' })}
+              tone="mute"
+              testID="swap-priced-by"
+            />
+            {/*
               No negative margin. It was `marginVertical: -8` to keep a 44 px
               target from spacing the rows out, and the price it paid was that
               the fee's second and third lines rendered OUTSIDE the row's box —
