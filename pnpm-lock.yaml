@@ -619,6 +619,9 @@ importers:
 
   packages/ui:
     dependencies:
+      '@noble/hashes':
+        specifier: ^1.8.0
+        version: 1.8.0
       '@tamagui/core':
         specifier: ^2.7.7
         version: 2.7.7(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -8367,7 +8370,9 @@ snapshots:
       metro-runtime: 0.84.6
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-color@2.1.0': {}
 

@@ -16,6 +16,7 @@ import { Icon } from './Icon'
 import { Body, Column, Row } from './primitives'
 import { Signature } from './Signature'
 import { metrics, paint } from './tokens'
+import { shortAddress } from './address'
 
 export interface SeatProps {
   readonly address: string
@@ -28,9 +29,7 @@ export interface SeatProps {
   readonly testID?: string
 }
 
-export function shortAddress(address: string): string {
-  return address.length > 12 ? `${address.slice(0, 6)}…${address.slice(-4)}` : address
-}
+
 
 export function Seat({ address, label, name, onPress, onCopy, copied = false, testID }: SeatProps) {
   const title = name ?? label

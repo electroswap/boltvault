@@ -379,6 +379,28 @@ export class HardwareService {
       if (!this.deps.trezor) return null
       const connect = await this.trezor()
       const status = await this.trezorStatus()
+      /*
+        Which account is this device actually holding (ES-BV-028)?
+
+        The Ledger signer has asked since it was written; the Trezor one never
+        did. Trezor Connect runs in a hosted popup — a third-party surface —
+        so "the device at that path holds this address" is worth one silent
+        APDU before a signature rather than after it. Once per session: the
+        answer cannot change while the same device stays plugged in, and a
+        check per signature would be a popup per signature.
+      */
+      const pinned = `${account.id}:${account.hardware.path}`
+      if (!this.trezorChecked.has(pinned)) {
+        const shown = unwrapTrezor(
+          await connect.ethereumGetAddress({ path: account.hardware.path, showOnTrezor: false }),
+        )
+        if (shown.address.toLowerCase() !== account.address.toLowerCase())
+          throw new EngineError(
+            'internal',
+            'This Trezor holds a different account at that path. Connect the device this account was added from.',
+          )
+        this.trezorChecked.add(pinned)
+      }
       return trezorAccount({ address: account.address as `0x${string}`, path: account.hardware.path, connect, hashesOnly: status.model === '1' })
     }
     if (account.kind === 'keystone') {
@@ -387,6 +409,9 @@ export class HardwareService {
     }
     return null
   }
+
+  /** Trezor accounts whose address this session has already confirmed on the device. */
+  private readonly trezorChecked = new Set<string>()
 
   dispose(): void {
     for (const p of this.keystone.values()) {

@@ -144,6 +144,18 @@ export function LedgerPicker({ onAdded, reducedMotion = false }: { onAdded: () =
     setBusy(true)
     setError(null)
     try {
+      /*
+        The device says the address out loud before it is stored (ES-BV-028).
+
+        The picker reads addresses with no on-device display, so a compromised
+        host — or a Connect popup serving a different tree — could list
+        addresses the device never showed, and the user would fund one of them.
+        `ledgerVerify` puts it on the device's own screen and returns what the
+        device said; if that is not the row that was tapped, nothing is stored.
+      */
+      const shown = await engine.hardware.ledgerVerify({ path: row.path, ...(status?.devices[0] ? { deviceId: status.devices[0].deviceId } : {}) })
+      if (shown.address.toLowerCase() !== row.address.toLowerCase())
+        throw new Error('The device showed a different address for that account. Nothing was added.')
       await engine.accounts.addHardware({ kind: 'ledger', address: row.address, path: row.path, ...(status?.devices[0] ? { deviceId: status.devices[0].deviceId } : {}), label: `Ledger ${row.scheme === 'live' ? 'Live' : 'BIP-44'} #${row.index}` })
       setAdded((xs) => [...xs, row.address.toLowerCase()])
       onAdded()
@@ -255,6 +267,12 @@ export function TrezorPicker({ onAdded, reducedMotion = false }: { onAdded: () =
     setBusy(true)
     setError(null)
     try {
+      // The same on the Trezor (ES-BV-028): the bundle read is `showOnTrezor:
+      // false`, so nothing had been in front of the user's eyes but the host's
+      // word for it.
+      const shown = await engine.hardware.trezorVerify({ path: row.path })
+      if (shown.address.toLowerCase() !== row.address.toLowerCase())
+        throw new Error('The device showed a different address for that account. Nothing was added.')
       await engine.accounts.addHardware({ kind: 'trezor', address: row.address, path: row.path, label: `Trezor ${row.scheme === 'live' ? 'Live' : 'BIP-44'} #${row.index}` })
       setAdded((xs) => [...xs, row.address.toLowerCase()])
       onAdded()

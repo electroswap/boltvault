@@ -15,6 +15,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@noble/hashes": "^1.8.0",
     "@tamagui/core": "^2.7.7",
     "qrcode": "^1.5.4",
     "react-native-svg": "15.15.4",

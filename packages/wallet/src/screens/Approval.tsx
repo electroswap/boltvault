@@ -22,6 +22,8 @@ import {
   paint,
   shortAddress,
   useWindowDimensions,
+  differingAt,
+  fullAddress,
 } from '@boltvault/ui'
 import {
   clampPerGas,
@@ -224,6 +226,10 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   */
   const codes = (assessment?.rules ?? []).map((r) => r.code)
   const firstTimeRecipient = needsCooling(codes)
+  /* The address a lookalike recipient is imitating, where the firewall found
+     one — so the plate can show the difference (ES-BV-033). */
+  const lookalikeOf =
+    assessment?.rules.find((r) => r.code === 'RECIPIENT_LOOKALIKE')?.lookalikeOf ?? null
   const largeSend = needsStepUp(codes)
   const delayMs = Math.max(
     assessment?.presentation.delayMs ?? 0,
@@ -688,7 +694,13 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
               <Body
                 key={i}
                 tone={toneOf(s.tone)}
-                numberOfLines={4}
+                /*
+                  A message's own text is rendered in full below (ES-BV-026),
+                  so its statement need not carry it — and every other
+                  statement carries names a site or a contract chose, where the
+                  cap is what stops one of them pushing the verb off screen.
+                */
+                numberOfLines={payload.kind === 'sign_message' ? 2 : 4}
                 testID={`approval-statement-${i}`}
               >
                 {s.text}
@@ -748,8 +760,13 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
                     })
                   : t({ id: 'approval.watch.title.unknown', message: 'Add a token to your list' })}
               </Body>
-              <Body tone="mute" size="caption">
-                {payload.address ? shortAddress(payload.address) : '—'}
+              {/*
+                In full (ES-BV-033). Anyone may deploy a token calling itself
+                USDC, so the address is the only thing that distinguishes the
+                real one — and it was the field the sheet truncated.
+              */}
+              <Body tone="mute" size="caption" selectable testID="approval-watch-address">
+                {payload.address ? fullAddress(payload.address) : '—'}
               </Body>
               {payload.onChain ? (
                 <Body tone="mute" size="caption">
@@ -817,8 +834,34 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
             </Body>
             {recipient ? (
               <Body size="caption" selectable testID="approval-first-time-address">
-                {recipient}
+                {fullAddress(recipient)}
               </Body>
+            ) : null}
+            {/*
+              Where it differs from the address it is imitating (ES-BV-033).
+              The firewall computes this and nothing rendered it, so the plate
+              said "check every character" and left the reader to do the
+              comparison unaided.
+            */}
+            {lookalikeOf && recipient ? (
+              <Column gap={2} testID="approval-lookalike-diff">
+                <Body tone="mute" size="caption">
+                  {t({ id: 'approval.lookalike.mine', message: 'The address you use' })}
+                </Body>
+                <Body size="caption" selectable>
+                  {fullAddress(lookalikeOf)}
+                </Body>
+                <Body tone="ember" size="caption">
+                  {t({
+                    id: 'approval.lookalike.diff',
+                    message: 'They differ at {n} of the 40 characters, positions {p}.',
+                    values: {
+                      n: differingAt(recipient, lookalikeOf).length,
+                      p: differingAt(recipient, lookalikeOf).slice(0, 12).map((i) => i + 1).join(', '),
+                    },
+                  })}
+                </Body>
+              </Column>
             ) : null}
             {secondsLeft > 0 ? (
               <Body tone="ember" size="caption" testID="approval-cooling">
@@ -1063,6 +1106,27 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
         ) : null}
         {payload.kind === 'sign_message' ? (
           <Column gap="$2">
+            {/*
+              The whole message, without a tap (ES-BV-026).
+
+              The statement was truncated at 400 characters and rendered at
+              four lines, and the full text only appeared once the details
+              toggle was opened — which is closed by default. A SIWE message
+              puts its resources at the bottom, so the part that says what is
+              actually being authorised was the part below the fold. It is a
+              signature: the thing being signed is the point of the screen.
+            */}
+            <Plate gap="$1" testID="approval-msg">
+              <Body tone="mute" size="caption">
+                {t({ id: 'msg.raw', message: 'Message' })}
+              </Body>
+              <ScrollView style={{ maxHeight: 220 }} nestedScrollEnabled>
+                <Body size="caption" selectable testID="approval-msg-body">
+                  {payload.text ?? payload.message}
+                </Body>
+              </ScrollView>
+            </Plate>
+            {/* The toggle keeps what it was always for: the bytes. */}
             <Body
               tone="mute"
               size="caption"
@@ -1070,20 +1134,20 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
               testID="approval-msg-toggle"
             >
               {showTx
-                ? t({ id: 'approval.msg.hide', message: 'Hide the exact message' })
-                : t({ id: 'approval.msg.show', message: 'Show the exact message' })}
+                ? t({ id: 'approval.msg.hide', message: 'Hide the raw bytes' })
+                : t({ id: 'approval.msg.show', message: 'Show the raw bytes' })}
             </Body>
             {showTx ? (
-              <Plate gap="$1" testID="approval-msg">
+              <Plate gap="$1" testID="approval-msg-raw">
                 <DetailRow
                   label={t({ id: 'msg.signer', message: 'Signed by' })}
                   value={payload.from}
                   testID="approval-msg-from"
                 />
                 <DetailRow
-                  label={t({ id: 'msg.raw', message: 'Message' })}
-                  value={payload.text ?? payload.message}
-                  testID="approval-msg-body"
+                  label={t({ id: 'msg.bytes', message: 'Bytes' })}
+                  value={payload.message}
+                  testID="approval-msg-bytes"
                 />
               </Plate>
             ) : null}

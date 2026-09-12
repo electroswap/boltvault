@@ -72,6 +72,15 @@ export interface RiskRule {
   readonly title: string
   /** What it means and what to do. */
   readonly detail: string
+  /**
+   * The address this one is imitating, on a lookalike finding (ES-BV-033).
+   *
+   * `poisonCheck` works out which characters differ and nothing rendered it,
+   * so the sheet told the reader to compare forty characters and left them to
+   * do it unaided. Structured rather than dug back out of `detail`, because a
+   * sentence is for reading and this is for drawing.
+   */
+  readonly lookalikeOf?: string
 }
 
 /** A plain-language line the user reads before signing; also the screen-reader text. */

@@ -2685,6 +2685,7 @@ function toView(a: Assessment, now = 0): AssessmentView {
       severity: r.severity,
       title: r.title,
       detail: r.detail,
+      ...(r.lookalikeOf ? { lookalikeOf: r.lookalikeOf } : {}),
     })),
     statements: a.statements.map((s) => ({ text: s.text, tone: s.tone })),
     changes: a.changes.map((s) => ({ text: s.text, tone: s.tone })),

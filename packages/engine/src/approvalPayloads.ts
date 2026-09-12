@@ -18,6 +18,12 @@ export const RiskRuleViewSchema = z.object({
   severity: SeveritySchema,
   title: z.string(),
   detail: z.string(),
+  /**
+   * On a lookalike finding, the address being imitated (ES-BV-033) — so the
+   * sheet can draw the difference the firewall already worked out instead of
+   * telling the reader to compare forty characters unaided.
+   */
+  lookalikeOf: z.string().optional(),
 })
 export type RiskRuleView = z.infer<typeof RiskRuleViewSchema>
 

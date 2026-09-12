@@ -1009,6 +1009,7 @@ export const urRecipientNotSelf: Rule = ({ decoded, context, chainId, account })
       severity: 'block',
       title: 'This swap sends the output to an address that imitates one you use',
       detail: `It shares the first and last characters with ${poison.match ?? ''} but is a different address.`,
+      ...(poison.match ? { lookalikeOf: poison.match } : {}),
     }
   return {
     code: 'UR_RECIPIENT_NOT_SELF',
@@ -1169,6 +1170,7 @@ export const recipientRules: Rule = ({ request, decoded, context, chainId, accou
       severity: 'block',
       title: 'This address imitates one you use',
       detail: `It shares the first and last characters with ${poison.match ?? ''} but is a different address. Copy the full address from a source you trust.`,
+      ...(poison.match ? { lookalikeOf: poison.match } : {}),
     }
   if (inSet(to, context.inboundOnly))
     return {

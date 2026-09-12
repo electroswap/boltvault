@@ -4,7 +4,7 @@
  * The token joins the list with `source: 'user'` and the portfolio
  * refreshes at once.
  */
-import { Body, Column, Input, Key, Plate, Row, Sheet } from '@boltvault/ui'
+import { Body, Column, Input, Key, Plate, Row, Sheet, fullAddress } from '@boltvault/ui'
 import { ChainSelectPill, ChainSheet, useChainBalances } from './ChainSelect'
 import type { ChainView, Settings } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
@@ -108,6 +108,15 @@ export function AddTokenSheet({ open, onClose, onAdded, initialChainId, initialA
             </Body>
             <Body tone="mute" size="caption">
               {t({ id: 'token.add.note', message: 'Anyone can deploy a token with any name. Check the address against the project’s own site before you trust it.' })}
+            </Body>
+            {/*
+              And here is the address to check (ES-BV-033). The sheet said
+              "check the address" and showed the name, the symbol and the
+              decimals — everything a copy can match — but never the one field
+              that tells two tokens apart.
+            */}
+            <Body size="caption" selectable testID="add-token-address-full">
+              {fullAddress(address.trim())}
             </Body>
           </Plate>
         ) : null}

@@ -30,7 +30,13 @@ export { useAppHidden } from './useAppHidden'
 export { useKeyboardHeight } from './useKeyboardHeight'
 export { bundledLogo, bundledLogoFiles, cacheTokenLogo, cachedTokenLogo, prewarmTokenLogos, markLabel, markFontSize, normaliseTokenAddress, setCoingeckoIds, setTokenLogoBase, setTokenLogoResolver, setTokenLogoStore, siblingExtension, tokenLogoCandidates, tokenLogoSources, LOGO_TIMEOUT_MS, NATIVE_KEY, TWA_SLUGS, type LogoSource, type TokenLogoStore } from './tokenLogos'
 export { Signature, type SignatureProps } from './Signature'
-export { Seat, shortAddress, type SeatProps } from './Seat'
+export { Seat, type SeatProps } from './Seat'
+/*
+  Address display lives in one place (ES-BV-033): EIP-55 casing is a checksum a
+  person can see, and the short form is six hex either side rather than four,
+  which is the shape an address-poisoning generator is built to satisfy.
+*/
+export { checksum, differingAt, fullAddress, shortAddress } from './address'
 export { BusBar, type BusBarProps } from './BusBar'
 export { Rotor, type RotorProps, type RotorItem } from './Rotor'
 export { Gauge, type GaugeProps } from './Gauge'
