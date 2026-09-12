@@ -17,6 +17,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
+import { passwordStrength } from './onboarding/rules'
 
 /**
  * How much of an animated export has been read.
@@ -64,6 +65,7 @@ export function Devices({ body }: { body: 'extension-popup' | 'extension-tab' | 
   const [movePasted, setMovePasted] = useState('')
   const [code, setCode] = useState('')
   const [movePassword, setMovePassword] = useState('')
+  const movePasswordStrength = passwordStrength(movePassword)
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   // Camera or keyboard, the frames are the same list, so everything below reads one.
   const moveFrames = host.scanQr ? frames : movePasted.split(/\s+/).filter(Boolean)
@@ -581,6 +583,12 @@ export function Devices({ body }: { body: 'extension-popup' | 'extension-tab' | 
               sensitive="code"
               testID="vault-move-code"
             />
+            {/*
+              The same policy as everywhere else (ES-BV-010). This screen used
+              to ask only that the field was non-empty — and it is the one that
+              puts an entire vault on a new device, which is exactly the file
+              an attacker takes away and guesses at offline.
+            */}
             <Input
               value={movePassword}
               onChange={setMovePassword}
@@ -589,13 +597,16 @@ export function Devices({ body }: { body: 'extension-popup' | 'extension-tab' | 
                 id: 'devices.move.password',
                 message: 'A password for this device',
               })}
+              hint={movePassword ? movePasswordStrength.label : undefined}
               sensitive
               testID="vault-move-password"
             />
             <Key
               label={t({ id: 'devices.move.go', message: 'Bring the vault here' })}
               disabled={
-                !moveReady || code.trim().split(/\s+/).filter(Boolean).length < 6 || !movePassword
+                !moveReady ||
+                code.trim().split(/\s+/).filter(Boolean).length < 6 ||
+                movePasswordStrength.score === 0
               }
               onPress={() =>
                 run(async () => {

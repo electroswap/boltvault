@@ -62,8 +62,12 @@ export const PASSKEY_USER_ID = '626f6c747661756c742d7661756c74'
 
 export { passwordStrength }
 
-/** The three positions the backup check asks about, chosen here because no seed exists yet. */
-function quizPositions(count: number, random: () => number): number[] {
+/**
+ * Kept for the tests that pin the shape of a quiz; the positions a user is
+ * asked about now come from the engine, which is the only thing that will
+ * accept an answer to them (ES-BV-004).
+ */
+export function quizPositions(count: number, random: () => number): number[] {
   const out = new Set<number>()
   while (out.size < 3) out.add(Math.floor(random() * count) + 1)
   return [...out].sort((a, b) => a - b)
@@ -202,7 +206,9 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
       const r = await engine.vault.propose({})
       const words = r.mnemonic.split(' ')
       setMnemonic(words)
-      setPositions(quizPositions(words.length, Math.random))
+      // The engine chose these and will only accept an answer to them
+      // (ES-BV-004); the screen no longer picks its own.
+      setPositions(r.positions)
       setAnswers({})
     })
 

@@ -29,9 +29,9 @@ const DEVICE_KEY = 'cd'.repeat(32)
 async function vaultWithEveryFactor() {
   const engine = createEngine({ platform: createMemoryPlatform(), heads, kdf: FAST })
   await engine.ready
-  const created = await engine.engine.vault.create({ password: 'pw' })
-  await engine.engine.vault.enrolPasskey({ credentialId: 'cred-1', prfSecretHex: PRF, password: 'pw' })
-  await engine.engine.vault.enrolDevice({ keyId: 'pixel', keyHex: DEVICE_KEY, password: 'pw' })
+  const created = await engine.engine.vault.create({ password: 'correct horse battery staple 42' })
+  await engine.engine.vault.enrolPasskey({ credentialId: 'cred-1', prfSecretHex: PRF, password: 'correct horse battery staple 42' })
+  await engine.engine.vault.enrolDevice({ keyId: 'pixel', keyHex: DEVICE_KEY, password: 'correct horse battery staple 42' })
   return { engine, seedId: created.seedId, mnemonic: created.mnemonic }
 }
 
@@ -50,7 +50,7 @@ describe('seed reveal costs the password, unless the user says otherwise', () =>
     try {
       // The default, and what Security and Onboarding have always said.
       expect((await engine.engine.settings.get()).revealNeedsPassword).toBe(true)
-      expect((await engine.engine.vault.reveal({ seedId, password: 'pw' })).mnemonic).toBe(mnemonic)
+      expect((await engine.engine.vault.reveal({ seedId, password: 'correct horse battery staple 42' })).mnemonic).toBe(mnemonic)
       expect(await codeOf(engine.engine.vault.reveal({ seedId, credentialId: 'cred-1', prfSecretHex: PRF }))).toBe('unauthorized')
       expect(await codeOf(engine.engine.vault.reveal({ seedId, keyId: 'pixel', keyHex: DEVICE_KEY }))).toBe('unauthorized')
     } finally {
@@ -89,7 +89,7 @@ describe('seed reveal costs the password, unless the user says otherwise', () =>
   it('still refuses a seed that does not exist, even with a good factor', async () => {
     const { engine } = await vaultWithEveryFactor()
     try {
-      expect(await codeOf(engine.engine.vault.reveal({ seedId: 'no-such-seed', password: 'pw' }))).toBe('not_found')
+      expect(await codeOf(engine.engine.vault.reveal({ seedId: 'no-such-seed', password: 'correct horse battery staple 42' }))).toBe('not_found')
     } finally {
       engine.dispose()
     }

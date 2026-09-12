@@ -11,6 +11,8 @@ import type { EngineEvent } from '../src/schema'
 
 const heads = { blockNumber: async (chainId: number) => BigInt(chainId === 52014 ? 15_100_000 : 20_000_000) }
 const FAST = { m: 1024, t: 1, p: 1 }
+/** A second password that also satisfies the engine's policy (ES-BV-010). */
+const NEXT_PASSWORD = 'another perfectly fine passphrase 8'
 const PHRASE = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
 const VECTOR0 = '0x9858EfFD232B4033E47d90003D41EC34EcaEda94'
 
@@ -132,13 +134,13 @@ describe('vault v2 + accounts', () => {
   it('import with a passphrase derives a different account than without; preview shows both trees', async () => {
     const { engine, ready } = boot()
     await ready
-    await expectError(engine.vault.import({ mnemonic: 'not a phrase', password: 'pw' }), 'invalid_mnemonic')
+    await expectError(engine.vault.import({ mnemonic: 'not a phrase', password: 'correct horse battery staple 42' }), 'invalid_mnemonic')
     const preview = await engine.accounts.previewDerivations({ mnemonic: PHRASE, count: 2 })
     expect(preview.bip44[0]).toBe(VECTOR0)
     expect(preview.ledgerLive[0]).toBe(VECTOR0) // the trees agree only at index 0
     expect(preview.bip44[1]).not.toBe(preview.ledgerLive[1])
 
-    const r = await engine.vault.import({ mnemonic: `  ${PHRASE.toUpperCase()} `, password: 'pw' })
+    const r = await engine.vault.import({ mnemonic: `  ${PHRASE.toUpperCase()} `, password: 'correct horse battery staple 42' })
     expect(r.accounts[0]?.address).toBe(VECTOR0)
     const { accounts: withPass } = { accounts: (await engine.accounts.previewDerivations({ mnemonic: PHRASE, passphrase: 'TREZOR' })).bip44 }
     expect(withPass[0]).not.toBe(VECTOR0)
@@ -147,7 +149,7 @@ describe('vault v2 + accounts', () => {
   it('multi-seed, derive, imported, watch, hardware, hide, reorder, remove', async () => {
     const { engine, ready } = boot()
     await ready
-    const { seedId } = await engine.vault.create({ password: 'pw' })
+    const { seedId } = await engine.vault.create({ password: 'correct horse battery staple 42' })
     const second = await engine.accounts.derive({ seedId })
     expect(second.index).toBe(1)
     expect(second.label).toBe('Account 2')
@@ -184,7 +186,7 @@ describe('vault v2 + accounts', () => {
   it('passkey and device wraps unlock the vault; changePassword re-wraps; removal is guarded', async () => {
     const { engine, ready } = boot()
     await ready
-    await engine.vault.create({ password: 'pw' })
+    await engine.vault.create({ password: 'correct horse battery staple 42' })
     const prf = 'ab'.repeat(32)
     /*
       An unlock factor is a key to everything, so changing the set of them
@@ -194,9 +196,9 @@ describe('vault v2 + accounts', () => {
     */
     await expectError(engine.vault.enrolPasskey({ credentialId: 'cred-1', prfSecretHex: prf, password: 'wrong' }), 'wrong_password')
     expect((await engine.vault.status()).wraps.map((w) => w.by)).toEqual(['password'])
-    let status = await engine.vault.enrolPasskey({ credentialId: 'cred-1', prfSecretHex: prf, password: 'pw' })
+    let status = await engine.vault.enrolPasskey({ credentialId: 'cred-1', prfSecretHex: prf, password: 'correct horse battery staple 42' })
     expect(status.wraps.map((w) => w.by)).toEqual(['password', 'prf'])
-    status = await engine.vault.enrolDevice({ keyId: 'pixel', keyHex: 'cd'.repeat(32), password: 'pw' })
+    status = await engine.vault.enrolDevice({ keyId: 'pixel', keyHex: 'cd'.repeat(32), password: 'correct horse battery staple 42' })
     expect(status.wraps).toHaveLength(3)
     await engine.vault.lock()
     await expectError(engine.vault.unlockWithPasskey({ credentialId: 'cred-1', prfSecretHex: 'ff'.repeat(32) }), 'unauthorized')
@@ -204,27 +206,33 @@ describe('vault v2 + accounts', () => {
     await engine.vault.lock()
     expect((await engine.vault.unlockWithDevice({ keyId: 'pixel', keyHex: 'cd'.repeat(32) })).accounts).toHaveLength(1)
 
-    await expectError(engine.vault.changePassword({ current: 'wrong', next: 'new' }), 'wrong_password')
-    await engine.vault.changePassword({ current: 'pw', next: 'new' })
+    // A new password below the policy is refused before anything is re-wrapped
+    // (ES-BV-010) — the vault file is what an attacker takes away and guesses at.
+    await expectError(engine.vault.changePassword({ current: 'correct horse battery staple 42', next: 'new' }), 'invalid_argument')
+    await expectError(engine.vault.changePassword({ current: 'wrong one entirely 99', next: NEXT_PASSWORD }), 'wrong_password')
+    await engine.vault.changePassword({ current: 'correct horse battery staple 42', next: NEXT_PASSWORD })
     await engine.vault.lock()
-    await expectError(engine.vault.unlock({ password: 'pw' }), 'wrong_password')
-    await engine.vault.unlock({ password: 'new' })
-    await expectError(engine.vault.removePasskey({ credentialId: 'cred-1', password: 'pw' }), 'wrong_password') // the password changed above
-    status = await engine.vault.removePasskey({ credentialId: 'cred-1', password: 'new' })
+    await expectError(engine.vault.unlock({ password: 'correct horse battery staple 42' }), 'wrong_password')
+    await engine.vault.unlock({ password: NEXT_PASSWORD })
+    await expectError(engine.vault.removePasskey({ credentialId: 'cred-1', password: 'correct horse battery staple 42' }), 'wrong_password') // the password changed above
+    status = await engine.vault.removePasskey({ credentialId: 'cred-1', password: NEXT_PASSWORD })
     expect(status.wraps.map((w) => w.by).sort()).toEqual(['device', 'password'])
   })
 
   it('backup quiz gates backupComplete; export/import moves the vault to a fresh device', async () => {
     const a = boot()
     await a.ready
-    const { seedId, mnemonic } = await a.engine.vault.create({ password: 'pw' })
+    const { seedId, mnemonic } = await a.engine.vault.create({ password: 'correct horse battery staple 42' })
     const quiz = await a.engine.vault.backupQuiz({ seedId })
     expect(quiz.positions).toHaveLength(3)
     expect(quiz.wordCount).toBe(12)
     const words = mnemonic.split(' ')
     const wrong = await a.engine.vault.confirmBackup({ seedId, answers: quiz.positions.map((p) => ({ position: p, word: 'zoo' })) })
     expect(wrong.ok).toBe(false)
-    const right = await a.engine.vault.confirmBackup({ seedId, answers: quiz.positions.map((p) => ({ position: p, word: words[p - 1]!.toUpperCase() })) })
+    // A question is spent by the attempt, right or wrong (ES-BV-004): the
+    // enumeration this closes needed one question to answer many times.
+    const again = await a.engine.vault.backupQuiz({ seedId })
+    const right = await a.engine.vault.confirmBackup({ seedId, answers: again.positions.map((p) => ({ position: p, word: words[p - 1]!.toUpperCase() })) })
     expect(right.ok).toBe(true)
     expect(right.status.backupComplete).toBe(true)
 
@@ -235,24 +243,30 @@ describe('vault v2 + accounts', () => {
       an eight-character user-invented one, lower-cased before the KDF, was not
       enough for something a camera can capture and grind offline.
     */
-    await expectError(a.engine.vault.export({ password: 'pw', code: 'orbit velvet cactus' }), 'invalid_argument')
-    const { frames, code } = await a.engine.vault.export({ password: 'pw' })
+    await expectError(a.engine.vault.export({ password: 'correct horse battery staple 42', code: 'orbit velvet cactus' }), 'invalid_argument')
+    const { frames, code } = await a.engine.vault.export({ password: 'correct horse battery staple 42' })
     expect(frames.length).toBeGreaterThan(0)
     expect(code.split(' ')).toHaveLength(6)
     const b = boot()
     await b.ready
-    await expectError(b.engine.vault.importExport({ frames, code: 'wrong code!!', password: 'newpw' }), 'unauthorized')
-    const moved = await b.engine.vault.importExport({ frames, code, password: 'newpw' })
+    /*
+      "Move a vault here" had no password policy at all, which made it the one
+      path that put somebody's whole vault on a new device behind whatever they
+      typed (ES-BV-010).
+    */
+    await expectError(b.engine.vault.importExport({ frames, code, password: 'x' }), 'invalid_argument')
+    await expectError(b.engine.vault.importExport({ frames, code: 'wrong code entirely here now', password: NEXT_PASSWORD }), 'unauthorized')
+    const moved = await b.engine.vault.importExport({ frames, code, password: NEXT_PASSWORD })
     expect(moved.accounts[0]?.address).toBe(right.status.seeds.length ? (await a.engine.accounts.list())[0]?.address : '')
     expect((await b.engine.vault.status()).backupComplete).toBe(true)
-    await expectError(a.engine.vault.importExport({ frames, code: 'orbit velvet cactus', password: 'x' }), 'invalid_argument')
+    await expectError(a.engine.vault.importExport({ frames, code: 'orbit velvet cactus', password: NEXT_PASSWORD }), 'invalid_argument')
   })
 
   it('migrates a v1 vault file on first unlock', async () => {
     const platform = createMemoryPlatform({ now: 1_700_000_000_000 })
     const { createVault } = await import('@boltvault/core')
     const v1 = await createVault(
-      'pw',
+      'correct horse battery staple 42',
       { seedHex: '0x' + 'ab'.repeat(64), mnemonic: PHRASE, importedKeys: {}, accounts: [{ id: 'acct_v1', kind: 'hd', label: 'Legacy', address: VECTOR0, index: 0 }] },
       { kdf: FAST },
     )
@@ -263,7 +277,7 @@ describe('vault v2 + accounts', () => {
     expect(status.exists).toBe(true)
     expect(status.wraps).toEqual([{ by: 'password', id: 'password' }])
     await expectError(engine.vault.unlockWithPasskey({ credentialId: 'c', prfSecretHex: 'ab' }), 'locked')
-    const { accounts } = await engine.vault.unlock({ password: 'pw' })
+    const { accounts } = await engine.vault.unlock({ password: 'correct horse battery staple 42' })
     expect(accounts[0]?.label).toBe('Legacy')
     status = await engine.vault.status()
     expect(status.seeds[0]?.label).toBe('Seed 1')
@@ -277,7 +291,7 @@ describe('activity', () => {
     const { engine, activity, ready, platform } = boot()
     await ready
     expect(await engine.activity.list()).toEqual([])
-    await engine.vault.create({ password: 'pw' })
+    await engine.vault.create({ password: 'correct horse battery staple 42' })
     const acct = (await engine.accounts.active())!
     await activity.append({ id: 'e1', hash: null, chainId: 52014, accountId: acct.id, to: '0xabc', value: '0x1', nonce: 0, submittedAt: 10, origin: null, category: 'SEND', statements: ['Send 1 ETN to 0xabc'], riskCodes: [], status: 'pending', blockNumber: null })
     await activity.append({ id: 'e2', hash: '0xh', chainId: 52014, accountId: acct.id, to: '0xdef', value: '0x0', nonce: 1, submittedAt: 20, origin: 'https://app.electroswap.io', category: 'SWAP', statements: [], riskCodes: [], status: 'confirmed', blockNumber: 5 })
@@ -287,7 +301,7 @@ describe('activity', () => {
     expect(blob).not.toContain('electroswap')
     await engine.vault.lock()
     expect(await engine.activity.list()).toEqual([])
-    await engine.vault.unlock({ password: 'pw' })
+    await engine.vault.unlock({ password: 'correct horse battery staple 42' })
     expect(await engine.activity.list()).toHaveLength(2)
     await engine.activity.clear()
     expect(await engine.activity.list()).toEqual([])

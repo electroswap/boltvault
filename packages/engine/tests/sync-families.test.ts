@@ -23,8 +23,8 @@ function device(relay: MemoryRelay): Engine {
 
 async function pair(a: Engine, b: Engine): Promise<void> {
   await Promise.all([a.ready, b.ready])
-  await a.engine.vault.create({ password: 'pw' })
-  await b.engine.vault.create({ password: 'pw' })
+  await a.engine.vault.create({ password: 'correct horse battery staple 42' })
+  await b.engine.vault.create({ password: 'correct horse battery staple 42' })
   await a.engine.sync.setDeviceLabel({ label: 'Laptop' })
   await b.engine.sync.setDeviceLabel({ label: 'Pixel 8' })
   const { offer } = await a.engine.sync.createOffer({ relayUrl: RELAY })
@@ -275,7 +275,7 @@ describe('a locked vault', () => {
     await expect(a.engine.sync.push()).rejects.toThrow()
     expect((await a.engine.sync.pull()).applied).toBe(0)
 
-    await a.engine.vault.unlock({ password: 'pw' })
+    await a.engine.vault.unlock({ password: 'correct horse battery staple 42' })
     await a.engine.sync.push()
     await b.engine.sync.pull()
     expect(await b.engine.contacts.list()).toHaveLength(1)

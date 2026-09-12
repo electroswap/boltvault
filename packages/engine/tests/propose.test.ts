@@ -61,17 +61,19 @@ describe('vault.propose', () => {
 
   it('the phrase it minted becomes the vault, and the quiz clears the backup gate', async () => {
     const { engine: e } = await fresh()
-    const { mnemonic } = await e.engine.vault.propose({})
+    const { mnemonic, positions } = await e.engine.vault.propose({})
     const words = mnemonic.split(' ')
     // The order the rebuilt flow uses: propose → (words, quiz) → password.
     const { seedId } = await e.engine.vault.import({ mnemonic, password: PASSWORD })
     expect((await e.engine.vault.status()).backupComplete).toBe(false)
     /*
-      Positions chosen here, not by `backupQuiz` — `confirmBackup` validates the
-      words against the stored phrase and accepts any positions, which is what
-      lets the quiz happen before the seed exists.
+      The positions come back from `propose` because the seed does not exist
+      yet, so `backupQuiz` cannot issue them — and `confirmBackup` accepts only
+      positions the wallet itself chose (ES-BV-004). Answering positions of the
+      caller's choosing is the per-word oracle that finding is about.
     */
-    const answers = [2, 5, 11].map((position) => ({ position, word: words[position - 1] ?? '' }))
+    expect(positions).toHaveLength(3)
+    const answers = positions.map((position) => ({ position, word: words[position - 1] ?? '' }))
     const ok = await e.engine.vault.confirmBackup({ seedId, answers })
     expect(ok.ok).toBe(true)
     expect((await e.engine.vault.status()).backupComplete).toBe(true)
@@ -79,10 +81,46 @@ describe('vault.propose', () => {
 
   it('refuses a quiz answered wrongly', async () => {
     const { engine: e } = await fresh()
-    const { mnemonic } = await e.engine.vault.propose({})
+    const { mnemonic, positions } = await e.engine.vault.propose({})
     const { seedId } = await e.engine.vault.import({ mnemonic, password: PASSWORD })
-    const wrong = [1, 2, 3].map((position) => ({ position, word: 'zoo' }))
+    const wrong = positions.map((position) => ({ position, word: 'zoo' }))
     expect((await e.engine.vault.confirmBackup({ seedId, answers: wrong })).ok).toBe(false)
     expect((await e.engine.vault.status()).backupComplete).toBe(false)
+  })
+
+  /*
+    ES-BV-004. `confirmBackup` took whatever positions the caller named, needed
+    only the session DEK and was not throttled, which makes it a per-word
+    oracle: answer `[{p, w} × 3]` for every `w` in the 2048-word list and the
+    word at `p` falls out. On the extension any page context that can reach the
+    UI namespace could do that on an unlocked wallet, with no password —
+    exactly what `revealNeedsPassword` exists to prevent.
+  */
+  it('will not answer a question it did not ask', async () => {
+    const { engine: e } = await fresh()
+    const { mnemonic, positions } = await e.engine.vault.propose({})
+    const words = mnemonic.split(' ')
+    const { seedId } = await e.engine.vault.import({ mnemonic, password: PASSWORD })
+    const other = [1, 2, 3, 4].filter((p) => !positions.includes(p)).slice(0, 3)
+    // Positions of the caller's choosing are refused outright.
+    await expect(e.engine.vault.confirmBackup({ seedId, answers: other.map((position) => ({ position, word: words[position - 1] ?? '' })) })).rejects.toMatchObject({ code: 'invalid_argument' })
+    // So is the same position three times, which is how the oracle was driven.
+    const one = positions[0] ?? 1
+    await expect(e.engine.vault.confirmBackup({ seedId, answers: [one, one, one].map((position) => ({ position, word: 'zoo' })) })).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect((await e.engine.vault.status()).backupComplete).toBe(false)
+  })
+
+  it('spends the question on any attempt, so a guess costs a fresh quiz', async () => {
+    const { engine: e } = await fresh()
+    const { mnemonic, positions } = await e.engine.vault.propose({})
+    const words = mnemonic.split(' ')
+    const { seedId } = await e.engine.vault.import({ mnemonic, password: PASSWORD })
+    expect((await e.engine.vault.confirmBackup({ seedId, answers: positions.map((position) => ({ position, word: 'zoo' })) })).ok).toBe(false)
+    // The right answer to a question already asked is not accepted either.
+    await expect(e.engine.vault.confirmBackup({ seedId, answers: positions.map((position) => ({ position, word: words[position - 1] ?? '' })) })).rejects.toMatchObject({ code: 'invalid_argument' })
+    // Ask again, and the right answer stands.
+    const again = await e.engine.vault.backupQuiz({ seedId })
+    const ok = await e.engine.vault.confirmBackup({ seedId, answers: again.positions.map((position) => ({ position, word: words[position - 1] ?? '' })) })
+    expect(ok.ok).toBe(true)
   })
 })

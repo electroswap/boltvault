@@ -43,6 +43,10 @@ import {
   type VaultFileV2,
   type VaultPlaintextV2,
   type VaultSeed,
+  isExportCodeWord,
+  passwordProblem,
+  passwordProblemText,
+  VaultExportEnvelopeSchema,
 } from '@boltvault/core'
 import type { Platform } from '@boltvault/platform'
 import { getAddress, isAddress } from 'viem'
@@ -70,6 +74,48 @@ const AUTO_LOCK_MS: Record<AutoLock, number> = {
 }
 /** A touch within this long of the last one is a no-op (the alarm is not rescheduled on every keystroke). */
 const TOUCH_DEBOUNCE_MS = 30_000
+
+/**
+ * The weakest Argon2id this wallet will use, whatever a stored document says.
+ *
+ * 64 MiB and three passes is the low end of what the calibration is allowed to
+ * settle on, and the floor a vault sealed on a slow phone still gets. It is a
+ * cost, not a preference: it is what stands between a stolen vault file and a
+ * dictionary.
+ */
+const KDF_FLOOR: Argon2idParams = { m: 64 * 1024, t: 3, p: 1 }
+
+function clampKdf(p: Argon2idParams): Argon2idParams {
+  return {
+    m: Math.max(p.m, KDF_FLOOR.m),
+    t: Math.max(p.t, KDF_FLOOR.t),
+    p: Math.max(p.p, KDF_FLOOR.p),
+  }
+}
+
+/**
+ * Failed attempts against every factor that opens the vault (ES-BV-008).
+ *
+ * In `storage.local` rather than session, because a service worker that dies
+ * between guesses is not a reason to hand the guesser a fresh budget — and
+ * closing the popup is exactly what a script grinding the port would do.
+ */
+/** How many words the backup quiz asks for. */
+const QUIZ_POSITIONS = 3
+
+const THROTTLE_DOC: DocSpec<{ failures: number; notBefore: number }> = {
+  key: 'vault.throttle',
+  version: 1,
+  schema: z.object({ failures: z.number().int().nonnegative(), notBefore: z.number().int().nonnegative() }),
+  defaultValue: () => ({ failures: 0, notBefore: 0 }),
+}
+
+/** Wrong answers allowed at full speed before the wait starts. */
+const THROTTLE_FREE = 5
+/** The first wait, doubling per failure after that. */
+const THROTTLE_BASE_MS = 30_000
+/** However many they get wrong, the wallet is usable again within this. */
+const THROTTLE_MAX_MS = 15 * 60_000
 
 const KDF_DOC: DocSpec<Argon2idParams | null> = {
   key: 'vault.kdf',
@@ -214,7 +260,22 @@ export class VaultManager {
   private async kdfParams(): Promise<Argon2idParams> {
     if (this.opts.kdf) return this.opts.kdf
     const stored = (await readDoc(this.platform.storage.local, KDF_DOC, () => this.platform.now())).value
-    if (stored) return stored
+    if (stored) {
+      /*
+        The calibrated cost is remembered in plain local storage and is read
+        back into every wrap this wallet makes after it: a password change, an
+        export, a vault created on this device (ES-BV-011). A schema that
+        accepts any positive integer therefore lets anyone who can write that
+        document choose the cost of the next Argon2id — `{m: 8, t: 1, p: 1}`
+        derives in microseconds, and the envelope sealed under it is offline-
+        guessable for good. Calibration may raise the cost; it may never take
+        it below what the wallet would refuse to ship.
+      */
+      const floored = clampKdf(stored)
+      if (floored.m !== stored.m || floored.t !== stored.t || floored.p !== stored.p)
+        await writeDoc(this.platform.storage.local, KDF_DOC, floored)
+      return floored
+    }
     /*
       Prove the chosen cost before writing it into the envelope.
 
@@ -309,6 +370,7 @@ export class VaultManager {
   }
 
   private async createFromSeed(seed: VaultSeed, password: string): Promise<AccountView[]> {
+    this.assertPasswordOk(password)
     if (await this.readFile()) throw new EngineError('invalid_argument', 'a vault already exists')
     const first = this.hdAccount(seed, 0, 'Account 1', 0)
     const pt: VaultPlaintextV2 = { v: 2, seeds: [seed], importedKeys: {}, accounts: [first] }
@@ -319,6 +381,7 @@ export class VaultManager {
 
   /** A vault with no seed — for watch-only or hardware-first users (§8.1). */
   async createEmpty(input: { password: string }): Promise<VaultStatus> {
+    this.assertPasswordOk(input.password)
     if (await this.readFile()) throw new EngineError('invalid_argument', 'a vault already exists')
     const pt: VaultPlaintextV2 = { v: 2, seeds: [], importedKeys: {}, accounts: [] }
     const { file, dek } = await createVaultV2(this.crypto, { password: input.password, plaintext: pt, kdf: await this.kdfParams(), now: this.platform.now() })
@@ -342,9 +405,31 @@ export class VaultManager {
    * abandoning the flow at the words step used to leave an unlocked vault with
    * no backup behind it, and now leaves nothing at all.
    */
-  async propose(input: { bits?: 128 | 256 }): Promise<{ mnemonic: string }> {
+  async propose(input: { bits?: 128 | 256 }): Promise<{ mnemonic: string; positions: number[] }> {
     if (await this.readFile()) throw new EngineError('invalid_argument', 'a vault already exists')
-    return { mnemonic: generateEntropy(input.bits ?? 128).mnemonic }
+    const { mnemonic } = generateEntropy(input.bits ?? 128)
+    /*
+      The quiz for a phrase that is not a seed yet (ES-BV-004).
+
+      Onboarding shows the words and quizzes on them before the vault exists,
+      so `backupQuiz` — which needs a stored seed — cannot be what issues the
+      positions on that path. They are issued here instead, against no seed id,
+      and `confirmBackup` accepts them for whichever seed the phrase becomes.
+      What matters is that the wallet chose them, not the caller.
+    */
+    const positions = this.mintQuizPositions(mnemonic.split(' ').length)
+    this.issuedQuiz = { seedId: null, positions, issuedAt: this.platform.now() }
+    return { mnemonic, positions }
+  }
+
+  /** Distinct one-based word positions, chosen by the wallet. */
+  private mintQuizPositions(wordCount: number): number[] {
+    const positions = new Set<number>()
+    while (positions.size < QUIZ_POSITIONS) {
+      const b = this.platform.random(1)[0] ?? 0
+      positions.add((b % wordCount) + 1)
+    }
+    return [...positions].sort((a, b) => a - b)
   }
 
   async create(input: { password: string; bits?: 128 | 256; label?: string }): Promise<{ accounts: AccountView[]; mnemonic: string; seedId: string }> {
@@ -378,14 +463,15 @@ export class VaultManager {
     if (!file) throw new EngineError('no_vault', 'no vault exists yet')
     if (!isV2(file)) {
       // First unlock after the upgrade: migrate v1 → v2 in place.
-      const migrated = await migrateV1(this.crypto, file, input.password, await this.kdfParams(), this.platform.now())
+      const kdf = await this.kdfParams()
+      const migrated = await this.guarded(() => migrateV1(this.crypto, file, input.password, kdf, this.platform.now()))
       if (!migrated) throw new EngineError('wrong_password', 'wrong password')
       await this.writeFile(migrated.file)
       const pt = openVaultV2(migrated.file, migrated.dek)
       if (!pt) throw new EngineError('internal', 'migration produced an unreadable vault')
       return { accounts: await this.unlockWithDek(migrated.dek, pt) }
     }
-    const dek = await this.unwrap(file, { password: input.password })
+    const dek = await this.guarded(() => this.unwrap(file, { password: input.password }))
     if (!dek) throw new EngineError('wrong_password', 'wrong password')
     const pt = openVaultV2(file, dek)
     if (!pt) throw new EngineError('internal', 'the vault could not be opened')
@@ -394,7 +480,7 @@ export class VaultManager {
 
   async unlockWithPasskey(input: { credentialId: string; prfSecretHex: string }): Promise<{ accounts: AccountView[] }> {
     const file = await this.requireV2()
-    const dek = await unwrapDek(this.crypto, file, { credentialId: input.credentialId, prfSecret: fromHex(input.prfSecretHex) })
+    const dek = await this.guarded(() => unwrapDek(this.crypto, file, { credentialId: input.credentialId, prfSecret: fromHex(input.prfSecretHex) }))
     if (!dek) throw new EngineError('unauthorized', 'this passkey does not unlock the vault')
     const pt = openVaultV2(file, dek)
     if (!pt) throw new EngineError('internal', 'the vault could not be opened')
@@ -403,7 +489,7 @@ export class VaultManager {
 
   async unlockWithDevice(input: { keyId: string; keyHex: string }): Promise<{ accounts: AccountView[] }> {
     const file = await this.requireV2()
-    const dek = await unwrapDek(this.crypto, file, { keyId: input.keyId, deviceKey: fromHex(input.keyHex) })
+    const dek = await this.guarded(() => unwrapDek(this.crypto, file, { keyId: input.keyId, deviceKey: fromHex(input.keyHex) }))
     if (!dek) throw new EngineError('unauthorized', 'this device key does not unlock the vault')
     const pt = openVaultV2(file, dek)
     if (!pt) throw new EngineError('internal', 'the vault could not be opened')
@@ -493,9 +579,89 @@ export class VaultManager {
     }
   }
 
+  /**
+   * Refuse a password this wallet would not seal a vault under (ES-BV-010).
+   *
+   * The policy lived in the onboarding screen, so it bound exactly the path
+   * that screen runs. `importExport` — "Move a vault here", which puts
+   * somebody's whole vault on a new device — checked only that the field was
+   * non-empty. A vault file is the thing an attacker takes away and guesses at
+   * offline; Argon2id buys time and a short password spends all of it.
+   */
+  private assertPasswordOk(password: string): void {
+    const problem = passwordProblem(password)
+    if (problem) throw new EngineError('invalid_argument', passwordProblemText(problem))
+  }
+
+  /**
+   * Refuse to even try, while the wallet is cooling off (ES-BV-008).
+   *
+   * Called before the KDF on every path that tests a factor, so a guess that
+   * is not allowed costs the attacker a round trip and costs this device
+   * nothing. Argon2id alone is a few guesses a second — plenty to grind a
+   * weak password through the UI port, silently, with the profile in hand.
+   */
+  private async assertNotThrottled(): Promise<void> {
+    const { value } = await readDoc(this.platform.storage.local, THROTTLE_DOC, () => this.platform.now())
+    const left = value.notBefore - this.platform.now()
+    if (left > 0)
+      throw new EngineError(
+        'throttled',
+        `Too many wrong attempts. Try again in ${Math.ceil(left / 1000)} seconds.`,
+        { seconds: Math.ceil(left / 1000) },
+      )
+  }
+
+  /** A wrong factor: count it, and make the next one wait longer. */
+  private async recordFailure(): Promise<void> {
+    const { value } = await readDoc(this.platform.storage.local, THROTTLE_DOC, () => this.platform.now())
+    const failures = value.failures + 1
+    /*
+      Five wrong answers are free; the fifth arms the wait, so the sixth
+      attempt is refused before the KDF runs. Doubling from there, to a cap —
+      a wallet that can never be opened again is its own kind of loss.
+    */
+    const over = failures - THROTTLE_FREE + 1
+    const wait = over <= 0 ? 0 : Math.min(THROTTLE_MAX_MS, THROTTLE_BASE_MS * 2 ** (over - 1))
+    await writeDoc(this.platform.storage.local, THROTTLE_DOC, { failures, notBefore: this.platform.now() + wait })
+  }
+
+  /** A right one: the budget is restored in full. */
+  private async clearFailures(): Promise<void> {
+    await writeDoc(this.platform.storage.local, THROTTLE_DOC, { failures: 0, notBefore: 0 })
+  }
+
+  /** Run something that tests a factor under the throttle, whatever it answers. */
+  private async guarded<T>(attempt: () => Promise<T | null>): Promise<T | null> {
+    await this.assertNotThrottled()
+    let out: T | null
+    try {
+      out = await attempt()
+    } catch (err) {
+      /*
+        A device that cannot allocate Argon2id's memory is not a wrong
+        password, and must not spend the budget — `unwrap` already separates
+        the two, and this keeps that distinction.
+      */
+      throw err
+    }
+    if (out === null) await this.recordFailure()
+    else await this.clearFailures()
+    return out
+  }
+
+  /**
+   * The quiz this wallet last asked, in memory only (ES-BV-004).
+   *
+   * Not persisted: a quiz that survives a restart is a question nobody is
+   * still looking at, and the point is that an answer must follow a question.
+   */
+  private issuedQuiz: { seedId: string | null; positions: number[]; issuedAt: number } | null = null
+
   private async verifyPassword(password: string): Promise<VaultFileV2> {
     const file = await this.requireV2()
-    if (!(await this.unwrap(file, { password }))) throw new EngineError('wrong_password', 'wrong password')
+    if (!(await this.guarded(() => this.unwrap(file, { password }))))
+      throw new EngineError('wrong_password', 'wrong password')
     return file
   }
 
@@ -527,6 +693,7 @@ export class VaultManager {
   }
 
   async changePassword(input: { current: string; next: string }): Promise<VaultStatus> {
+    this.assertPasswordOk(input.next)
     const file = await this.verifyPassword(input.current)
     const dek = await this.dek()
     await this.writeFile(await changePasswordV2(this.crypto, file, dek, input.next, await this.kdfParams(), this.platform.now()))
@@ -594,24 +761,59 @@ export class VaultManager {
     const seed = pt.seeds.find((s) => s.id === input.seedId)
     if (!seed) throw new EngineError('not_found', 'no such seed')
     const words = seed.mnemonic.split(' ')
-    const positions = new Set<number>()
-    while (positions.size < 3) {
-      const b = this.platform.random(1)[0] ?? 0
-      positions.add((b % words.length) + 1)
-    }
-    return { positions: [...positions].sort((a, b) => a - b), wordCount: words.length }
+    const sorted = this.mintQuizPositions(words.length)
+    // What was asked, so the answer can be checked against it (ES-BV-004).
+    this.issuedQuiz = { seedId: seed.id, positions: sorted, issuedAt: this.platform.now() }
+    return { positions: sorted, wordCount: words.length }
   }
 
+  /**
+   * Check the answers to the quiz that was actually asked (ES-BV-004).
+   *
+   * This method used to take any positions the caller liked, check them
+   * against the phrase, need only the session DEK and never be throttled —
+   * which makes it a per-word oracle. Answering `[{p, w}, {p, w}, {p, w}]` for
+   * every `w` in the 2048-word list recovers the word at `p`; twelve positions
+   * is at most 24,576 sub-millisecond calls, and the BIP-39 checksum narrows
+   * the last word for free. On the extension, any page context that can reach
+   * the UI namespace can do this on an unlocked wallet, without the password,
+   * which is precisely what `revealNeedsPassword` exists to prevent.
+   *
+   * So: the positions must be the ones `backupQuiz` just issued, they must all
+   * be answered, the issued quiz is spent by any attempt, and a wrong attempt
+   * costs the same growing delay a wrong password does.
+   */
   async confirmBackup(input: { seedId: string; answers: Array<{ position: number; word: string }> }): Promise<{ ok: boolean; status: VaultStatus }> {
+    await this.assertNotThrottled()
+    const issued = this.issuedQuiz
+    // Spent on any attempt at all, right or wrong: a second guess needs a
+    // second quiz, which is what stops the enumeration.
+    this.issuedQuiz = null
     const { pt } = await this.plaintext()
     const seed = pt.seeds.find((s) => s.id === input.seedId)
     if (!seed) throw new EngineError('not_found', 'no such seed')
-    const words = seed.mnemonic.split(' ')
-    const ok = input.answers.length >= 3 && input.answers.every((a) => words[a.position - 1] === a.word.trim().toLowerCase())
-    if (ok) {
-      const now = this.platform.now()
-      await this.mutate((p) => ({ ...p, seeds: p.seeds.map((s) => (s.id === seed.id ? { ...s, backedUpAt: now } : s)) }))
+    // A quiz issued by `propose` names no seed: the phrase became this one.
+    if (!issued || (issued.seedId !== null && issued.seedId !== seed.id))
+      throw new EngineError('invalid_argument', 'Ask for the quiz again — this answer does not match a question that was asked.')
+    const asked = [...issued.positions].sort((a, b) => a - b)
+    const answered = [...new Set(input.answers.map((a) => a.position))].sort((a, b) => a - b)
+    if (
+      input.answers.length !== asked.length ||
+      answered.length !== asked.length ||
+      asked.some((p, i) => p !== answered[i])
+    ) {
+      await this.recordFailure()
+      throw new EngineError('invalid_argument', 'Answer the words that were asked for.')
     }
+    const words = seed.mnemonic.split(' ')
+    const ok = input.answers.every((a) => words[a.position - 1] === a.word.trim().toLowerCase())
+    if (!ok) {
+      await this.recordFailure()
+      return { ok, status: await this.status() }
+    }
+    await this.clearFailures()
+    const now = this.platform.now()
+    await this.mutate((p) => ({ ...p, seeds: p.seeds.map((s) => (s.id === seed.id ? { ...s, backedUpAt: now } : s)) }))
     return { ok, status: await this.status() }
   }
 
@@ -636,8 +838,20 @@ export class VaultManager {
   async export(input: { password: string; code?: string }): Promise<{ frames: string[]; code: string }> {
     await this.verifyPassword(input.password)
     const supplied = (input.code ?? '').trim()
-    if (supplied && supplied.split(/\s+/).filter(Boolean).length < EXPORT_CODE_WORDS)
-      throw new EngineError('invalid_argument', `A phrase you choose must be at least ${EXPORT_CODE_WORDS} words. Leave it blank and BoltVault will make one.`)
+    /*
+      Six tokens is not six words (ES-BV-009). "a a a a a a" satisfied a count,
+      and the envelope this code seals is displayed as a QR anyone in the room
+      can photograph — so the code is the only thing standing between them and
+      the vault. Every word has to be one BoltVault could have minted, which is
+      what makes the count mean something.
+    */
+    if (supplied) {
+      const words = supplied.toLowerCase().split(/\s+/).filter(Boolean)
+      if (words.length < EXPORT_CODE_WORDS || new Set(words).size < EXPORT_CODE_WORDS)
+        throw new EngineError('invalid_argument', `A phrase you choose must be at least ${EXPORT_CODE_WORDS} different words. Leave it blank and BoltVault will make one.`)
+      if (!words.every((w) => isExportCodeWord(w)))
+        throw new EngineError('invalid_argument', 'Every word must be from the recovery word list. Leave it blank and BoltVault will make one.')
+    }
     const code = supplied || mintExportCode((n) => this.platform.random(n))
     const { pt } = await this.plaintext()
     const env = await exportVaultV2(this.crypto, pt, code, await this.kdfParams(), this.platform.now())
@@ -645,6 +859,7 @@ export class VaultManager {
   }
 
   async importExport(input: { frames: string[]; code: string; password: string }): Promise<{ accounts: AccountView[] }> {
+    this.assertPasswordOk(input.password)
     if (await this.readFile()) throw new EngineError('invalid_argument', 'a vault already exists on this device')
     const payload = assembleQrFrames(input.frames)
     if (!payload) throw new EngineError('invalid_argument', 'the export is incomplete — keep scanning')
@@ -654,7 +869,19 @@ export class VaultManager {
     } catch {
       throw new EngineError('invalid_argument', 'the export could not be read')
     }
-    const pt = await openVaultExport(this.crypto, env as Parameters<typeof openVaultExport>[1], input.code)
+    /*
+      The scanned envelope chooses the Argon2id cost (ES-BV-009).
+
+      `openVaultExport` reads `kdf.m`, `kdf.t` and `kdf.p` straight out of the
+      JSON, so a QR naming four gibibytes hangs the phone or kills the worker
+      before anybody types a code — and a missing salt threw a raw TypeError
+      out of `fromHex`. The envelope is a stranger's file: it is parsed against
+      a schema, with the cost bounded, before any of it is used.
+    */
+    const envelope = VaultExportEnvelopeSchema.safeParse(env)
+    if (!envelope.success)
+      throw new EngineError('invalid_argument', 'That does not look like a BoltVault export.')
+    const pt = await openVaultExport(this.crypto, envelope.data, input.code)
     if (!pt) throw new EngineError('unauthorized', 'wrong code')
     const { file, dek } = await createVaultV2(this.crypto, { password: input.password, plaintext: pt, kdf: await this.kdfParams(), now: this.platform.now() })
     await this.writeFile(file)
@@ -880,6 +1107,15 @@ export class VaultManager {
   }
 }
 
+/*
+  The wire bound; the policy is `assertPasswordOk` (ES-BV-010).
+
+  Keeping `min(1)` here is deliberate: a schema refusal is a malformed request,
+  and a password that is merely too weak is a person's mistake that deserves a
+  sentence rather than a validation error. The wallet's own screens check
+  first; this is what makes the check true on every path, including the ones no
+  screen guards.
+*/
 const PasswordSchema = z.string().min(1).max(1024)
 
 /**

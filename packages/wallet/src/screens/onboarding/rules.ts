@@ -7,26 +7,24 @@
  * be unit-tested: `packages/wallet/tests/*` run under plain vitest, so this
  * module must not reach `@boltvault/ui` (react-native) even indirectly.
  */
+import { MIN_PASSWORD_LENGTH, passwordProblem } from '@boltvault/core'
 import { t } from '../../i18n'
 
 export type OnboardingPath = 'create' | 'import' | 'watch'
 export type Step = 'intro' | 'blocked' | 'welcome' | 'words' | 'quiz' | 'password' | 'import' | 'preview' | 'watch' | 'passkey'
 
-export const MIN_PASSWORD = 12
-/**
- * How many different characters a password must use.
- *
- * Length alone let "aaaaaaaaaaaa" score as usable: twelve characters, one bit
- * of imagination. Distinct-character count is the cheapest check that catches
- * the whole family — a repeated letter, a two-character cycle, a mashed row —
- * without shipping an entropy estimator. zxcvbn is ~400 KB, and the popup has
- * a bundle gate precisely so nobody reaches for it.
- */
-const MIN_DISTINCT = 5
+/*
+  The refusals themselves now live in `@boltvault/core` so the engine enforces
+  the same line on every path that sets a password (ES-BV-010) — including
+  "Move a vault here", which had no policy at all. What stays here is the
+  wording and the shades above the line, which are a screen's business.
+*/
+export const MIN_PASSWORD = MIN_PASSWORD_LENGTH
 
 export function passwordStrength(pw: string): { score: 0 | 1 | 2 | 3; label: string } {
-  if (pw.length < MIN_PASSWORD) return { score: 0, label: t({ id: 'pw.short', message: 'At least {n} characters', values: { n: MIN_PASSWORD } }) }
-  if (new Set(pw).size < MIN_DISTINCT) return { score: 0, label: t({ id: 'pw.repetitive', message: 'Too few different characters' }) }
+  const problem = passwordProblem(pw)
+  if (problem === 'short') return { score: 0, label: t({ id: 'pw.short', message: 'At least {n} characters', values: { n: MIN_PASSWORD } }) }
+  if (problem === 'repetitive') return { score: 0, label: t({ id: 'pw.repetitive', message: 'Too few different characters' }) }
   const classes = [/[a-z]/, /[A-Z]/, /\d/, /[^\w]/].filter((r) => r.test(pw)).length
   const words = pw.trim().split(/\s+/).length
   if (pw.length >= 20 || words >= 4) return { score: 3, label: t({ id: 'pw.strong', message: 'Strong' }) }

@@ -323,9 +323,6 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
-
-
-
   packages/chains:
     dependencies:
       viem:
@@ -484,7 +481,6 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
-
   packages/hardware:
     dependencies:
       '@keystonehq/bc-ur-registry-eth':
@@ -516,8 +512,6 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
-
-
   packages/market-data:
     devDependencies:
       typescript:
@@ -526,9 +520,6 @@ importers:
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
-
-
-
 
   packages/platform:
     dependencies:
@@ -545,7 +536,6 @@ importers:
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
-
 
   packages/protocol:
     dependencies:
@@ -579,7 +569,6 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
 
-
   packages/settings:
     dependencies:
       '@boltvault/core':
@@ -592,7 +581,6 @@ importers:
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
-
 
   packages/testing:
     dependencies:
@@ -628,8 +616,6 @@ importers:
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
-
-
 
   packages/ui:
     dependencies:
@@ -673,6 +659,9 @@ importers:
 
   packages/wallet:
     dependencies:
+      '@boltvault/core':
+        specifier: workspace:*
+        version: link:../core
       '@boltvault/engine':
         specifier: workspace:*
         version: link:../engine
@@ -707,7 +696,6 @@ importers:
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(happy-dom@20.14.0)(lightningcss@1.32.0)(terser@5.46.1)
-
 
 packages:
 
@@ -8379,9 +8367,7 @@ snapshots:
       metro-runtime: 0.84.6
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-color@2.1.0': {}
 

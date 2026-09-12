@@ -113,7 +113,14 @@ export interface VaultNamespace {
   /** Block screenshots while a phrase is on screen (§8.1). Real on mobile; the extension cannot, and says so. */
   hidePreview(input: { hide: boolean }): Promise<void>
   /** A fresh phrase with nothing written: the words are shown and checked before a password exists (§8.1). */
-  propose(input: { bits?: 128 | 256 }): Promise<{ mnemonic: string }>
+  /**
+   * A phrase, and the words the wallet will ask about (ES-BV-004).
+   *
+   * The positions come back from here because onboarding quizzes before the
+   * seed exists, so `backupQuiz` cannot be what issues them — and
+   * `confirmBackup` only accepts positions the wallet chose.
+   */
+  propose(input: { bits?: 128 | 256 }): Promise<{ mnemonic: string; positions: number[] }>
   /** Onboarding: a fresh 12/24-word seed. The mnemonic is returned exactly once. */
   create(input: {
     password: string

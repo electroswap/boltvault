@@ -13,6 +13,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@boltvault/core": "workspace:*",
     "@boltvault/engine": "workspace:*",
     "@boltvault/platform": "workspace:*",
     "@boltvault/ui": "workspace:*",

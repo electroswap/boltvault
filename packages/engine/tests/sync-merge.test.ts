@@ -28,8 +28,8 @@ function device(now: number, relay: MemoryRelay): Device {
 
 async function pair(a: Device, b: Device, labelA: string, labelB: string): Promise<void> {
   await Promise.all([a.engine.ready, b.engine.ready])
-  await a.engine.engine.vault.create({ password: 'pw' })
-  await b.engine.engine.vault.create({ password: 'pw' })
+  await a.engine.engine.vault.create({ password: 'correct horse battery staple 42' })
+  await b.engine.engine.vault.create({ password: 'correct horse battery staple 42' })
   await a.engine.engine.sync.setDeviceLabel({ label: labelA })
   await b.engine.engine.sync.setDeviceLabel({ label: labelB })
   const { offer } = await a.engine.engine.sync.createOffer({ relayUrl: RELAY })

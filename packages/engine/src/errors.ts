@@ -22,6 +22,15 @@ export type EngineErrorCode =
   | 'timeout'
   /** Too many requests already waiting for a human (§3.5: a page must not be able to bury the sheet). */
   | 'limit_exceeded'
+  /**
+   * Too many wrong answers, too fast (ES-BV-004, ES-BV-008).
+   *
+   * The only cost of a guess used to be Argon2id, which is a few per second —
+   * enough to grind a weak password through the UI port, silently, with the
+   * profile in hand. `data` carries `{ seconds }` so a screen can count down
+   * rather than say "try again" and mean nothing.
+   */
+  | 'throttled'
   | 'internal'
 
 export class EngineError extends Error {

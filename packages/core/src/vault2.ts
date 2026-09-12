@@ -19,6 +19,7 @@
  * (hash-wasm) and mobile (libsodium) share this file byte-for-byte.
  */
 import { wordlist } from '@scure/bip39/wordlists/english'
+import { z } from 'zod'
 import { xchacha20poly1305 } from '@noble/ciphers/chacha'
 import { hkdf } from '@noble/hashes/hkdf'
 import { sha256 } from '@noble/hashes/sha256'
@@ -349,6 +350,48 @@ export function mintExportCode(random: (n: number) => Uint8Array): string {
   }
   return out.join(' ')
 }
+
+/** True for a word BoltVault could itself have minted into an export code. */
+export function isExportCodeWord(word: string): boolean {
+  return EXPORT_WORDS.has(word.trim().toLowerCase())
+}
+const EXPORT_WORDS: ReadonlySet<string> = new Set(wordlist)
+
+/**
+ * The envelope a "Move a vault here" scan produces, as a stranger's file
+ * (ES-BV-009).
+ *
+ * `importExport` used to `JSON.parse` the payload and hand the object straight
+ * to `openVaultExport`, which reads `kdf.m`, `kdf.t` and `kdf.p` out of it and
+ * passes them to Argon2id. A QR naming four gibibytes therefore hung the phone
+ * or killed the extension worker before a code was ever typed, and a missing
+ * salt threw a raw `TypeError` out of `fromHex`. The cost is bounded to the
+ * range this wallet itself would ever choose, and every field has to be there
+ * and be the right shape.
+ */
+export const VaultExportEnvelopeSchema = z.object({
+  v: z.literal(2),
+  kind: z.literal('boltvault-export'),
+  kdf: z.object({
+    alg: z.literal('argon2id'),
+    salt: z.string().regex(/^[0-9a-fA-F]{32}$/),
+    /*
+      The upper bounds are the point: a QR naming four gibibytes, or a million
+      passes, costs the scanning device everything before a code is typed. The
+      lower bound is deliberately generous — it has to admit every envelope
+      this wallet can legitimately produce, including the deliberately cheap
+      parameters the test harness seals with, and a weak KDF on somebody else's
+      export is their exposure to accept, not ours to refuse mid-transfer.
+    */
+    m: z.number().int().min(1024).max(256 * 1024),
+    t: z.number().int().min(1).max(10),
+    p: z.number().int().min(1).max(4),
+  }),
+  nonce: z.string().regex(/^[0-9a-fA-F]{48}$/),
+  /** Base64; 64 KiB is far above any real vault and far below anything harmful. */
+  ct: z.string().min(1).max(64 * 1024),
+  createdAt: z.number().int().nonnegative(),
+})
 
 /** Seal the plaintext under a one-time code (typed on the destination, never displayed there). */
 export async function exportVaultV2(crypto: VaultCrypto, plaintext: VaultPlaintextV2, code: string, kdf: Argon2idParams = DEFAULT_KDF_V2, now: number = Date.now()): Promise<VaultExportEnvelope> {

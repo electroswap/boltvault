@@ -178,7 +178,7 @@ describe('at rest, with the vault locked', () => {
     const platform = createMemoryPlatform({ now: 1_700_000_000_000 })
     const eng = createEngine({ platform, heads, kdf: FAST, electroswapUrl: null, pricesUrl: null, staticsUrl: null })
     await eng.ready
-    await eng.engine.vault.import({ mnemonic: PHRASE, password: 'pw' })
+    await eng.engine.vault.import({ mnemonic: PHRASE, password: 'correct horse battery staple 42' })
     const accountId = (await eng.engine.accounts.active())?.id ?? ''
     await eng.watchlist.star({ kind: 'token', chainId: 52014, address: '0xfeedfacefeedfacefeedfacefeedfacefeedface', label: 'WATCHED' })
     await eng.engine.tokens.setPrefs({ chainId: 52014, address: '0xfeedfacefeedfacefeedfacefeedfacefeedface', pinned: true })
@@ -188,7 +188,7 @@ describe('at rest, with the vault locked', () => {
     expect(await eng.watchlist.list()).toEqual([])
     expect(await eng.engine.accounts.active()).toBeNull()
 
-    await eng.engine.vault.unlock({ password: 'pw' })
+    await eng.engine.vault.unlock({ password: 'correct horse battery staple 42' })
     // A service that hydrated while locked cached an empty result; if it is not
     // dropped on unlock it serves "nothing watched" for the rest of the session.
     expect((await eng.watchlist.list()).map((i) => i.label)).toEqual(['WATCHED'])
