@@ -52,7 +52,33 @@ export function trezorAccount(input: TrezorAccountInput): LocalAccount {
       const types = { EIP712Domain: getTypesForEIP712Domain({ domain }), ...td.types } as Parameters<typeof hashStruct>[0]['types']
       const domainSeparator = hashDomain({ domain: domain ?? {}, types })
       const messageHash = hashStruct({ data: td.message as Record<string, unknown>, primaryType: td.primaryType, types })
-      const data = { types, domain: td.domain ?? {}, primaryType: td.primaryType, message: td.message }
+      /*
+        JSON-safe, because this crosses a channel that cannot carry BigInt
+        (ES-BV-057).
+
+        Trezor Connect runs in a hosted popup and the payload is structured-
+        cloned or serialised to reach it. A `uint256` in typed data arrives
+        here as a `bigint` — which is exactly what a Permit2 deadline or a
+        Seaport amount is — and either throws on the way or silently loses
+        the value. Numbers go as decimal strings, which is what the wire
+        format wants anyway.
+      */
+      const jsonSafe = (v: unknown): unknown => {
+        if (typeof v === 'bigint') return v.toString()
+        if (Array.isArray(v)) return v.map(jsonSafe)
+        if (v && typeof v === 'object') {
+          const out: Record<string, unknown> = {}
+          for (const [k, x] of Object.entries(v as Record<string, unknown>)) out[k] = jsonSafe(x)
+          return out
+        }
+        return v
+      }
+      const data = {
+        types,
+        domain: jsonSafe(td.domain ?? {}) as Record<string, unknown>,
+        primaryType: td.primaryType,
+        message: jsonSafe(td.message) as Record<string, unknown>,
+      }
       const r = unwrap(await connect.ethereumSignTypedData({ path, data, metamask_v4_compat: true, ...(input.hashesOnly ? { domain_separator_hash: domainSeparator, message_hash: messageHash } : {}) }))
       return normaliseSignature(r.signature)
     },

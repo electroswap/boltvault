@@ -31,6 +31,7 @@
  */
 import { getChain } from '@boltvault/chains'
 import { authHeaders } from './apiAuth'
+import { safeImageUrl } from './images'
 
 /** What a price source knows about one token. */
 export interface PriceQuote {
@@ -197,7 +198,8 @@ export class GeckoTerminalPrices implements PriceSource {
             const quote: PriceQuote = {
               price,
               change24h: null,
-              logoUri: typeof image === 'string' && /^https?:\/\//.test(image) ? image : null,
+              // https only (ES-BV-059): a price index's image URL is not ours.
+              logoUri: typeof image === 'string' ? safeImageUrl(image) : null,
             }
             this.remember(chainId, addr, quote)
             out.set(addr, quote)

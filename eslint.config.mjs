@@ -62,6 +62,31 @@ export default tseslint.config(
     },
   },
   {
+    /*
+      The session DEK is one `chrome.storage.session` read away from any code
+      running in a trusted extension page (ES-BV-051).
+
+      The restriction above exempts `packages/wallet` and `packages/ui` — they
+      are shared with the phone and have no business touching a host API — but
+      it did not cover the extension's own page entrypoints, which run in the
+      same trusted origin as the popup and can read the key straight out of
+      session storage. No page code does today. This is the rule that keeps it
+      that way: pages talk to the worker over the port, and only the worker and
+      the platform adapter touch storage.
+    */
+    files: ['apps/extension/entrypoints/**/*.ts', 'apps/extension/entrypoints/**/*.tsx', 'apps/extension/src/**/*.ts', 'apps/extension/src/**/*.tsx'],
+    ignores: ['apps/extension/entrypoints/background.ts', 'apps/extension/src/platform.ts', 'apps/extension/src/port-channel.ts', 'apps/extension/src/ui-host.ts', 'apps/extension/src/sender.ts', 'apps/extension/src/crash.ts', 'apps/extension/src/trezor.ts', '**/tests/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "MemberExpression[object.object.name=/^(chrome|browser)$/][object.property.name='storage']",
+          message: 'A page does not read extension storage: the session DEK lives there (ES-BV-051). Ask the worker over the port.',
+        },
+      ],
+    },
+  },
+  {
     files: ['packages/wallet/**/*.ts', 'packages/wallet/**/*.tsx'],
     rules: {
       // `react-native-*` matters as much as `react-native` itself: the whole

@@ -44,7 +44,17 @@ export function extensionUiHost(body: 'extension-popup' | 'extension-tab' | 'ext
             const url = tab?.url ?? tab?.pendingUrl ?? ''
             if (!/^https?:/.test(url)) return null
             const u = new URL(url)
-            return { origin: u.origin, host: u.host, favicon: tab?.favIconUrl ?? null }
+            /*
+              https favicons only (ES-BV-059).
+
+              `favIconUrl` is whatever the page declared. A `data:` URI is an
+              image the wallet never fetched and cannot judge, and a plain-http
+              one both leaks which site the popup is looking at and can be
+              replaced in flight. The badge falls back to its link icon.
+            */
+            const icon = tab?.favIconUrl ?? ''
+            const favicon = /^https:\/\//i.test(icon) ? icon : null
+            return { origin: u.origin, host: u.host, favicon }
           },
         }
       : {}),

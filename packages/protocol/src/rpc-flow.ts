@@ -850,6 +850,17 @@ export class RpcFlow {
         const p = param(params, 0) as { type?: unknown; options?: unknown } | undefined
         if (!p || typeof p.type !== 'string')
           throw new RpcError(RPC.INVALID_PARAMS, 'type is required')
+        /*
+          Refuse a type this wallet cannot add, before a sheet (ES-BV-054).
+
+          Any string reached the user and then failed *after* they approved it,
+          which spends the one thing a signing sheet is for — the user's
+          attention — on something that could never have worked, and trains
+          them that approving is harmless. ERC-20 is what the engine adds; the
+          others are a refusal the page can handle.
+        */
+        if (p.type.toUpperCase() !== 'ERC20')
+          throw new RpcError(RPC.INVALID_PARAMS, `BoltVault can only watch ERC-20 tokens, not ${bounded(p.type, 32, 'type')}.`)
         return {
           kind: 'watch_asset',
           origin,

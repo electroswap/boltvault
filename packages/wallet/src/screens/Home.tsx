@@ -179,7 +179,17 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     if (!host.widget || !active || !portfolio.snapshot) return
     const showTotal = widgetTotal
     void host.widget.publish({
-      seed: fnv1a32(active.address.toLowerCase()),
+      /*
+        Seeded from the account id, not the address (ES-BV-056).
+
+        The widget snapshot is a file, and a file can leave the device in a
+        backup. `fnv1a32(address)` is thirty-two bits over a value an attacker
+        can enumerate — every address they care about, hashed, compared — so
+        the file said which account it belonged to. The account id is eight
+        random bytes this install chose and publishes nowhere else, and the
+        seed's only job is to pick an identicon.
+      */
+      seed: fnv1a32(active.id),
       label: active.label,
       tier: tier?.tier ?? 0,
       total: showTotal ? portfolio.snapshot.total : null,

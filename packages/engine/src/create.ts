@@ -296,6 +296,8 @@ export function createEngine(deps: EngineDeps): Engine {
     purgeAccount: async (id) => {
       await sealed.purgeAccount(id)
       await cache.forgetAccount(id)
+      // …and its history, which used to outlive it (ES-BV-056).
+      await activity.forgetAccount(id).catch(() => undefined)
     },
     ...(deps.kdf ? { kdf: deps.kdf } : {}),
   })

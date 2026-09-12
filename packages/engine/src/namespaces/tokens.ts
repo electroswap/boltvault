@@ -10,6 +10,7 @@ import { fetchTokenList, type CustomToken, type TokenEntry } from '@boltvault/to
 import { getAddress, isAddress, parseAbi, type Hex } from 'viem'
 import { z } from 'zod'
 import { EngineError } from '../errors'
+import { safeImageUrl } from '../images'
 import type { SealedMap } from '../sealed'
 import type { EventBus, NamespaceSpec } from '../host'
 import { readMany } from '../multicall'
@@ -126,7 +127,10 @@ export class TokensService {
   }
 
   logoFor(chainId: number, address: string, listUri?: string | undefined): string | null {
-    if (listUri && /^https?:\/\//.test(listUri)) return listUri
+    // https only: the list is fetched unsigned, so its image URLs are somebody
+    // else's words (ES-BV-059).
+    const fromList = safeImageUrl(listUri)
+    if (fromList) return fromList
     // The static host serves .svg for most tokens and .png for a few; the old
     // `.png` convention 404'd for WETN, USDC, USDT, BOLT, DYNO and — because
     // native falls through to the wrapped token's file — for native ETN, which

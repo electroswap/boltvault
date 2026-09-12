@@ -2962,6 +2962,28 @@ export function normaliseTypedData(input: unknown): unknown {
     for (const f of domainFields)
       if (/^u?int/.test(f.type) && domain[f.name] !== undefined)
         domain[f.name] = strictBig(f.name, domain[f.name])
+  /*
+    A dApp-supplied `EIP712Domain` has to match the domain it describes
+    (ES-BV-057).
+
+    It is dropped here and viem rebuilds it from whichever fields the domain
+    object happens to carry, so a page could declare one type list and send a
+    domain with different fields — and the hash the wallet signs would be
+    computed from the rebuilt list rather than the declared one. The two
+    always agreeing is what makes dropping it safe, so that is checked rather
+    than assumed. Extra declared fields with no value, or values with no
+    declared field, mean the page is describing two different domains.
+  */
+  if (domainFields) {
+    const declared = new Set(domainFields.map((f) => f.name))
+    const present = new Set(Object.keys(domain).filter((k) => domain[k] !== undefined))
+    for (const name of present)
+      if (!declared.has(name))
+        throw new EngineError('invalid_argument', `typed data domain carries ${name}, which its own EIP712Domain does not declare`)
+    for (const name of declared)
+      if (!present.has(name))
+        throw new EngineError('invalid_argument', `typed data declares domain field ${name} but does not supply it`)
+  }
   const { EIP712Domain: _omit, ...rest } = types
   return {
     domain,

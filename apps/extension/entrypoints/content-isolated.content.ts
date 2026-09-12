@@ -65,7 +65,18 @@ export default defineContentScript({
       const doc = r['bv:local:settings'] as { data?: { metaMaskCompat?: boolean; defaultWallet?: boolean } } | undefined
       const value = doc?.data
       if (!value) return
-      window.dispatchEvent(new CustomEvent(CONFIG_EVENT, { detail: { isMetaMask: value.metaMaskCompat === true, defaultWallet: value.defaultWallet === true } }))
+      /*
+        A JSON string, not an object (ES-BV-052).
+
+        Firefox gives a content script its own compartment, and an object
+        `detail` dispatched from it reaches page script as a wrapper the page
+        may not be able to read — so on Firefox `metaMaskCompat` and
+        `defaultWallet` could silently not take effect, which is the same
+        failure this line was written to fix on Chrome. A string crosses the
+        boundary as a primitive on every engine.
+      */
+      const detail = JSON.stringify({ isMetaMask: value.metaMaskCompat === true, defaultWallet: value.defaultWallet === true })
+      window.dispatchEvent(new CustomEvent(CONFIG_EVENT, { detail }))
     })
   },
 })

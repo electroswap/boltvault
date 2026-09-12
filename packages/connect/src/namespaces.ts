@@ -7,7 +7,16 @@
 import { caipAccount, caipChain, chainIdFromCaip, type ApprovedNamespaces, type SessionProposal } from './walletkit'
 
 /** Methods the engine's rpcFlow answers over WalletConnect (the APPROVAL and CONNECT classes, plus the SAFE reads dApps ask wallets for). */
-export const WC_METHODS = ['eth_sendTransaction', 'personal_sign', 'eth_signTypedData', 'eth_signTypedData_v4', 'eth_signTypedData_v3', 'wallet_switchEthereumChain', 'wallet_addEthereumChain', 'wallet_watchAsset', 'wallet_getCapabilities', 'eth_accounts', 'eth_chainId', 'eth_requestAccounts'] as const
+/*
+  `eth_signTypedData` is not here (ES-BV-053).
+
+  The unversioned method is in `REJECTED_METHODS` — its encoding is
+  ambiguous and no wallet should sign it — so advertising it at the Connect
+  sheet promised something the flow refuses on arrival. A dApp that reads the
+  namespace and picks it gets a refusal it could have avoided, and the user
+  gets a failure that looks like the wallet's.
+*/
+export const WC_METHODS = ['eth_sendTransaction', 'personal_sign', 'eth_signTypedData_v4', 'eth_signTypedData_v3', 'wallet_switchEthereumChain', 'wallet_addEthereumChain', 'wallet_watchAsset', 'wallet_getCapabilities', 'eth_accounts', 'eth_chainId', 'eth_requestAccounts'] as const
 
 export const WC_EVENTS = ['accountsChanged', 'chainChanged'] as const
 

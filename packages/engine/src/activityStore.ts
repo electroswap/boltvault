@@ -190,6 +190,20 @@ export class ActivityStore {
     await this.persist([], true)
   }
 
+  /**
+   * Drop every row belonging to a removed account (ES-BV-056).
+   *
+   * Removing an account purged its sealed shards and left its activity where
+   * it was, so the addresses, amounts and counterparties of an account the
+   * user had deliberately taken off the device stayed on it. This runs on the
+   * same path as the rest of the purge.
+   */
+  async forgetAccount(accountId: string): Promise<void> {
+    const entries = await this.load()
+    const kept = entries.filter((e) => e.accountId !== accountId)
+    if (kept.length !== entries.length) await this.persist(kept, true)
+  }
+
   /** Forget the decrypted cache on lock. */
   forget(): void {
     this.cache = null

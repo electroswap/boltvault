@@ -507,7 +507,27 @@ export function installProvider(config: ProviderConfig): InstallResult {
     provider.primeOnce()
   })
   win.addEventListener(CONFIG_EVENT, (ev) => {
-    const detail = (ev as { detail?: { isMetaMask?: boolean; defaultWallet?: boolean } }).detail
+    /*
+      A string or an object, whichever crossed the boundary (ES-BV-052).
+
+      Firefox gives the content script its own compartment, and an object
+      `detail` dispatched from there can reach page script as a wrapper it
+      cannot read. The content script sends JSON now; this still accepts an
+      object so a page-provider script and a content script from different
+      builds are not required to match.
+    */
+    type Config = { isMetaMask?: boolean; defaultWallet?: boolean }
+    const raw = (ev as { detail?: unknown }).detail
+    let detail: Config | null = null
+    if (typeof raw === 'string') {
+      try {
+        detail = JSON.parse(raw) as Config
+      } catch {
+        detail = null
+      }
+    } else if (raw && typeof raw === 'object') {
+      detail = raw as Config
+    }
     if (!detail) return
     provider.applyConfig(detail)
     if (detail.defaultWallet && win.ethereum === provider) {

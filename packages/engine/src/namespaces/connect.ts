@@ -10,6 +10,7 @@ import {
   buildNamespaces,
   caipChain,
   chainIdFromCaip,
+  WC_METHODS,
   WC_REASON,
   type ActiveSession,
   type SessionProposal,
@@ -293,8 +294,25 @@ export class ConnectService {
       name `eip155:1` on its next request and sign on Ethereum instead.
     */
     const chainId = chainIdFromCaip(req.chainId)
-    const approved = l.session.chains.length === 0 || l.session.chains.includes(req.chainId)
-    if (chainId === null || !this.deps.chains.known(chainId) || !approved) {
+    /*
+      An empty approved list is nothing approved, not everything (ES-BV-053).
+
+      `chains.length === 0 ||` made the gate fail open: a session whose stored
+      chain list was empty — a peer that approved none, a row that failed to
+      round-trip — could name any chain the wallet knows and be served. The
+      whole point of the check is that the user agreed to these chains at the
+      Connect sheet, and an empty list says they agreed to none.
+    */
+    const approved = l.session.chains.includes(req.chainId)
+    /*
+      …and to a method the wallet actually advertised. `WC_METHODS` is what
+      goes into the approved namespace at the Connect sheet, and nothing
+      compared a request against it: a peer could name anything and let the
+      flow's own tables be the only gate. They are a good gate, but the
+      namespace is the promise, and the promise should be kept from both ends.
+    */
+    const methodOk = (WC_METHODS as readonly string[]).includes(req.method)
+    if (chainId === null || !this.deps.chains.known(chainId) || !approved || !methodOk) {
       await kit
         .respondSessionRequest({
           topic: req.topic,

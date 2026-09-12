@@ -69,7 +69,57 @@
             {
               "scheme": "https",
               "host": "wallet.electroswap.io",
-              "pathPrefix": "/"
+              "pathPrefix": "/wc"
+            },
+            {
+              "scheme": "https",
+              "host": "wallet.electroswap.io",
+              "pathPrefix": "/launchpad"
+            },
+            {
+              "scheme": "https",
+              "host": "wallet.electroswap.io",
+              "pathPrefix": "/pay"
+            },
+            {
+              "scheme": "https",
+              "host": "wallet.electroswap.io",
+              "pathPrefix": "/swap"
+            },
+            {
+              "scheme": "https",
+              "host": "wallet.electroswap.io",
+              "pathPrefix": "/explore"
+            },
+            {
+              "scheme": "https",
+              "host": "wallet.electroswap.io",
+              "pathPrefix": "/activity"
+            },
+            {
+              "scheme": "https",
+              "host": "wallet.electroswap.io",
+              "pathPrefix": "/bridge"
+            },
+            {
+              "scheme": "https",
+              "host": "wallet.electroswap.io",
+              "pathPrefix": "/receive"
+            },
+            {
+              "scheme": "https",
+              "host": "wallet.electroswap.io",
+              "pathPrefix": "/browser"
+            },
+            {
+              "scheme": "https",
+              "host": "wallet.electroswap.io",
+              "pathPrefix": "/open"
+            },
+            {
+              "scheme": "https",
+              "host": "wallet.electroswap.io",
+              "pathPrefix": "/home"
             }
           ],
           "category": [
