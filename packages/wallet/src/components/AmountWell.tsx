@@ -9,7 +9,7 @@
  * it, so the eye learns the shape once.
  */
 import { Body, Column, Icon, Input, MaxKey, Plate, Row, paint, type IconName } from '@boltvault/ui'
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { t } from '../i18n'
 
 export interface AmountWellProps {
@@ -78,11 +78,34 @@ export interface AmountWellProps {
 
 export function AmountWell({ label, value, onChange, readOnly = false, disabled = false, tokenPill, right, fiat, balance, balanceIcon = 'wallet', onMax, error, decimals, accent, louder = false, autoFocus, testID, inputTestID, maxTestID, balanceTestID }: AmountWellProps) {
   const empty = !value || value === '0' || value === '—'
+  const typed = useRef(false)
+  const prevValue = useRef(value)
   const [pinStart, setPinStart] = useState(0)
+  /*
+    Pin on any fill that did not come from this well's own keystrokes.
+
+    MAX used to be the only bump, which hid the same bug on Swap's other
+    terminal: typing an exact-in amount paints a long decimal into "You
+    receive" (and exact-out into "You pay"), the field parks its caret at
+    the end, and the units scroll off the leading edge. The numbers before
+    the point stay in view when we pin both wells the same way.
+  */
+  if (value !== prevValue.current) {
+    const wasTyped = typed.current
+    typed.current = false
+    prevValue.current = value
+    if (!wasTyped) setPinStart((n) => n + 1)
+  }
   const fillMax = onMax
     ? () => {
         setPinStart((n) => n + 1)
         onMax()
+      }
+    : undefined
+  const handleChange = onChange
+    ? (next: string) => {
+        typed.current = true
+        onChange(next)
       }
     : undefined
   return (
@@ -95,12 +118,12 @@ export function AmountWell({ label, value, onChange, readOnly = false, disabled 
       </Row>
       <Row gap="$2" alignItems="center" minHeight={louder ? 52 : 40} flex={louder ? 1 : undefined}>
         <Column flex={1} minWidth={0}>
-          {readOnly || !onChange ? (
+          {readOnly || !handleChange ? (
             <Body fontFamily="$readout" fontSize={louder ? 32 : 28} lineHeight={louder ? 38 : 34} fontWeight="600" letterSpacing={louder ? -1.0 : -0.85} numberOfLines={1} color={empty ? '$mute' : '$ink'} testID={inputTestID}>
               {value || '0'}
             </Body>
           ) : (
-            <Input value={value} onChange={onChange} placeholder="0" bare big {...(louder ? { louder: true } : {})} numeric {...(decimals !== undefined ? { maxDecimals: decimals } : {})} autoFocus={autoFocus} pinStart={pinStart} disabled={disabled} testID={inputTestID} />
+            <Input value={value} onChange={handleChange} placeholder="0" bare big {...(louder ? { louder: true } : {})} numeric {...(decimals !== undefined ? { maxDecimals: decimals } : {})} autoFocus={autoFocus} pinStart={pinStart} disabled={disabled} testID={inputTestID} />
           )}
         </Column>
         {tokenPill ?? null}

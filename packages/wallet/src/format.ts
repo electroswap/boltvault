@@ -232,6 +232,42 @@ export function formatRate(
 }
 
 /**
+ * A quoted amount as a field value: no grouping commas, the fraction cut
+ * short so the units stay in view.
+ *
+ * `formatRaw` is for reading (it groups thousands); putting that string back
+ * into a numeric input would turn "1,234.5" into "1.2345". Exact token
+ * decimals — eighteen of them on ETN — overflow the well and hide everything
+ * before the point, which is the number that matters. The independent well
+ * still shows what the user typed; this is only the other side, from the
+ * quote.
+ *
+ * Two places from 1 up, six significant figures below (the interface's
+ * `SwapTradeAmount` length), never rounded up.
+ */
+export function formatInputAmount(raw: string, decimals: number): string {
+  let n: bigint
+  try {
+    n = BigInt(raw)
+  } catch {
+    return ''
+  }
+  if (n === 0n) return '0'
+  const base = 10n ** BigInt(decimals)
+  const whole = n / base
+  const frac = decimals > 0 ? (n % base).toString().padStart(decimals, '0') : ''
+  const exact = frac ? `${whole.toString()}.${frac}` : whole.toString()
+  const places =
+    whole > 0n
+      ? 2
+      : (() => {
+          const firstDigit = frac.search(/[1-9]/)
+          return firstDigit === -1 ? 0 : firstDigit + 6
+        })()
+  return cut(exact, places)
+}
+
+/**
  * A token amount at a length a person can read.
  *
  * Owner, on the farm position card: "better rounding logic". `formatRaw` is

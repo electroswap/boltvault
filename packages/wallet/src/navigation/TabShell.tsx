@@ -4,8 +4,8 @@
  * screens is replaced by Unlock. A pending dApp approval takes over the
  * popup and the mobile body (the sign window mounts it by route).
  */
-import { Body, Column, Field, Key, MotionProvider, PageLoader, Row, Scrim, ScreenEnter, Sheet, metrics, motion, useAppHidden, useInsets, useWindowDimensions, type EnterDirection } from '@boltvault/ui'
-import { Suspense, lazy, useEffect, useRef, useState } from 'react'
+import { Body, Column, Field, Key, MotionProvider, PageLoader, Row, Scrim, ScreenEnter, Sheet, metrics, useAppHidden, useInsets, useWindowDimensions, type EnterDirection } from '@boltvault/ui'
+import { Suspense, lazy, useEffect, useRef } from 'react'
 import { Approval } from '../screens/Approval'
 import { Home, type HomeProps } from '../screens/Home'
 import { Onboarding } from '../screens/Onboarding'
@@ -218,17 +218,6 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   useEffect(() => {
     prevKey.current = enterKey
   })
-  const [fading, setFading] = useState(false)
-  const seenEnter = useRef(false)
-  useEffect(() => {
-    if (!seenEnter.current) {
-      seenEnter.current = true
-      return
-    }
-    setFading(true)
-    const t = setTimeout(() => setFading(false), motion.screen)
-    return () => clearTimeout(t)
-  }, [enterKey])
 
   /*
     A stale build stops quoting, routing and signing — and nothing else
@@ -461,8 +450,17 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
               <Suspense fallback={<PageLoader overlay reducedMotion={reducedMotion} testID="screen-loading" />}>{screen}</Suspense>
             </ScreenEnter>
           </Column>
-          {/* Over the screen, under the tab bar: the page assembles beneath it. */}
-          {busy && !takeover && !fading ? <PageLoader overlay reducedMotion={reducedMotion} testID="page-loading" /> : null}
+          {/*
+            Over the screen, under the tab bar: the page assembles beneath it.
+
+            Held through the screen-enter fade as well. Hiding it for those
+            150 ms was a flash of the half-built destination — a collection
+            with no art, a signing sheet with no preview — which is the gap
+            the overlay exists to cover. Owner, on Swap: overlay the ES loader
+            the moment the key is pressed, and only lift it when the
+            transaction preview is rendered.
+          */}
+          {busy && !takeover ? <PageLoader overlay reducedMotion={reducedMotion} testID="page-loading" /> : null}
         </Column>
         {/* Last child, so a device round trip sheet paints above the tab bar (§7.5). */}
         {takeover ? null : (

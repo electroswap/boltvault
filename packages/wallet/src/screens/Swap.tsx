@@ -27,9 +27,10 @@ import { useChainHead } from '../hooks/useChainHead'
 import { useName } from '../hooks/useNames'
 import { usePortfolio } from '../hooks/usePortfolio'
 import { usePrefs } from '../hooks/usePrefs'
-import { formatAmountFiat, formatFloor, formatPct, formatQuantity, formatRate, formatRaw } from '../format'
+import { formatAmountFiat, formatFloor, formatInputAmount, formatPct, formatQuantity, formatRate, formatRaw } from '../format'
 import { t } from '../i18n'
 import { swapFlowStore, useSwapFlow } from '../state/useSwapFlow'
+import { useScreenBusy } from '../state/useScreenBusy'
 import { useWalletState } from '../state/useWalletState'
 import { AmountWell } from '../components/AmountWell'
 import { useRouter } from '../navigation/router'
@@ -182,6 +183,16 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   const [details, setDetails] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /*
+    The ES overlay from the click until the signing sheet has a preview.
+
+    `execute`/`place` wait on the first sheet, then this screen still has to
+    hand the flow to the shell and unmount. Clearing `busy` in `finally` lifted
+    the loader onto the "Swapping…" panel for that gap. Stay busy on success
+    so the overlay covers the handoff; Approval takes the flag the moment it
+    mounts, and unmounting here clears ours.
+  */
+  useScreenBusy('swap', busy)
   const [now, setNow] = useState(() => Date.now())
   const [fire, setFire] = useState(0)
 
@@ -461,9 +472,11 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
       const f = await engine.swap.flow({ flowId: r.flowId })
       if (f) swapFlowStore.upsert(f)
       setActive(r.flowId)
+      // No sheet to hand to — nothing to cover. A signing request keeps us
+      // busy until this screen unmounts under the overlay.
+      if (!r.requestId) setBusy(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
-    } finally {
       setBusy(false)
     }
   }
@@ -1149,22 +1162,5 @@ function spendableNative(quote: SwapQuoteView | null): string | null {
     return formatUnits(BigInt(quote.maxSpendableRaw), quote.decimalsIn)
   } catch {
     return null
-  }
-}
-
-/**
- * A raw amount as a field value: exact decimals, no grouping commas.
- *
- * `formatRaw` is for reading (it groups thousands); putting that string back
- * into a numeric input would turn "1,234.5" into "1.2345". The independent
- * well shows what the user typed; this is only the other side, from the quote.
- */
-function formatInputAmount(raw: string, decimals: number): string {
-  try {
-    const s = formatUnits(BigInt(raw), decimals)
-    if (!s.includes('.')) return s
-    return s.replace(/0+$/, '').replace(/\.$/, '')
-  } catch {
-    return ''
   }
 }

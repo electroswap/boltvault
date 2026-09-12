@@ -245,17 +245,15 @@ writeFileSync(join(mob, 'android-icon-foreground.png'), png(432, { shape: 'none'
 writeFileSync(join(mob, 'android-icon-background.png'), png(432, { shape: 'square', scale: 0.0001 }))
 writeFileSync(join(mob, 'android-icon-monochrome.png'), png(432, { shape: 'none', ground: false, fill: 'white', scale: 0.5 }))
 /*
-  Android 12's splash icon and the windowBackground that follows it have to be
-  the same drawing at the same size, or the first beat of a cold start is a
-  jump: a small bolt in a circular mask, then a bigger one whose glow is a
-  square. Both assets below are the BoltMark proportion (bolt = 1/1.8 of the
-  frame) baked onto opaque void, so the square of the PNG is the window colour
-  and cannot read as a cropped plate of light.
+  The native splash mark is the same drawing as the adaptive-icon foreground:
+  the bolt alone, on transparency, at half scale so it sits in the circular
+  safe zone. No bloom. A glow baked into a square PNG is what the phone showed
+  as a cropped plate of light.
 
   `plugins/withNativeSplash.js` copies splash-mark.png into the Android project
   as both the Android 12 icon and the still behind it.
 */
-writeFileSync(join(mob, 'splash-icon.png'), png(1024, { shape: 'square', ground: true, scale: 1 / 1.8 }))
-writeFileSync(join(mob, 'splash-mark.png'), png(1024, { shape: 'square', ground: true, scale: 1 / 1.8 }))
+writeFileSync(join(mob, 'splash-icon.png'), png(1024, { shape: 'none', ground: false, scale: 0.5 }))
+writeFileSync(join(mob, 'splash-mark.png'), png(1024, { shape: 'none', ground: false, scale: 0.5 }))
 
 console.log(`icons written to ${ext} and ${mob}`)

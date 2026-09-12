@@ -3,123 +3,95 @@
  *
  * ## The still and the strike
  *
- * Android paints one mark from the tap: `@drawable/boltvault_splash`, the same
- * bolt, same size, same dead-centre (`plugins/withNativeSplash.js`). Android 12
- * would otherwise put the adaptive icon in a 240 dp circle for a few frames
- * and then swap to a larger square-cropped bitmap — two drawings. The native
- * plugin uses this mark as both the Android 12 icon and the window, so the
- * still is one object, and the two seconds React needs are part of the splash
- * rather than a hole in it.
+ * Android paints the same bolt the launcher icon uses — mark alone, on the
+ * void, dead centre (`plugins/withNativeSplash.js`). No bloom is baked into
+ * that bitmap: a glow in a square PNG is a cropped plate of light, which is
+ * what a cold start used to show between the circular Android 12 icon and
+ * this screen.
  *
- * Then this mounts. The mark does not re-enter — it **discharges**. A white
- * flash off the bolt, a plasma bloom, then concentric rings of current riding
- * out to the corners of the screen: solid, dashed, haloed, the last one slow
- * and almost full-bleed. The circuit wakes in their wake, the name lands under
- * the tail, the lock-up last. The mark itself only recoils.
- *
- * Everything is a Reanimated CSS animation — declarative keyframes, no
- * imperative timeline to keep in step, and the same code drives the web body
- * where the harness screenshots it.
+ * Then this mounts. The mark does not re-enter — it **discharges**. A flash
+ * off the bolt, then concentric rings of current riding out. Those rings are
+ * Views, not SVG: scale and opacity on a circular border run on the UI thread
+ * and ease continuously, instead of jumping between CSS keyframes while a
+ * thousand-pixel SVG is rasterised. The circuit wakes in their wake, the name
+ * lands under the tail, the lock-up last. The mark itself only recoils.
  */
-import Animated, { cubicBezier } from 'react-native-reanimated'
-import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg'
-import { useId } from 'react'
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
+import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withDelay, withTiming, cubicBezier } from 'react-native-reanimated'
 import { BoltMark } from './BoltMark'
 import { Field } from './scene/Field'
 import { light, paint } from './tokens'
 
 /**
- * The mark is the same size here and in the native drawable, so the handoff
- * from the still to the motion is invisible. Fixed rather than a fraction of
- * the screen for exactly that reason: the drawable cannot know the width.
+ * Sized so the polygon matches the native still.
  *
- * 240 dp is Android 12's splash-icon diameter. Anything else and the still
- * Android paints for the first frames is a different object from the still it
- * paints while Hermes evaluates the bundle.
- * `MARK_DP` in apps/mobile/plugins/withNativeSplash.js is the other half.
+ * The Android 12 icon and the windowBackground item are 240 dp of a scale-0.5
+ * bolt (the adaptive-icon safe zone). That bolt is 120 dp. BoltMark's viewBox
+ * is 1.8 units with the polygon in 1, so 216 dp draws the same 120 dp bolt.
+ * `MARK_DP` in apps/mobile/plugins/withNativeSplash.js is the 240.
  */
-export const SPLASH_MARK = 240
+export const SPLASH_MARK = 216
 
 /**
  * How long the ceremony runs, so a body can hold the splash for exactly that
- * and not a frame longer. The last thing to finish is the outer ring, at
- * 320 + 1500.
+ * and not a frame longer. The last ring is delay 360 + duration 1400.
  */
-export const SPLASH_BEAT = 1850
+export const SPLASH_BEAT = 1800
 
-/** The strike's ease: fast out of the gate, long settle. */
 const OUT = cubicBezier(0.16, 1, 0.3, 1)
-const FLARE = cubicBezier(0.2, 0.9, 0.1, 1)
+const RING_EASE = Easing.bezier(0.16, 1, 0.3, 1)
 
 function Flash({ size }: { size: number }) {
-  const id = `sf-${useId().replace(/[^a-zA-Z0-9]/g, '')}`
-  const box = size * 2.6
+  const t = useSharedValue(0)
+  useEffect(() => {
+    t.value = withTiming(1, { duration: 560, easing: Easing.bezier(0.2, 0.9, 0.1, 1) })
+  }, [t])
+  const box = size * 2.2
+  const style = useAnimatedStyle(() => ({
+    opacity: interpolate(t.value, [0, 0.16, 1], [0, 0.55, 0]),
+    transform: [{ scale: interpolate(t.value, [0, 1], [0.45, 1.7]) }],
+  }))
   return (
     <Animated.View
       pointerEvents="none"
-      style={{
-        position: 'absolute',
-        width: box,
-        height: box,
-        animationName: {
-          from: { opacity: 0, transform: [{ scale: 0.4 }] },
-          '16%': { opacity: 1, transform: [{ scale: 0.85 }] },
-          to: { opacity: 0, transform: [{ scale: 1.85 }] },
+      style={[
+        {
+          position: 'absolute',
+          width: box,
+          height: box,
+          borderRadius: box / 2,
+          backgroundColor: 'rgba(234, 246, 255, 0.9)',
         },
-        animationDuration: '620ms',
-        animationTimingFunction: FLARE,
-        animationFillMode: 'both',
-      }}
-    >
-      <Svg width={box} height={box} viewBox="0 0 1 1">
-        <Defs>
-          <RadialGradient id={id} cx="50%" cy="50%" r="50%">
-            <Stop offset="0" stopColor={light.core} stopOpacity={1} />
-            <Stop offset="0.18" stopColor={light.arc} stopOpacity={0.72} />
-            <Stop offset="0.48" stopColor={light.plasma} stopOpacity={0.28} />
-            <Stop offset="1" stopColor={light.plasma} stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        <Circle cx="0.5" cy="0.5" r="0.5" fill={`url(#${id})`} />
-      </Svg>
-    </Animated.View>
+        style,
+      ]}
+    />
   )
 }
 
-/** A filled shockwave of plasma — the air lighting, not a stroke. */
-function Bloom({ size, delay, duration, from = 0.22, to = 1 }: { size: number; delay: number; duration: number; from?: number; to?: number }) {
-  const id = `sb-${useId().replace(/[^a-zA-Z0-9]/g, '')}`
+/** A filled circular shockwave — compositor-only, so it stays round. */
+function Bloom({ size, delay, duration, color }: { size: number; delay: number; duration: number; color: string }) {
+  const t = useSharedValue(0)
+  useEffect(() => {
+    t.value = withDelay(delay, withTiming(1, { duration, easing: RING_EASE }))
+  }, [delay, duration, t])
+  const style = useAnimatedStyle(() => ({
+    opacity: interpolate(t.value, [0, 0.18, 1], [0.55, 0.28, 0]),
+    transform: [{ scale: interpolate(t.value, [0, 1], [0.2, 1]) }],
+  }))
   return (
     <Animated.View
       pointerEvents="none"
-      style={{
-        position: 'absolute',
-        width: size,
-        height: size,
-        animationName: {
-          from: { opacity: 0.9, transform: [{ scale: from }] },
-          '22%': { opacity: 0.55 },
-          to: { opacity: 0, transform: [{ scale: to }] },
+      style={[
+        {
+          position: 'absolute',
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: color,
         },
-        animationDuration: `${duration}ms`,
-        animationDelay: `${delay}ms`,
-        animationTimingFunction: OUT,
-        animationFillMode: 'both',
-      }}
-    >
-      <Svg width={size} height={size} viewBox="0 0 1 1">
-        <Defs>
-          <RadialGradient id={id} cx="50%" cy="50%" r="50%">
-            <Stop offset="0" stopColor={light.core} stopOpacity={0.35} />
-            <Stop offset="0.28" stopColor={light.arc} stopOpacity={0.22} />
-            <Stop offset="0.62" stopColor={light.plasma} stopOpacity={0.16} />
-            <Stop offset="1" stopColor={light.plasma} stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        <Circle cx="0.5" cy="0.5" r="0.5" fill={`url(#${id})`} />
-      </Svg>
-    </Animated.View>
+        style,
+      ]}
+    />
   )
 }
 
@@ -127,82 +99,42 @@ interface RingSpec {
   readonly delay: number
   readonly duration: number
   readonly color: string
-  readonly halo?: string
-  readonly stroke: number
-  readonly haloStroke?: number
-  readonly dash?: string
-  readonly spin?: number
-  readonly from?: number
-  readonly peak?: number
+  readonly thickness: number
+  readonly from: number
+  readonly peak: number
 }
 
 /**
- * One ring of current riding outward from the strike.
- *
- * A View border was a cheap circle and read as one. SVG lets the stroke carry
- * a halo, a dash, a spin — the same language IntroArt uses for orbits, fired
- * once instead of looping.
+ * One ring of current. A `View` with `borderRadius` and a transform — the same
+ * two properties a compositor can animate without a layout pass.
  */
-function Ring({ reach, delay, duration, color, halo, stroke, haloStroke, dash, spin = 0, from = 0.1, peak = 0.92 }: RingSpec & { reach: number }) {
-  const c = 50
-  const r = 46
+function Ring({ reach, delay, duration, color, thickness, from, peak }: RingSpec & { reach: number }) {
+  const t = useSharedValue(0)
+  useEffect(() => {
+    t.value = withDelay(delay, withTiming(1, { duration, easing: RING_EASE }))
+  }, [delay, duration, t])
+  const style = useAnimatedStyle(() => ({
+    opacity: interpolate(t.value, [0, 0.1, 0.55, 1], [0, peak, peak * 0.45, 0]),
+    transform: [{ scale: interpolate(t.value, [0, 1], [from, 1]) }],
+  }))
   return (
     <Animated.View
       pointerEvents="none"
-      style={{
-        position: 'absolute',
-        width: reach,
-        height: reach,
-        animationName: {
-          from: { opacity: 0, transform: [{ scale: from }, { rotate: '0deg' }] },
-          '9%': { opacity: peak },
-          '55%': { opacity: peak * 0.55 },
-          to: { opacity: 0, transform: [{ scale: 1 }, { rotate: `${spin}deg` }] },
+      style={[
+        {
+          position: 'absolute',
+          width: reach,
+          height: reach,
+          borderRadius: reach / 2,
+          borderWidth: thickness,
+          borderColor: color,
         },
-        animationDuration: `${duration}ms`,
-        animationDelay: `${delay}ms`,
-        animationTimingFunction: OUT,
-        animationFillMode: 'both',
-      }}
-    >
-      <Svg width={reach} height={reach} viewBox="0 0 100 100">
-        {halo ? <Circle cx={c} cy={c} r={r} fill="none" stroke={halo} strokeWidth={haloStroke ?? stroke * 3.2} strokeOpacity={0.28} strokeLinecap="round" strokeDasharray={dash} /> : null}
-        <Circle cx={c} cy={c} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={dash} />
-      </Svg>
-    </Animated.View>
+        style,
+      ]}
+    />
   )
 }
 
-/** A slow breath after the strike, so the hold is not a still. */
-function Afterglow({ reach, delay }: { reach: number; delay: number }) {
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={{
-        position: 'absolute',
-        width: reach,
-        height: reach,
-        animationName: {
-          from: { opacity: 0, transform: [{ scale: 0.28 }] },
-          '12%': { opacity: 0.45 },
-          to: { opacity: 0, transform: [{ scale: 0.82 }] },
-        },
-        animationDuration: '2200ms',
-        animationDelay: `${delay}ms`,
-        animationTimingFunction: OUT,
-        animationIterationCount: 2,
-        animationFillMode: 'both',
-      }}
-    >
-      <Svg width={reach} height={reach} viewBox="0 0 100 100">
-        <Circle cx="50" cy="50" r="46" fill="none" stroke={light.arc} strokeWidth={1.1} strokeOpacity={0.55} />
-        <Circle cx="50" cy="50" r="46" fill="none" stroke={light.core} strokeWidth={0.4} strokeOpacity={0.7} />
-      </Svg>
-    </Animated.View>
-  )
-}
-
-/** A general entrance with real travel — Ignition is deliberately smaller than this. */
 function Rise({ children, delay, travel = 18, duration = 480 }: { children: ReactNode; delay: number; travel?: number; duration?: number }) {
   return (
     <Animated.View
@@ -222,7 +154,6 @@ function Rise({ children, delay, travel = 18, duration = 480 }: { children: Reac
   )
 }
 
-/** The circuit arriving in the shockwave's wake, rather than being there all along. */
 function Wake({ children }: { children: ReactNode }) {
   return (
     <Animated.View
@@ -243,17 +174,16 @@ function Wake({ children }: { children: ReactNode }) {
   )
 }
 
-/** The mark's recoil: it is already on screen, so it must not re-enter. */
 function Recoil({ children }: { children: ReactNode }) {
   return (
     <Animated.View
       style={{
         animationName: {
           from: { transform: [{ scale: 1 }] },
-          '18%': { transform: [{ scale: 1.14 }] },
+          '20%': { transform: [{ scale: 1.08 }] },
           to: { transform: [{ scale: 1 }] },
         },
-        animationDuration: '820ms',
+        animationDuration: '720ms',
         animationTimingFunction: OUT,
         animationFillMode: 'both',
       }}
@@ -263,36 +193,12 @@ function Recoil({ children }: { children: ReactNode }) {
   )
 }
 
-function SignatureLine({ delay }: { delay: number }) {
-  return (
-    <Animated.View
-      style={{
-        marginTop: 12,
-        width: 96,
-        height: 2,
-        borderRadius: 1,
-        backgroundColor: paint.arc,
-        animationName: {
-          from: { opacity: 0, transform: [{ scaleX: 0.12 }] },
-          '40%': { opacity: 0.9, transform: [{ scaleX: 1 }] },
-          to: { opacity: 0.28, transform: [{ scaleX: 1 }] },
-        },
-        animationDuration: '720ms',
-        animationDelay: `${delay}ms`,
-        animationTimingFunction: OUT,
-        animationFillMode: 'both',
-      }}
-    />
-  )
-}
-
 const RINGS: readonly RingSpec[] = [
-  { delay: 20, duration: 980, color: light.core, halo: light.arc, stroke: 2.4, haloStroke: 7, from: 0.08, peak: 1 },
-  { delay: 70, duration: 1080, color: light.arc, halo: light.arc, stroke: 1.6, dash: '9 11', spin: 48, from: 0.1, peak: 0.95 },
-  { delay: 130, duration: 1180, color: light.plasma, halo: light.plasma, stroke: 2.1, haloStroke: 8, from: 0.12, peak: 0.88 },
-  { delay: 190, duration: 1280, color: light.arc, stroke: 1.15, dash: '3 7', spin: -62, from: 0.14, peak: 0.8 },
-  { delay: 250, duration: 1400, color: light.core, halo: light.plasma, stroke: 1.4, haloStroke: 6, from: 0.16, peak: 0.75 },
-  { delay: 320, duration: 1500, color: light.plasma, stroke: 1.05, from: 0.2, peak: 0.55 },
+  { delay: 0, duration: 1000, color: light.core, thickness: 2.5, from: 0.14, peak: 0.95 },
+  { delay: 90, duration: 1120, color: light.arc, thickness: 2, from: 0.14, peak: 0.8 },
+  { delay: 180, duration: 1240, color: 'rgba(79, 195, 255, 0.45)', thickness: 6, from: 0.16, peak: 0.4 },
+  { delay: 270, duration: 1320, color: light.plasma, thickness: 2, from: 0.18, peak: 0.65 },
+  { delay: 360, duration: 1440, color: 'rgba(139, 92, 246, 0.4)', thickness: 5, from: 0.2, peak: 0.35 },
 ]
 
 export interface SplashArtProps {
@@ -309,26 +215,32 @@ export interface SplashArtProps {
 export function SplashArt({ width, height, name, brand, reducedMotion = false, testID }: SplashArtProps) {
   const mark = SPLASH_MARK
   const still = reducedMotion
-  const reach = Math.ceil(Math.hypot(width, height) * 0.96)
+  const reach = Math.ceil(Math.hypot(width, height) * 0.92)
   const field = <Field scene="circuit" address="0x0000000000000000000000000000000000000e7n" quiet width={width} height={height} reducedMotion={reducedMotion} />
   return (
     <Animated.View style={{ flex: 1, backgroundColor: paint.void, alignItems: 'center', justifyContent: 'center' }} testID={testID}>
       {still ? field : <Wake>{field}</Wake>}
 
-      {/* The strike, dead centre — where the native drawable already put it. */}
       <Animated.View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }} pointerEvents="none">
         {still ? null : (
           <>
-            <Bloom size={reach} delay={0} duration={920} from={0.18} to={0.72} />
-            <Bloom size={reach} delay={180} duration={1100} from={0.24} to={0.9} />
+            <Bloom size={reach * 0.55} delay={0} duration={780} color="rgba(234, 246, 255, 0.35)" />
+            <Bloom size={reach * 0.85} delay={120} duration={1100} color="rgba(79, 195, 255, 0.18)" />
             {RINGS.map((ring) => (
-              <Ring key={`${ring.delay}-${ring.duration}`} reach={reach} {...ring} />
+              <Ring key={`${ring.delay}-${ring.color}`} reach={reach} {...ring} />
             ))}
-            <Afterglow reach={reach * 0.62} delay={720} />
             <Flash size={mark} />
           </>
         )}
-        {still ? <BoltMark size={mark} testID="splash-mark" /> : <Recoil><BoltMark size={mark} testID="splash-mark" /></Recoil>}
+        {/* glow=0: the native still is the launcher bolt, no aura. A vector
+            aura in a square Svg is the same cropped plate the bitmap was. */}
+        {still ? (
+          <BoltMark size={mark} glow={0} testID="splash-mark" />
+        ) : (
+          <Recoil>
+            <BoltMark size={mark} glow={0} testID="splash-mark" />
+          </Recoil>
+        )}
       </Animated.View>
 
       {/* The name sits under the mark rather than sharing a column with it, so
@@ -337,14 +249,7 @@ export function SplashArt({ width, height, name, brand, reducedMotion = false, t
           to y=0.94 of the unit square, which is 0.744 of the 1.8-unit viewBox,
           which is 0.244 below the box's own centre. */}
       <Animated.View style={{ position: 'absolute', left: 0, right: 0, top: height / 2 + mark * 0.244 + 22, alignItems: 'center' }} pointerEvents="none">
-        {still ? (
-          name
-        ) : (
-          <Rise delay={260} duration={520}>
-            {name}
-            <SignatureLine delay={0} />
-          </Rise>
-        )}
+        {still ? name : <Rise delay={280} duration={520}>{name}</Rise>}
       </Animated.View>
 
       <Animated.View style={{ position: 'absolute', left: 0, right: 0, bottom: 44, alignItems: 'center' }} pointerEvents="none">

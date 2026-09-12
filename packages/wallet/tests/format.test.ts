@@ -5,7 +5,7 @@
  * decimal can tip a figure into the unit above, and 999,999 is 1M, not 1000K.
  */
 import { describe, expect, it } from 'vitest'
-import { displayFiat, formatAmount, formatCompact, formatFloor, formatQuantity, formatRaw, maskedFiat } from '../src/format'
+import { displayFiat, formatAmount, formatCompact, formatFloor, formatInputAmount, formatQuantity, formatRaw, maskedFiat } from '../src/format'
 
 describe('formatCompact', () => {
   it('leaves anything under a thousand alone, decimals and all', () => {
@@ -99,6 +99,28 @@ describe('never rounds up', () => {
       if (!Number.isFinite(shown)) continue
       expect(shown).toBeLessThanOrEqual(exact)
     }
+  })
+})
+
+describe('a quoted swap amount in the field', () => {
+  it('keeps the units and cuts the fraction, never rounding up', () => {
+    // 1234.5678… at 18 decimals must not dump eighteen places into the well.
+    expect(formatInputAmount('1234567890123456789012', 18)).toBe('1234.56')
+    // One wei short of 1234.57 must still read 1234.56.
+    expect(formatInputAmount('1234569999999999999999', 18)).toBe('1234.56')
+    expect(formatInputAmount('1000000000000000000', 18)).toBe('1')
+    expect(formatInputAmount('0', 18)).toBe('0')
+  })
+
+  it('keeps six significant figures below one, so dust does not become a zero', () => {
+    expect(formatInputAmount('123456789012345', 18)).toBe('0.000123456')
+    expect(formatInputAmount('997000', 6)).toBe('0.997')
+    expect(formatInputAmount('500000000000000000', 18)).toBe('0.5')
+  })
+
+  it('never puts a grouping comma in the field', () => {
+    expect(formatInputAmount('1234567000000', 6)).toBe('1234567')
+    expect(formatInputAmount('1234567000000', 6)).not.toContain(',')
   })
 })
 

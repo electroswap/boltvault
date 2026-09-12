@@ -15,8 +15,13 @@
  *    near the top and jumped as content arrived.
  *  - the screen still mounts, fetches and lays out underneath, so lifting the
  *    loader reveals a finished page instead of starting one.
+ *
+ * Registration happens during render as well as in layout, so a screen that
+ * replaces another (Swap → the signing sheet) is already in the set before
+ * the outgoing screen's cleanup runs. The overlay never drops for a frame
+ * between "I clicked Swap" and "the preview is painted".
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 
 type Listener = () => void
 
@@ -33,15 +38,19 @@ function emit(): void {
  * that goes away can never leave the shell stuck behind a loader.
  */
 export function useScreenBusy(id: string, isBusy: boolean): void {
+  if (isBusy) busy.add(id)
+
+  useLayoutEffect(() => {
+    if (!isBusy) return
+    busy.add(id)
+    emit()
+  }, [id, isBusy])
+
+  // Lift after paint so the page is finished underneath, the way collection
+  // artwork is. Showing uses layout so the overlay is on the click's frame.
   useEffect(() => {
-    const had = busy.has(id)
-    if (isBusy && !had) {
-      busy.add(id)
-      emit()
-    } else if (!isBusy && had) {
-      busy.delete(id)
-      emit()
-    }
+    if (isBusy) return
+    if (busy.delete(id)) emit()
   }, [id, isBusy])
 
   useEffect(() => {

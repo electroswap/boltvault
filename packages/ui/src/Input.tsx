@@ -78,32 +78,61 @@ export interface InputProps {
    */
   readonly maxDecimals?: number
   /**
-   * Bump this after a programmatic fill (MAX) to drop the caret at the start.
+   * Bump this after a programmatic fill (MAX, a quote painting the other well)
+   * to drop the caret at the start even while the field is focused.
    *
    * A long decimal otherwise leaves the caret at the end, and the field
    * scrolls to show the last digits instead of the units. The numbers before
    * the point are the ones that matter; the user can move the caret when they
-   * mean to edit.
+   * mean to edit. Unfocused numeric fields pin on their own whenever the
+   * value changes — see the layout effect below.
    */
   readonly pinStart?: number
+}
+
+function pinCaretToStart(node: TextInput | null): void {
+  if (!node) return
+  node.setNativeProps?.({ selection: { start: 0, end: 0 } })
+  if (Platform.OS === 'web') {
+    const el = node as unknown as HTMLInputElement
+    el.setSelectionRange?.(0, 0)
+    el.scrollLeft = 0
+  }
 }
 
 export const Input = forwardRef<TextInput, InputProps>(function Input({ value, onChange, label, placeholder, secure, multiline, bare, big, louder, numeric, error, hint, autoFocus, onSubmit, testID, autoCapitalize = 'none', disabled, sensitive, maxDecimals, pinStart }, ref) {
   const [focused, setFocused] = useState(false)
   const inner = useRef<TextInput>(null)
+  const prevPin = useRef(pinStart)
   const [selection, setSelection] = useState<{ start: number; end: number } | undefined>(undefined)
   useLayoutEffect(() => {
-    if (!pinStart) return
+    const pinBumped = pinStart !== prevPin.current
+    prevPin.current = pinStart
+    /*
+      Pin whenever the units would otherwise scroll off the leading edge.
+
+      A quote painting the other swap well does not bump `pinStart` from a
+      keypress — and often does not focus that well either — but the native
+      field still parks an invisible caret at the end, so a long decimal
+      hides everything before the point. Unfocused numeric fields therefore
+      pin on every value change. `pinStart` is the same pin while focused
+      (MAX, a quote that landed on the field you are looking at).
+    */
+    const shouldPin = pinBumped || Boolean(numeric && !focused)
+    if (!shouldPin) return
     setSelection({ start: 0, end: 0 })
-    const node = inner.current
-    if (!node) return
-    node.setNativeProps?.({ selection: { start: 0, end: 0 } })
-    if (Platform.OS === 'web') {
-      const el = node as unknown as HTMLInputElement
-      el.setSelectionRange?.(0, 0)
-      el.scrollLeft = 0
+    pinCaretToStart(inner.current)
+    if (Platform.OS !== 'web') return
+    let innerId = 0
+    const outerId = requestAnimationFrame(() => {
+      pinCaretToStart(inner.current)
+      innerId = requestAnimationFrame(() => pinCaretToStart(inner.current))
+    })
+    return () => {
+      cancelAnimationFrame(outerId)
+      cancelAnimationFrame(innerId)
     }
-  }, [pinStart])
+  }, [pinStart, value, numeric, focused])
   const handleChange = (next: string): void => {
     setSelection(undefined)
     if (!numeric) {
@@ -175,7 +204,12 @@ export const Input = forwardRef<TextInput, InputProps>(function Input({ value, o
           : {})}
         editable={!disabled}
         onSubmitEditing={onSubmit}
-        onFocus={() => setFocused(true)}
+        onFocus={() => {
+          setFocused(true)
+          // Let the tap place the caret; a controlled {0,0} from the unfocused
+          // pin would otherwise insert at the start of a quoted amount.
+          setSelection(undefined)
+        }}
         onBlur={() => setFocused(false)}
         testID={testID}
         accessibilityLabel={label ?? placeholder}

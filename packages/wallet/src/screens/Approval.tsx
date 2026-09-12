@@ -48,6 +48,7 @@ import { useRouter } from '../navigation/router'
 import { useWcProposal } from '../hooks/useWcProposal'
 import { COOLING_MS, needsCooling, needsStepUp, recipientOf } from '../state/safeguards'
 import { useApprovals } from '../state/useApprovals'
+import { useScreenBusy } from '../state/useScreenBusy'
 import { useWalletState } from '../state/useWalletState'
 
 const FOCUS_INERT_MS = 600
@@ -185,6 +186,13 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
     : pending[0]
   const payload = useMemo(() => (request ? parseApprovalPayload(request.payload) : null), [request])
   const assessment = payload ? assessmentOf(payload) : null
+  /*
+    Hold the shell's ES overlay until this sheet has a request to show.
+
+    Swap (and Send) cover the wait to get here; we cover the last beat so the
+    loader lifts onto a painted preview rather than onto `approval-loading`.
+  */
+  useScreenBusy('sign', Boolean(requestId) && (!loaded || !request || !payload))
 
   useEffect(() => {
     engine.chains.list().then(setChains, () => undefined)
