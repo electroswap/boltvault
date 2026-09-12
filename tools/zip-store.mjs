@@ -67,6 +67,56 @@ const hadKey = 'key' in manifest
 delete manifest.key
 
 const files = (await walk(dir)).map((p) => relative(dir, p).split('\\').join('/')).sort()
+
+/*
+  A store package is not "whatever is in the output directory" (ES-BV-044).
+
+  `zip:chrome` zipped whatever happened to be there — including a harness
+  build, which carries a scripted engine and a fixture vault — and the two
+  scripts were not wired to `build:release`. Three refusals, each of them a
+  thing that has actually shipped from somebody's wallet repository before:
+  a development harness, a development API origin, and a package nobody can
+  reproduce.
+*/
+const harness = files.filter((f) => /(^|\/)harness/.test(f))
+if (harness.length) {
+  console.error(`Refusing to package: this build contains the development harness (${harness[0]}).`)
+  console.error('Build with `pnpm build:release` (BOLTVAULT_HARNESS=0) before packaging.')
+  process.exit(1)
+}
+
+/*
+  The API origin is compiled in, so a package built from a developer's `.env`
+  can point the wallet at localhost. Grep the bundle rather than trust the
+  environment of whoever is running this.
+*/
+for (const name of files) {
+  if (!name.endsWith('.js')) continue
+  const text = await readFile(join(dir, name), 'utf8')
+  const cleartext = text.match(/["'`]http:\/\/(?!localhost|127\.0\.0\.1)[^"'`]+["'`]/)
+  if (text.includes('http://localhost') || text.includes('http://127.0.0.1')) {
+    console.error(`Refusing to package: ${name} carries a localhost origin. Build with a production WXT_BOLTVAULT_API.`)
+    process.exit(1)
+  }
+  if (cleartext) {
+    console.error(`Refusing to package: ${name} carries a cleartext origin ${cleartext[0]}.`)
+    process.exit(1)
+  }
+}
+
+/*
+  And it must be the build the manifest describes. `build:repro` writes
+  `build-manifest.json` beside the output; without it there is nothing to
+  compare a published package against.
+*/
+const manifestPath = `${dir}.manifest.json`
+try {
+  await stat(manifestPath)
+} catch {
+  console.error(`Refusing to package: no reproducible-build manifest at ${relative(root, manifestPath)}.`)
+  console.error('Run `pnpm build:repro` so the package can be checked against a manifest.')
+  process.exit(1)
+}
 const locals = []
 const centrals = []
 let offset = 0

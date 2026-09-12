@@ -62,7 +62,15 @@ export const AccountViewSchema = z.object({
 })
 export type AccountView = z.infer<typeof AccountViewSchema>
 
-export const AutoLockSchema = z.enum(['5min', '15min', '60min', 'never'])
+/**
+ * When an idle wallet locks itself.
+ *
+ * `background` locks the moment the app leaves the foreground, which is the
+ * only setting that helps an unattended phone: the others are timers, and a
+ * phone put down on a table is unattended from the second it is put down
+ * (ES-BV-041). It is the mobile default.
+ */
+export const AutoLockSchema = z.enum(['background', '5min', '15min', '60min', 'never'])
 export type AutoLock = z.infer<typeof AutoLockSchema>
 
 export const WrapKindSchema = z.enum(['password', 'prf', 'device'])

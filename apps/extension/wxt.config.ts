@@ -41,6 +41,28 @@ const RNW_DIR = dirname(require.resolve('react-native-web/package.json'))
  * - react-native-web + Tamagui render the shared screens; `react-native` is
  *   aliased to `react-native-web` for the whole bundle.
  */
+/*
+  A release build says so or does not build (ES-BV-044).
+
+  `__DEV__`, `NODE_ENV` and `__API_ORIGIN__` all come from the ambient
+  environment, and `.env.example` names a cleartext localhost origin as the
+  template value — so a store package built from a developer's shell could
+  carry a development React build pointed at a local API, and nothing said so.
+  `BOLTVAULT_HARNESS=0` is what `pnpm build:release` sets, and it is taken here
+  to mean "this one is going to a store".
+*/
+function assertReleaseSane(): void {
+  if (process.env['BOLTVAULT_HARNESS'] !== '0') return
+  const origin = (process.env['WXT_BOLTVAULT_API'] ?? 'https://electroswap.io').replace(/\/+$/, '')
+  if (!origin.startsWith('https://'))
+    throw new Error(`A release build needs an https API origin; WXT_BOLTVAULT_API is "${origin}".`)
+  if ((process.env['NODE_ENV'] ?? 'production') !== 'production')
+    throw new Error(`A release build needs NODE_ENV=production; it is "${process.env['NODE_ENV'] ?? ''}".`)
+  if (process.env['BOLTVAULT_HARNESS_BUILD'] === '1')
+    throw new Error('BOLTVAULT_HARNESS_BUILD=1 and BOLTVAULT_HARNESS=0 are contradictory.')
+}
+assertReleaseSane()
+
 export default defineConfig({
   srcDir: '.',
   /*

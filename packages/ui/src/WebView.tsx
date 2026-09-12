@@ -15,6 +15,21 @@ export interface WebViewHandle {
 }
 
 export interface WebViewProps {
+  /**
+   * A page has tried to navigate somewhere that is not https (ES-BV-039).
+   *
+   * Return true to let it through. The host decides, because the decision is
+   * "does the user want to leave the site they are on", and only the app knows
+   * what it would be leaving for. Absent means refuse, which is the safe
+   * default for anything that has not thought about it.
+   */
+  readonly onExternalNavigation?: (request: {
+    readonly url: string
+    /** False for an iframe: a third-party frame is not the page the user is on. */
+    readonly isTopFrame: boolean
+    /** True when the user tapped something, rather than the page assigning `location`. */
+    readonly fromGesture: boolean
+  }) => boolean
   readonly url: string
   /** Runs before any page script; the provider goes here. */
   readonly injectedScriptBeforeLoad: string

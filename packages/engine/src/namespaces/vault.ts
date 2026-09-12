@@ -67,6 +67,13 @@ const KEY_LOCK_AT = 'vault.lockAt'
 export const AUTOLOCK_ALARM = 'vault.autolock'
 
 const AUTO_LOCK_MS: Record<AutoLock, number> = {
+  /*
+    A timer of zero: `arm` schedules it, and on mobile `platform.lockOnBackground`
+    fires it the moment the app leaves the foreground rather than waiting
+    (ES-BV-041). On the extension, where a popup closing is not the user
+    walking away, it behaves as the shortest timer.
+  */
+  background: 0,
   '5min': 300_000,
   '15min': 900_000,
   '60min': 3_600_000,

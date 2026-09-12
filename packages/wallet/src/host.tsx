@@ -35,6 +35,17 @@ export interface UiHost {
   readonly relayUrl: string
   /** Copy to the clipboard (addresses, hashes). */
   copy?(text: string): Promise<void>
+  /**
+   * Android, where the device keystore factor is PIN-strength (ES-BV-005).
+   *
+   * The pinned keychain module binds the wrap key to
+   * `AUTH_BIOMETRIC_STRONG or AUTH_DEVICE_CREDENTIAL` with a five-second
+   * validity window and no `setInvalidatedByBiometricEnrollment`, so the
+   * screen-lock PIN releases it and enrolling a new fingerprint does not
+   * invalidate it. Screens that treat the device factor as equivalent to a
+   * password need to know.
+   */
+  readonly isAndroid?: boolean
   /** Open an external page (explorer links) in the body's browser. */
   openUrl?(url: string): Promise<void>
   /** The page the popup was opened over (`activeTab`): origin, host, favicon — the dApp status on Home. Null off http(s). */

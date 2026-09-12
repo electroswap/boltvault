@@ -4,7 +4,7 @@
  * screens is replaced by Unlock. A pending dApp approval takes over the
  * popup and the mobile body (the sign window mounts it by route).
  */
-import { Column, Field, MotionProvider, PageLoader, Scrim, ScreenEnter, metrics, useInsets, useWindowDimensions, type EnterDirection } from '@boltvault/ui'
+import { Body, Column, Field, Key, MotionProvider, PageLoader, Row, Scrim, ScreenEnter, Sheet, metrics, useInsets, useWindowDimensions, type EnterDirection } from '@boltvault/ui'
 import { Suspense, lazy, useEffect, useRef } from 'react'
 import { Approval } from '../screens/Approval'
 import { Home, type HomeProps } from '../screens/Home'
@@ -16,6 +16,7 @@ import { useApprovals } from '../state/useApprovals'
 import { HardwarePrompt } from '../components/HardwarePrompt'
 import { useFlowNavigation } from '../state/useSwapFlow'
 import { useLinks } from '../state/useLinks'
+import { t } from '../i18n'
 import { useFeelEvents } from '../feel'
 import { useWalletState } from '../state/useWalletState'
 import { useScene } from '../state/useScene'
@@ -139,7 +140,7 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   // A swap or limit-order flow opens its sheets from here, where nothing unmounts (§8.6).
   useFlowNavigation()
   useFeelEvents()
-  useLinks()
+  const { pendingPairing, confirmPairing, dismissPairing } = useLinks()
   // Owner: split the routes, "but preload other CSS for the rest of the bundle
   // after home is rendered so there's no additional load time for next
   // tabs/pages." One effect after the first paint, on idle.
@@ -431,6 +432,37 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
         </Column>
         {/* Last child, so a device round trip sheet paints above the tab bar (§7.5). */}
         <HardwarePrompt body={body} reducedMotion={reducedMotion} />
+        {/*
+          A pairing waits for a yes (ES-BV-040).
+
+          `pair()` used to run the moment a `wc:` link arrived from anywhere —
+          a page in the in-app browser, another app, a QR in an email — and the
+          first thing the user saw was a Connect sheet for a peer they had not
+          knowingly invited. Pairing is not free either: it opens a relay
+          subscription and tells the peer this wallet exists.
+        */}
+        <Sheet
+          open={pendingPairing !== null}
+          onClose={dismissPairing}
+          title={t({ id: 'wc.pair.title', message: 'Connect to an app?' })}
+          testID="wc-pair-confirm"
+        >
+          <Column gap="$3">
+            <Body tone="mute" size="caption">
+              {t({
+                id: 'wc.pair.body',
+                message: 'A link asked BoltVault to start a WalletConnect session. If you did not just scan a code or tap Connect on a site, say no.',
+              })}
+            </Body>
+            <Body size="caption" tone="mute" selectable testID="wc-pair-topic">
+              {pendingPairing?.topic ?? ''}
+            </Body>
+            <Row gap="$2">
+              <Key label={t({ id: 'common.cancel', message: 'Cancel' })} kind="secondary" onPress={dismissPairing} testID="wc-pair-cancel" />
+              <Key label={t({ id: 'wc.pair.go', message: 'Connect' })} onPress={confirmPairing} testID="wc-pair-go" />
+            </Row>
+          </Column>
+        </Sheet>
         <UpdateRequired />
       </Column>
     </MotionContext.Provider>

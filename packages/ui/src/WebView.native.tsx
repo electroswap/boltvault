@@ -29,6 +29,7 @@ export function WebView({
   onNavigateStart,
   onLoadEnd,
   onError,
+  onExternalNavigation,
   handleRef,
   testID,
 }: WebViewProps) {
@@ -89,6 +90,30 @@ export function WebView({
       allowUniversalAccessFromFileURLs={false}
       allowsInlineMediaPlayback
       setSupportMultipleWindows={false}
+      /*
+        Nothing leaves this WebView without being asked about (ES-BV-039).
+
+        `originWhitelist` alone does not refuse a navigation — the pinned
+        `react-native-webview` hands anything outside the list to
+        `Linking.canOpenURL` → `Linking.openURL`, so a page could set
+        `location = 'ethereum:0x…@52014'` or `'boltvault://wc?uri=wc:…'` and
+        the wallet would open Send with an attacker's address prefilled, or
+        pair a WalletConnect session, while the user believed they were still
+        inside the site's own flow. Returning false here stops the navigation
+        dead; the host decides what, if anything, to do with it.
+      */
+      onShouldStartLoadWithRequest={(r) => {
+        if (/^https:/i.test(r.url)) return true
+        return (
+          onExternalNavigation?.({
+            url: r.url,
+            // `isTopFrame` is absent on older iOS payloads; a frame that does
+            // not say it is the top one is treated as one that is not.
+            isTopFrame: r.isTopFrame === true,
+            fromGesture: r.navigationType === 'click',
+          }) ?? false
+        )
+      }}
       javaScriptEnabled
       domStorageEnabled
       // Cleartext navigations go to the OS browser, not into the wallet's chrome.

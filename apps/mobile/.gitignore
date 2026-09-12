@@ -18,6 +18,14 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# Store credentials (ES-BV-050). `eas.json` names
+# `./play-service-account.json` as the Play submit key, and the file was not
+# ignored — one `git add .` away from a service account in the history.
+play-service-account.json
+credentials.json
+google-services.json
+GoogleService-Info.plist
+
 # Metro
 .metro-health-check*
 

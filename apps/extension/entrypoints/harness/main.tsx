@@ -10,7 +10,10 @@
  * off by default so the committed baselines stay network-free and
  * deterministic; the landing page's screenshots are the only thing that asks.
  */
-import { App, createFixtureEngine, isTabId, type FixtureScenario, type ScreenId } from '@boltvault/wallet'
+import { App, isTabId, type ScreenId } from '@boltvault/wallet'
+// The harness is the only thing that builds a scripted engine, so it is the
+// only thing that imports one (ES-BV-044).
+import { createFixtureEngine, type FixtureScenario } from '@boltvault/wallet/fixtures'
 import '../../src/chrome.css'
 import { createRoot } from 'react-dom/client'
 

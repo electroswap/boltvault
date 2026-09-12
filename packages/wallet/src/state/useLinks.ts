@@ -4,7 +4,7 @@
  * Send, a screen link navigates. Mounted once per body; the host supplies
  * the URLs. Nothing executes without the user's next tap.
  */
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { parseLink, type LinkAction } from '../links'
@@ -12,13 +12,48 @@ import { useRouter } from '../navigation/router'
 
 const ETN = 52014
 
-export function useLinks(): void {
+/**
+ * Links the app raised for itself, after asking (ES-BV-039, ES-BV-040).
+ *
+ * The in-app browser will not hand a `wc:`, `ethereum:` or `boltvault:` URL to
+ * the OS any more — the page that asked is not the person, and the OS route
+ * came straight back into the wallet with no confirmation anywhere along it.
+ * A URL the user has explicitly agreed to open arrives here instead, so it
+ * goes through the same parser and the same screens as a real deep link
+ * without ever leaving the app.
+ */
+const listeners = new Set<(url: string) => void>()
+
+export function deliverLink(url: string): void {
+  for (const l of [...listeners]) l(url)
+}
+
+/**
+ * A WalletConnect pairing waiting for the user to say yes (ES-BV-040).
+ *
+ * `pair()` used to run the moment a `wc:` link arrived, from any source — a
+ * page inside the in-app browser, another app, a QR in an email — and the
+ * first thing the user saw was a Connect sheet for a peer they had not
+ * knowingly invited. Pairing itself is not free: it opens a relay subscription
+ * and tells the peer this wallet exists. Asking first costs one tap.
+ */
+export interface PendingPairing {
+  readonly uri: string
+  /** The topic, which is all a URI says about itself before the peer answers. */
+  readonly topic: string
+}
+
+export function useLinks(): {
+  pendingPairing: PendingPairing | null
+  confirmPairing: () => void
+  dismissPairing: () => void
+} {
   const engine = useEngine()
   const host = useHost()
   const router = useRouter()
+  const [pendingPairing, setPendingPairing] = useState<PendingPairing | null>(null)
   useEffect(() => {
     const links = host.links
-    if (!links) return
     const seen = new Set<string>()
     const act = async (url: string): Promise<void> => {
       if (seen.has(url)) return
@@ -27,7 +62,8 @@ export function useLinks(): void {
       if (!action) return
       switch (action.kind) {
         case 'wc':
-          await engine.connect.pair({ uri: action.uri }).catch(() => undefined)
+          // Not without a yes (ES-BV-040).
+          setPendingPairing({ uri: action.uri, topic: action.uri.slice(3).split('@')[0] ?? '' })
           return
         case 'launchpad': {
           await engine.launchpad.rememberFromLink({ url: action.url }).catch(() => undefined)
@@ -45,7 +81,23 @@ export function useLinks(): void {
           return
       }
     }
-    void links.initial().then((url) => (url ? act(url) : undefined))
-    return links.subscribe((url) => void act(url))
+    void links?.initial().then((url) => (url ? act(url) : undefined))
+    const inApp = (url: string): void => void act(url)
+    listeners.add(inApp)
+    const off = links?.subscribe((url) => void act(url))
+    return () => {
+      listeners.delete(inApp)
+      off?.()
+    }
   }, [engine, host, router])
+
+  return {
+    pendingPairing,
+    confirmPairing: () => {
+      const p = pendingPairing
+      setPendingPairing(null)
+      if (p) void engine.connect.pair({ uri: p.uri }).catch(() => undefined)
+    },
+    dismissPairing: () => setPendingPairing(null),
+  }
 }

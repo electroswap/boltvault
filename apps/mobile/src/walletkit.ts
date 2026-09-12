@@ -145,13 +145,58 @@ function toSession(raw: unknown): ActiveSession | null {
 }
 
 /** Build the adapter; resolves null when no project id is configured. */
+/**
+ * A key-value store for WalletConnect, backed by the encrypted MMKV instance.
+ *
+ * The shape is `@walletconnect/keyvaluestorage`'s: everything is JSON, and
+ * `getKeys`/`getEntries` are used at startup to restore sessions.
+ */
+async function wcStorage(): Promise<never> {
+  const { secretStore } = await import('./platform')
+  const store = await secretStore()
+  const key = (k: string): string => `wc:${k}`
+  return {
+    getKeys: async () => (await store.keys()).filter((k) => k.startsWith('wc:')).map((k) => k.slice(3)),
+    getEntries: async () => {
+      const out: Array<[string, unknown]> = []
+      for (const k of await store.keys()) {
+        if (!k.startsWith('wc:')) continue
+        const raw = await store.get(k)
+        if (raw !== null) out.push([k.slice(3), JSON.parse(raw) as unknown])
+      }
+      return out
+    },
+    getItem: async (k: string) => {
+      const raw = await store.get(key(k))
+      return raw === null ? undefined : (JSON.parse(raw) as unknown)
+    },
+    setItem: async (k: string, v: unknown) => {
+      await store.set(key(k), JSON.stringify(v))
+    },
+    removeItem: async (k: string) => {
+      await store.remove(key(k))
+    },
+    // The interface is `IKeyValueStorage`; the shape above is all of it.
+  } as never
+}
+
 export async function createWalletKit(): Promise<WalletKitLike | null> {
   if (!WALLETCONNECT_PROJECT_ID) return null
   const [{ WalletKit }, { Core }] = await Promise.all([
     import('@reown/walletkit'),
     import('@walletconnect/core'),
   ])
-  const core = new Core({ projectId: WALLETCONNECT_PROJECT_ID })
+  /*
+    WalletConnect's own keys go in the encrypted store (ES-BV-042).
+
+    `new Core({ projectId })` with no `storage` falls back to AsyncStorage,
+    which on both platforms is a plain file in the app container: the pairing
+    symmetric keys and the session keys sat there in the clear. They are
+    app-private, so this is not a remote-read exposure — but they are key
+    material, the wallet already has an AES-256 MMKV instance for key material,
+    and there is no reason for these to be the exception.
+  */
+  const core = new Core({ projectId: WALLETCONNECT_PROJECT_ID, storage: await wcStorage() })
   const kit = (await WalletKit.init({ core, metadata: METADATA })) as unknown as KitApi
   return {
     pair: async ({ uri }) => {

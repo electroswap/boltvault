@@ -24,7 +24,17 @@ import { PASSKEY_USER_ID } from './Onboarding'
 import { useSecretGuard } from './onboarding/useSecretGuard'
 import { passwordStrength } from './onboarding/rules'
 
-const AUTO_LOCKS: AutoLock[] = ['5min', '15min', '60min', 'never']
+/*
+  What this body offers (ES-BV-041).
+
+  `background` locks the moment the app leaves the foreground, which is the
+  only setting that helps an unattended phone — the others are timers, and a
+  phone put down on a table is unattended from the second it is put down. And
+  `never` keeps the key in process memory for as long as the app lives, which
+  on a phone is days: it is not offered there at all.
+*/
+const AUTO_LOCKS_MOBILE: AutoLock[] = ['background', '5min', '15min', '60min']
+const AUTO_LOCKS_EXTENSION: AutoLock[] = ['5min', '15min', '60min', 'never']
 
 export function Security({ body }: { body: 'extension-popup' | 'extension-tab' | 'mobile' }) {
   const engine = useEngine()
@@ -112,17 +122,19 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
           })}
         </Body>
         <Row gap="$2" flexWrap="wrap">
-          {AUTO_LOCKS.map((a) => (
+          {(body === 'mobile' ? AUTO_LOCKS_MOBILE : AUTO_LOCKS_EXTENSION).map((a) => (
             <Key
               key={a}
               label={
-                a === '5min'
-                  ? t({ id: 'al.5', message: '5 min' })
-                  : a === '15min'
-                    ? t({ id: 'al.15', message: '15 min' })
-                    : a === '60min'
-                      ? t({ id: 'al.60', message: '1 hour' })
-                      : t({ id: 'al.never', message: 'Never' })
+                a === 'background'
+                  ? t({ id: 'al.background', message: 'On leaving' })
+                  : a === '5min'
+                    ? t({ id: 'al.5', message: '5 min' })
+                    : a === '15min'
+                      ? t({ id: 'al.15', message: '15 min' })
+                      : a === '60min'
+                        ? t({ id: 'al.60', message: '1 hour' })
+                        : t({ id: 'al.never', message: 'Never' })
               }
               kind={vault?.autoLock === a ? 'primary' : 'secondary'}
               size="compact"
@@ -334,8 +346,30 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
         months, and locking somebody out of their own phrase is its own loss.
       */}
       <Plate gap="$2" testID="reveal-password">
+        {/*
+          Not switchable on Android (ES-BV-005).
+
+          `react-native-keychain` creates the Android wrap key with
+          `AUTH_BIOMETRIC_STRONG or AUTH_DEVICE_CREDENTIAL` and a five-second
+          validity window, and never calls
+          `setInvalidatedByBiometricEnrollment` — so the device PIN releases
+          it, it stays usable for five seconds after any strong
+          authentication, and it survives somebody enrolling their own
+          fingerprint (which on Android needs only the PIN). It is a
+          PIN-strength factor wearing a biometric label, and PIN strength is
+          not enough to reveal a recovery phrase.
+        */}
+        {host.body === 'mobile' && host.isAndroid ? (
+          <Body tone="mute" size="caption" testID="reveal-password-android">
+            {t({
+              id: 'security.reveal.android',
+              message: 'Your password is always required to show a recovery phrase on Android: the device keystore there can be released by the screen-lock PIN, and survives a new fingerprint being added.',
+            })}
+          </Body>
+        ) : null}
         <Toggle
-          value={settings?.revealNeedsPassword ?? true}
+          disabled={host.body === 'mobile' && host.isAndroid === true}
+          value={host.body === 'mobile' && host.isAndroid ? true : (settings?.revealNeedsPassword ?? true)}
           onChange={(v) =>
             engine.settings.set({ revealNeedsPassword: v }).then(setSettings, () => undefined)
           }

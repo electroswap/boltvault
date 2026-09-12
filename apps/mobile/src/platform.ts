@@ -86,6 +86,38 @@ async function secretStoreKey(): Promise<string> {
   return key
 }
 
+/**
+ * Where the MMKV stores live, excluded from the device backup (ES-BV-042).
+ *
+ * Null when the platform cannot say — in which case the library's default
+ * stands, which is what shipped, so a missing file-system module degrades to
+ * the old behaviour rather than to no storage at all.
+ */
+async function storeDirectory(): Promise<string | null> {
+  if (RNPlatform.OS !== 'ios' && RNPlatform.OS !== 'android') return null
+  try {
+    const { Directory, Paths } = await import('expo-file-system')
+    /*
+      A directory of our own under the app's documents, flagged.
+
+      `Library/Application Support` would be the tidier home, but the pinned
+      `expo-file-system` exposes `document`, `cache` and `bundle` and no way to
+      reach Library — and the property that matters here is the exclusion, not
+      the path. A flagged directory is out of the iCloud and local backups
+      wherever it sits.
+    */
+    const dir = new Directory(Paths.document, 'mmkv')
+    if (!dir.exists) dir.create({ intermediates: true })
+    if (RNPlatform.OS === 'ios') {
+      // `NSURLIsExcludedFromBackupKey`, the same flag the widget file carries.
+      ;(dir as unknown as { excludeFromBackup?: () => void }).excludeFromBackup?.()
+    }
+    return dir.uri.replace(/^file:\/\//, '').replace(/\/$/, '')
+  } catch {
+    return null
+  }
+}
+
 function timerAlarms(): AlarmScheduler {
   const due = new Map<string, number>()
   const timers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -127,8 +159,21 @@ function timerAlarms(): AlarmScheduler {
 
 export async function createMobilePlatform(): Promise<Platform> {
   await Sodium.ready
-  const local = createMMKV({ id: 'bv-local' })
-  const secret = createMMKV({ id: 'bv-secret', encryptionKey: await secretStoreKey(), encryptionType: 'AES-256' })
+  /*
+    Out of Documents, and out of the backup (ES-BV-042).
+
+    `react-native-mmkv` defaults to `Documents/mmkv`, and on iOS Documents is
+    backed up to iCloud and to an unencrypted local backup unless something
+    says otherwise. What is in there is the encrypted vault and the settings —
+    ciphertext, since the MMKV key itself is `WHEN_UNLOCKED_THIS_DEVICE_ONLY`
+    and therefore never leaves — but ciphertext that has left the device is
+    ciphertext somebody can grind at their leisure. Application Support is the
+    right place for data the user did not create, and the exclusion flag is one
+    call.
+  */
+  const path = await storeDirectory()
+  const local = createMMKV({ id: 'bv-local', ...(path ? { path } : {}) })
+  const secret = createMMKV({ id: 'bv-secret', ...(path ? { path } : {}), encryptionKey: await secretStoreKey(), encryptionType: 'AES-256' })
   return {
     kind: 'mobile',
     storage: { local: mmkvStore(local), secret: mmkvStore(secret), session: memoryStore() },
@@ -168,6 +213,25 @@ export async function createMobilePlatform(): Promise<Platform> {
       else await ScreenCapture.allowScreenCaptureAsync('secrets')
     },
   }
+}
+
+/**
+ * The encrypted store on its own, for things that are not the engine's
+ * (ES-BV-042) — WalletConnect's pairing and session keys, which otherwise sit
+ * in AsyncStorage as a plain file.
+ *
+ * One instance per process: MMKV keeps its own handle, and two `createMMKV`
+ * calls with the same id and key answer the same data.
+ */
+let secretOnly: ReturnType<typeof mmkvStore> | null = null
+export async function secretStore(): Promise<ReturnType<typeof mmkvStore>> {
+  if (!secretOnly) {
+    const path = await storeDirectory()
+    secretOnly = mmkvStore(
+      createMMKV({ id: 'bv-secret', ...(path ? { path } : {}), encryptionKey: await secretStoreKey(), encryptionType: 'AES-256' }),
+    )
+  }
+  return secretOnly
 }
 
 export const isAndroid = RNPlatform.OS === 'android'

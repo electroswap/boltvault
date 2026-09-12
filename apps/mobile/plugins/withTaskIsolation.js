@@ -48,8 +48,19 @@ function withObscuredTouchFilter(config) {
     // corrupt it — the manifest half of this plugin still applies.
     const m = /(\n(\s*)super\.onCreate\([^)]*\)\s*\n)/.exec(src)
     if (!m) {
-      console.warn('[withTaskIsolation] could not find super.onCreate in MainActivity; obscured-touch filtering not applied')
-      return c
+      /*
+        Fail closed (ES-BV-043).
+
+        This warned and returned the config unchanged, so a build whose
+        MainActivity template had shifted shipped without
+        `filterTouchesWhenObscured` — silently, in a log line nobody reads, on
+        the guard that stops an overlay drawn over the approval sheet passing
+        taps through to it. A prebuild that cannot apply a security control is
+        a prebuild that should stop.
+      */
+      throw new Error(
+        '[withTaskIsolation] could not find super.onCreate in MainActivity, so obscured-touch filtering was not applied. The Expo template has changed; update the anchor in plugins/withTaskIsolation.js before shipping.',
+      )
     }
     const indent = m[2] ?? '    '
     const inject = `${m[1]}${indent}// A window drawn over the approval sheet must not be able to pass taps through to it.\n${indent}window.decorView.${GUARD} = true\n`

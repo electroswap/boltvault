@@ -3,7 +3,7 @@ import { createEngine, type Engine } from '@boltvault/engine'
 import { App as WalletApp, SPLASH_BEAT, SplashRoot, takeSplash, type UiHost } from '@boltvault/wallet'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useState } from 'react'
-import { Linking, Share, StyleSheet, View } from 'react-native'
+import { AppState, Linking, Share, StyleSheet, View } from 'react-native'
 import Animated, { cubicBezier } from 'react-native-reanimated'
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { haptic, sound } from './src/feel'
@@ -11,7 +11,7 @@ import { mobileLedgerProvider } from './src/ledger'
 import { links } from './src/links'
 import { PAGE_PROVIDER_SCRIPT } from './src/page-provider.generated'
 import { DEVICE_KEY_ID, ensureDeviceKey, readDeviceKey, removeDeviceKey } from './src/device-key'
-import { createMobilePlatform } from './src/platform'
+import { createMobilePlatform, isAndroid } from './src/platform'
 import { pushStatus, registerPush, unregisterPush } from './src/push'
 import { ScanHost, scanQr } from './src/scan'
 import { registerTokenLogos } from './src/token-logos'
@@ -21,6 +21,8 @@ import { clearWidgetSnapshot, publishWidgetSnapshot } from './src/widget'
 /** The phone's capabilities (master plan §5): everything the shared screens may ask their body for. */
 const host: Partial<UiHost> = {
   body: 'mobile',
+  // The Android keystore factor is PIN-strength, not biometric (ES-BV-005).
+  isAndroid,
   secretsAllowed: true,
   // Passkeys on mobile (platform authenticators via react-native-passkeys) land
   // with the v1.1 native-secret module; the password unlocks.
@@ -148,6 +150,27 @@ export default function App() {
       alive = false
     }
   }, [])
+  /*
+    Leaving the app locks the wallet (ES-BV-041).
+
+    The session store is an in-memory map and the auto-lock timers were
+    re-checked only on foreground, so a phone put down with BoltVault open
+    stayed unlocked until it was picked up again — and `autoLock: 'never'`
+    kept the key in process memory for the life of the app, which on a phone
+    is days. An unattended phone is unattended from the second it is put down;
+    a timer cannot help with that and this can.
+  */
+  useEffect(() => {
+    if (!engine) return
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') return
+      void engine.engine.settings
+        .get()
+        .then((s) => (s.autoLock === 'background' ? engine.engine.vault.lock() : undefined))
+        .catch(() => undefined)
+    })
+    return () => sub.remove()
+  }, [engine])
   return (
     /*
       SafeAreaProvider, not react-native's SafeAreaView: that component is

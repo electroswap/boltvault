@@ -1,5 +1,5 @@
 
-import { checksum } from '@boltvault/ui'/**
+/**
  * What the signing sheet must do, given the rule codes it is handed (master
  * plan §3.4 point 6, §3.6).
  *
@@ -53,14 +53,12 @@ export function recipientOf(tx: { readonly to: string | null; readonly data: str
   if (data.length <= 2) return tx.to
   const selector = data.slice(0, 10).toLowerCase()
   /*
-    Checksummed, because this is the string a person is asked to compare
-    against the one they were given (ES-BV-033). Calldata is lowercase hex, so
-    without this the plate showed a form no other wallet, explorer or exchange
-    displays — and half the point of EIP-55 casing is that a single wrong
-    character changes the letters downstream.
+    Lowercase, as the calldata holds it. The screen applies EIP-55 casing where
+    it renders this (ES-BV-033) — this module is imported by tests that run
+    under plain vitest and must not reach `@boltvault/ui`, which is
+    react-native.
   */
-  if (selector === ERC20_TRANSFER && data.length >= 74) return checksum(`0x${data.slice(34, 74)}`)
-  if (selector === ERC20_TRANSFER_FROM && data.length >= 138)
-    return checksum(`0x${data.slice(98, 138)}`)
-  return tx.to === null ? null : checksum(tx.to)
+  if (selector === ERC20_TRANSFER && data.length >= 74) return `0x${data.slice(34, 74)}`
+  if (selector === ERC20_TRANSFER_FROM && data.length >= 138) return `0x${data.slice(98, 138)}`
+  return tx.to
 }

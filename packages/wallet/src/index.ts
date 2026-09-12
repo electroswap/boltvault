@@ -11,7 +11,13 @@ export { RouterProvider, RouterStore, useRouter, type Router, type Route, type R
 export { SCREENS, TABS, TAB_ORDER, isTabId, isScreenId, type ScreenId, type ScreenParams, type TabId, type ScreenMeta } from './navigation/registry'
 export { TabShell } from './navigation/TabShell'
 export { setupI18n, t, i18n, SOURCE_LOCALE } from './i18n'
-export { createFixtureEngine, fixtureSnapshot, FIXTURE_SCENARIOS, type FixtureScenario } from './fixtures/fixtureEngine'
+/*
+  The fixture engine is NOT exported here (ES-BV-044). `apps/mobile` imports
+  this module and Metro does not tree-shake, so re-exporting the harness put a
+  scripted engine, a public BIP-39 test vector and a fixture password into the
+  store bundle. It lives at `@boltvault/wallet/fixtures`, which only the
+  harness and the tests import.
+*/
 export * from './format'
 export { HostProvider, useHost, DEFAULT_RELAY, type UiHost, type PasskeyProvider, type PasskeyResult, type WidgetSnapshot } from './host'
 export { parseLink, type LinkAction } from './links'

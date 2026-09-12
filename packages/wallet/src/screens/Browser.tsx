@@ -6,7 +6,7 @@
  * origins never load; an SPA route change that dropped the provider gets it
  * re-injected.
  */
-import { Body, Column, Icon, IconButton, Input, Key, Plate, Pressable, Rim, Row, WebView, metrics, paint, radius, type WebViewHandle } from '@boltvault/ui'
+import { Body, Column, Icon, IconButton, Input, Key, Plate, Pressable, Rim, Row, Sheet, WebView, metrics, paint, radius, type WebViewHandle } from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
 import type { DappSession } from '@boltvault/engine'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -14,6 +14,7 @@ import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
+import { deliverLink } from '../state/useLinks'
 
 const HOME = 'https://app.electroswap.io'
 const INPAGE_TARGET = 'bolt-inpage'
@@ -68,6 +69,17 @@ export function Browser({
   const [navigating, setNavigating] = useState(true)
   const [session, setSession] = useState<DappSession | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /*
+    A page inside the browser asking to leave it (ES-BV-039).
+
+    `originWhitelist` does not refuse a navigation — the pinned WebView hands
+    anything outside the list straight to the OS — so a page could set
+    `location = 'ethereum:0x…@52014'` or `'boltvault://wc?uri=wc:…'` and the
+    wallet would open Send with an attacker's address prefilled, or pair a
+    WalletConnect session, while the user believed they were still inside the
+    site's own flow. Nothing leaves without a top-frame tap and a yes.
+  */
+  const [leaving, setLeaving] = useState<string | null>(null)
   const handle = useRef<WebViewHandle | null>(null)
   const channel = useRef(
     Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) =>
@@ -284,6 +296,29 @@ export function Browser({
           {error}
         </Body>
       ) : null}
+      {/* The only door out of the browser (ES-BV-039). */}
+      <Sheet open={leaving !== null} onClose={() => setLeaving(null)} title={t({ id: 'browser.leave.title', message: 'This page wants to open something else' })} testID="browser-leave">
+        <Column gap="$3">
+          <Body tone="mute" size="caption">
+            {t({ id: 'browser.leave.body', message: 'It is asking to leave the browser and open this. Only continue if you asked for it.' })}
+          </Body>
+          <Body size="caption" selectable testID="browser-leave-url">
+            {leaving ?? ''}
+          </Body>
+          <Row gap="$2">
+            <Key label={t({ id: 'common.cancel', message: 'Cancel' })} kind="secondary" onPress={() => setLeaving(null)} testID="browser-leave-cancel" />
+            <Key
+              label={t({ id: 'browser.leave.go', message: 'Open it' })}
+              onPress={() => {
+                const target = leaving
+                setLeaving(null)
+                if (target) deliverLink(target)
+              }}
+              testID="browser-leave-go"
+            />
+          </Row>
+        </Column>
+      </Sheet>
       <WebView
         url={url}
         injectedScriptBeforeLoad={script}
@@ -295,6 +330,12 @@ export function Browser({
           setNavigating(false)
         }}
         onNavigateStart={() => setNavigating(true)}
+        onExternalNavigation={({ url: target, isTopFrame, fromGesture }) => {
+          // A third-party frame is not the page the user is on, and an
+          // assignment to `location` is not a person deciding anything.
+          if (isTopFrame && fromGesture) setLeaving(target)
+          return false
+        }}
         onLoadEnd={reinject}
         onError={(m) => {
           setError(m)

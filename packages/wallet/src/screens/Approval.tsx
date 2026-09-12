@@ -47,6 +47,7 @@ import { useHost } from '../host'
 import { useFeel } from '../feel'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
+import { useWcProposal } from '../hooks/useWcProposal'
 import { COOLING_MS, needsCooling, needsStepUp, recipientOf } from '../state/safeguards'
 import { useApprovals } from '../state/useApprovals'
 import { useWalletState } from '../state/useWalletState'
@@ -228,6 +229,8 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   const firstTimeRecipient = needsCooling(codes)
   /* The address a lookalike recipient is imitating, where the firewall found
      one — so the plate can show the difference (ES-BV-033). */
+  // The WalletConnect proposal behind this sheet, where there is one (ES-BV-040).
+  const proposal = useWcProposal(request?.origin ?? null)
   const lookalikeOf =
     assessment?.rules.find((r) => r.code === 'RECIPIENT_LOOKALIKE')?.lookalikeOf ?? null
   const largeSend = needsStepUp(codes)
@@ -634,6 +637,39 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
             </Body>
           </Row>
         </Column>
+
+        {/*
+          What the peer says it is, said to be what it says (ES-BV-040).
+
+          A proposal Verify could not vouch for gets a synthetic
+          `<topic>.walletconnect.invalid` origin — right for the firewall,
+          useless to a reader — and that host was the whole of what this sheet
+          showed. The claimed name and URL have been on the proposal since it
+          arrived and nothing read them, nor the lookalike verdict the engine
+          computes from the claimed host.
+        */}
+        {payload.kind === 'connect' && proposal ? (
+          <Plate gap="$1" testID="approval-wc-claim" {...(proposal.claimLooksLike ? { borderColor: paint.burn } : {})}>
+            <Body tone="mute" size="caption">
+              {t({ id: 'approval.wc.claim', message: 'Claimed by the app — not verified' })}
+            </Body>
+            <Body numberOfLines={1}>{proposal.name || t({ id: 'approval.wc.noname', message: 'unnamed' })}</Body>
+            {proposal.url ? (
+              <Body tone="mute" size="caption" numberOfLines={1} selectable>
+                {proposal.url}
+              </Body>
+            ) : null}
+            {proposal.claimLooksLike ? (
+              <Body tone="burn" size="caption" testID="approval-wc-lookalike">
+                {t({
+                  id: 'approval.wc.lookalike',
+                  message: 'That address imitates {h}, which is a site you use. Nothing has checked that this app is who it says.',
+                  values: { h: proposal.claimLooksLike },
+                })}
+              </Body>
+            ) : null}
+          </Plate>
+        ) : null}
 
         {/* Who signs */}
         {payload.kind === 'connect' ? (
