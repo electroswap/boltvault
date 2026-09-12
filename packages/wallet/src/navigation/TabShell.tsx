@@ -192,24 +192,36 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
   })
   const enterKey = `${state.tab}:${depth}:${current.screen}:${JSON.stringify(current.params ?? null)}`
 
+  /*
+    A screen that takes the whole window still owes the system bars their room.
+
+    The shell below pads by `insets.top`/`insets.bottom` before it paints a
+    screen, but these two returns happen *above* it and painted edge to edge —
+    so on an edge-to-edge Android window a confirmation raised from the in-app
+    browser had its title under the notification bar and its Confirm key under
+    the navigation bar. Owner: "Transaction confirmations triggered via the
+    in-app browser are being cut off by the top Android notification bar, and
+    by the bottom Android navigation bar." Unlock came in through the same door
+    and had the same hole.
+  */
+  const bare = (node: React.ReactNode): React.ReactNode => (
+    <MotionContext.Provider value={reducedMotion}>
+      <Column flex={1} backgroundColor="$void" paddingTop={insets.top} paddingBottom={insets.bottom}>
+        {node}
+      </Column>
+    </MotionContext.Provider>
+  )
+
   const locked = !loading && !!vault?.exists && !vault.unlocked
   if (locked && current.screen !== 'onboarding' && current.screen !== 'moments') {
-    return (
-      <MotionContext.Provider value={reducedMotion}>
-        <Unlock body={body} reducedMotion={reducedMotion} />
-      </MotionContext.Provider>
-    )
+    return bare(<Unlock body={body} reducedMotion={reducedMotion} />)
   }
 
   // A dApp is waiting: the popup and the phone show the sheet over everything (§8.15).
   // Our own flows (Send, Revoke) navigate to the sheet themselves.
   const external = pending.filter((p) => !p.origin.startsWith('internal:'))
   if (external.length > 0 && body !== 'extension-tab' && current.screen !== 'sign' && current.screen !== 'onboarding' && current.screen !== 'moments') {
-    return (
-      <MotionContext.Provider value={reducedMotion}>
-        <Approval body={body} reducedMotion={reducedMotion} requestId={external[0]?.id} />
-      </MotionContext.Provider>
-    )
+    return bare(<Approval body={body} reducedMotion={reducedMotion} requestId={external[0]?.id} />)
   }
 
   let screen: React.ReactNode
