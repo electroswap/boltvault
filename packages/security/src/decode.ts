@@ -482,27 +482,49 @@ function decodeTypedMessage(t: TypedDataJson): DecodedTypedData {
 // ---- personal_sign ------------------------------------------------------------------
 
 export interface DecodedMessage {
-  /** UTF-8 text when the bytes are printable text; null for binary. */
+  /** UTF-8 text when the bytes are printable text; null for binary, and for text that would not read as its bytes. */
   readonly text: string | null
+  /** The message carries characters that reorder or hide what is drawn (§3.4 WYSIWYS). */
+  readonly hidden: boolean
   readonly bytes: number
   /** 32 bytes exactly, or RLP that starts like a transaction — the "sign this hash" drain. */
   readonly looksLikeHashOrTx: boolean
 }
 
 export function decodeMessage(message: Hex | string): DecodedMessage {
-  if (!isHex(message)) return { text: message, bytes: new TextEncoder().encode(message).length, looksLikeHashOrTx: false }
+  if (!isHex(message)) return { text: isPrintable(message) ? message : null, bytes: new TextEncoder().encode(message).length, looksLikeHashOrTx: false, hidden: hasHiddenFormatting(message) }
   const bytes = size(message)
   let text: string | null = null
+  let hidden = false
   try {
     const s = hexToString(message)
-    // Printable: no control characters other than whitespace, and no replacement chars.
+    // Printable: no control characters other than whitespace, no replacement
+    // chars, and nothing that reorders what is drawn.
+    hidden = hasHiddenFormatting(s)
     text = isPrintable(s) ? s : null
   } catch {
     text = null
   }
   const first = parseInt(message.slice(2, 4), 16)
   const rlpTx = bytes > 40 && (first === 0x02 || first === 0x01 || first === 0x04 || (first >= 0xc0 && first <= 0xff))
-  return { text, bytes, looksLikeHashOrTx: text === null && (bytes === 32 || rlpTx) }
+  return { text, bytes, looksLikeHashOrTx: text === null && (bytes === 32 || rlpTx), hidden }
+}
+
+/**
+ * Characters that move text about without printing anything themselves —
+ * `\p{Cf}` (the bidi overrides, embeddings and isolates, the zero-width
+ * joiners), and the line and paragraph separators.
+ *
+ * A message carrying U+202E renders right-to-left from that point on, so
+ * "Sign in to app.electroswap.io" can be written in bytes that name another
+ * domain entirely. Typed-data names and symbols already went through
+ * `untrusted()` in the explainer, which strips exactly these; a `personal_sign`
+ * body did not, and it is the one place where the bytes ARE the sentence.
+ */
+const HIDDEN_FORMATTING = /[\p{Cf}\p{Zl}\p{Zp}]/u
+
+function hasHiddenFormatting(s: string): boolean {
+  return HIDDEN_FORMATTING.test(s)
 }
 
 function isPrintable(s: string): boolean {
@@ -512,5 +534,7 @@ function isPrintable(s: string): boolean {
     if (c < 0x20 && c !== 0x09 && c !== 0x0a && c !== 0x0d) return false
     if (c === 0x7f) return false
   }
-  return true
+  // A bidi override is printable in the sense that a font draws around it, and
+  // that is the problem: what the reader sees is not the order of the bytes.
+  return !hasHiddenFormatting(s)
 }

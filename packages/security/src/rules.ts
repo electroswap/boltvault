@@ -1163,6 +1163,71 @@ export const simulationRules: Rule = ({ request, simulation, decoded }) => {
   return null
 }
 
+/**
+ * How far above the node's own price a dApp-supplied fee goes before it is
+ * worth a sentence, and before it is worth a typed word.
+ *
+ * The gas editor's band is 50–400 % of what the transaction carries, so a dApp
+ * that sets fifty times the going rate does not move the band up — it moves
+ * the whole band, and the editor cannot bring the price back down to anything
+ * sane. Double is already outside honest variance; ten times is a decimal
+ * point somebody put in the wrong place, or meant to.
+ */
+export const FEE_WARN_MULTIPLE = 2n
+export const FEE_DANGER_MULTIPLE = 10n
+
+/**
+ * A price per unit of gas the site chose, well above the one the node
+ * suggested (§3.4).
+ *
+ * `prepare()` honours `gasPrice`/`maxFeePerGas` when a request carries them,
+ * and the fee editor then anchors its band on that number rather than on the
+ * node's — so a site could make the cheapest signable fee twenty-five times
+ * the going rate and the sheet said nothing at all. It still signs; it is the
+ * user's own coin and their own decision. It just no longer does so quietly.
+ */
+export const feeExcessive: Rule = ({ request, context, chainId }) => {
+  if (request.kind !== 'transaction') return null
+  const f = context.supplied?.perGas
+  if (!f || f.node <= 0n || f.theirs <= f.node * FEE_WARN_MULTIPLE) return null
+  const total = f.theirs * f.gasLimit
+  // "More than what it moves" only means anything when something is moving.
+  const overValue = request.tx.value > 0n && total > request.tx.value
+  const wild = f.theirs > f.node * FEE_DANGER_MULTIPLE
+  const times = Number((f.theirs * 10n) / f.node) / 10
+  return {
+    code: 'FEE_EXCESSIVE',
+    severity: wild || overValue ? 'danger' : 'warn',
+    title: 'This site set the fee, and set it high',
+    detail: `It asks to pay ${nativeText(chainId, total)} in network fees — ${times}× what this network is currently charging${overValue ? `, more than the ${nativeText(chainId, request.tx.value)} being sent` : ''}. The fee editor cannot go below half of what the site chose.`,
+  }
+}
+
+/**
+ * A nonce the site chose that is not this account's next one (§3.4).
+ *
+ * A nonce above the pending count does not fail — it sits in the pool as a
+ * gap, and executes whenever later sends happen to fill it in, which may be
+ * weeks later and at a price nobody is watching. One below has already been
+ * used. Either way the transaction the user approved is not the transaction
+ * that is about to happen, and the number belongs on the sheet rather than
+ * inside the collapsed details.
+ */
+export const nonceNotNext: Rule = ({ request, context }) => {
+  if (request.kind !== 'transaction') return null
+  const n = context.supplied?.nonce
+  if (!n || n.theirs === n.next) return null
+  return {
+    code: 'NONCE_NOT_NEXT',
+    severity: 'warn',
+    title: n.theirs > n.next ? 'This transaction would wait its turn' : 'This transaction uses a used number',
+    detail:
+      n.theirs > n.next
+        ? `The site asked for position ${n.theirs} in this account's queue; the next free one is ${n.next}. It will not execute until ${n.theirs - n.next} more transaction${n.theirs - n.next === 1 ? '' : 's'} from this account have gone out — which could be a long time from now, at a price nobody is watching.`
+        : `The site asked for position ${n.theirs} in this account's queue, which has already been used. The next free one is ${n.next}.`,
+  }
+}
+
 export const chainMismatch: Rule = ({ request, chainId }) => {
   if (request.kind !== 'transaction') return null
   if (request.tx.chainId !== chainId)
@@ -1199,6 +1264,8 @@ export const ALL_RULES: readonly Rule[] = [
   urRecipientNotSelf,
   urOutputStranded,
   swapMinOutImplausible,
+  feeExcessive,
+  nonceNotNext,
   multicallOpaque,
   unknownFunction,
   newContract,

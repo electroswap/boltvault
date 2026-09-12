@@ -60,8 +60,14 @@ export interface ApprovalProps {
 
 function siteOf(origin: string): { host: string; internal: boolean } {
   if (origin.startsWith('internal:')) return { host: 'BoltVault', internal: true }
+  /*
+    A paired device is not a site and has no host — `new URL('device:Pixel 8')`
+    parses happily and answers an empty one, so the origin line on a remote-sign
+    sheet was blank. It is named the way `explain.ts siteName()` names it.
+  */
+  if (origin.startsWith('device:')) return { host: `your ${origin.slice(7)} (paired device)`, internal: true }
   try {
-    return { host: new URL(origin).host, internal: false }
+    return { host: new URL(origin).host || origin, internal: false }
   } catch {
     return { host: origin, internal: false }
   }
@@ -491,8 +497,15 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
         : (request.chainId ?? 52014)
   const chain = chains.find((c) => c.chainId === chainId)
   const blocked = assessment?.presentation.blocked === true
+  /*
+    Fail closed. `typedConfirmation` is null when no word is wanted and a
+    string when one is — an EMPTY string is a bug upstream, not a licence to
+    arm, and it is exactly what a `device:` origin used to produce. A word is
+    required whenever the field is not null, and an empty one means "confirm".
+  */
   const needsTyped = assessment?.presentation.typedConfirmation ?? null
-  const typedOk = !needsTyped || typed.trim().toLowerCase() === needsTyped.toLowerCase()
+  const wantedWord = needsTyped === null ? null : needsTyped || 'confirm'
+  const typedOk = wantedWord === null || typed.trim().toLowerCase() === wantedWord.toLowerCase()
   const stepUpPending = largeSend && !stepUpDone
   // A device that has told us it cannot sign holds the verb: pressing it would
   // only spend a round trip to be told the same thing.
@@ -1173,14 +1186,14 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
           )
         ) : null}
 
-        {needsTyped && !blocked ? (
+        {wantedWord !== null && !blocked ? (
           <Input
             value={typed}
             onChange={setTyped}
             label={t({
               id: 'approval.typed',
               message: 'Type {word} to continue',
-              values: { word: needsTyped },
+              values: { word: wantedWord },
             })}
             autoCapitalize="none"
             testID="approval-typed"

@@ -26,9 +26,9 @@ interface DappClient {
   channel: MemoryChannel
 }
 
-function dapp(engine: Engine, origin: string, session = 'sess'): DappClient {
+function dapp(engine: Engine, origin: string, session = 'sess', info: { tabId?: number } = {}): DappClient {
   const [a, b] = createChannelPair()
-  engine.provider.serve(b, origin)
+  engine.provider.serve(b, origin, info)
   const events: DappClient['events'] = []
   const waiters = new Map<number, { resolve: (v: unknown) => void; reject: (e: unknown) => void }>()
   let next = 1
@@ -261,6 +261,63 @@ describe('provider service', () => {
     await engine.engine.approvals.decide({ id: req.id, approve: true })
     const [s1, s2] = await Promise.all([p1, p2])
     expect(s1).toBe(s2)
+  })
+
+  it('records which tab asked, so the host can decline to raise a window over the user', async () => {
+    /*
+      ATT-BV-010. The tab reached `serve()` and stopped there, so the worker
+      opened a focused signing window for a request from any tab, foreground or
+      three windows back. It is on the record now — and on the record, so it
+      survives the restart that re-attaches the sheet.
+    */
+    const a = dapp(engine, ORIGIN_A, 'tabbed', { tabId: 42 })
+    const message = `0x${Buffer.from('from a tab').toString('hex')}` as Hex
+    const p = a.request('personal_sign', [message, address], 61)
+    const req = await nextApproval(engine)
+    expect((req.payload as { tabId?: number }).tabId).toBe(42)
+    await engine.engine.approvals.decide({ id: req.id, approve: true })
+    await p
+  })
+
+  it('gives a rejected sheet\u2019s place in the queue back', async () => {
+    /*
+      ATT-BV-014. `reserveNonce` pruned only by age or by the chain moving
+      past, so rejecting a sheet held its number for the full five-minute TTL:
+      the next send took N+1 and sat behind a hole nothing would ever fill,
+      showing "pending" until the reservation expired. Electroneum has no
+      speed-up path, so there was nothing the person could do but wait.
+    */
+    const a = dapp(engine, ORIGIN_A, 'queue')
+    const first = a.request('eth_sendTransaction', [{ from: address, to: UNKNOWN, value: '0x1' }], 71)
+    const req = await nextApproval(engine, (r) => r.kind === 'send_transaction')
+    const held = (req.payload as { tx: { nonce: number } }).tx.nonce
+    await engine.engine.approvals.decide({ id: req.id, approve: false })
+    await expect(first).rejects.toMatchObject({ code: 4001 })
+
+    const b = dapp(engine, ORIGIN_A, 'queue-2')
+    const second = b.request('eth_sendTransaction', [{ from: address, to: UNKNOWN, value: '0x1' }], 72)
+    const next = await nextApproval(engine, (r) => r.kind === 'send_transaction')
+    expect((next.payload as { tx: { nonce: number } }).tx.nonce).toBe(held)
+    await engine.engine.approvals.decide({ id: next.id, approve: true })
+    await second
+  })
+
+  it('runs the revert check even when the site supplies a gas limit', async () => {
+    /*
+      ATT-BV-013. `eth_estimateGas` is two things at once — a size, and the one
+      cheap proof the call does not revert. Skipping it because `gas` was given
+      dropped both, and `SIM_INCOMPLETE` then told the user "only the revert
+      check ran" about a check that had not.
+    */
+    const before = rpc.requests.length
+    const a = dapp(engine, ORIGIN_A, 'gassy')
+    const p = a.request('eth_sendTransaction', [{ from: address, to: UNKNOWN, value: '0x1', gas: '0x30d40' }], 73)
+    const req = await nextApproval(engine, (r) => r.kind === 'send_transaction')
+    expect(rpc.requests.slice(before).map((r) => r.method)).toContain('eth_estimateGas')
+    // The supplied limit is still what gets signed.
+    expect((req.payload as { tx: { gas: string } }).tx.gas).toBe('0x30d40')
+    await engine.engine.approvals.decide({ id: req.id, approve: true })
+    await p
   })
 
   it('disconnecting from Settings tells the site, with a real disconnect event', async () => {

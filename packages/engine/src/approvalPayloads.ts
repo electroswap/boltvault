@@ -59,10 +59,26 @@ export const PreparedTxSchema = z.object({
   maxFeePerGas: HexSchema.optional(),
   maxPriorityFeePerGas: HexSchema.optional(),
   gasPrice: HexSchema.optional(),
+  /**
+   * What the node itself suggested per unit of gas, whatever the request asked
+   * for. The fee editor's band is anchored here rather than on the price in
+   * the transaction: a site that sets fifty times the going rate does not move
+   * the band up, it moves the whole band, and the editor could then not get
+   * back down to anything a block would sensibly include.
+   */
+  nodePerGas: HexSchema.optional(),
 })
 export type PreparedTx = z.infer<typeof PreparedTxSchema>
 
 /**
+ * `tabId` / `frameId` — which tab asked, when a browser tab did.
+ *
+ * The design queues an approval-class request from a hidden tab rather than
+ * throwing a focused window over whatever the person is doing. That hold lived
+ * only in the MAIN-world provider, which is page code and therefore no hold at
+ * all — a page posts straight to the bridge and skips it. The sender's tab is
+ * on the record so the worker can decide, and it survives a restart with it.
+ *
  * `intentDigest` — a canonical fingerprint of the request as it arrived.
  *
  * A re-sent request re-attaches to a pending sheet by origin plus the
@@ -78,10 +94,10 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
     /** The site was already permitted; the vault was just locked. Auto-approve after unlock. */
     reconnect: z.boolean(),
     firstTime: z.boolean(),
-    clientRequestId: z.string(), intentDigest: z.string().optional(),
+    clientRequestId: z.string(), intentDigest: z.string().optional(), tabId: z.number().int().optional(), frameId: z.number().int().optional(),
   }),
-  z.object({ kind: z.literal('sign_message'), from: AddressSchema, message: HexSchema, text: z.string().nullable(), assessment: AssessmentViewSchema, clientRequestId: z.string(), intentDigest: z.string().optional() }),
-  z.object({ kind: z.literal('eth_sign'), from: AddressSchema, hash: HexSchema, assessment: AssessmentViewSchema, clientRequestId: z.string(), intentDigest: z.string().optional() }),
+  z.object({ kind: z.literal('sign_message'), from: AddressSchema, message: HexSchema, text: z.string().nullable(), assessment: AssessmentViewSchema, clientRequestId: z.string(), intentDigest: z.string().optional(), tabId: z.number().int().optional(), frameId: z.number().int().optional() }),
+  z.object({ kind: z.literal('eth_sign'), from: AddressSchema, hash: HexSchema, assessment: AssessmentViewSchema, clientRequestId: z.string(), intentDigest: z.string().optional(), tabId: z.number().int().optional(), frameId: z.number().int().optional() }),
   z.object({
     kind: z.literal('sign_typed_data'),
     from: AddressSchema,
@@ -90,7 +106,7 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
     domainName: z.string().nullable(),
     primaryType: z.string(),
     assessment: AssessmentViewSchema,
-    clientRequestId: z.string(), intentDigest: z.string().optional(),
+    clientRequestId: z.string(), intentDigest: z.string().optional(), tabId: z.number().int().optional(), frameId: z.number().int().optional(),
   }),
   z.object({
     kind: z.literal('send_transaction'),
@@ -110,10 +126,10 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
      * request flip a sheet the user approved as "sign" into a broadcast.
      */
     signOnly: z.boolean().optional(),
-    clientRequestId: z.string(), intentDigest: z.string().optional(),
+    clientRequestId: z.string(), intentDigest: z.string().optional(), tabId: z.number().int().optional(), frameId: z.number().int().optional(),
   }),
-  z.object({ kind: z.literal('switch_chain'), chainId: z.number().int().positive(), clientRequestId: z.string(), intentDigest: z.string().optional() }),
-  z.object({ kind: z.literal('add_chain'), chainId: z.number().int().positive(), clientRequestId: z.string(), intentDigest: z.string().optional() }),
+  z.object({ kind: z.literal('switch_chain'), chainId: z.number().int().positive(), clientRequestId: z.string(), intentDigest: z.string().optional(), tabId: z.number().int().optional(), frameId: z.number().int().optional() }),
+  z.object({ kind: z.literal('add_chain'), chainId: z.number().int().positive(), clientRequestId: z.string(), intentDigest: z.string().optional(), tabId: z.number().int().optional(), frameId: z.number().int().optional() }),
   z.object({
     kind: z.literal('watch_asset'),
     type: z.string(),
@@ -124,7 +140,7 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
     decimals: z.number().int().nonnegative().nullable(),
     onChain: z.object({ name: z.string(), symbol: z.string(), decimals: z.number().int().nonnegative() }).nullable(),
     mismatch: z.boolean(),
-    clientRequestId: z.string(), intentDigest: z.string().optional(),
+    clientRequestId: z.string(), intentDigest: z.string().optional(), tabId: z.number().int().optional(), frameId: z.number().int().optional(),
   }),
 ])
 
@@ -189,9 +205,16 @@ export function suggestedPerGas(tx: PreparedTx): bigint {
   return BigInt((tx.type === 'eip1559' ? tx.maxFeePerGas : tx.gasPrice) ?? '0x0')
 }
 
-/** The band a hand-set price per unit of gas has to stay inside. */
+/**
+ * The band a hand-set price per unit of gas has to stay inside.
+ *
+ * Anchored on the node's own suggestion where there is one, not on the price
+ * the transaction happens to carry — those differ exactly when a dApp supplied
+ * `gasPrice`/`maxFeePerGas`, which is the case the band exists for.
+ */
 export function gasBand(tx: PreparedTx): { floor: bigint; suggested: bigint; ceiling: bigint } {
-  const suggested = suggestedPerGas(tx)
+  const node = tx.nodePerGas ? BigInt(tx.nodePerGas) : 0n
+  const suggested = node > 0n ? node : suggestedPerGas(tx)
   return { floor: (suggested * BigInt(GAS_FLOOR_PERCENT)) / 100n, suggested, ceiling: (suggested * BigInt(GAS_CEILING_PERCENT)) / 100n }
 }
 

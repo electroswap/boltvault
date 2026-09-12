@@ -80,6 +80,32 @@ describe('method table', () => {
     expect(await req(h, A, 'eth_getLogs', [{ fromBlock: '0x1', toBlock: '0x100' }])).toBe('ok:eth_getLogs')
     expect(await req(h, A, 'eth_getLogs', [{ fromBlock: 'latest', toBlock: 'latest' }])).toBe('ok:eth_getLogs')
   })
+  it('does not let a named tag walk round the range guard', async () => {
+    /*
+      ATT-BV-009. Every named tag mapped to null and the guard only refused
+      when the lower bound was a number, so `earliest` — genesis to now, the
+      most expensive query a node answers — passed unbounded, and a connected
+      page could loop it at the per-origin budget until the endpoints cooled
+      down and the wallet's own polling degraded with them.
+    */
+    const h = harness()
+    await req(h, A, 'eth_requestAccounts')
+    for (const filter of [
+      { fromBlock: 'earliest' },
+      { fromBlock: 'earliest', toBlock: 'latest' },
+      { fromBlock: 'earliest', toBlock: 'pending' },
+      { fromBlock: '0x1', toBlock: 'latest' },
+    ])
+      await expect(req(h, A, 'eth_getLogs', [filter])).rejects.toMatchObject({ code: RPC.LIMIT_EXCEEDED })
+    // A window off genesis is a window like any other, and still answered.
+    expect(await req(h, A, 'eth_getLogs', [{ fromBlock: 'earliest', toBlock: '0x10' }])).toBe('ok:eth_getLogs')
+    /*
+      `safe` and `finalized` both name a block a few confirmations behind the
+      head, so the range between them is a handful of blocks however it is
+      written. Refusing it would break an honest query to buy nothing.
+    */
+    expect(await req(h, A, 'eth_getLogs', [{ fromBlock: 'safe', toBlock: 'finalized' }])).toBe('ok:eth_getLogs')
+  })
   it('refuses chain state to an unconnected origin, but still answers discovery', async () => {
     const h = harness()
     // Discovery is open: EIP-1193 expects a provider to answer before a page

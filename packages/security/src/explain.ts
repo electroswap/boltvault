@@ -399,6 +399,13 @@ function expiry(v: bigint): string {
 export function explainMessage(message: Hex | string): Statement[] {
   const d = decodeMessage(message)
   if (d.text !== null) return [{ text: d.text.length > 400 ? `${d.text.slice(0, 400)}…` : d.text, tone: 'neutral' }]
+  /*
+    Text carrying bidi overrides or other invisible formatting is not shown as
+    text at all: what a font draws for it is not the order of the bytes being
+    signed, which is the one promise the sheet makes. It falls back to the byte
+    count, and says why rather than leaving the reader to wonder.
+  */
+  if (d.hidden) return [{ text: `Sign ${d.bytes} bytes of text that contains hidden formatting characters — what it would draw is not the order of what it says`, tone: 'warn' }]
   return [{ text: `Sign ${d.bytes} bytes of binary data`, tone: 'warn' }]
 }
 

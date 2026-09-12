@@ -191,6 +191,23 @@ describe('decodeMessage', () => {
     const hex = `0x${Buffer.from('Sign in to ElectroSwap').toString('hex')}` as Hex
     expect(decodeMessage(hex)).toMatchObject({ text: 'Sign in to ElectroSwap', looksLikeHashOrTx: false })
   })
+  it('will not render text that reorders itself', () => {
+    /*
+      ATT-BV-015. `isPrintable` rejected C0 controls, DEL and U+FFFD and
+      nothing else, so U+202E survived into the statement and the exact-message
+      plate: "Sign in to app.electroswap.io" could be written in bytes naming
+      another domain, and the sheet drew the reassuring version. Typed-data
+      names already went through `untrusted()`; the one place where the bytes
+      ARE the sentence did not.
+    */
+    const evil = `0x${Buffer.from('Sign in to \u202Eoi.paws\u202C').toString('hex')}` as Hex
+    const d = decodeMessage(evil)
+    expect(d.hidden).toBe(true)
+    expect(d.text).toBeNull()
+    // Plain text is untouched, including the whitespace that has always passed.
+    expect(decodeMessage(`0x${Buffer.from('line one\nline two').toString('hex')}`)).toMatchObject({ hidden: false, text: 'line one\nline two' })
+  })
+
   it('flags a 32-byte hash', () => {
     expect(decodeMessage(`0x${'ab'.repeat(32)}`).looksLikeHashOrTx).toBe(true)
   })

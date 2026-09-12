@@ -2,7 +2,7 @@ import { ELECTRONEUM_ADDRESSES, feeRecipient } from '@boltvault/chains'
 import { encodeAbiParameters, encodeFunctionData, maxUint256, parseAbiParameters, type Hex } from 'viem'
 import { describe, expect, it } from 'vitest'
 import { ERC20_ABI, ERC721_ABI, MULTICALL3_ABI, UNIVERSAL_ROUTER_ABI } from '../src/abis'
-import { assess, emptyContext, type AssessmentInput } from '../src/assess'
+import { assess, emptyContext, presentationFor, type AssessmentInput } from '../src/assess'
 import { UR_COMMAND } from '../src/ur'
 import type { SignRequest } from '../src/types'
 
@@ -127,6 +127,71 @@ describe('permit family', () => {
     )
     expect(codes(a)).toContain('SEAPORT_ZERO_CONSIDERATION')
     expect(a.presentation.blocked).toBe(true)
+  })
+})
+
+describe('what the site chose for itself', () => {
+  /*
+    ATT-BV-013. `prepare()` honours a supplied `gasPrice`/`maxFeePerGas` and
+    the fee editor then bands 50–400 % of it, so a site could make the cheapest
+    signable fee twenty-five times the going rate with nothing said on the
+    sheet; and a supplied `nonce` above the pending count sits in the pool as a
+    gap, executing weeks later at a price nobody is watching.
+  */
+  const send = (value: bigint): SignRequest => ({ kind: 'transaction', tx: { from: ME, to: UNKNOWN, data: '0x', value, chainId: 52014 } })
+  const gwei = 1_000_000_000n
+
+  it('says nothing about a fee within sight of the node\u2019s own', () => {
+    expect(codes(run(send(10n ** 18n), { supplied: { perGas: { theirs: gwei, node: gwei, gasLimit: 21_000n } } }))).not.toContain('FEE_EXCESSIVE')
+    expect(codes(run(send(10n ** 18n), { supplied: { perGas: { theirs: gwei * 2n, node: gwei, gasLimit: 21_000n } } }))).not.toContain('FEE_EXCESSIVE')
+  })
+
+  it('warns above double, and demands a word above ten times', () => {
+    const warned = run(send(10n ** 18n), { supplied: { perGas: { theirs: gwei * 3n, node: gwei, gasLimit: 21_000n } } })
+    expect(warned.rules.find((r) => r.code === 'FEE_EXCESSIVE')?.severity).toBe('warn')
+    const wild = run(send(10n ** 18n), { supplied: { perGas: { theirs: gwei * 50n, node: gwei, gasLimit: 21_000n } } })
+    expect(wild.rules.find((r) => r.code === 'FEE_EXCESSIVE')?.severity).toBe('danger')
+    expect(wild.presentation.typedConfirmation).toBe('app.example.com')
+  })
+
+  it('is danger when the fee is worth more than what is being sent', () => {
+    // 21 000 × 3 gwei is 63 000 gwei; the transfer is 1 gwei.
+    const a = run(send(gwei), { supplied: { perGas: { theirs: gwei * 3n, node: gwei, gasLimit: 21_000n } } })
+    expect(a.rules.find((r) => r.code === 'FEE_EXCESSIVE')?.severity).toBe('danger')
+    expect(a.rules.find((r) => r.code === 'FEE_EXCESSIVE')?.detail).toContain('more than')
+  })
+
+  it('names a nonce that is not this account\u2019s next one', () => {
+    expect(codes(run(send(1n), { supplied: { nonce: { theirs: 7, next: 7 } } }))).not.toContain('NONCE_NOT_NEXT')
+    const ahead = run(send(1n), { supplied: { nonce: { theirs: 10, next: 7 } } })
+    expect(codes(ahead)).toContain('NONCE_NOT_NEXT')
+    expect(ahead.rules.find((r) => r.code === 'NONCE_NOT_NEXT')?.detail).toContain('3 more transactions')
+    expect(codes(run(send(1n), { supplied: { nonce: { theirs: 3, next: 7 } } }))).toContain('NONCE_NOT_NEXT')
+  })
+
+  it('says nothing at all when the wallet worked the numbers out itself', () => {
+    expect(codes(run(send(10n ** 18n)))).not.toContain('FEE_EXCESSIVE')
+    expect(codes(run(send(10n ** 18n)))).not.toContain('NONCE_NOT_NEXT')
+  })
+})
+
+describe('the typed confirmation word', () => {
+  /*
+    ATT-BV-012. `confirmationWord` answered `new URL(origin).hostname`, which
+    is the empty string for `device:Pixel 8` — and the Approval screen read a
+    falsy word as "none required". Every `danger` remote-sign sheet therefore
+    armed after 1.5 s with nothing typed: the phone forwards an
+    `approve(unknownSpender, max)` for a Trezor account and the laptop shows
+    the danger plate but asks for nothing.
+  */
+  it('is never empty, whatever the origin is', () => {
+    for (const origin of ['device:Pixel 8', 'device:', 'internal:swap', 'not a url at all'])
+      expect(presentationFor('danger', origin).typedConfirmation).toBe('confirm')
+  })
+  it('is still the site for a site', () => {
+    expect(presentationFor('danger', 'https://www.app.example.com/x').typedConfirmation).toBe('app.example.com')
+    // …and no word at all below danger.
+    expect(presentationFor('warn', 'device:Pixel 8').typedConfirmation).toBeNull()
   })
 })
 

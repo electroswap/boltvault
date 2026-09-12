@@ -46,6 +46,8 @@ export type RiskCode =
   | 'SIM_FAILED'
   | 'SIM_INCOMPLETE'
   | 'SIM_UNAVAILABLE'
+  | 'FEE_EXCESSIVE'
+  | 'NONCE_NOT_NEXT'
   | 'FEE_SINK_MISMATCH'
   | 'FEE_TIER_MISMATCH'
   | 'WALLET_FEE_OVERCHARGE'
@@ -174,6 +176,19 @@ export interface AssessmentContext {
    * The clipboard check has nothing to compare against but this.
    */
   readonly lastCopiedAddress?: { readonly address: Hex; readonly at: number } | null
+  /**
+   * What the request itself supplied that the wallet would otherwise have
+   * worked out: the price per unit of gas, and the nonce (§3.4).
+   *
+   * Both are honoured — a dApp may have a reason for either — but neither is
+   * checked by anything else, so they are put in front of the reader here. The
+   * field is only set when the dApp actually supplied the value; a fee the
+   * wallet computed has nothing to say about itself.
+   */
+  readonly supplied?: {
+    readonly perGas?: { readonly theirs: bigint; readonly node: bigint; readonly gasLimit: bigint }
+    readonly nonce?: { readonly theirs: number; readonly next: number }
+  } | null
   /** BOLT's address on this chain, for farm-boost statements; optional. */
   readonly boltToken?: Hex
   /** For `internal:bridge`: whether the recipient is a contract on the origin and on the destination (§8.7). */

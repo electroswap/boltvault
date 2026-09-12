@@ -257,10 +257,19 @@ export class RpcFlow {
           const { fromBlock, toBlock } = f as { fromBlock?: unknown; toBlock?: unknown }
           const from = blockNumber(fromBlock)
           const to = blockNumber(toBlock)
-          if (from !== null && to !== null && to - from > MAX_LOG_RANGE) throw new RpcError(RPC.LIMIT_EXCEEDED, `eth_getLogs range is limited to ${MAX_LOG_RANGE} blocks.`)
-          if (from !== null && to === null && fromBlock !== 'latest') {
-            // An open-ended range from a fixed block is unbounded; refuse rather than melt the RPC.
-            throw new RpcError(RPC.LIMIT_EXCEEDED, `eth_getLogs needs a toBlock within ${MAX_LOG_RANGE} blocks of fromBlock.`)
+          const tooWide = `eth_getLogs needs a numeric toBlock within ${MAX_LOG_RANGE} blocks of fromBlock.`
+          /*
+            A lower bound that names a block — a number, or `earliest`, which is
+            block zero — needs a numeric upper bound within the window. Anything
+            open at the top is a full-history scan under another name: `earliest`
+            alone, `earliest → latest`, `safe → finalized`, or a fixed block with
+            no `toBlock` at all. At the wallet's sixty-a-second budget a
+            connected page could loop those until the registry endpoints cooled
+            down and took the wallet's own polling with them.
+          */
+          if (from !== null && from !== 'head') {
+            if (typeof to !== 'number') throw new RpcError(RPC.LIMIT_EXCEEDED, tooWide)
+            if (to - from > MAX_LOG_RANGE) throw new RpcError(RPC.LIMIT_EXCEEDED, `eth_getLogs range is limited to ${MAX_LOG_RANGE} blocks.`)
           }
         }
         return this.passthrough(chainId, method, params)
@@ -512,9 +521,19 @@ function permissions(origin: string, addresses: readonly string[], now: number):
   return [{ id: `${origin}:eth_accounts`, parentCapability: 'eth_accounts', invoker: origin, caveats: [{ type: 'restrictReturnedAccounts', value: [...addresses] }], date: now }]
 }
 
-function blockNumber(v: unknown): number | null {
+/**
+ * A block tag as a number, or `'head'` for the ones that mean "now", or null
+ * for anything unreadable.
+ *
+ * `earliest` used to answer null along with the rest, which made it invisible
+ * to the range guard — `{ fromBlock: 'earliest' }` is genesis to now, the
+ * largest query a node can be asked for, and it went straight through. It is
+ * block zero and says so.
+ */
+function blockNumber(v: unknown): number | 'head' | null {
   if (typeof v !== 'string') return null
-  if (v === 'latest' || v === 'pending' || v === 'earliest' || v === 'safe' || v === 'finalized') return null
+  if (v === 'earliest') return 0
+  if (v === 'latest' || v === 'pending' || v === 'safe' || v === 'finalized') return 'head'
   if (/^0x[0-9a-fA-F]+$/.test(v)) return parseInt(v, 16)
   if (/^\d+$/.test(v)) return Number(v)
   return null

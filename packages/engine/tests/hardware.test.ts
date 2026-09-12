@@ -92,6 +92,35 @@ describe('a Ledger account through the engine', () => {
     await expect.poll(async () => (await engine.engine.activity.list({ accountId: ledgerAccountId })).find((e) => e.id === requestId)?.status, { timeout: 10_000 }).toBe('confirmed')
   })
 
+  it('a mis-pressed reject leaves the row waiting, and the retry confirms it', async () => {
+    /*
+      ATT-BV-018. `broadcast()` marked the row `failed` for any signing error,
+      including the device refusal that `settle(…, retryable)` deliberately
+      returns to `pending` so the same request can be approved again. The retry
+      then found the write-ahead entry and skipped the append, and the hash
+      update did not reset the status — so a confirmed transaction stayed
+      recorded as failed, and `resumeWatchers` (which re-watches `pending` rows
+      only) would not pick it up across a restart.
+    */
+    const before = rpc.state.transactions.size
+    const { requestId } = await engine.engine.send.submit({ accountId: ledgerAccountId, chainId: TESTNET, token: 'native', to: FRIEND, amount: '1' })
+    await approvalById(engine, requestId)
+    device.app.rejectNext = true
+    await engine.engine.approvals.decide({ id: requestId, approve: true })
+    // The refusal comes back to the queue, and the row is still waiting with it.
+    await expect.poll(() => engine.approvals.get(requestId)?.status, { timeout: 10_000 }).toBe('pending')
+    const refused = (await engine.engine.activity.list({ accountId: ledgerAccountId })).find((e) => e.id === requestId)
+    expect(refused?.status).toBe('pending')
+    expect(refused?.statements.some((t) => /reject/i.test(t))).toBe(true)
+    expect(rpc.state.transactions.size).toBe(before)
+
+    // Approve again, this time with the right button.
+    await engine.engine.approvals.decide({ id: requestId, approve: true })
+    await expect.poll(() => rpc.state.transactions.size, { timeout: 10_000 }).toBe(before + 1)
+    rpc.advanceBlocks()
+    await expect.poll(async () => (await engine.engine.activity.list({ accountId: ledgerAccountId })).find((e) => e.id === requestId)?.status, { timeout: 10_000 }).toBe('confirmed')
+  })
+
   /*
     The device signs with the key it holds; the wallet broadcasts for the
     account the user chose. Nothing used to check those were the same key — so
