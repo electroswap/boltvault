@@ -15,9 +15,10 @@ node_modules/
 pnpm-lock.yaml.lock
 .turbo/
 
-# Local one-off rebuild helpers stay out of git — except the Android one, which
-# is tracked on purpose: it carries the prebuild/signing/launch-check knowledge
-# that is otherwise only on one machine.
+# Local one-off rebuild helpers stay out of the repository — except these two,
+# which are kept on purpose: they carry the prebuild/signing/launch-check
+# knowledge and the whole store-packaging pipeline, which would otherwise live
+# on one machine only.
 rebuild-*.sh
 
 # Local build configuration: the API origin and the wallet API key a developer
