@@ -86,7 +86,14 @@ const CASES: Array<{ screen: string; scenario: string; sizes: Array<keyof typeof
   { screen: 'home', scenario: 'keystone', sizes: ['popup', 'mobile'] },
   // M9: the feel settings and the browser's web plate; Connected sites and Alerts carry the WalletConnect and push plates.
   { screen: 'feel', scenario: 'funded', sizes: ['popup'] },
-  { screen: 'browser', scenario: 'funded', sizes: ['popup'] },
+  /*
+    Both halves of this screen. The popup renders the "already in every tab"
+    plate; only `mobile` declares `host.browser` (see the harness host), and
+    only there does the address bar — Back, the field with its padlock, Go and
+    Reload — exist at all. It had no baseline, which is how its chrome drifted
+    into a second row nobody had asked for.
+  */
+  { screen: 'browser', scenario: 'funded', sizes: ['popup', 'mobile'] },
   // M10: About (version, encryption, fee sink, signed flags, crash reports).
   { screen: 'about', scenario: 'funded', sizes: ['popup'] },
 ]

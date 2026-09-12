@@ -6,7 +6,7 @@
  * origins never load; an SPA route change that dropped the provider gets it
  * re-injected.
  */
-import { Body, Chip, Column, Icon, Input, Key, Plate, Row, WebView, metrics, paint, type WebViewHandle } from '@boltvault/ui'
+import { Body, Column, Icon, IconButton, Input, Key, Plate, Pressable, Rim, Row, WebView, metrics, paint, radius, type WebViewHandle } from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
 import type { DappSession } from '@boltvault/engine'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -139,32 +139,49 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
 
   return (
     <Column flex={1} testID="browser">
+      {/*
+        One bar, the way a browser has one.
+
+        There were two: an address row, and under it a strip carrying the
+        origin as a chip, the page's <title>, and the reload circle. Owner:
+        "There's no need for the page title bar under the address bar… Back the
+        back button consistent with the rest of the back buttons. Restyle 'Go'
+        in a circle and put the refresh circle button next to 'Go'."
+
+        The strip's one load-bearing job was saying whether the origin was
+        fetched over TLS, and that is the padlock inside the field now — where
+        every other browser puts it, against the URL it vouches for, instead of
+        as a second copy of the address on its own line. The page title was
+        never anything the URL did not already say.
+      */}
       <Row gap="$2" padding={metrics.inset} paddingBottom={8} alignItems="center">
-        <Key label="" kind="secondary" onPress={() => (nav.canGoBack ? handle.current?.goBack() : router.back())} icon={<Icon name="back" size={18} color={paint.ink} />} testID="browser-back" />
-        <Column flex={1}>
-          <Input value={typed} onChange={setTyped} placeholder="https://" testID="browser-url" />
-        </Column>
-        <Key label={t({ id: 'browser.go', message: 'Go' })} kind="secondary" onPress={go} testID="browser-go" />
+        {/* The same round Back as `ScreenHeader`'s, not a squared-off Key. */}
+        <IconButton icon="back" label={t({ id: 'back', message: 'Back' })} onPress={() => (nav.canGoBack ? handle.current?.goBack() : router.back())} testID="browser-back" />
+        <Row
+          flex={1}
+          minWidth={0}
+          alignItems="center"
+          gap={6}
+          paddingLeft={10}
+          paddingRight={4}
+          height={metrics.hit}
+          borderWidth={1}
+          borderRadius={radius.well}
+          borderColor="$edge"
+          backgroundColor="$well"
+          accessibilityLabel={session?.verified ? t({ id: 'browser.secure', message: 'Secure · {o}', values: { o: origin ?? '' } }) : t({ id: 'browser.insecure', message: 'Not secure · {o}', values: { o: origin ?? '' } })}
+          testID="browser-origin"
+        >
+          <Icon name={session?.verified ? 'lock' : 'globe'} size={14} color={session?.verified ? paint.arc : paint.mute} />
+          <Column flex={1} minWidth={0}>
+            <Input value={typed} onChange={setTyped} placeholder="https://" bare onSubmit={go} testID="browser-url" />
+          </Column>
+        </Row>
+        <RoundKey label={t({ id: 'browser.go', message: 'Go' })} onPress={go} testID="browser-go" />
+        <IconButton icon="refresh" label={t({ id: 'browser.reload', message: 'Reload' })} onPress={() => handle.current?.reload()} testID="browser-reload" />
       </Row>
-      <Row gap="$2" paddingHorizontal={metrics.inset} paddingBottom={8} alignItems="center">
-        <Chip>
-          <Body tone={session?.verified ? 'arc' : 'mute'} size="caption" testID="browser-origin">
-            {origin ?? '—'}
-          </Body>
-        </Chip>
-        {nav.loading ? (
-          <Body tone="mute" size="caption">
-            {t({ id: 'browser.loading', message: 'Loading…' })}
-          </Body>
-        ) : nav.title ? (
-          <Body tone="mute" size="caption" numberOfLines={1} flexShrink={1}>
-            {nav.title}
-          </Body>
-        ) : null}
-        <Chip onPress={() => handle.current?.reload()} cursor="pointer" minHeight={44} justifyContent="center" testID="browser-reload">
-          <Icon name="refresh" size={16} color={paint.mute} />
-        </Chip>
-      </Row>
+      {/* Loading was a word on the strip that is gone; it is the hairline every browser draws. */}
+      <Column height={2} backgroundColor={nav.loading ? paint.arc : 'transparent'} testID="browser-progress" />
       {error ? (
         <Body tone="burn" size="caption" paddingHorizontal={metrics.inset} testID="browser-error">
           {error}
@@ -172,5 +189,26 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
       ) : null}
       <WebView url={url} injectedScriptBeforeLoad={script} onMessage={onMessage} onNavigate={(s) => { setNav(s); setTyped(s.url); setError(null) }} onLoadEnd={reinject} onError={(m) => setError(m)} handleRef={(h) => (handle.current = h)} testID="browser-page" />
     </Column>
+  )
+}
+
+/**
+ * "Go", in the same circle the icon buttons beside it wear.
+ *
+ * `IconButton` is that circle with a glyph in it; this is that circle with two
+ * letters in it, so the three controls at the right of the address bar are one
+ * row of discs rather than a rectangle and two circles. Owner: "Restyle 'Go'
+ * in a circle and put the refresh circle button next to 'Go'."
+ */
+function RoundKey({ label, onPress, testID }: { label: string; onPress: () => void; testID?: string }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} testID={testID} style={{ width: metrics.hit, height: metrics.hit, alignItems: 'center', justifyContent: 'center' }}>
+      <Column width={metrics.disc} height={metrics.disc} borderRadius={metrics.disc / 2} backgroundColor="$glassRaised" alignItems="center" justifyContent="center" overflow="hidden">
+        <Body size="caption" fontWeight="600" tone="arc" zIndex={1}>
+          {label}
+        </Body>
+        <Rim radius={metrics.disc / 2} opacity={0.35} />
+      </Column>
+    </Pressable>
   )
 }
