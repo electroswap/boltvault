@@ -132,6 +132,8 @@ export interface VaultNamespace {
     password: string
     passphrase?: string
     label?: string
+    /** The caller supplied a phrase the user already keeps: no backup gate. Onboarding's restore path sets it; its create path does not. */
+    backedUp?: boolean
   }): Promise<{ accounts: AccountView[]; seedId: string }>
   unlock(input: { password: string }): Promise<{ accounts: AccountView[] }>
   unlockWithPasskey(input: {

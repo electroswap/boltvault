@@ -14,6 +14,7 @@ import { AddAccountSheet } from '../components/accounts/AddAccountSheet'
 import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
+import { useRevealPolicy } from '../hooks/useRevealPolicy'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
 import { useReducedMotion } from '../state/useReducedMotion'
@@ -291,6 +292,8 @@ function SeedRevealSheet({ open, onClose, seed, reducedMotion = false }: { open:
   const [biometricOk, setBiometricOk] = useState(false)
   const passkeyIds = (vault?.wraps ?? []).filter((w) => w.by === 'prf').map((w) => w.id)
   const deviceWrapped = (vault?.wraps ?? []).some((w) => w.by === 'device')
+  // What the engine will accept, not what the device has enrolled — see useRevealPolicy.
+  const revealPolicy = useRevealPolicy()
   // Arms screenshot blocking while the phrase is on screen; must run before the
   // `!seed` early return so the hook order stays stable.
   const { masked } = useSecretGuard(words !== null)
@@ -382,13 +385,10 @@ function SeedRevealSheet({ open, onClose, seed, reducedMotion = false }: { open:
         <Column gap="$2">
           <Body tone="mute">{t({ id: 'reveal.body', message: 'Enter your password. Make sure nobody can see your screen.' })}</Body>
           <Input value={password} onChange={setPassword} secure sensitive autoFocus onSubmit={() => void reveal()} testID="reveal-password" />
-          {passkeyOk ? <Key label={t({ id: 'reveal.passkey', message: 'Reveal with passkey' })} kind="secondary" size="compact" disabled={busy} onPress={() => void revealWithPasskey()} testID="reveal-passkey" /> : null}
-          {/*
-            Withheld, not failed after the tap (ES-BV-005). On Android the
-            engine refuses a non-password reveal, so this button could only
-            ever produce an error message.
-          */}
-          {biometricOk && !host.isAndroid ? <Key label={t({ id: 'reveal.biometric', message: 'Reveal with biometrics' })} kind="secondary" size="compact" disabled={busy} onPress={() => void revealWithBiometric()} testID="reveal-biometric" /> : null}
+          {revealPolicy.factorsAllowed && passkeyOk ? <Key label={t({ id: 'reveal.passkey', message: 'Reveal with passkey' })} kind="secondary" size="compact" disabled={busy} onPress={() => void revealWithPasskey()} testID="reveal-passkey" /> : null}
+          {revealPolicy.factorsAllowed && biometricOk ? <Key label={t({ id: 'reveal.biometric', message: 'Reveal with biometrics' })} kind="secondary" size="compact" disabled={busy} onPress={() => void revealWithBiometric()} testID="reveal-biometric" /> : null}
+          {/* Withheld with a reason, not silently absent — the same sentence Backup gives. */}
+          {!revealPolicy.factorsAllowed && (passkeyOk || biometricOk) && revealPolicy.reason ? <Body tone="mute" size="caption" testID="reveal-factors-withheld">{revealPolicy.reason}</Body> : null}
           {error ? <Body tone="burn">{error}</Body> : null}
         </Column>
       )}

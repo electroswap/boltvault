@@ -252,11 +252,24 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
       finish()
     })
 
+  /*
+    Restoring is not creating, and the backup gate knows the difference now.
+
+    A restored phrase arrives already backed up: the user typed it in from
+    whatever they keep it on, which is the exact thing the gate exists to make
+    them do. Asking again was not merely redundant — Home carried the banner,
+    Accounts offered "Back up now", and swapping and limit orders stayed shut
+    until the user recited words back to the wallet they had just given it.
+
+    The create path above is untouched: `sealCreate` passes no flag, so the
+    seed it seals is unbacked until `confirmBackup` clears it.
+  */
   const sealImport = (): Promise<void> =>
     run(async () => {
       await engine.vault.import({
         mnemonic: phrase,
         password,
+        backedUp: true,
         ...(passphrase ? { passphrase } : {}),
       })
       setPhrase('')

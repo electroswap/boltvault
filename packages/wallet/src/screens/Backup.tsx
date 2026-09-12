@@ -17,6 +17,7 @@ import {
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
+import { useRevealPolicy } from '../hooks/useRevealPolicy'
 import { t } from '../i18n'
 import { throttleMessage } from '../throttle'
 import { useSecretGuard } from './onboarding/useSecretGuard'
@@ -52,6 +53,16 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
   const [passkeyOk, setPasskeyOk] = useState(false)
   const deviceWrapped = (vault?.wraps ?? []).some((w) => w.by === 'device')
   const [biometricOk, setBiometricOk] = useState(false)
+  /*
+    What the engine will actually accept, asked before anything is drawn
+    (ES-BV-005 and `revealNeedsPassword`). The factor buttons below used to
+    appear whenever a factor was *enrolled*, which is a different question: the
+    setting defaults to on, so both of them refused after the prompt. And on
+    Android, where the answer is always no, this screen rendered nothing and
+    left a tester hunting for a fingerprint button that policy had removed.
+  */
+  const revealPolicy = useRevealPolicy()
+  const factorEnrolled = passkeyOk || (deviceWrapped && biometricOk)
 
   // Secrets never render in the popup (§3.2): hand off to tab.html once mounted.
   useEffect(() => {
@@ -246,7 +257,7 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
               }
               testID="backup-show"
             />
-            {passkeyOk ? (
+            {revealPolicy.factorsAllowed && passkeyOk ? (
               <Key
                 label={t({ id: 'backup.show.passkey', message: 'Show with passkey' })}
                 kind="secondary"
@@ -255,12 +266,7 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
                 testID="backup-show-passkey"
               />
             ) : null}
-            {/*
-              Withheld on Android, not failed after the tap (ES-BV-005): the
-              engine refuses a non-password reveal there, so the button could
-              only ever produce an error message.
-            */}
-            {biometricOk && !host.isAndroid ? (
+            {revealPolicy.factorsAllowed && biometricOk ? (
               <Key
                 label={t({ id: 'backup.show.biometric', message: 'Show with biometrics' })}
                 kind="secondary"
@@ -268,6 +274,17 @@ export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
                 onPress={() => void revealWithBiometric()}
                 testID="backup-show-biometric"
               />
+            ) : null}
+            {/*
+              The withheld case, said out loud. Somebody who has a fingerprint
+              enrolled and uses it to unlock every day will look for it here;
+              an empty space under the password field reads as a missing
+              feature, which is exactly how it was reported.
+            */}
+            {!revealPolicy.factorsAllowed && factorEnrolled && revealPolicy.reason ? (
+              <Body tone="mute" size="caption" testID="backup-factors-withheld">
+                {revealPolicy.reason}
+              </Body>
             ) : null}
           </Column>
         ) : !quiz ? (

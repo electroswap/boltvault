@@ -318,6 +318,30 @@ export function Rack({ body, embedded = false, limit }: { body: BodyKind; embedd
         </Body>
       ) : null}
       {shown.length > 0 ? <TileGrid target={wide ? 150 : 100} gap={8} minCols={2} maxCols={6} fallbackWidth={(wide ? 640 : 400) - inset * 2} testID="rack-grid">{shelves}</TileGrid> : null}
+      {/*
+        The shelves are short and the wallet knows it.
+
+        The indexer drops pieces it marks as spam, and the collection counts
+        beside the picker come from a source that does not, so the two can
+        disagree by a lot. Left unsaid, that reads as loss — "just part of my
+        collection is shown ... I believe in total around 150, but I have 300+"
+        — and the honest answer is that the pieces are still on chain and still
+        the user's; what is missing is the indexer's willingness to list them.
+
+        No arithmetic on screen: the engine compares held units against
+        collection balances, which is the only comparison that survives an
+        ERC-1155 edition, and this line would have to compare rows. The fact is
+        what the user was missing, not the subtraction.
+      */}
+      {!embedded && inventory?.partial ? (
+        <Body tone="mute" size="caption" testID="rack-partial">
+          {t({
+            id: 'rack.partial',
+            message:
+              'Some pieces this address holds are not on the shelves: the marketplace index leaves them out, usually as suspected spam. They are still yours on chain — add the collection by address to see them here.',
+          })}
+        </Body>
+      ) : null}
       {embedded && pieces.length > (limit ?? 0) ? <Key label={t({ id: 'rack.open', message: 'Open the Rack' })} kind="secondary" size="compact" onPress={() => router.navigate('rack')} testID="rack-open" /> : null}
       {error ? <Body tone="burn" testID="rack-error">{error}</Body> : null}
       {!embedded && inventory && inventory.assets.length > 0 && !selecting ? <Pill label={t({ id: 'collection.add.pill', message: 'Add a collection' })} icon={<Icon name="plus" size={14} color={paint.arc} />} tone="arc" size="sm" onPress={() => setSheet('add')} testID="rack-add-collection" /> : null}

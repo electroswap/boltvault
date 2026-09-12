@@ -414,16 +414,17 @@ export class VaultManager {
 
   // ---- create / import / unlock / lock ----------------------------------------------
 
-  private seedFromMnemonic(mnemonic: string, label: string, passphrase?: string): VaultSeed {
+  private seedFromMnemonic(mnemonic: string, label: string, passphrase?: string, backedUp = false): VaultSeed {
     const m = normaliseMnemonic(mnemonic)
     if (!validateMnemonicStr(m)) throw new EngineError('invalid_mnemonic', 'that is not a valid recovery phrase')
+    const now = this.platform.now()
     const seed: VaultSeed = {
       id: toHex(this.platform.random(8)),
       label,
       mnemonic: m,
       seedHex: seedHexFromMnemonic(m, passphrase),
-      backedUpAt: null,
-      createdAt: this.platform.now(),
+      backedUpAt: backedUp ? now : null,
+      createdAt: now,
     }
     return passphrase ? { ...seed, passphrase } : seed
   }
@@ -503,8 +504,26 @@ export class VaultManager {
     return { accounts, mnemonic: seed.mnemonic, seedId: seed.id }
   }
 
-  async import(input: { mnemonic: string; password: string; passphrase?: string; label?: string }): Promise<{ accounts: AccountView[]; seedId: string }> {
-    const seed = this.seedFromMnemonic(input.mnemonic, input.label ?? 'Seed 1', input.passphrase)
+  /**
+   * A phrase the caller supplies, sealed into a vault.
+   *
+   * Two callers, two meanings, and `backedUp` is what separates them. The
+   * create path mints the words with `propose` and hands them here only once
+   * the password exists, so the seed arrives unbacked and the quiz that
+   * follows is what clears it. The restore path is somebody typing in a phrase
+   * they already keep somewhere — a beta tester: "I have imported with seed
+   * phrase, but still it asked me to back-up my recovery phrase which seems
+   * silly because I just entered it (I already have a backup)". They are
+   * right. Demanding a backup of a phrase whose backup was the input is a gate
+   * with nothing behind it, and it was not a soft nag: Home showed the banner,
+   * Accounts said "Back up now", and swap and limit orders both refused to
+   * proceed until the user re-read words back to the wallet it had just read
+   * them from.
+   *
+   * Defaults to false, so a caller that says nothing still gets the gate.
+   */
+  async import(input: { mnemonic: string; password: string; passphrase?: string; label?: string; backedUp?: boolean }): Promise<{ accounts: AccountView[]; seedId: string }> {
+    const seed = this.seedFromMnemonic(input.mnemonic, input.label ?? 'Seed 1', input.passphrase, input.backedUp === true)
     const accounts = await this.createFromSeed(seed, input.password)
     return { accounts, seedId: seed.id }
   }
@@ -1099,9 +1118,19 @@ export class VaultManager {
     })
   }
 
+  /**
+   * A second recovery phrase, always one the user already has.
+   *
+   * Nothing mints a phrase through here — the only caller is the "Add recovery
+   * phrase" field on the accounts sheet, which is a paste box. So the seed is
+   * backed up by construction, and saying otherwise had a reach well past the
+   * one seed: `backupComplete` is `seeds.every(backedUp)`, so adding a second
+   * phrase to a fully backed-up vault re-armed Home's banner and shut swapping
+   * and limit orders for the first seed too.
+   */
   async addSeed(input: { mnemonic: string; label?: string; passphrase?: string }): Promise<{ seedId: string; account: AccountView }> {
     const { pt } = await this.plaintext()
-    const seed = this.seedFromMnemonic(input.mnemonic, input.label ?? `Seed ${pt.seeds.length + 1}`, input.passphrase)
+    const seed = this.seedFromMnemonic(input.mnemonic, input.label ?? `Seed ${pt.seeds.length + 1}`, input.passphrase, true)
     if (pt.seeds.some((s) => s.seedHex === seed.seedHex)) throw new EngineError('invalid_argument', 'that recovery phrase is already in this vault')
     const account = await this.addAccount((_p, order) => ({ account: this.hdAccount(seed, 0, `${seed.label} · Account 1`, order), seed }))
     return { seedId: seed.id, account }
@@ -1244,8 +1273,8 @@ export function vaultNamespace(vault: VaultManager, settings: SettingsStore): Na
       handler: (arg) => vault.create(arg as { password: string; bits?: 128 | 256; label?: string }),
     },
     import: {
-      input: z.object({ mnemonic: z.string().min(1).max(2048), password: PasswordSchema, passphrase: z.string().max(256).optional(), label: z.string().max(64).optional() }),
-      handler: (arg) => vault.import(arg as { mnemonic: string; password: string; passphrase?: string; label?: string }),
+      input: z.object({ mnemonic: z.string().min(1).max(2048), password: PasswordSchema, passphrase: z.string().max(256).optional(), label: z.string().max(64).optional(), backedUp: z.boolean().optional() }),
+      handler: (arg) => vault.import(arg as { mnemonic: string; password: string; passphrase?: string; label?: string; backedUp?: boolean }),
     },
     unlock: { input: z.object({ password: PasswordSchema }), handler: (arg) => vault.unlock(arg as { password: string }) },
     unlockWithPasskey: {

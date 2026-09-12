@@ -100,6 +100,33 @@ const inventorySpec = (chainId: number, accountId: string) => ({
   schema: InventorySchema,
 })
 
+/**
+ * How many dividend reads the inventory build keeps in the air at once.
+ *
+ * One RPC per Electric Legends piece, and the Rack cannot paint until the last
+ * one lands, so serial was the wrong shape the moment the owned-pieces walk
+ * stopped truncating at five pages. Low enough not to look like a burst to a
+ * public node, high enough that a three-hundred-piece collection is a short
+ * wait rather than a long one.
+ */
+const DIVIDEND_CONCURRENCY = 8
+
+/** `Promise.all` with a ceiling: results in input order, at most `limit` calls outstanding. */
+async function mapWithConcurrency<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length)
+  let next = 0
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const i = next++
+      const item = items[i]
+      if (i >= items.length || item === undefined) return
+      out[i] = await fn(item)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return out
+}
+
 const isEtn = (chainId: number): chainId is 52014 | 5201420 =>
   chainId === 52014 || chainId === 5201420
 const hex = (n: bigint): Hex => `0x${n.toString(16)}`
@@ -275,10 +302,11 @@ export class NftService {
   private async buildInventory(accountId: string, chainId: number): Promise<Inventory> {
     const { client, chainId: cid } = this.client(chainId)
     const account = await this.account(accountId)
-    const [owned, fetchedBalances] = await Promise.all([
+    const [ownedPage, fetchedBalances] = await Promise.all([
       fetchOwnedAssets(client, cid, account.address),
       fetchCollectionBalances(client, cid, account.address).catch(() => []),
     ])
+    const owned = ownedPage.assets
     const balances: Array<{
       address: string
       name: string
@@ -296,14 +324,31 @@ export class NftService {
       : []
     const floors = new Map(collections.map((c) => [c.address.toLowerCase(), c.floorEtn]))
     const legendsAddr = ELECTRONEUM_ADDRESSES[cid].electricLegends
-    const assets: AssetView[] = []
     let customAddresses = new Set<string>()
-    for (const a of owned) {
+    /*
+      Units, not rows, because that is what the collection counts are.
+
+      `nftCollectionBalances` counts what the address holds, and one ERC-1155
+      row can be five of them. Comparing rows against units would have called
+      every multi-edition holding "partial" — the comparison below is only
+      meaningful if both sides count the same thing.
+    */
+    let heldUnits = owned.reduce((n, a) => n + (a.quantity > 0 ? a.quantity : 1), 0)
+    /*
+      The dividend read is the only chain call in this loop, and it used to be
+      the whole loop: one `await` per piece, in order, so a Legends holder paid
+      one round trip per token before the Rack could paint. That was survivable
+      only because the fetch above stopped at five pages. With the walk now
+      going to the end of the collection, a serial read would turn a bigger
+      collection into a slower one in direct proportion — so it runs in bounded
+      batches, and only for the collection that pays dividends at all.
+    */
+    const assets: AssetView[] = await mapWithConcurrency(owned, DIVIDEND_CONCURRENCY, async (a) => {
       const dividends = same(a.address, legendsAddr)
         ? await this.deps.legends.claimableFor(cid, BigInt(a.tokenId)).catch(() => 0n)
         : null
-      assets.push(await this.toView(cid, a, account.address, dividends))
-    }
+      return this.toView(cid, a, account.address, dividends)
+    })
     // Custom collections (plan A3): the chain's own pieces, marked so the Piece view hides the marketplace verbs.
     if (this.deps.custom) {
       try {
@@ -340,6 +385,7 @@ export class NftService {
             custom: true,
           })
         }
+        heldUnits += mine.pieces.length
         for (const c of mine.collections)
           if (c.balance > 0 && !balances.some((b) => same(b.address, c.address)))
             balances.push({ address: c.address, name: c.name, logoUrl: null, balance: c.balance })
@@ -372,6 +418,15 @@ export class NftService {
       floorValueEtn: priced ? floorValue : null,
       listedCount: assets.filter((a) => a.listing !== null).length,
       withOffersCount: assets.filter((a) => a.bids.length > 0).length,
+      /*
+        Two numbers that should agree and sometimes cannot. `collections` comes
+        from `nftCollectionBalances`, which counts everything the address holds;
+        the pieces come from `nftBalances`, which is spam-filtered and — if the
+        cursor outran its budget — possibly short. When the shelves hold fewer
+        pieces than the collections claim, the Rack says so instead of letting
+        the user count them and conclude the wallet lost something.
+      */
+      partial: heldUnits < balances.reduce((n, b) => n + b.balance, 0) || ownedPage.truncated,
       observedAt: this.deps.platform.now(),
     }
   }

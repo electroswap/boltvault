@@ -16,7 +16,9 @@ import type { ContactView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
+import { useNames } from '../hooks/useNames'
 import { t } from '../i18n'
+import { bookEntryKind } from './addressBookRules'
 
 const ETN = 52014
 
@@ -28,19 +30,64 @@ export function AddressBook({ body }: { body: 'extension-popup' | 'extension-tab
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
+  /*
+    The other direction. Entries are stored as addresses — a name is a claim
+    that can be re-pointed, an address is what the user meant — so the book
+    printed six nibbles and four for every row and recognised nothing. These
+    are forward-verified reverse records, resolved once per page, and they are
+    shown beside the address rather than instead of it: the address is what the
+    entry actually is.
+  */
+  const names = useNames(contacts.map((c) => c.address))
 
   useEffect(() => {
     engine.contacts.list().then(setContacts, () => undefined)
   }, [engine])
 
-  const looksLikeAddress = /^0x[0-9a-fA-F]{40}$/.test(address.trim()) || /\.etn$/i.test(address.trim())
+  const typed = address.trim()
+  /*
+    `.etn` resolves on Electroneum through its UniversalResolver and `.eth` on
+    Ethereum; `names.chainFor` picks the chain from the suffix, so one call
+    covers both whichever chain the book is filed under.
+  */
+  const kind = bookEntryKind(address)
+  const isHex = kind === 'address'
+  const isName = kind === 'name'
+  const usable = kind !== 'unusable'
 
+  /**
+   * Save a name by saving what it points at.
+   *
+   * The book never resolved anything. The field accepted `name.etn` — the
+   * placeholder advertised it — and then handed the literal string to
+   * `contacts.add`, which opens with `isAddress()` and throws "not an address".
+   * So the one input the screen invited was the one input it could not take,
+   * and the error said nothing about why. A tester put it plainly: "At address
+   * book the wallet does not recognize by ENS name." `.eth` did not even get
+   * that far: the gate below rejected the suffix outright and left Save
+   * disabled with no explanation at all.
+   *
+   * Resolution happens here, where Send and the watch-address step already do
+   * it, and what gets stored is the address. That is the right thing to store
+   * for a book whose entries are also the firewall's lookalike reference set —
+   * a name is a claim that can be re-pointed later, an address is the thing the
+   * user meant.
+   */
   const add = async (): Promise<void> => {
     setBusy(true)
     setError(null)
     try {
-      const c = await engine.contacts.add({ address: address.trim(), label: label.trim(), chainId: ETN })
-      setContacts((cs) => [...cs, c])
+      let resolved = typed
+      if (!isHex) {
+        const hit = await engine.names.resolve({ chainId: ETN, name: typed })
+        if (!hit.address) {
+          setError(t({ id: 'book.noname', message: 'That name does not resolve to an address.' }))
+          return
+        }
+        resolved = hit.address
+      }
+      const c = await engine.contacts.add({ address: resolved, label: label.trim(), chainId: ETN })
+      setContacts((cs) => [...cs.filter((x) => x.id !== c.id), c])
       setLabel('')
       setAddress('')
     } catch (err) {
@@ -72,9 +119,15 @@ export function AddressBook({ body }: { body: 'extension-popup' | 'extension-tab
           {t({ id: 'book.add.hint', message: 'A name you will recognise later. Saved addresses appear as chips on the Send screen.' })}
         </Body>
         <Input value={label} onChange={setLabel} placeholder={t({ id: 'book.name.ph', message: 'Name' })} testID="book-name" />
-        <Input value={address} onChange={setAddress} placeholder={t({ id: 'book.address.ph', message: '0x… or name.etn' })} autoCapitalize="none" testID="book-address" />
+        <Input value={address} onChange={setAddress} placeholder={t({ id: 'book.address.ph', message: '0x…, name.etn or name.eth' })} autoCapitalize="none" testID="book-address" />
+        {/* A name is looked up when Save is pressed; saying so beats a Save key that looks inert. */}
+        {isName ? (
+          <Body tone="mute" size="caption" testID="book-name-note">
+            {t({ id: 'book.name.note', message: 'Saving looks this name up on chain and keeps the address it points at today.' })}
+          </Body>
+        ) : null}
         {error ? <Body tone="burn">{error}</Body> : null}
-        <Key label={t({ id: 'save', message: 'Save' })} kind="secondary" disabled={busy || !label.trim() || !looksLikeAddress} onPress={() => void add()} testID="book-save" />
+        <Key label={t({ id: 'save', message: 'Save' })} kind="secondary" disabled={busy || !label.trim() || !usable} onPress={() => void add()} testID="book-save" />
       </Plate>
 
       {contacts.length === 0 ? (
@@ -92,6 +145,11 @@ export function AddressBook({ body }: { body: 'extension-popup' | 'extension-tab
                   <Body tone="mute" size="caption" fontVariant={['tabular-nums']} numberOfLines={1}>
                     {shortAddress(c.address)}
                   </Body>
+                  {names.get(c.address.toLowerCase()) ? (
+                    <Body tone="mute" size="caption" numberOfLines={1} testID={`book-name-${c.id}`}>
+                      {`· ${names.get(c.address.toLowerCase()) ?? ''}`}
+                    </Body>
+                  ) : null}
                   {c.confirmed ? <Icon name="check" size={12} color={paint.surge} /> : null}
                 </Row>
               </Column>

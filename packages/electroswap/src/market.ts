@@ -376,10 +376,48 @@ export interface OwnedAssetView extends AssetView {
   readonly listed: boolean
 }
 
-export async function fetchOwnedAssets(client: ElectroSwapClient, chainId: number, owner: string, first = 100): Promise<OwnedAssetView[]> {
+/**
+ * The runaway guard on the owned-pieces walk, in pages.
+ *
+ * Not a collection-size limit: at the 100 the caller asks for it clears
+ * anything a person plausibly holds, and it exists only so a cursor that never
+ * terminates cannot keep the Rack loading indefinitely. Reaching it is
+ * reported, never swallowed.
+ */
+const OWNED_PAGE_BUDGET = 40
+
+export interface OwnedAssetsPage {
+  readonly assets: OwnedAssetView[]
+  /** The walk stopped on the safety bound with a cursor still in hand: what came back is not the whole wallet. */
+  readonly truncated: boolean
+}
+
+/**
+ * Every piece an address holds, walked to the end of the cursor.
+ *
+ * This used to stop after five pages, unconditionally — `for (let page = 0;
+ * page < 5; page++)` — and return what it had as though that were everything.
+ * The page size is a request, not a promise: the indexer caps `first` at its
+ * own figure, so the ceiling was five of *its* pages, not five hundred pieces.
+ * A tester with a real collection found the arithmetic for us: "At
+ * collectibles, just part of my collection is shown. I believe in total around
+ * 150, but I have 300+."
+ *
+ * So the loop now follows `hasNextPage` to the end. The bound that remains is a
+ * runaway guard rather than a page budget — an indexer that keeps answering
+ * `hasNextPage` for ever must not hold this call open for ever — and when it is
+ * the thing that stops the walk, the caller is told, because a short answer
+ * that knows it is short should never be presented as a complete one.
+ */
+export async function fetchOwnedAssets(client: ElectroSwapClient, chainId: number, owner: string, first = 100): Promise<OwnedAssetsPage> {
   const out: OwnedAssetView[] = []
   let after: string | null = null
-  for (let page = 0; page < 5; page++) {
+  let truncated = false
+  for (let page = 0; ; page++) {
+    if (page >= OWNED_PAGE_BUDGET) {
+      truncated = true
+      break
+    }
     const data = await client.query<unknown>(NFT_BALANCES, { chain: chainEnum(chainId), owner, first, after })
     const parsed = z.object({ nftBalances: edges(z.object({ quantity: z.number().nullable().optional(), listedMarketplaces: z.array(z.string()).nullable().optional(), ownedAsset: AssetNodeSchema.nullable().optional() })) }).parse(data)
     const p = parsed.nftBalances
@@ -391,7 +429,7 @@ export async function fetchOwnedAssets(client: ElectroSwapClient, chainId: numbe
     after = p?.pageInfo?.hasNextPage ? (p.pageInfo.endCursor ?? null) : null
     if (!after) break
   }
-  return out
+  return { assets: out, truncated }
 }
 
 export interface CollectionBalanceView {

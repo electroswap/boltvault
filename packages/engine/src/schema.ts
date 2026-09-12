@@ -1012,6 +1012,17 @@ export const InventorySchema = z.object({
   floorValueEtn: Fiat,
   listedCount: z.number().int().nonnegative(),
   withOffersCount: z.number().int().nonnegative(),
+  /**
+   * The shelves hold fewer pieces than the collection counts claim.
+   *
+   * Two sources, two filters: the counts come from `nftCollectionBalances`,
+   * which counts everything; the pieces come from `nftBalances`, which drops
+   * what the indexer marks as spam and can stop short if its cursor outruns the
+   * walk's budget. Optional rather than defaulted so an inventory written by an
+   * older build still parses, and so the type the cache round-trips is the same
+   * on the way in as on the way out.
+   */
+  partial: z.boolean().optional(),
   observedAt: z.number().int().nonnegative(),
 })
 export type Inventory = z.infer<typeof InventorySchema>
