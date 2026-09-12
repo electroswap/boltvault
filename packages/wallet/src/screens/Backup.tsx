@@ -24,7 +24,7 @@ import { useSecretGuard } from './onboarding/useSecretGuard'
 import { useRouter } from '../navigation/router'
 import { useWalletState } from '../state/useWalletState'
 
-export function Backup({ reducedMotion = false }: { reducedMotion?: boolean }) {
+export function Backup() {
   const engine = useEngine()
   const host = useHost()
   const router = useRouter()

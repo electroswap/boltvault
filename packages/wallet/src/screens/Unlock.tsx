@@ -22,13 +22,7 @@ import { throttleMessage } from '../throttle'
 import { useRouter } from '../navigation/router'
 import { useWalletState } from '../state/useWalletState'
 
-export function Unlock({
-  body,
-  reducedMotion = false,
-}: {
-  body: 'extension-popup' | 'extension-tab' | 'mobile'
-  reducedMotion?: boolean
-}) {
+export function Unlock({ body }: { body: 'extension-popup' | 'extension-tab' | 'mobile' }) {
   const engine = useEngine()
   const host = useHost()
   const router = useRouter()

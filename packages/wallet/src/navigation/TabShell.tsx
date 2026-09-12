@@ -241,7 +241,7 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
     // stale build never stands between the user and their own vault.
     screen = <UpdateRequired />
   } else if (takeover === 'unlock') {
-    screen = <Unlock body={body} reducedMotion={reducedMotion} />
+    screen = <Unlock body={body} />
   } else if (takeover === 'approval') {
     screen = <Approval body={body} reducedMotion={reducedMotion} requestId={external[0]?.id} />
   }
@@ -343,10 +343,10 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
       screen = <Accounts body={body} />
       break
     case 'backup':
-      screen = <Backup reducedMotion={reducedMotion} />
+      screen = <Backup />
       break
     case 'unlock':
-      screen = <Unlock body={body} reducedMotion={reducedMotion} />
+      screen = <Unlock body={body} />
       break
     case 'onboarding':
       screen = <Onboarding reducedMotion={reducedMotion} />

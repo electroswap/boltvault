@@ -75,13 +75,47 @@ export default tseslint.config(
       the platform adapter touch storage.
     */
     files: ['apps/extension/entrypoints/**/*.ts', 'apps/extension/entrypoints/**/*.tsx', 'apps/extension/src/**/*.ts', 'apps/extension/src/**/*.tsx'],
-    ignores: ['apps/extension/entrypoints/background.ts', 'apps/extension/src/platform.ts', 'apps/extension/src/port-channel.ts', 'apps/extension/src/ui-host.ts', 'apps/extension/src/sender.ts', 'apps/extension/src/crash.ts', 'apps/extension/src/trezor.ts', '**/tests/**'],
+    ignores: ['apps/extension/entrypoints/background.ts', 'apps/extension/entrypoints/*.content.ts', 'apps/extension/src/platform.ts', 'apps/extension/src/port-channel.ts', 'apps/extension/src/ui-host.ts', 'apps/extension/src/sender.ts', 'apps/extension/src/crash.ts', 'apps/extension/src/trezor.ts', '**/tests/**'],
     rules: {
       'no-restricted-syntax': [
         'error',
         {
           selector: "MemberExpression[object.object.name=/^(chrome|browser)$/][object.property.name='storage']",
           message: 'A page does not read extension storage: the session DEK lives there (ES-BV-051). Ask the worker over the port.',
+        },
+      ],
+    },
+  },
+  {
+    /*
+      A content script is not a page, and `storage.local` is not the DEK.
+
+      The rule above bans every storage namespace outright, which is right for
+      the trusted pages it covers — they share an origin with the popup, so
+      `storage.session` is one call away from them, and "ask the worker" costs
+      nothing. Applied to `content-isolated.content.ts` it banned something
+      else: the `bv:local:settings` read that tells the injected provider
+      whether `metaMaskCompat` and `defaultWallet` are on. That read is
+      deliberate and has already been fixed once (it looked up the bare key
+      instead of the prefixed one and therefore never fired), and moving it to
+      the port would mean opening a port at `document_start` on every page in
+      the browser to fetch two booleans.
+
+      Neither half of the rule's reasoning reaches it. A content script runs in
+      an isolated world in the page's process, not the extension's trusted
+      origin; and `chrome.storage.session` defaults to TRUSTED_CONTEXTS, so a
+      content script cannot read the DEK's home even if it asks. What is left
+      worth banning is exactly that — `storage.session` — and it stays banned
+      here, so a later `setAccessLevel` change cannot quietly make this the
+      hole the original rule was written to prevent.
+    */
+    files: ['apps/extension/entrypoints/*.content.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "MemberExpression[object.object.name=/^(chrome|browser)$/][object.property.name='storage'][property.name='session']",
+          message: 'A content script never touches session storage: the DEK lives there (ES-BV-051). storage.local is fine.',
         },
       ],
     },
