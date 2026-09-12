@@ -13,6 +13,8 @@
  * clears what this device did without pretending the chain forgot.
  */
 import { fetchWalletActivity, type ElectroSwapClient, type FeedRow } from '@boltvault/electroswap'
+import { untrusted } from '@boltvault/security'
+import { formatUnits } from 'viem'
 import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
 import type { ActivityStore } from '../activityStore'
@@ -41,12 +43,20 @@ const FeedRowSchema = z.object({
       sender: z.string().nullable(),
       recipient: z.string().nullable(),
       amountRaw: z.string().nullable(),
+      decimals: z.number().int().nullable(),
       direction: z.enum(['IN', 'OUT', 'SELF']).nullable(),
     }),
   ),
 })
 
-const FEED_SPEC = (chainId: number, owner: string) => ({ key: cacheKey('activity', 'feed', chainId, owner), schema: z.array(FeedRowSchema) })
+/*
+  `feed2`: the cached row shape gained `decimals` (ES-BV-034), and a document
+  written under the old shape no longer parses. The feed is a 45-second
+  convenience over an API call, so a new key is the whole migration — the
+  alternative is an optional field that makes the type permanently softer than
+  the data.
+*/
+const FEED_SPEC = (chainId: number, owner: string) => ({ key: cacheKey('activity', 'feed2', chainId, owner), schema: z.array(FeedRowSchema) })
 
 /** The API's activity types, mapped onto the categories Activity already draws. */
 const CATEGORIES: Readonly<Record<string, ActivityCategory>> = {
@@ -72,8 +82,31 @@ function categoryOf(row: FeedRow): ActivityCategory {
   return direction === 'IN' ? 'RECEIVE' : direction === 'OUT' ? 'SEND' : 'DAPP'
 }
 
-function amountText(raw: string, symbol: string | null): string {
-  return symbol ? `${raw} ${symbol}` : raw
+/**
+ * A feed amount in the units a person uses (ES-BV-034).
+ *
+ * `amountRaw` is base units — the API's whole-unit figure multiplied up — so
+ * printing it verbatim gave rows like "Received 5000000000000000000 ETN" for
+ * five coins. The symbol comes from the API and is rendered beside the user's
+ * own money, so it goes through the same sanitiser the firewall's statements
+ * use: a symbol carrying U+202E can otherwise reorder the sentence around it.
+ */
+function amountText(raw: string, symbol: string | null, decimals: number | null): string {
+  let text = raw
+  if (decimals !== null && decimals >= 0) {
+    try {
+      text = trimZeros(formatUnits(BigInt(raw), decimals))
+    } catch {
+      text = raw
+    }
+  }
+  const clean = symbol ? untrusted(symbol, 12) : ''
+  return clean ? `${text} ${clean}` : text
+}
+
+/** "1.500" is 1.5; "5.0" is 5. A display convention, never applied to a value. */
+function trimZeros(s: string): string {
+  return s.includes('.') ? s.replace(/0+$/, '').replace(/\.$/, '') : s
 }
 
 /**
@@ -83,9 +116,16 @@ function amountText(raw: string, symbol: string | null): string {
 function statementOf(row: FeedRow): string {
   const moved = row.changes.find((c) => c.amountRaw && c.amountRaw !== '0') ?? row.changes[0]
   if (!moved) return 'Transaction'
-  const amount = moved.amountRaw ? amountText(moved.amountRaw, moved.symbol) : (moved.symbol ?? 'an asset')
-  if (moved.direction === 'IN') return `Received ${amount}${moved.sender ? ` from ${moved.sender}` : ''}`
-  if (moved.direction === 'OUT') return `Sent ${amount}${moved.recipient ? ` to ${moved.recipient}` : ''}`
+  const amount = moved.amountRaw
+    ? amountText(moved.amountRaw, moved.symbol, moved.decimals)
+    : moved.symbol
+      ? untrusted(moved.symbol, 12)
+      : 'an asset'
+  // Counterparties come from the API too, and an address is 42 characters.
+  const from = moved.sender ? untrusted(moved.sender, 42) : ''
+  const to = moved.recipient ? untrusted(moved.recipient, 42) : ''
+  if (moved.direction === 'IN') return `Received ${amount}${from ? ` from ${from}` : ''}`
+  if (moved.direction === 'OUT') return `Sent ${amount}${to ? ` to ${to}` : ''}`
   return `Moved ${amount}`
 }
 

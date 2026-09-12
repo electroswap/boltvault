@@ -7,6 +7,7 @@
  * takes over once the ElectroSwap watcher exists, B6) and notify through
  * the platform. Nothing here is a nag: every alert is opt-in per item.
  */
+import { untrusted } from '@boltvault/security'
 import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
 import type { SealedMap } from '../sealed'
@@ -97,7 +98,7 @@ export class WatchlistService {
     await this.hydrate()
     const k = this.key(input.kind, input.chainId, input.address)
     if (!this.items.some((i) => this.key(i.kind, i.chainId, i.address) === k)) {
-      this.items = [...this.items, { kind: input.kind, chainId: input.chainId, address: input.address, label: input.label.slice(0, 64), above: null, below: null, onLive: input.kind === 'campaign', addedAt: this.deps.platform.now(), lastValue: null }]
+      this.items = [...this.items, { kind: input.kind, chainId: input.chainId, address: input.address, label: untrusted(input.label, 32), above: null, below: null, onLive: input.kind === 'campaign', addedAt: this.deps.platform.now(), lastValue: null }]
       await this.persist()
     }
     return this.items

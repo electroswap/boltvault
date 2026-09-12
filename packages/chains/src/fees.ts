@@ -101,6 +101,36 @@ function neverRaises(candidate: WalletFeeConfig, bundled: WalletFeeConfig): bool
   return points.every((score) => bipsAt(candidate, score) <= bipsAt(bundled, score))
 }
 
+/**
+ * A served ladder may not shrink what a holder's DYNO is worth (ES-BV-032).
+ *
+ * `neverRaises` compares the two ladders at each threshold *for a given
+ * score* — but the score itself is computed from `dynoWeight`, so a served
+ * ladder that leaves every rung alone and halves the weight moves every holder
+ * down a rung and raises what they pay. A weight of zero, or a band of one or
+ * less, disables the measurement entirely and puts everybody on the base rate.
+ * None of that is visible to a check that holds the score fixed.
+ *
+ * So the two fields may only ever move in the holder's favour: the weight up,
+ * and the band no wider than the bundled one allows.
+ */
+function keepsDynoWorth(candidate: WalletFeeConfig, bundled: WalletFeeConfig): boolean {
+  let weight: bigint
+  let base: bigint
+  try {
+    weight = BigInt(candidate.dynoWeight)
+    base = BigInt(bundled.dynoWeight)
+  } catch {
+    return false
+  }
+  if (weight < base) return false
+  if (!Number.isFinite(candidate.dynoWeightBand)) return false
+  if (candidate.dynoWeightBand < 1 || candidate.dynoWeightBand > bundled.dynoWeightBand) return false
+  // Counting farmed BOLT is a discount; a served ladder may add it, never remove it.
+  if (bundled.countFarmBolt && !candidate.countFarmBolt) return false
+  return true
+}
+
 /** Ascending thresholds, descending fees, and nothing at or below zero bips. */
 function wellFormed(config: WalletFeeConfig): boolean {
   if (!Number.isInteger(config.baseBips) || config.baseBips < MIN_TIER_BIPS) return false
@@ -139,7 +169,8 @@ export function applyServedLadder(chainId: number, ladder: ServedLadder): boolea
     dynoWeightBand: ladder.dynoWeightBand,
     countFarmBolt: ladder.countFarmBolt,
   }
-  if (!wellFormed(candidate) || !neverRaises(candidate, bundled)) return false
+  if (!wellFormed(candidate) || !neverRaises(candidate, bundled) || !keepsDynoWorth(candidate, bundled))
+    return false
   served.set(chainId, candidate)
   return true
 }

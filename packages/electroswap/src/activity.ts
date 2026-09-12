@@ -34,6 +34,15 @@ export interface FeedAssetChange {
   readonly recipient: string | null
   /** Raw units as a decimal string, converted from the API's whole units. Null when it did not say. */
   readonly amountRaw: string | null
+  /**
+   * The token's decimal places, so `amountRaw` can be read back out (ES-BV-034).
+   *
+   * The conversion to raw units was one-way: Activity then printed the raw
+   * integer and a feed row read "Received 5000000000000000000 ETN". Null when
+   * the API did not say, which is the only case where the raw figure is all
+   * there is.
+   */
+  readonly decimals: number | null
   readonly direction: 'IN' | 'OUT' | 'SELF' | null
 }
 
@@ -139,6 +148,7 @@ function changeOf(raw: z.infer<typeof ChangeSchema>): FeedAssetChange | null {
     sender: raw.sender ?? null,
     recipient: raw.recipient ?? null,
     amountRaw,
+    decimals: typeof decimals === 'number' ? decimals : null,
     direction,
   }
 }

@@ -44,6 +44,7 @@ import {
   type SignRequest,
   type Simulation,
   type TraceFrame,
+  untrusted,
 } from '@boltvault/security'
 import {
   keccak256,
@@ -1044,8 +1045,15 @@ export class ProviderService {
           from: intent.from,
           typedData: typedJson,
           version: intent.version,
-          domainName: parsed?.domain.name ?? null,
-          primaryType: parsed?.primaryType ?? 'unknown',
+          /*
+            Both come from the thing being signed (ES-BV-038). The decoder caps
+            their length but leaves the characters alone, and these two are
+            rendered on the domain plate without going through the sanitiser
+            the statements use — so a domain name carrying U+202E reorders the
+            line it sits on.
+          */
+          domainName: parsed?.domain.name ? untrusted(parsed.domain.name, 64) : null,
+          primaryType: untrusted(parsed?.primaryType ?? 'unknown', 64),
           assessment: toView(assessment, this.deps.platform.now()),
           clientRequestId: intent.clientRequestId,
         }

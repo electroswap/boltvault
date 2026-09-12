@@ -5,6 +5,7 @@
  * Activity tab can carry a badge and a "needs attention" section. OS
  * notifications still go out through `platform.notify`; this is the record.
  */
+import { untrusted } from '@boltvault/security'
 import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
 import type { SealedMap } from '../sealed'
@@ -95,7 +96,14 @@ export class NotificationsService {
     // notes, not one that the second account silently swallows as a duplicate.
     const accountId = input.accountId !== undefined ? input.accountId : await this.activeAccountId()
     const id = accountId === null ? input.id : `${accountId}:${input.id}`
-    const note: NotificationView = { id, kind: input.kind, title: input.title, body: input.body, target: input.target ?? null, at: this.platform.now(), read: false, accountId }
+    /*
+      Titles and bodies reach here from Explore data, the marketplace index and
+      the price feed (ES-BV-038). They are rendered in the wallet's own list —
+      and on mobile, as an OS notification outside the app entirely, where the
+      wallet's name is above them. Anything that can reorder a line gets the
+      same treatment the firewall's statements get.
+    */
+    const note: NotificationView = { id, kind: input.kind, title: untrusted(input.title, 80), body: untrusted(input.body, 200), target: input.target ?? null, at: this.platform.now(), read: false, accountId }
     if (items.some((n) => n.id === id)) {
       if (input.renew !== true) return false
       await this.persist([note, ...items.filter((n) => n.id !== id)])

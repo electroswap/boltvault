@@ -904,14 +904,18 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
               never behind the raw-message toggle.
             */}
             <Plate gap="$1" testID="approval-domain">
+              {/* Both are the site's own words: bounded to two lines so one
+                  cannot push the verb off the sheet (ES-BV-038). */}
               <DetailRow
                 label={t({ id: 'typed.type', message: 'Message type' })}
                 value={payload.primaryType}
+                numberOfLines={2}
                 testID="approval-domain-type"
               />
               <DetailRow
                 label={t({ id: 'typed.domain', message: 'Domain' })}
                 value={payload.domainName ?? t({ id: 'typed.domain.none', message: 'not named' })}
+                numberOfLines={2}
                 testID="approval-domain-name"
               />
               <DetailRow
@@ -1430,10 +1434,23 @@ function formatWei(wei: string): string {
 
 /** The raw JSON of a typed-data message, with any truncation stated rather than silent. */
 const RAW_MAX = 12_000
+/**
+ * Characters that move text about rather than being text (ES-BV-038).
+ *
+ * `JSON.stringify` preserves them, so a typed-data message whose field values
+ * carry U+202E renders reordered in the raw plate — the one place on the sheet
+ * that is meant to show exactly what is being signed. They are printed as
+ * their escapes instead, which is both honest and visible.
+ */
+const INVISIBLE = /[\p{Cf}\p{Zl}\p{Zp}]/gu
+
 function rawJson(value: unknown): string {
   let text: string
   try {
-    text = JSON.stringify(value, null, 1) ?? ''
+    text = (JSON.stringify(value, null, 1) ?? '').replace(
+      INVISIBLE,
+      (c) => `\\u${c.codePointAt(0)?.toString(16).padStart(4, '0') ?? '0000'}`,
+    )
   } catch {
     return '(this message could not be rendered)'
   }
@@ -1465,13 +1482,15 @@ function typedDomain(value: unknown): { verifyingContract: string | null; chainI
  * so it wraps — an address the user cannot read all of is an address they
  * cannot check, and 6+4 truncation is exactly what address poisoning aims at.
  */
-function DetailRow({ label, value, testID }: { label: string; value: string; testID?: string }) {
+function DetailRow({ label, value, numberOfLines, testID }: { label: string; value: string; numberOfLines?: number; testID?: string }) {
   return (
     <Column gap={2}>
       <Body tone="mute" size="caption">
         {label}
       </Body>
-      <Body size="caption" selectable testID={testID}>
+      {/* A value the site chose can be any length; the caller says how much of
+          the sheet it may take (ES-BV-038). */}
+      <Body size="caption" selectable {...(numberOfLines !== undefined ? { numberOfLines } : {})} testID={testID}>
         {value}
       </Body>
     </Column>

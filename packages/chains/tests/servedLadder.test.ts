@@ -33,6 +33,29 @@ describe('served fee ladder', () => {
     expect(walletFeeConfig(MAINNET)?.tiers[0]?.bips).toBe(base.tiers[0]!.bips - 2)
   })
 
+  /*
+    ES-BV-032. `neverRaises` compares the two ladders at a given score, and the
+    score is computed from `dynoWeight` — so a ladder that leaves every rung
+    alone and halves the weight moves every holder down a rung and charges them
+    more, invisibly to a check that holds the score fixed. A weight of zero or
+    a band of one disables the measurement entirely.
+  */
+  it('refuses a ladder that quietly shrinks what a holder\'s DYNO is worth', () => {
+    const base = asServed()
+    expect(applyServedLadder(MAINNET, { ...base, dynoWeight: '0' })).toBe(false)
+    expect(applyServedLadder(MAINNET, { ...base, dynoWeight: `${BigInt(base.dynoWeight) / 2n}` })).toBe(false)
+    // A wider band lets a measured weight drift further below the anchor.
+    expect(applyServedLadder(MAINNET, { ...base, dynoWeightBand: base.dynoWeightBand + 1 })).toBe(false)
+    expect(applyServedLadder(MAINNET, { ...base, dynoWeightBand: 0 })).toBe(false)
+    // A band of one only turns measurement off, which pins the anchor the
+    // ladder may not lower — safe, and refusing it would be noise.
+    expect(applyServedLadder(MAINNET, { ...base, dynoWeightBand: 1 })).toBe(true)
+    if (base.countFarmBolt) expect(applyServedLadder(MAINNET, { ...base, countFarmBolt: false })).toBe(false)
+    // The bundled ladder itself still passes, and so does a more generous weight.
+    expect(applyServedLadder(MAINNET, base)).toBe(true)
+    expect(applyServedLadder(MAINNET, { ...base, dynoWeight: `${BigInt(base.dynoWeight) * 2n}` })).toBe(true)
+  })
+
   it('refuses a ladder that would raise the base rate', () => {
     const dearer: ServedLadder = { ...asServed(), baseBips: 80 }
     expect(applyServedLadder(MAINNET, dearer)).toBe(false)
