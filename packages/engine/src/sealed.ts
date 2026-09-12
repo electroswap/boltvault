@@ -62,7 +62,15 @@ function blobSchema<T>(inner: ZodType<T>): ZodType<{ v: 1; items: Item<T>[] }> {
 export class SealedMap<T> {
   private items: Item<T>[] | null = null
   /** The stored blob would not open; writing would destroy it. See `load`. */
-  private poisoned = false
+  /**
+   * What this map found the last time it tried to read the blob (ES-BV-062).
+   *
+   * `'no'` is the ordinary state. `'kept'` means the ciphertext could not be
+   * read but a copy of it is safely aside under the quarantine key, so a fresh
+   * blob may be started — nothing is lost by writing. `'unsafe'` means even
+   * the copy failed, and then nothing is written over the bytes at all.
+   */
+  private poisoned: 'no' | 'kept' | 'unsafe' = 'no'
   private readonly blob: ZodType<{ v: 1; items: Item<T>[] }>
   private readonly aadBytes: Uint8Array
   private readonly infoBytes: Uint8Array
@@ -149,8 +157,13 @@ export class SealedMap<T> {
 
   /** Forget the decrypted entries on lock. */
   forget(): void {
-    this.poisoned = false
+    this.poisoned = 'no'
     this.items = null
+  }
+
+  /** Whether the last read had to set the blob aside, for a surface that says so. */
+  setAside(): boolean {
+    return this.poisoned !== 'no'
   }
 
   private async mutate(f: (items: Item<T>[]) => Item<T>[]): Promise<boolean> {
@@ -196,8 +209,20 @@ export class SealedMap<T> {
     try {
       const pt = xchacha20poly1305(key, fromHex(parsed.nonce), this.aadBytes).decrypt(fromHex(parsed.ct))
       const blob = this.blob.safeParse(JSON.parse(new TextDecoder().decode(pt)))
-      this.items = blob.success ? blob.data.items : []
       zeroise(pt)
+      /*
+        A blob that opens but does not fit its schema is unreadable too
+        (ES-BV-061).
+
+        This branch used to fall through to an empty list with no quarantine
+        and no flag, so the next write committed the empty list over real
+        entries. That is how one over-long device label in a pairing answer
+        — 65 characters where the row schema allows 64 — emptied every
+        existing pairing on the offering device, channel keys and all, with
+        nothing said. It takes the same path as a failed decrypt now.
+      */
+      if (!blob.success) throw new Error('the blob does not match its schema')
+      this.items = blob.data.items
     } catch {
       /*
         A blob that will not open is not an empty blob.
@@ -211,9 +236,9 @@ export class SealedMap<T> {
         said. The ciphertext is copied aside under its own key first, and the
         map refuses to write until somebody decides what to do about it.
       */
-      await this.quarantine(raw)
+      const kept = await this.quarantine(raw)
       this.items = []
-      this.poisoned = true
+      this.poisoned = kept ? 'kept' : 'unsafe'
     } finally {
       zeroise(key)
     }
@@ -227,13 +252,15 @@ export class SealedMap<T> {
    * begin with "your history is still on the disk" rather than with a
    * shrug.
    */
-  private async quarantine(raw: string): Promise<void> {
+  private async quarantine(raw: string): Promise<boolean> {
     try {
       const at = this.platform.now()
       await this.platform.storage.local.set(`${this.opts.key}.sealed-quarantine.${at}`, raw)
+      return true
     } catch {
       // Storage that will not take a copy is storage that will not take the
       // overwrite either; `poisoned` is what actually protects the bytes.
+      return false
     }
   }
 
@@ -243,10 +270,21 @@ export class SealedMap<T> {
       — a password rotation, a different vault unlocking — clears the flag on
       the next load, because that load is a fresh attempt with a fresh key.
     */
-    if (this.poisoned)
+    /*
+      Nothing is written over a blob this map could not read, copy or no copy
+      (ES-BV-012, ES-BV-061).
+
+      These maps hold pairings, sites, allowances and cached state — things a
+      user would want back and nothing that gates an action in the product. The
+      activity log is the one store where refusing forever is worse than the
+      loss, and it decides that for itself.
+    */
+    if (this.poisoned !== 'no')
       throw new EngineError(
         'internal',
-        `${this.opts.key} could not be decrypted and has been set aside; it will not be overwritten.`,
+        this.poisoned === 'kept'
+          ? `${this.opts.key} could not be read and has been set aside; it will not be overwritten.`
+          : `${this.opts.key} could not be read and no copy of it could be made; it will not be overwritten.`,
       )
     const key = await this.key()
     const nonce = this.platform.random(24)

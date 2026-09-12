@@ -54,6 +54,9 @@ import type { VaultManager } from './vault'
 
 const enc = new TextEncoder()
 
+/** Where the blind relay lives under the API origin (master plan §9.5). */
+export const SYNC_RELAY_PATH = '/api/wallet/sync'
+
 export interface Relay {
   /** `PUT /api/wallet/sync/<pairingId>/<slot>` — one opaque blob per slot (§9.5). */
   put(pairingId: string, slot: string, sealed: SealedRecord): Promise<void>
@@ -198,7 +201,15 @@ export function assertRelayAllowed(relayUrl: string, allowed: string | null | un
 
 export const PairedDeviceRowSchema = z.object({
   deviceId: z.string(),
-  label: z.string().max(64),
+  /*
+    Bounded and stripped wherever the row is read, not only where it is written
+    (ES-BV-061). The label becomes the origin on a remote-sign sheet, so a row
+    paired before `deviceLabel` existed — up to 64 characters, bidi and
+    zero-width included — would still reorder the line it sits on. The
+    transform runs on every read of every row, which is what upgrades an
+    install that already holds one.
+  */
+  label: z.string().max(64).transform(deviceLabel),
   signingPublicKey: z.string(),
   pairingId: z.string(),
   channelKey: z.string(),
@@ -467,7 +478,19 @@ export class SyncService {
   }
 
   private async saveDevices(rows: PairedDeviceRow[]): Promise<void> {
-    await this.deps.devices.set('all', rows)
+    /*
+      Validate on the way in, not only on the way out (ES-BV-061).
+
+      `SealedMap.set` encrypts whatever it is handed; only the read validates.
+      A row that cannot survive the round trip is a row that empties the blob,
+      so it is caught here, where there is still a caller to tell. Rows paired
+      before this existed are re-checked on every save, which is what upgrades
+      an install that already holds one.
+    */
+    const checked = z.array(PairedDeviceRowSchema).safeParse(rows)
+    if (!checked.success)
+      throw new EngineError('invalid_argument', 'that device cannot be stored as a pairing; its label or keys are out of shape')
+    await this.deps.devices.set('all', checked.data as PairedDeviceRow[])
   }
 
   private async state(): Promise<SyncState> {
@@ -595,7 +618,17 @@ export class SyncService {
     p.channel = deriveChannel(p.pairingId, p.keys.x25519PrivateKey, answer.x25519PublicKey)
     p.peer = {
       deviceId: answer.deviceId,
-      label: answer.label,
+      /*
+        The offering side bounds the label too (ES-BV-061).
+
+        `deviceLabel` was applied when accepting an offer but not when
+        receiving an answer, and `AnswerSchema` allows 256 characters where the
+        stored row allows 64. A 65-character label therefore sealed a blob that
+        its own read schema refuses, the map read it back as empty, and the
+        next save committed that empty list — every existing pairing on this
+        device gone, channel keys and all, with nothing said.
+      */
+      label: deviceLabel(answer.label),
       signingPublicKey: answer.signingPublicKey,
     }
     await this.emit()

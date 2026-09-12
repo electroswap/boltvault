@@ -62,7 +62,7 @@ import { NotificationsService, notificationsNamespace } from './namespaces/notif
 import { CustomCollectionsService, customCollectionsNamespace } from './namespaces/nftCustom'
 import { PrefsService, prefsNamespace } from './namespaces/prefs'
 import { SitesService, sitesNamespace } from './namespaces/sites'
-import { createSyncStateStore, HttpRelay, MemoryRelay, SyncService, syncNamespace, type Relay } from './namespaces/sync'
+import { createSyncStateStore, HttpRelay, MemoryRelay, SYNC_RELAY_PATH, SyncService, syncNamespace, type Relay } from './namespaces/sync'
 import { TokensService, tokensNamespace } from './namespaces/tokens'
 import { accountsNamespace, KEY_DEK, KEY_LOCK_AT, VaultManager, vaultNamespace } from './namespaces/vault'
 import {
@@ -443,7 +443,16 @@ export function createEngine(deps: EngineDeps): Engine {
     relayFor,
     // A scanned pairing offer may not name a relay other than this one
     // (ES-BV-014); loopback stays allowed for development.
-    defaultRelayUrl: deps.relayUrl ?? null,
+    /*
+      This build's relay, derived rather than injected (ES-BV-014).
+
+      `assertRelayAllowed` pins a scanned offer's relay to this one, and
+      neither body was passing it — so `defaultRelayUrl` was null in both and
+      any `https://` host named by a scanned QR was accepted. It follows the
+      API origin, which is what "this build's infrastructure" means everywhere
+      else in here; a test or a development build can still override it.
+    */
+    defaultRelayUrl: deps.relayUrl === undefined ? `${apiOrigin}${SYNC_RELAY_PATH}` : deps.relayUrl,
     identity: sealed.syncIdentity,
     devices: sealed.syncDevices,
     meta: sealed.syncMeta,

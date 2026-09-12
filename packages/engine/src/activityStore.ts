@@ -22,7 +22,13 @@ const BlobSchema = z.object({ v: z.literal(1), entries: z.array(ActivityEntrySch
 export class ActivityStore {
   private cache: ActivityEntry[] | null = null
   /** The stored blob would not open under this key; refuse to write over it. */
-  private poisoned = false
+  /**
+   * What the last read of the blob found (ES-BV-062). `'kept'` means the
+   * ciphertext could not be read but a copy is safely aside, so a fresh blob
+   * may be started; `'unsafe'` means even the copy failed, and then nothing is
+   * written over the bytes.
+   */
+  private poisoned: 'no' | 'kept' | 'unsafe' = 'no'
 
   constructor(
     private readonly platform: Platform,
@@ -72,7 +78,10 @@ export class ActivityStore {
     try {
       const pt = xchacha20poly1305(key, fromHex(parsed.nonce), AAD).decrypt(fromHex(parsed.ct))
       const blob = BlobSchema.safeParse(JSON.parse(new TextDecoder().decode(pt)))
-      this.cache = blob.success ? blob.data.entries : []
+      // A blob that opens but does not fit its schema is unreadable too
+      // (ES-BV-061): the same path, not a silent empty list.
+      if (!blob.success) throw new Error('the blob does not match its schema')
+      this.cache = blob.data.entries
     } catch {
       /*
         A blob that will not open is not an empty blob (ES-BV-012).
@@ -86,9 +95,9 @@ export class ActivityStore {
         were not. The bytes are copied aside under their own key and the store
         refuses to write until somebody decides what to do about it.
       */
-      await this.quarantine(raw)
+      const kept = await this.quarantine(raw)
       this.cache = []
-      this.poisoned = true
+      this.poisoned = kept ? 'kept' : 'unsafe'
     }
     return this.cache
   }
@@ -98,26 +107,49 @@ export class ActivityStore {
    * read without the old DEK, and it is there so a support conversation can
    * begin with "your history is still on the disk" rather than with a shrug.
    */
-  private async quarantine(raw: string): Promise<void> {
+  private async quarantine(raw: string): Promise<boolean> {
     try {
       await this.platform.storage.local.set(`${KEY_BLOB}.sealed-quarantine.${this.platform.now()}`, raw)
+      return true
     } catch {
       // Storage that will not take a copy will not take the overwrite either;
       // `poisoned` is what actually protects the bytes.
+      return false
     }
   }
 
-  private async persist(entries: ActivityEntry[]): Promise<void> {
+  private async persist(entries: ActivityEntry[], overQuarantined = false): Promise<void> {
     /*
       Nothing is written over a blob this store could not read. A DEK change —
       a password rotation, a different vault unlocking — clears the flag on the
       next load, because that load is a fresh attempt with a fresh key.
     */
-    if (this.poisoned)
+    if (this.poisoned === 'unsafe')
       throw new EngineError(
         'internal',
-        'The activity history could not be decrypted and has been set aside; it will not be overwritten.',
+        'The activity history could not be read and no copy of it could be made; it will not be overwritten.',
       )
+    /*
+      One store may start again, and only on the paths that must not stop
+      (ES-BV-062).
+
+      The write-ahead append runs before every signature, so refusing it for
+      the life of the install meant one unreadable blob — a corrupted byte,
+      or a blob left on the install by a previous vault — stopped every send,
+      swap, bridge and dApp transaction with an internal error and no in-app
+      way out. That is a worse outcome than the loss, and the loss is bounded:
+      the ciphertext is under the quarantine key, where the right DEK still
+      opens it.
+
+      Reading paths and bulk rewrites do not get this. A `list()` that quietly
+      committed an empty history would be the ES-BV-012 bug again.
+    */
+    if (this.poisoned === 'kept' && !overQuarantined)
+      throw new EngineError(
+        'internal',
+        'The activity history could not be read and has been set aside; it will not be overwritten.',
+      )
+    this.poisoned = 'no'
     const key = await this.key()
     const nonce = this.platform.random(24)
     const ct = xchacha20poly1305(key, nonce, AAD).encrypt(new TextEncoder().encode(JSON.stringify({ v: 1, entries })))
@@ -130,7 +162,8 @@ export class ActivityStore {
   async append(entry: ActivityEntry): Promise<void> {
     const entries = await this.load()
     if (entries.some((e) => e.id === entry.id)) throw new EngineError('invalid_argument', `duplicate activity id ${entry.id}`)
-    await this.persist([...entries, entry])
+    // The path that gates every signature (ES-BV-062).
+    await this.persist([...entries, entry], true)
   }
 
   async update(id: string, patch: Partial<ActivityEntry>): Promise<ActivityEntry> {
@@ -141,12 +174,20 @@ export class ActivityStore {
     const next = ActivityEntrySchema.parse({ ...current, ...patch })
     const list = entries.slice()
     list[idx] = next
-    await this.persist(list)
+    // A broadcast writes its hash and its status through here; the same
+    // reasoning as `append`.
+    await this.persist(list, true)
     return next
   }
 
+  /**
+   * Discard the history. This is the in-app way out of an unreadable blob
+   * (ES-BV-062): it is a deliberate user action that already means "throw this
+   * away", so it is allowed to write over a quarantined one. The ciphertext
+   * stays under the quarantine key either way.
+   */
   async clear(): Promise<void> {
-    await this.persist([])
+    await this.persist([], true)
   }
 
   /** Forget the decrypted cache on lock. */
@@ -154,6 +195,6 @@ export class ActivityStore {
     this.cache = null
     // The next load is a fresh attempt with whatever key is current, so the
     // refusal is re-decided rather than inherited (ES-BV-012).
-    this.poisoned = false
+    this.poisoned = 'no'
   }
 }
