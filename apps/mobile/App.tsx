@@ -6,6 +6,17 @@ import { useEffect, useState } from 'react'
 import { AppState, Linking, Share, StyleSheet, View } from 'react-native'
 import Animated, { cubicBezier } from 'react-native-reanimated'
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
+/*
+  The version, from `version.json` at the repo root — the same file the
+  extension manifest and `app.config.ts` read (the release checklist).
+
+  It was `EXPO_PUBLIC_APP_VERSION` out of `apps/mobile/.env`, which is
+  gitignored, so the number Settings › About showed and the number the API saw
+  as `clientVersion` came from a file that is different on every machine and
+  absent on CI — falling back to a literal that nobody was bumping. A build's
+  own version is not local configuration.
+*/
+import { version as APP_VERSION } from '../../version.json'
 import { haptic, sound } from './src/feel'
 import { mobileLedgerProvider } from './src/ledger'
 import { links } from './src/links'
@@ -64,7 +75,7 @@ const host: Partial<UiHost> = {
     disable: unregisterPush,
   },
   widget: { publish: publishWidgetSnapshot, clear: clearWidgetSnapshot },
-  version: process.env['EXPO_PUBLIC_APP_VERSION'] ?? '0.1.0',
+  version: APP_VERSION,
   buildHash: process.env['EXPO_PUBLIC_BUILD_HASH'] ?? null,
 }
 
@@ -143,7 +154,7 @@ export default function App() {
     let alive = true
     Promise.all([createMobilePlatform(), createWalletKit().catch(() => null)])
       .then(([platform, walletKit]) => {
-        if (alive) setEngine(createEngine({ platform, ledger: mobileLedgerProvider(), walletKit, body: 'mobile', clientVersion: `BoltVault/${process.env['EXPO_PUBLIC_APP_VERSION'] ?? '0.1.0'}`, ...(process.env['EXPO_PUBLIC_BOLTVAULT_API'] ? { apiOrigin: process.env['EXPO_PUBLIC_BOLTVAULT_API'] } : {}), ...(process.env['EXPO_PUBLIC_BOLTVAULT_KEY'] ? { clientKey: process.env['EXPO_PUBLIC_BOLTVAULT_KEY'] } : {}), ...(process.env['EXPO_PUBLIC_QUOTER_URL'] ? { quoterUrl: process.env['EXPO_PUBLIC_QUOTER_URL'] } : {}), features: { limitOrders: process.env['EXPO_PUBLIC_BOLTVAULT_LIMIT_ORDERS'] === '1' } }))
+        if (alive) setEngine(createEngine({ platform, ledger: mobileLedgerProvider(), walletKit, body: 'mobile', clientVersion: `BoltVault/${APP_VERSION}`, ...(process.env['EXPO_PUBLIC_BOLTVAULT_API'] ? { apiOrigin: process.env['EXPO_PUBLIC_BOLTVAULT_API'] } : {}), ...(process.env['EXPO_PUBLIC_BOLTVAULT_KEY'] ? { clientKey: process.env['EXPO_PUBLIC_BOLTVAULT_KEY'] } : {}), ...(process.env['EXPO_PUBLIC_QUOTER_URL'] ? { quoterUrl: process.env['EXPO_PUBLIC_QUOTER_URL'] } : {}), features: { limitOrders: process.env['EXPO_PUBLIC_BOLTVAULT_LIMIT_ORDERS'] === '1' } }))
       })
       .catch((err: unknown) => console.error('platform failed', err))
     return () => {

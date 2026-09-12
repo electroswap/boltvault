@@ -8,5 +8,5 @@
     "moduleResolution": "Bundler",
     "types": ["vitest/globals"]
   },
-  "include": ["App.tsx", "index.ts", "src", "tests", "app.json"]
+  "include": ["App.tsx", "app.config.ts", "index.ts", "src", "tests", "app.json"]
 }
