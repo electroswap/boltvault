@@ -24,6 +24,15 @@ export interface InputProps {
   /** Readout numerals (Oxanium 28) for amounts. */
   readonly big?: boolean
   /**
+   * The amount one step louder (Oxanium 32), for the swap console.
+   *
+   * The web interface sets its swap amount at 36 px and steps down to 28 on a
+   * phone (`StyledNumericalInput`), against a body face; our readout face at
+   * the same 28 measured a tenth shorter than the page beside it, which is the
+   * gap the owner photographed. Only `big` fields have a size to choose.
+   */
+  readonly louder?: boolean
+  /**
    * An amount field. Rejects anything that is not a number as it is typed —
    * owner: "Swap input is accepting non digit chars" — and asks the phone for
    * a decimal keypad. Kept as sanitising rather than a pattern check so a
@@ -39,7 +48,7 @@ export interface InputProps {
   readonly disabled?: boolean
 }
 
-export const Input = forwardRef<TextInput, InputProps>(function Input({ value, onChange, label, placeholder, secure, multiline, bare, big, numeric, error, hint, autoFocus, onSubmit, testID, autoCapitalize = 'none', disabled }, ref) {
+export const Input = forwardRef<TextInput, InputProps>(function Input({ value, onChange, label, placeholder, secure, multiline, bare, big, louder, numeric, error, hint, autoFocus, onSubmit, testID, autoCapitalize = 'none', disabled }, ref) {
   const [focused, setFocused] = useState(false)
   const handleChange = (next: string): void => {
     if (!numeric) {
@@ -79,7 +88,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input({ value, o
         testID={testID}
         accessibilityLabel={label ?? placeholder}
         style={{
-          minHeight: multiline ? 96 : big ? 40 : metrics.hit + 4,
+          minHeight: multiline ? 96 : big ? (louder ? 44 : 40) : metrics.hit + 4,
           paddingHorizontal: bare ? 0 : 14,
           paddingVertical: multiline ? 12 : 0,
           borderRadius: radius.well,
@@ -89,8 +98,8 @@ export const Input = forwardRef<TextInput, InputProps>(function Input({ value, o
           color: paint.ink,
           fontFamily: big ? fonts.readout : fonts.text,
           fontWeight: big ? '600' : '400',
-          fontSize: big ? 28 : 15,
-          letterSpacing: big ? -0.85 : 0,
+          fontSize: big ? (louder ? 32 : 28) : 15,
+          letterSpacing: big ? (louder ? -1.0 : -0.85) : 0,
           lineHeight: multiline ? 22 : undefined,
           textAlignVertical: multiline ? 'top' : 'center',
           ...OUTLINE_OFF,

@@ -41,6 +41,17 @@ export interface AmountWellProps {
    * pixel thicker when there's locked liquidity").
    */
   readonly accent?: `#${string}` | `rgba(${string})` | null
+  /**
+   * The amount one step louder, and the well a little taller to carry it.
+   *
+   * The swap console is the one well that stands beside the web interface —
+   * the owner reads the two on the same phone — and the interface sets its
+   * amount at 36 px, stepping to 28 only below its `sm` breakpoint. Measured
+   * off the owner's two screenshots our 28 px readout came out a tenth shorter
+   * than the page's, which is the difference they were pointing at. Send and
+   * Bridge have nothing to be measured against and stay exactly as they were.
+   */
+  readonly louder?: boolean
   readonly autoFocus?: boolean
   readonly testID?: string
   readonly inputTestID?: string
@@ -48,24 +59,24 @@ export interface AmountWellProps {
   readonly balanceTestID?: string
 }
 
-export function AmountWell({ label, value, onChange, readOnly = false, tokenPill, right, fiat, balance, balanceIcon = 'wallet', onMax, error, accent, autoFocus, testID, inputTestID, maxTestID, balanceTestID }: AmountWellProps) {
+export function AmountWell({ label, value, onChange, readOnly = false, tokenPill, right, fiat, balance, balanceIcon = 'wallet', onMax, error, accent, louder = false, autoFocus, testID, inputTestID, maxTestID, balanceTestID }: AmountWellProps) {
   const empty = !value || value === '0' || value === '—'
   return (
-    <Plate role="well" gap={2} paddingVertical={8} paddingHorizontal={12} {...(accent ? { borderColor: accent, borderWidth: 2 } : {})} testID={testID}>
+    <Plate role="well" gap={2} paddingVertical={louder ? 10 : 8} paddingHorizontal={12} {...(accent ? { borderColor: accent, borderWidth: 2 } : {})} testID={testID}>
       <Row justifyContent="space-between" alignItems="center" minHeight={right ? 32 : 18}>
         <Body tone="mute" size="caption">
           {label}
         </Body>
         {right ?? null}
       </Row>
-      <Row gap="$2" alignItems="center" minHeight={40}>
+      <Row gap="$2" alignItems="center" minHeight={louder ? 44 : 40}>
         <Column flex={1} minWidth={0}>
           {readOnly || !onChange ? (
-            <Body fontFamily="$readout" fontSize={28} lineHeight={34} fontWeight="600" letterSpacing={-0.85} numberOfLines={1} color={empty ? '$mute' : '$ink'} testID={inputTestID}>
+            <Body fontFamily="$readout" fontSize={louder ? 32 : 28} lineHeight={louder ? 38 : 34} fontWeight="600" letterSpacing={louder ? -1.0 : -0.85} numberOfLines={1} color={empty ? '$mute' : '$ink'} testID={inputTestID}>
               {value || '0'}
             </Body>
           ) : (
-            <Input value={value} onChange={onChange} placeholder="0" bare big numeric autoFocus={autoFocus} testID={inputTestID} />
+            <Input value={value} onChange={onChange} placeholder="0" bare big {...(louder ? { louder: true } : {})} numeric autoFocus={autoFocus} testID={inputTestID} />
           )}
         </Column>
         {tokenPill ?? null}

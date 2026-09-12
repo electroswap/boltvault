@@ -19,7 +19,13 @@ export interface PillProps {
   readonly chevron?: boolean
   readonly selected?: boolean
   readonly tone?: 'ink' | 'mute' | 'arc' | 'ember' | 'surge' | 'burn'
-  readonly size?: 'xs' | 'sm' | 'md'
+  /**
+   * `lg` is the swap console's token selector, sized from the web interface's
+   * own `CurrencySelect`: a 36 px pill whose symbol is set at 18 px, not at the
+   * 13 px every other pill's label uses. Owner: "bigger font for token
+   * selectors". Everything else stays where it was.
+   */
+  readonly size?: 'xs' | 'sm' | 'md' | 'lg'
   /**
    * Bold the label. For a pill whose label is a *name* rather than a setting —
    * the token in a swap or send selector, where the symbol is the subject of
@@ -42,7 +48,7 @@ export function Pill({ label, icon, chevron = false, selected = false, tone, siz
     <Animated.View
       style={{
         height,
-        paddingHorizontal: size === 'xs' ? 7 : size === 'sm' ? 10 : 12,
+        paddingHorizontal: size === 'xs' ? 7 : size === 'sm' ? 10 : size === 'lg' ? 10 : 12,
         borderRadius: 999,
         borderWidth: 1,
         alignItems: 'center',
@@ -70,12 +76,12 @@ export function Pill({ label, icon, chevron = false, selected = false, tone, siz
         transitionTimingFunction: 'ease-out',
       }}
     >
-      <Row gap={size === 'xs' ? 4 : 6} alignItems="center">
+      <Row gap={size === 'xs' ? 4 : size === 'lg' ? 8 : 6} alignItems="center">
         {icon}
-        <Body size="caption" fontSize={size === 'xs' ? 11 : undefined} lineHeight={size === 'xs' ? 14 : undefined} tone={labelTone} fontWeight={strong ? '700' : selected ? '600' : '400'} numberOfLines={1}>
+        <Body size="caption" fontSize={size === 'xs' ? 11 : size === 'lg' ? 18 : undefined} lineHeight={size === 'xs' ? 14 : size === 'lg' ? 22 : undefined} tone={labelTone} fontWeight={strong ? '700' : selected ? '600' : '400'} numberOfLines={1}>
           {label}
         </Body>
-        {chevron ? <Icon name="chevronDown" size={14} color={selected ? paint.ink : paint.mute} /> : null}
+        {chevron ? <Icon name="chevronDown" size={size === 'lg' ? 18 : 14} color={selected ? paint.ink : paint.mute} /> : null}
       </Row>
     </Animated.View>
   )

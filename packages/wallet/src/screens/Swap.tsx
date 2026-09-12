@@ -30,27 +30,22 @@ import { swapFlowStore, useSwapFlow } from '../state/useSwapFlow'
 import { useWalletState } from '../state/useWalletState'
 import { AmountWell } from '../components/AmountWell'
 import { ChainCaption } from '../components/ChainSelect'
-import { ScreenFooter } from '../components/ScreenFooter'
 import { FeeScheduleSheet } from './FeeScheduleSheet'
 import { statusLabel, stepLabel } from '../components/FlowPlate'
 
 const ETN = 52014
 
 /**
- * A quote that may have been priced from either end (§8.6: "exact-out is a
- * power toggle, default off").
+ * The page's side margin, taken from the interface's own `PageWrapper`
+ * (`padding: 68px 8px 0px`).
  *
- * The two fields are optional because `SwapQuoteSchema` does not carry them
- * yet — they ride on the engine's answer rather than in its schema while that
- * lands — so a screen must read them as "may be absent" and fall back to the
- * exact-in reading, which is what every quote before this meant.
- *
- * What the inherited fields mean when `tradeType` is 'exactOut':
- *  - `amountInRaw`    the estimate: what it costs at the quoted price.
- *  - `maximumInRaw`   the promise: the most that can leave the account.
- *  - `receiveRaw`     exactly what the user typed.
+ * Every other screen here uses `metrics.inset`/`insetWide` — 13 and 16 — and
+ * on the swap screen that put a third more air down each side than the page
+ * the owner reads beside it. This is the one screen with something to match,
+ * so it matches, and nothing else moves. Owner: "Less margins on the
+ * left/right, center the dialog in the page."
  */
-type Quote = SwapQuote & { readonly tradeType?: 'exactIn' | 'exactOut'; readonly maximumInRaw?: string }
+const GUTTER = 8
 
 /** The air above and below every line of the details card. */
 const ROW_PAD = 9
@@ -103,19 +98,11 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   const [tokenOut, setTokenOut] = useState(initialOut ?? '')
   const [amount, setAmount] = useState('')
   const [minOut, setMinOut] = useState('')
-  /*
-    Which end of the trade the user is holding still. Off by default (§8.6), and
-    reset whenever the pair changes: an exact amount of one token is not an
-    exact amount of the next one.
-  */
-  const [exactOut, setExactOut] = useState(false)
-  /** The amount the user typed into the receive terminal, when they are typing there. */
-  const [want, setWant] = useState('')
   const [duration, setDuration] = useState<string>('604800')
   const [slippage, setSlippage] = useState<number | null>(null)
   const [slippageOpen, setSlippageOpen] = useState(false)
   const [picker, setPicker] = useState<'in' | 'out' | null>(null)
-  const [quote, setQuote] = useState<Quote | null>(null)
+  const [quote, setQuote] = useState<SwapQuote | null>(null)
   const [limitQuote, setLimitQuote] = useState<LimitQuote | null>(null)
   const [orders, setOrders] = useState<LimitOrderView[]>([])
   const [feeSheet, setFeeSheet] = useState(false)
@@ -165,17 +152,15 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
       tokenIn,
       tokenOut,
       slippageBips: effectiveSlippage,
-      // Exactly one side is fixed, and `tradeType` says which one the user typed.
-      ...(exactOut ? { amountOut: want, tradeType: 'exactOut' as const } : { amountIn: amount }),
+      amountIn: amount,
     }),
-    [active?.id, tokenIn, tokenOut, effectiveSlippage, exactOut, want, amount],
+    [active?.id, tokenIn, tokenOut, effectiveSlippage, amount],
   )
   // Quote as the user types and again on every block while the pair is set (§8.6: rerated per block).
   useEffect(() => {
     if (!active || !tokenOut || slippage === null) return
     if (mode === 'swap') {
-      // Whichever terminal the user is typing in is the one that has to have something in it.
-      if (!(exactOut ? want : amount).trim()) {
+      if (!amount.trim()) {
         setQuote(null)
         return
       }
@@ -206,7 +191,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
       alive = false
       clearTimeout(id)
     }
-  }, [engine, active, mode, tokenIn, tokenOut, amount, want, exactOut, swapArgs, minOut, duration, effectiveSlippage, slippage, head?.blockNumber])
+  }, [engine, active, mode, tokenIn, tokenOut, amount, swapArgs, minOut, duration, effectiveSlippage, slippage, head?.blockNumber])
 
   useEffect(() => {
     if (flow?.status === 'done') setFire((n) => n + 1)
@@ -264,21 +249,18 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   const coachOpen = mode === 'swap' && prefsLoaded && activityLoaded && !hasSwapped && !prefs.swapCoachDismissed
 
   /*
-    An amount is an amount OF something, so changing what the trade is made of
-    drops the side that was being held still. Keeping "100" through a flip would
-    quietly turn "exactly 100 USDC" into "exactly 100 BOLT".
+    A quote is a quote OF a pair, so changing what the trade is made of drops
+    it: the figures on screen belong to the tokens that were there a moment ago.
   */
-  const resetFixedSide = useCallback(() => {
-    setExactOut(false)
-    setWant('')
+  const resetQuote = useCallback(() => {
     setQuote(null)
   }, [])
 
   const flip = useCallback(() => {
     setTokenIn(tokenOut)
     setTokenOut(tokenIn)
-    resetFixedSide()
-  }, [tokenIn, tokenOut, resetFixedSide])
+    resetQuote()
+  }, [tokenIn, tokenOut, resetQuote])
 
   const pick = (address: string): void => {
     if (picker === 'in') {
@@ -288,7 +270,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
       if (address.toLowerCase() === tokenIn.toLowerCase()) setTokenIn(tokenOut)
       setTokenOut(address)
     }
-    resetFixedSide()
+    resetQuote()
     setPicker(null)
   }
 
@@ -347,10 +329,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
           </Body>
           {q ? (
             <Body tone="mute" testID="swap-flow-summary">
-              {/* The guarantee reads from whichever side was held still. */}
-              {(q as Quote).tradeType === 'exactOut'
-                ? t({ id: 'swap.summary.exactOut', message: 'at most {a} {s} → {b} {u}', values: { a: formatRaw((q as Quote).maximumInRaw ?? q.amountInRaw, q.decimalsIn), s: q.symbolIn, b: formatRaw(q.receiveRaw, q.decimalsOut), u: q.symbolOut } })
-                : t({ id: 'swap.summary', message: '{a} {s} → at least {b} {u}', values: { a: formatRaw(q.amountInRaw, q.decimalsIn), s: q.symbolIn, b: formatFloor(q.minimumOutRaw, q.decimalsOut), u: q.symbolOut } })}
+              {t({ id: 'swap.summary', message: '{a} {s} → at least {b} {u}', values: { a: formatRaw(q.amountInRaw, q.decimalsIn), s: q.symbolIn, b: formatFloor(q.minimumOutRaw, q.decimalsOut), u: q.symbolOut } })}
             </Body>
           ) : null}
           <Plate gap="$2" testID="swap-steps">
@@ -381,14 +360,6 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   const feeMain = quote ? (quote.fee.bips === 0 ? t({ id: 'swap.fee.zero.v2', message: 'No wallet fee · {name}', values: { name: quote.fee.name } }) : t({ id: 'swap.fee.main.v2', message: '{p} · {name}', values: { p: formatPct(quote.fee.bips), name: quote.fee.name } })) : t({ id: 'swap.fee.idle', message: '0.50% · hold BOLT for less' })
   const feeDetail = quote && quote.fee.bips > 0 && quote.amountOutRaw !== '0' ? t({ id: 'swap.fee.detail', message: '{a} {s} to {to}', values: { a: formatRaw(quote.fee.amountRaw, quote.decimalsOut), s: quote.symbolOut, to: quote.fee.sink ? shortAddress(quote.fee.sink) : '—' } }) : null
   const nextLine = quote?.fee.nextTierAt && quote.fee.nextTierBips !== null ? t({ id: 'swap.fee.next', message: 'hold {n} BOLT-eq for {p}', values: { n: formatRaw(quote.fee.nextTierAt, 18), p: formatPct(quote.fee.nextTierBips) } }) : null
-  /*
-    §7.10 forbids hiding a fee, and fixing the output moves where this one is
-    felt: it is still taken from the output on chain, but the order is bought
-    large enough to absorb it, so what the user actually notices is a slightly
-    bigger bill. Saying so is the difference between "the fee" and "why does
-    this cost more than the rate says".
-  */
-  const feeOnTop = exactOut && quote && quote.fee.bips > 0 ? t({ id: 'swap.fee.onTop', message: 'added to what you pay, so you receive the full amount' }) : null
   const lockText = liquidity.value
     ? liquidity.value.lockedPct > 0
       ? t({ id: 'swap.locks', message: '{p}% locked · {n}', values: { p: Math.round(liquidity.value.lockedPct), n: liquidity.value.lockCount === 1 ? t({ id: 'swap.locks.one', message: '1 lock' }) : t({ id: 'swap.locks.many', message: '{n} locks', values: { n: liquidity.value.lockCount } }) } })
@@ -428,19 +399,25 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
   const canSwap = blockedSide === null && (mode === 'swap' ? !!quote?.ok && fresh && !busy : !!limitQuote?.ok && !busy)
   const priced = quote && quote.amountOutRaw !== '0'
   const receiveText = priced ? formatRaw(quote.receiveRaw, quote.decimalsOut) : '—'
-  /*
-    In the exact-out direction the pay terminal is the answer, so it shows the
-    quoted cost as a readout. The number the user is actually committing to is
-    the ceiling, and that gets its own line in the details — the same place the
-    other direction's guarantee lives.
-  */
-  const payText = exactOut ? (priced ? formatRaw(quote.amountInRaw, quote.decimalsIn) : '—') : amount
-  const ceilingText = quote?.maximumInRaw && quote.maximumInRaw !== '0' ? `${formatRaw(quote.maximumInRaw, quote.decimalsIn)} ${quote.symbolIn}` : '—'
   const keyLabel = mode === 'swap' ? (quote && quote.priceImpactPct !== null && quote.priceImpactPct > 15 ? t({ id: 'swap.key.anyway', message: 'Swap anyway' }) : t({ id: 'swap.key', message: 'Swap' })) : t({ id: 'swap.limit.key', message: 'Place order' })
 
   return (
     <Column flex={1}>
-      <ScrollView contentContainerStyle={{ padding: inset, gap: 10 }} testID="swap">
+      {/*
+        The dialog, laid out the way the interface lays its own out.
+
+        `PageWrapper` there is `max-width: 480px; margin: 0 auto` with 8 px of
+        side padding, and everything — header, both terminals, the details row
+        and the Swap button — lives inside the one `SwapWrapper` card. This
+        screen had the console at a 16 px inset, the details as a second plate
+        below it, and the key pinned to the bottom of the *window* by
+        `ScreenFooter`, which is what put half a phone of empty space between
+        the card and the button the owner was reaching for. Owner: "Less
+        margins on the left/right, center the dialog in the page, bring the
+        swap button up."
+      */}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: GUTTER, paddingVertical: inset, gap: 10 }} testID="swap">
+        <Column width="100%" maxWidth={metrics.dialog} alignSelf="center" gap={10}>
         {/* Title row: Swap (or Swap · Limit) and the slippage pill (owner item W2). */}
         {/* `metrics.header` so the home key below fits without moving anything. */}
         <Row justifyContent="space-between" alignItems="center" minHeight={metrics.header} gap="$2">
@@ -472,16 +449,21 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
           {mode === 'swap' ? <Pill icon={<Icon name="tune" size={14} color={paint.mute} />} label={formatPct(effectiveSlippage)} size="sm" onPress={() => setSlippageOpen(true)} accessibilityLabel={t({ id: 'swap.slippage', message: 'Slippage {p}', values: { p: formatPct(effectiveSlippage) } })} testID="swap-slippage" /> : null}
         </Row>
 
-        {/* The console: two wells in one panel, the flip control on their seam (style bible › layout). */}
-        <Plate role="console" gap="$1" padding={10} testID="swap-console">
+        {/*
+          The console: two wells, the seam controls between them, the details
+          row and the key, all in one panel — `SwapWrapper` holds exactly this
+          set, and its inner padding is 8, not 10.
+        */}
+        <Plate role="console" gap="$1" padding={8} testID="swap-console">
           <AmountWell
-            label={exactOut ? t({ id: 'swap.pay.estimated', message: 'You pay about' }) : t({ id: 'swap.pay', message: 'You pay' })}
-            value={payText}
-            {...(exactOut ? { readOnly: true } : { onChange: setAmount })}
+            label={t({ id: 'swap.pay', message: 'You pay' })}
+            value={amount}
+            onChange={setAmount}
+            louder
             tokenPill={<TokenPill token={inView} onPress={() => setPicker('in')} testID="swap-token-in" />}
-            fiat={formatAmountFiat(exactOut ? payText.replace(/,/g, '') : amount, rowIn, currency)}
+            fiat={formatAmountFiat(amount, rowIn, currency)}
             balance={rowIn ? `${formatQuantity(rowIn.quantity)} ${rowIn.symbol}` : null}
-            onMax={rowIn && !exactOut ? () => setAmount(rowIn.quantity) : undefined}
+            onMax={rowIn ? () => setAmount(rowIn.quantity) : undefined}
             accent={lockRim}
             testID="terminal-in"
             inputTestID="swap-amount-in"
@@ -530,45 +512,22 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
 
           {mode === 'swap' ? (
             /*
-              The receive terminal, which can now be typed in.
+              The receive terminal: a readout, with no control beside its label.
 
-              §8.6 makes this a power toggle rather than the default, so the
-              well stays a readout until the pill beside its label is pressed —
-              and the pill is the only new control on the screen, because the
-              limit mode's second editable terminal already showed that this
-              well takes a value perfectly well.
+              It carried an "Exact amount" pill that flipped the trade to
+              exact-out. Owner: "I do not like the 'Exact amount' button in the
+              swap dialog" — and the interface's own output panel has nothing
+              there either, so the label row is a label row again. The engine
+              still prices exact-out (`swap.quote` takes `tradeType`); nothing
+              in this product asks it to.
             */
             <AmountWell
-              label={exactOut ? t({ id: 'swap.receive.exact', message: 'You receive exactly' }) : t({ id: 'swap.receive', message: 'You receive' })}
-              value={exactOut ? want : receiveText}
-              {...(exactOut ? { onChange: setWant } : { readOnly: true })}
-              right={
-                <Pill
-                  size="sm"
-                  label={t({ id: 'swap.exactOut', message: 'Exact amount' })}
-                  selected={exactOut}
-                  onPress={() => {
-                    /*
-                      Turning it on carries the figure across, so the price the
-                      user was just looking at becomes the amount they are
-                      asking for; turning it off hands the pay terminal back
-                      whatever the quote said it would cost.
-                    */
-                    if (exactOut) {
-                      setAmount(priced ? formatRaw(quote.amountInRaw, quote.decimalsIn).replace(/,/g, '') : amount)
-                      setWant('')
-                    } else {
-                      setWant(priced ? formatRaw(quote.receiveRaw, quote.decimalsOut).replace(/,/g, '') : '')
-                    }
-                    setExactOut((v) => !v)
-                    setQuote(null)
-                  }}
-                  accessibilityLabel={t({ id: 'swap.exactOut.a11y', message: 'Set the exact amount you receive' })}
-                  testID="swap-exact-out"
-                />
-              }
+              label={t({ id: 'swap.receive', message: 'You receive' })}
+              value={receiveText}
+              readOnly
+              louder
               tokenPill={<TokenPill token={outView} onPress={() => setPicker('out')} testID="swap-token-out" />}
-              fiat={exactOut ? formatAmountFiat(want, rowOut, currency) : priced ? formatAmountFiat(formatRaw(quote.receiveRaw, quote.decimalsOut).replace(/,/g, ''), rowOut, currency) : null}
+              fiat={priced ? formatAmountFiat(formatRaw(quote.receiveRaw, quote.decimalsOut).replace(/,/g, ''), rowOut, currency) : null}
               balance={rowOut ? `${formatQuantity(rowOut.quantity)} ${rowOut.symbol}` : null}
               accent={lockRim}
               testID="terminal-out"
@@ -580,6 +539,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
               label={t({ id: 'limit.receive', message: 'You receive at least' })}
               value={minOut}
               onChange={setMinOut}
+              louder
               tokenPill={<TokenPill token={outView} onPress={() => setPicker('out')} testID="swap-token-out" />}
               fiat={formatAmountFiat(minOut, rowOut, currency)}
               balance={rowOut ? `${formatQuantity(rowOut.quantity)} ${rowOut.symbol}` : null}
@@ -588,38 +548,21 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
               balanceTestID="swap-balance-out"
             />
           )}
-        </Plate>
 
-        {mode === 'limit' && limitQuote ? (
-          <Plate gap="$1" testID="limit-distance">
-            <Body tone="mute" size="caption">
-              {limitQuote.marketRate ? t({ id: 'limit.market', message: 'Market: {r}', values: { r: formatRate(limitQuote.marketRate, limitQuote.symbolIn, limitQuote.symbolOut) ?? '—' } }) : t({ id: 'limit.market.none', message: 'No market rate for this pair right now.' })}
-            </Body>
-            {limitQuote.distancePct !== null ? (
-              <Body tone={limitQuote.distancePct >= 0 ? 'arc' : 'ember'} size="caption">
-                {limitQuote.distancePct >= 0 ? t({ id: 'limit.above', message: '{p}% above market — fills when the price gets there', values: { p: limitQuote.distancePct.toFixed(2) } }) : t({ id: 'limit.below', message: '{p}% below market — a swap would pay more right now', values: { p: Math.abs(limitQuote.distancePct).toFixed(2) } })}
-              </Body>
-            ) : null}
-            <Row gap="$2" flexWrap="wrap">
-              {DURATIONS.map((d) => (
-                <Pill key={d.id} label={d.label} selected={duration === d.id} onPress={() => setDuration(d.id)} testID={`limit-duration-${d.id}`} />
-              ))}
-            </Row>
-          </Plate>
-        ) : null}
+          {/*
+            The details card, in the interface's shape: the rate is the row you
+            always see, with the route beside it and a chevron at the end, and
+            the rest of the figures live under it.
 
-        {/*
-          The details card, in the interface's shape: the rate is the row you
-          always see, with the route beside it and a chevron at the end, and the
-          rest of the figures live under it.
-
-          It used to be two plates — a rate strip and a four-row fee stack, both
-          always open — which is most of why the two screens did not look alike
-          however closely the console matched. `SwapDetailsDropdown` there is one
-          card: "1 BOLT = 2.31282 ETN" and a chevron, then price impact, max
-          slippage, network cost, order routing.
-        */}
-        {mode === 'swap' ? (
+            It used to be two plates — a rate strip and a four-row fee stack,
+            both always open — which is most of why the two screens did not look
+            alike however closely the console matched. `SwapDetailsDropdown`
+            there is one card: "1 BOLT = 2.31282 ETN" and a chevron, then price
+            impact, max slippage, network cost, order routing — and it is a
+            child of `SwapWrapper`, not a plate floating below it, which is why
+            it sits inside the console here now.
+          */}
+          {mode === 'swap' ? (
           <Plate role="recessed" rim={0.7} gap={0} paddingVertical={2} paddingHorizontal="$3" testID="fee-stack">
             <Pressable
               onPress={() => setDetails((d) => !d)}
@@ -678,11 +621,6 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
                       {feeDetail}
                     </Body>
                   ) : null}
-                  {feeOnTop ? (
-                    <Body tone="mute" size="caption" textAlign="right" testID="swap-fee-on-top">
-                      {feeOnTop}
-                    </Body>
-                  ) : null}
                   {nextLine ? (
                     <Body tone="ember" size="caption" textAlign="right" testID="swap-fee-next">
                       {nextLine}
@@ -691,17 +629,7 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
                 </Column>
               </Row>
             </Pressable>
-            {/*
-              The guarantee, whichever side it is on. Fixing the output leaves
-              nothing to floor — the minimum received IS the amount asked for —
-              so the figure worth stating is the ceiling on what leaves the
-              account, which is the number slippage actually protects now.
-            */}
-            {exactOut ? (
-              <FeeRow label={t({ id: 'swap.max', message: 'Most you will pay' })} value={ceilingText} tone="mute" testID="swap-max-in" />
-            ) : (
-              <FeeRow label={t({ id: 'swap.min', message: 'Minimum received' })} value={priced ? `${formatRaw(quote.minimumOutRaw, quote.decimalsOut)} ${quote.symbolOut}` : '—'} tone="mute" testID="swap-min" />
-            )}
+            <FeeRow label={t({ id: 'swap.min', message: 'Minimum received' })} value={priced ? `${formatRaw(quote.minimumOutRaw, quote.decimalsOut)} ${quote.symbolOut}` : '—'} tone="mute" testID="swap-min" />
             <FeeRow label={t({ id: 'swap.locked', message: 'Liquidity locked' })} value={lockText} tone={lockTone} testID="swap-locks" />
             {quote && quote.taxBips > 0 ? <FeeRow label={t({ id: 'swap.tax.label', message: 'Token tax' })} value={t({ id: 'swap.tax', message: '+{p} token tax', values: { p: formatPct(quote.taxBips) } })} tone="ember" testID="swap-tax" /> : null}
             {/*
@@ -714,12 +642,74 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
             </>
             ) : null}
           </Plate>
-        ) : (
-          <Body tone="mute" size="caption">
-            {t({ id: 'limit.fee', message: 'Platform fee 0.1% on fill · no wallet fee' })}
-          </Body>
-        )}
+          ) : (
+            <Body tone="mute" size="caption" paddingHorizontal="$3" paddingVertical={6}>
+              {t({ id: 'limit.fee', message: 'Platform fee 0.1% on fill · no wallet fee' })}
+            </Body>
+          )}
 
+          {/*
+            The key, and whatever has to be read before pressing it.
+
+            `ButtonError`/`ButtonPrimary` is the last child of the interface's
+            own card, directly under the details row, and that is the whole of
+            the owner's "bring the swap button up": it used to hang off
+            `ScreenFooter`, pinned to the bottom of the window, which on a phone
+            left most of a screen of nothing between the figures and the verb.
+            The warnings come with it — a caption about a blocked token belongs
+            beside the key it disables, not at the other end of the page.
+          */}
+          <Column gap="$2" paddingHorizontal={4} paddingTop={6} testID="swap-act">
+            {blockedSide ? (
+              <Body tone="burn" size="caption" testID="swap-blocked">
+                {t({
+                  id: 'swap.blocked',
+                  message: '{s} is marked unsafe to trade. Its contract behaves in a way that takes money from the people who hold it — BoltVault will not swap it. Pick another token.',
+                  values: { s: blockedSide.symbol },
+                })}
+              </Body>
+            ) : null}
+            {warnedSide ? (
+              <Body tone="ember" size="caption" testID="swap-warned">
+                {t({
+                  id: 'swap.warned',
+                  message: 'Strong warning on {s}. The market flags this token as risky to hold; read its page before you trade it.',
+                  values: { s: warnedSide.symbol },
+                })}
+              </Body>
+            ) : null}
+            {problem && (amount.trim() || minOut.trim()) ? (
+              <Body tone="burn" size="caption" testID="swap-problem">
+                {problem}
+              </Body>
+            ) : null}
+            {error ? <Body tone="burn">{error}</Body> : null}
+            {mode === 'swap' && quote?.ok && !fresh ? (
+              <Body tone="mute" size="caption" testID="swap-stale">
+                {t({ id: 'swap.stale', message: 'Re-quoting…' })}
+              </Body>
+            ) : null}
+            <Key label={keyLabel} disabled={!canSwap} onPress={run} testID="swap-key" />
+          </Column>
+        </Plate>
+
+        {mode === 'limit' && limitQuote ? (
+          <Plate gap="$1" testID="limit-distance">
+            <Body tone="mute" size="caption">
+              {limitQuote.marketRate ? t({ id: 'limit.market', message: 'Market: {r}', values: { r: formatRate(limitQuote.marketRate, limitQuote.symbolIn, limitQuote.symbolOut) ?? '—' } }) : t({ id: 'limit.market.none', message: 'No market rate for this pair right now.' })}
+            </Body>
+            {limitQuote.distancePct !== null ? (
+              <Body tone={limitQuote.distancePct >= 0 ? 'arc' : 'ember'} size="caption">
+                {limitQuote.distancePct >= 0 ? t({ id: 'limit.above', message: '{p}% above market — fills when the price gets there', values: { p: limitQuote.distancePct.toFixed(2) } }) : t({ id: 'limit.below', message: '{p}% below market — a swap would pay more right now', values: { p: Math.abs(limitQuote.distancePct).toFixed(2) } })}
+              </Body>
+            ) : null}
+            <Row gap="$2" flexWrap="wrap">
+              {DURATIONS.map((d) => (
+                <Pill key={d.id} label={d.label} selected={duration === d.id} onPress={() => setDuration(d.id)} testID={`limit-duration-${d.id}`} />
+              ))}
+            </Row>
+          </Plate>
+        ) : null}
 
         {/* Open orders */}
         {mode === 'limit' ? (
@@ -749,40 +739,8 @@ export function Swap({ body, tokenIn: initialIn, tokenOut: initialOut, reducedMo
             )}
           </Column>
         ) : null}
+        </Column>
       </ScrollView>
-
-      <ScreenFooter inset={inset} testID="swap-footer">
-        {blockedSide ? (
-          <Body tone="burn" size="caption" testID="swap-blocked">
-            {t({
-              id: 'swap.blocked',
-              message: '{s} is marked unsafe to trade. Its contract behaves in a way that takes money from the people who hold it — BoltVault will not swap it. Pick another token.',
-              values: { s: blockedSide.symbol },
-            })}
-          </Body>
-        ) : null}
-        {warnedSide ? (
-          <Body tone="ember" size="caption" testID="swap-warned">
-            {t({
-              id: 'swap.warned',
-              message: 'Strong warning on {s}. The market flags this token as risky to hold; read its page before you trade it.',
-              values: { s: warnedSide.symbol },
-            })}
-          </Body>
-        ) : null}
-        {problem && (amount.trim() || want.trim() || minOut.trim()) ? (
-          <Body tone="burn" size="caption" testID="swap-problem">
-            {problem}
-          </Body>
-        ) : null}
-        {error ? <Body tone="burn">{error}</Body> : null}
-        {mode === 'swap' && quote?.ok && !fresh ? (
-          <Body tone="mute" size="caption" testID="swap-stale">
-            {t({ id: 'swap.stale', message: 'Re-quoting…' })}
-          </Body>
-        ) : null}
-        <Key label={keyLabel} disabled={!canSwap} onPress={run} testID="swap-key" />
-      </ScreenFooter>
 
       {/* Sheets are siblings of the screen's ScrollView (plan B1). */}
       <FeeScheduleSheet
@@ -830,6 +788,14 @@ function FeeRow({ label, value, tone, testID }: { label: string; value: string; 
   )
 }
 
+/**
+ * The token selector, at the interface's own size.
+ *
+ * `CurrencySelect` there is a 36 px pill holding a 24 px `CurrencyLogo` and a
+ * symbol set at 18 px on a phone (`StyledTokenName`). Ours was a 13 px caption
+ * beside an 18 px mark, which measured about a third shorter than the page the
+ * owner was holding it against. Owner: "bigger font for token selectors."
+ */
 function TokenPill({ token, onPress, testID }: { token: TokenView | null; onPress: () => void; testID: string }) {
-  return <Pill strong label={token?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} icon={token ? <TokenAvatar chainId={ETN} address={token.address} symbol={token.symbol} logoUri={token.logoUri} size={18} /> : undefined} chevron tone="ink" onPress={onPress} accessibilityLabel={token?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} testID={testID} />
+  return <Pill strong size="lg" label={token?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} icon={token ? <TokenAvatar chainId={ETN} address={token.address} symbol={token.symbol} logoUri={token.logoUri} size={24} /> : undefined} chevron tone="ink" onPress={onPress} accessibilityLabel={token?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} testID={testID} />
 }

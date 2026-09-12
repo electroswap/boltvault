@@ -114,6 +114,15 @@ export const metrics = {
    * that number, once, so every screen stops at the same place.
    */
   page: 680,
+  /**
+   * How wide the swap console may get, anywhere.
+   *
+   * `metrics.page` is the reading width for a column of plates; a dialog is a
+   * different thing and the interface caps its own at 480 (`PageWrapper`:
+   * `max-width: 480px; margin: 0 auto`). Below that it is the full width less
+   * the gutter, which is every phone, so this only bites in a tab.
+   */
+  dialog: 480,
   /** Minimum hit target. A PR that shrinks one fails CI. Thumbs are not cursors, so the phone asks for more. */
   hit: native ? 48 : 44,
   busBar: native ? 58 : 52,
