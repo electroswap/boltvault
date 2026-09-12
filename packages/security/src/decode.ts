@@ -4,8 +4,25 @@
  * reason about. Unknown selectors are reported as unknown — never silently
  * "contract interaction".
  */
-import { decodeFunctionData, getAddress, hexToString, isAddress, isHex, maxUint256, size, type Abi, type Hex } from 'viem'
-import { ERC20_CONTRACTS, LAUNCHPAD_CONTRACTS, fourByte, fragmentFor, fragmentForAny, resolveSelector } from './abis'
+import {
+  decodeFunctionData,
+  getAddress,
+  hexToString,
+  isAddress,
+  isHex,
+  maxUint256,
+  size,
+  type Abi,
+  type Hex,
+} from 'viem'
+import {
+  ERC20_CONTRACTS,
+  LAUNCHPAD_CONTRACTS,
+  fourByte,
+  fragmentFor,
+  fragmentForAny,
+  resolveSelector,
+} from './abis'
 import { knownContract } from './registry'
 import { decodeUniversalRouter, type DecodedUniversalRouter } from './ur'
 
@@ -19,9 +36,27 @@ export function isUnlimited(amount: bigint, bits: 160 | 256 = 256): boolean {
 export type DecodedCall =
   | { readonly kind: 'native_transfer'; readonly to: Hex; readonly value: bigint }
   | { readonly kind: 'deploy' }
-  | { readonly kind: 'erc20_transfer'; readonly token: Hex; readonly to: Hex; readonly amount: bigint; readonly from?: Hex }
-  | { readonly kind: 'erc20_approve'; readonly token: Hex; readonly spender: Hex; readonly amount: bigint; readonly unlimited: boolean }
-  | { readonly kind: 'erc721_transfer'; readonly token: Hex; readonly from: Hex; readonly to: Hex; readonly tokenId: bigint }
+  | {
+      readonly kind: 'erc20_transfer'
+      readonly token: Hex
+      readonly to: Hex
+      readonly amount: bigint
+      readonly from?: Hex
+    }
+  | {
+      readonly kind: 'erc20_approve'
+      readonly token: Hex
+      readonly spender: Hex
+      readonly amount: bigint
+      readonly unlimited: boolean
+    }
+  | {
+      readonly kind: 'erc721_transfer'
+      readonly token: Hex
+      readonly from: Hex
+      readonly to: Hex
+      readonly tokenId: bigint
+    }
   /**
    * `transferFrom(address,address,uint256)` on a contract the wallet cannot
    * place. ERC-20 and ERC-721 share the selector and the argument layout, so
@@ -29,26 +64,145 @@ export type DecodedCall =
    * calldata says which. Guessing renders one as the other — an item id of
    * 250000 reads as 250,000 tokens — so this kind says so instead.
    */
-  | { readonly kind: 'ambiguous_transfer_from'; readonly token: Hex; readonly from: Hex; readonly to: Hex; readonly value: bigint }
-  | { readonly kind: 'erc721_approve'; readonly token: Hex; readonly to: Hex; readonly tokenId: bigint }
-  | { readonly kind: 'approval_for_all'; readonly token: Hex; readonly operator: Hex; readonly approved: boolean }
-  | { readonly kind: 'erc1155_transfer'; readonly token: Hex; readonly from: Hex; readonly to: Hex; readonly ids: readonly bigint[]; readonly amounts: readonly bigint[] }
-  | { readonly kind: 'permit2_approve'; readonly token: Hex; readonly spender: Hex; readonly amount: bigint; readonly expiration: number; readonly unlimited: boolean }
-  | { readonly kind: 'permit2_lockdown'; readonly approvals: ReadonlyArray<{ token: Hex; spender: Hex }> }
+  | {
+      readonly kind: 'ambiguous_transfer_from'
+      readonly token: Hex
+      readonly from: Hex
+      readonly to: Hex
+      readonly value: bigint
+    }
+  | {
+      readonly kind: 'erc721_approve'
+      readonly token: Hex
+      readonly to: Hex
+      readonly tokenId: bigint
+    }
+  | {
+      readonly kind: 'approval_for_all'
+      readonly token: Hex
+      readonly operator: Hex
+      readonly approved: boolean
+    }
+  | {
+      readonly kind: 'erc1155_transfer'
+      readonly token: Hex
+      readonly from: Hex
+      readonly to: Hex
+      readonly ids: readonly bigint[]
+      readonly amounts: readonly bigint[]
+    }
+  | {
+      readonly kind: 'permit2_approve'
+      readonly token: Hex
+      readonly spender: Hex
+      readonly amount: bigint
+      readonly expiration: number
+      readonly unlimited: boolean
+    }
+  | {
+      readonly kind: 'permit2_lockdown'
+      readonly approvals: ReadonlyArray<{ token: Hex; spender: Hex }>
+    }
   | { readonly kind: 'wrap'; readonly token: Hex; readonly amount: bigint }
   | { readonly kind: 'unwrap'; readonly token: Hex; readonly amount: bigint }
-  | { readonly kind: 'universal_router'; readonly router: Hex; readonly decoded: DecodedUniversalRouter; readonly value: bigint }
-  | { readonly kind: 'multicall'; readonly to: Hex; readonly value: bigint; readonly calls: ReadonlyArray<{ target: Hex; data: Hex }> }
-  | { readonly kind: 'limit_order'; readonly manager: Hex; readonly action: 'submit' | 'close'; readonly tokenIn: Hex | null; readonly tokenOut: Hex | null; readonly amountIn: bigint; readonly minOut: bigint; readonly recipient: Hex | null; readonly durationSeconds: bigint; readonly orderIds: readonly bigint[]; readonly withPermit: boolean }
-  | { readonly kind: 'farm_deposit'; readonly farm: Hex; readonly farmId: bigint; readonly amount0: bigint; readonly amount1: bigint; readonly amountBolt: bigint; readonly value: bigint }
-  | { readonly kind: 'farm_withdraw'; readonly farm: Hex; readonly farmId: bigint; readonly liquidity: bigint; readonly asNative: boolean }
-  | { readonly kind: 'launchpad'; readonly pool: Hex; readonly action: 'contribute' | 'claim_tokens' | 'claim_refund' | 'claim_referral'; readonly value: bigint; readonly referrer: Hex | null; readonly recipient: Hex | null }
-  | { readonly kind: 'seaport_fulfill'; readonly marketplace: Hex; readonly offerer: Hex; readonly offer: ReadonlyArray<{ token: Hex; itemType: number; identifier: bigint; amount: bigint }>; readonly consideration: ReadonlyArray<{ token: Hex; itemType: number; identifier: bigint; amount: bigint; recipient: Hex }>; readonly value: bigint }
+  | {
+      readonly kind: 'universal_router'
+      readonly router: Hex
+      readonly decoded: DecodedUniversalRouter
+      readonly value: bigint
+    }
+  | {
+      readonly kind: 'multicall'
+      readonly to: Hex
+      readonly value: bigint
+      readonly calls: ReadonlyArray<{ target: Hex; data: Hex }>
+    }
+  | {
+      readonly kind: 'limit_order'
+      readonly manager: Hex
+      readonly action: 'submit' | 'close'
+      readonly tokenIn: Hex | null
+      readonly tokenOut: Hex | null
+      readonly amountIn: bigint
+      readonly minOut: bigint
+      readonly recipient: Hex | null
+      readonly durationSeconds: bigint
+      readonly orderIds: readonly bigint[]
+      readonly withPermit: boolean
+    }
+  | {
+      readonly kind: 'farm_deposit'
+      readonly farm: Hex
+      readonly farmId: bigint
+      readonly amount0: bigint
+      readonly amount1: bigint
+      readonly amountBolt: bigint
+      readonly value: bigint
+    }
+  | {
+      readonly kind: 'farm_withdraw'
+      readonly farm: Hex
+      readonly farmId: bigint
+      readonly liquidity: bigint
+      readonly asNative: boolean
+    }
+  | {
+      readonly kind: 'launchpad'
+      readonly pool: Hex
+      readonly action: 'contribute' | 'claim_tokens' | 'claim_refund' | 'claim_referral'
+      readonly value: bigint
+      readonly referrer: Hex | null
+      readonly recipient: Hex | null
+    }
+  | {
+      readonly kind: 'seaport_fulfill'
+      readonly marketplace: Hex
+      readonly offerer: Hex
+      readonly offer: ReadonlyArray<{
+        token: Hex
+        itemType: number
+        identifier: bigint
+        amount: bigint
+      }>
+      readonly consideration: ReadonlyArray<{
+        token: Hex
+        itemType: number
+        identifier: bigint
+        amount: bigint
+        recipient: Hex
+      }>
+      readonly value: bigint
+    }
   | { readonly kind: 'seaport_cancel'; readonly marketplace: Hex; readonly count: number }
-  | { readonly kind: 'dividends'; readonly distributor: Hex; readonly action: 'register' | 'claim'; readonly tokenIds: readonly bigint[] }
-  | { readonly kind: 'nft_mint'; readonly minter: Hex; readonly collection: Hex; readonly count: bigint; readonly value: bigint }
-  | { readonly kind: 'bridge'; readonly router: Hex; readonly destinationDomain: number; readonly recipient: Hex; readonly amount: bigint; readonly value: bigint }
-  | { readonly kind: 'contract_call'; readonly to: Hex; readonly selector: Hex; readonly functionName: string | null; readonly args: readonly unknown[] | null; readonly value: bigint }
+  | {
+      readonly kind: 'dividends'
+      readonly distributor: Hex
+      readonly action: 'register' | 'claim'
+      readonly tokenIds: readonly bigint[]
+    }
+  | {
+      readonly kind: 'nft_mint'
+      readonly minter: Hex
+      readonly collection: Hex
+      readonly count: bigint
+      readonly value: bigint
+    }
+  | {
+      readonly kind: 'bridge'
+      readonly router: Hex
+      readonly destinationDomain: number
+      readonly recipient: Hex
+      readonly amount: bigint
+      readonly value: bigint
+    }
+  | {
+      readonly kind: 'contract_call'
+      readonly to: Hex
+      readonly selector: Hex
+      readonly functionName: string | null
+      readonly args: readonly unknown[] | null
+      readonly value: bigint
+    }
 
 export interface DecodeCallInput {
   readonly chainId: number
@@ -96,7 +250,8 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
   const { chainId, to, data, value } = input
   if (to === null) return { kind: 'deploy' }
   if (!data || data === '0x' || size(data) === 0) return { kind: 'native_transfer', to, value }
-  if (size(data) < 4) return { kind: 'contract_call', to, selector: data, functionName: null, args: null, value }
+  if (size(data) < 4)
+    return { kind: 'contract_call', to, selector: data, functionName: null, args: null, value }
   const selector = data.slice(0, 10) as Hex
   const known = knownContract(chainId, to)
 
@@ -108,26 +263,83 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
     const p = decodeAs('Permit2', selector, data)
     if (p?.functionName === 'approve') {
       const [token, spender, amount, expiration] = p.args as [Hex, Hex, bigint, number]
-      return { kind: 'permit2_approve', token, spender, amount, expiration, unlimited: isUnlimited(amount, 160) }
+      return {
+        kind: 'permit2_approve',
+        token,
+        spender,
+        amount,
+        expiration,
+        unlimited: isUnlimited(amount, 160),
+      }
     }
     if (p?.functionName === 'lockdown') {
       const [approvals] = p.args as [ReadonlyArray<{ token: Hex; spender: Hex }>]
-      return { kind: 'permit2_lockdown', approvals: approvals.map((a) => ({ token: a.token, spender: a.spender })) }
+      return {
+        kind: 'permit2_lockdown',
+        approvals: approvals.map((a) => ({ token: a.token, spender: a.spender })),
+      }
     }
   }
   if (known?.role === 'wrapped_native') {
     const w = decodeAs('WETH9', selector, data)
     if (w?.functionName === 'deposit') return { kind: 'wrap', token: to, amount: value }
-    if (w?.functionName === 'withdraw') return { kind: 'unwrap', token: to, amount: (w.args as [bigint])[0] }
+    if (w?.functionName === 'withdraw')
+      return { kind: 'unwrap', token: to, amount: (w.args as [bigint])[0] }
   }
   if (known?.role === 'limit_orders') {
     const l = decodeAs('LimitOrders', selector, data)
     if (l?.functionName === 'submitOrder' || l?.functionName === 'submitOrderWithPermit') {
-      const [tokenIn, tokenOut, , amountInExact, amountOutMin, recipient, duration] = l.args as [Hex, Hex, boolean, bigint, bigint, Hex, bigint]
-      return { kind: 'limit_order', manager: to, action: 'submit', tokenIn, tokenOut, amountIn: amountInExact, minOut: amountOutMin, recipient, durationSeconds: duration, orderIds: [], withPermit: l.functionName === 'submitOrderWithPermit' }
+      const [tokenIn, tokenOut, , amountInExact, amountOutMin, recipient, duration] = l.args as [
+        Hex,
+        Hex,
+        boolean,
+        bigint,
+        bigint,
+        Hex,
+        bigint,
+      ]
+      return {
+        kind: 'limit_order',
+        manager: to,
+        action: 'submit',
+        tokenIn,
+        tokenOut,
+        amountIn: amountInExact,
+        minOut: amountOutMin,
+        recipient,
+        durationSeconds: duration,
+        orderIds: [],
+        withPermit: l.functionName === 'submitOrderWithPermit',
+      }
     }
-    if (l?.functionName === 'closeOrder') return { kind: 'limit_order', manager: to, action: 'close', tokenIn: null, tokenOut: null, amountIn: 0n, minOut: 0n, recipient: null, durationSeconds: 0n, orderIds: [(l.args as [bigint])[0]], withPermit: false }
-    if (l?.functionName === 'closeOrders') return { kind: 'limit_order', manager: to, action: 'close', tokenIn: null, tokenOut: null, amountIn: 0n, minOut: 0n, recipient: null, durationSeconds: 0n, orderIds: [...(l.args as [readonly bigint[]])[0]], withPermit: false }
+    if (l?.functionName === 'closeOrder')
+      return {
+        kind: 'limit_order',
+        manager: to,
+        action: 'close',
+        tokenIn: null,
+        tokenOut: null,
+        amountIn: 0n,
+        minOut: 0n,
+        recipient: null,
+        durationSeconds: 0n,
+        orderIds: [(l.args as [bigint])[0]],
+        withPermit: false,
+      }
+    if (l?.functionName === 'closeOrders')
+      return {
+        kind: 'limit_order',
+        manager: to,
+        action: 'close',
+        tokenIn: null,
+        tokenOut: null,
+        amountIn: 0n,
+        minOut: 0n,
+        recipient: null,
+        durationSeconds: 0n,
+        orderIds: [...(l.args as [readonly bigint[]])[0]],
+        withPermit: false,
+      }
   }
   if (known?.role === 'farm') {
     const f = decodeAs('YieldFarm', selector, data)
@@ -143,9 +355,46 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
   if (known?.role === 'marketplace') {
     const s = decodeAs('Seaport15', selector, data)
     if (s?.functionName === 'fulfillOrder') {
-      const [order] = s.args as [{ parameters: { offerer: Hex; offer: ReadonlyArray<{ itemType: number; token: Hex; identifierOrCriteria: bigint; startAmount: bigint }>; consideration: ReadonlyArray<{ itemType: number; token: Hex; identifierOrCriteria: bigint; startAmount: bigint; recipient: Hex }> } }]
+      const [order] = s.args as [
+        {
+          parameters: {
+            offerer: Hex
+            offer: ReadonlyArray<{
+              itemType: number
+              token: Hex
+              identifierOrCriteria: bigint
+              startAmount: bigint
+            }>
+            consideration: ReadonlyArray<{
+              itemType: number
+              token: Hex
+              identifierOrCriteria: bigint
+              startAmount: bigint
+              recipient: Hex
+            }>
+          }
+        },
+      ]
       const p = order.parameters
-      return { kind: 'seaport_fulfill', marketplace: to, offerer: p.offerer, offer: p.offer.map((o) => ({ token: o.token, itemType: Number(o.itemType), identifier: o.identifierOrCriteria, amount: o.startAmount })), consideration: p.consideration.map((c) => ({ token: c.token, itemType: Number(c.itemType), identifier: c.identifierOrCriteria, amount: c.startAmount, recipient: c.recipient })), value }
+      return {
+        kind: 'seaport_fulfill',
+        marketplace: to,
+        offerer: p.offerer,
+        offer: p.offer.map((o) => ({
+          token: o.token,
+          itemType: Number(o.itemType),
+          identifier: o.identifierOrCriteria,
+          amount: o.startAmount,
+        })),
+        consideration: p.consideration.map((c) => ({
+          token: c.token,
+          itemType: Number(c.itemType),
+          identifier: c.identifierOrCriteria,
+          amount: c.startAmount,
+          recipient: c.recipient,
+        })),
+        value,
+      }
     }
     if (s?.functionName === 'cancel') {
       const [orders] = s.args as [readonly unknown[]]
@@ -156,14 +405,26 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
     const d = decodeAs('EsDividendDistributorV2', selector, data)
     if (d?.functionName === 'register' || d?.functionName === 'claimDividends') {
       const [ids] = d.args as [readonly bigint[]]
-      return { kind: 'dividends', distributor: to, action: d.functionName === 'register' ? 'register' : 'claim', tokenIds: [...ids] }
+      return {
+        kind: 'dividends',
+        distributor: to,
+        action: d.functionName === 'register' ? 'register' : 'claim',
+        tokenIds: [...ids],
+      }
     }
   }
   if (known?.role === 'warp_router') {
     const w = decodeAs('HyperlaneTokenRouter', selector, data)
     if (w?.functionName === 'transferRemote') {
       const [destination, recipient32, amount] = w.args as [number, Hex, bigint]
-      return { kind: 'bridge', router: to, destinationDomain: Number(destination), recipient: getAddress(`0x${recipient32.slice(-40)}`), amount, value }
+      return {
+        kind: 'bridge',
+        router: to,
+        destinationDomain: Number(destination),
+        recipient: getAddress(`0x${recipient32.slice(-40)}`),
+        amount,
+        value,
+      }
     }
   }
   if (known?.role === 'minter') {
@@ -175,15 +436,52 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
   }
   // Launchpad pools are one contract per campaign: matched by selector, then by the manager the pool reports (engine side).
   const lp = decodeAsAny(LAUNCHPAD_CONTRACTS, selector, data)
-  if (lp?.functionName === 'contribute') return { kind: 'launchpad', pool: to, action: 'contribute', value, referrer: (lp.args as [Hex])[0], recipient: null }
-  if (lp?.functionName === 'claimTokens') return { kind: 'launchpad', pool: to, action: 'claim_tokens', value, referrer: null, recipient: (lp.args as [Hex])[0] }
-  if (lp?.functionName === 'claimRefund') return { kind: 'launchpad', pool: to, action: 'claim_refund', value, referrer: null, recipient: (lp.args as [Hex])[0] }
-  if (lp?.functionName === 'claimReferralRewards' && known?.role === 'launchpad') return { kind: 'launchpad', pool: to, action: 'claim_referral', value, referrer: null, recipient: null }
+  if (lp?.functionName === 'contribute')
+    return {
+      kind: 'launchpad',
+      pool: to,
+      action: 'contribute',
+      value,
+      referrer: (lp.args as [Hex])[0],
+      recipient: null,
+    }
+  if (lp?.functionName === 'claimTokens')
+    return {
+      kind: 'launchpad',
+      pool: to,
+      action: 'claim_tokens',
+      value,
+      referrer: null,
+      recipient: (lp.args as [Hex])[0],
+    }
+  if (lp?.functionName === 'claimRefund')
+    return {
+      kind: 'launchpad',
+      pool: to,
+      action: 'claim_refund',
+      value,
+      referrer: null,
+      recipient: (lp.args as [Hex])[0],
+    }
+  if (lp?.functionName === 'claimReferralRewards' && known?.role === 'launchpad')
+    return {
+      kind: 'launchpad',
+      pool: to,
+      action: 'claim_referral',
+      value,
+      referrer: null,
+      recipient: null,
+    }
   if (known?.role === 'multicall') {
     const m = decodeAs('Multicall3', selector, data)
     if (m) {
       const [calls] = m.args as [ReadonlyArray<{ target: Hex; callData: Hex }>]
-      return { kind: 'multicall', to, value, calls: calls.map((c) => ({ target: c.target, data: c.callData })) }
+      return {
+        kind: 'multicall',
+        to,
+        value,
+        calls: calls.map((c) => ({ target: c.target, data: c.callData })),
+      }
     }
   }
 
@@ -220,7 +518,8 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
     if (e721.functionName === 'transferFrom' || e721.functionName === 'safeTransferFrom') {
       const [from, dest, tokenId] = e721.args as [Hex, Hex, bigint]
       // `safeTransferFrom` is ERC-721 only — no ambiguity there.
-      if (e721.functionName === 'safeTransferFrom') return { kind: 'erc721_transfer', token: to, from, to: dest, tokenId }
+      if (e721.functionName === 'safeTransferFrom')
+        return { kind: 'erc721_transfer', token: to, from, to: dest, tokenId }
       /*
         `transferFrom(address,address,uint256)` is the same selector and the
         same layout in both standards, so the third word is an amount or a
@@ -230,8 +529,10 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
         read as "250,000". Decide from evidence, and when there is none, say so
         rather than guess.
       */
-      if (input.standardHint === 'erc721' || known?.role === 'nft') return { kind: 'erc721_transfer', token: to, from, to: dest, tokenId }
-      if (input.standardHint === 'erc20') return { kind: 'erc20_transfer', token: to, from, to: dest, amount: tokenId }
+      if (input.standardHint === 'erc721' || known?.role === 'nft')
+        return { kind: 'erc721_transfer', token: to, from, to: dest, tokenId }
+      if (input.standardHint === 'erc20')
+        return { kind: 'erc20_transfer', token: to, from, to: dest, amount: tokenId }
       return { kind: 'ambiguous_transfer_from', token: to, from, to: dest, value: tokenId }
     }
     if (e721.functionName === 'approve') {
@@ -246,7 +547,12 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
       return { kind: 'erc1155_transfer', token: to, from, to: dest, ids: [id], amounts: [amount] }
     }
     if (e1155.functionName === 'safeBatchTransferFrom') {
-      const [from, dest, ids, amounts] = e1155.args as [Hex, Hex, readonly bigint[], readonly bigint[]]
+      const [from, dest, ids, amounts] = e1155.args as [
+        Hex,
+        Hex,
+        readonly bigint[],
+        readonly bigint[],
+      ]
       return { kind: 'erc1155_transfer', token: to, from, to: dest, ids, amounts }
     }
   }
@@ -265,12 +571,27 @@ export function decodeCalldata(input: DecodeCallInput): DecodedCall {
   const claim = resolveSelector(selector, known?.role ?? null)
   if (claim) {
     const named = tryDecode(claim.abi, data)
-    if (named) return { kind: 'contract_call', to, selector, functionName: named.functionName, args: named.args, value }
+    if (named)
+      return {
+        kind: 'contract_call',
+        to,
+        selector,
+        functionName: named.functionName,
+        args: named.args,
+        value,
+      }
   }
   const local = fourByte(selector)
   if (local) {
     const named = local.abi ? tryDecode(local.abi, data) : null
-    return { kind: 'contract_call', to, selector, functionName: local.name, args: named?.args ?? null, value }
+    return {
+      kind: 'contract_call',
+      to,
+      selector,
+      functionName: local.name,
+      args: named?.args ?? null,
+      value,
+    }
   }
   return { kind: 'contract_call', to, selector, functionName: null, args: null, value }
 }
@@ -291,13 +612,76 @@ export interface TypedDataJson {
   readonly message: Record<string, unknown>
 }
 
+/**
+ * One Seaport order. A plain `OrderComponents` message carries one; a
+ * `BulkOrder` carries a whole Merkle tree of them under a single signature,
+ * and every one of them is authorised by it — so the decoder returns all of
+ * them and the rules judge the message by its worst leaf.
+ */
+export interface DecodedSeaportOrder {
+  readonly offerer: Hex
+  readonly offer: ReadonlyArray<{
+    token: Hex
+    itemType: number
+    identifier: bigint
+    amount: bigint
+  }>
+  readonly consideration: ReadonlyArray<{
+    token: Hex
+    itemType: number
+    identifier: bigint
+    amount: bigint
+    recipient: Hex
+  }>
+  readonly zeroConsideration: boolean
+}
+
 export type DecodedTypedData =
-  | { readonly kind: 'permit2_permit_single'; readonly spender: Hex; readonly token: Hex; readonly amount: bigint; readonly expiration: bigint; readonly sigDeadline: bigint; readonly unlimited: boolean }
-  | { readonly kind: 'permit2_permit_batch'; readonly spender: Hex; readonly details: ReadonlyArray<{ token: Hex; amount: bigint; expiration: bigint; unlimited: boolean }> }
-  | { readonly kind: 'permit2_transfer'; readonly spender: Hex; readonly transfers: ReadonlyArray<{ token: Hex; amount: bigint }>; readonly witness: boolean; readonly batch: boolean }
-  | { readonly kind: 'erc2612_permit'; readonly owner: Hex; readonly spender: Hex; readonly value: bigint; readonly deadline: bigint; readonly unlimited: boolean }
-  | { readonly kind: 'dai_permit'; readonly holder: Hex; readonly spender: Hex; readonly allowed: boolean; readonly expiry: bigint }
-  | { readonly kind: 'seaport_order'; readonly offerer: Hex; readonly offer: ReadonlyArray<{ token: Hex; itemType: number; identifier: bigint; amount: bigint }>; readonly consideration: ReadonlyArray<{ token: Hex; itemType: number; identifier: bigint; amount: bigint; recipient: Hex }>; readonly zeroConsideration: boolean }
+  | {
+      readonly kind: 'permit2_permit_single'
+      readonly spender: Hex
+      readonly token: Hex
+      readonly amount: bigint
+      readonly expiration: bigint
+      readonly sigDeadline: bigint
+      readonly unlimited: boolean
+    }
+  | {
+      readonly kind: 'permit2_permit_batch'
+      readonly spender: Hex
+      readonly details: ReadonlyArray<{
+        token: Hex
+        amount: bigint
+        expiration: bigint
+        unlimited: boolean
+      }>
+    }
+  | {
+      readonly kind: 'permit2_transfer'
+      readonly spender: Hex
+      readonly transfers: ReadonlyArray<{ token: Hex; amount: bigint }>
+      readonly witness: boolean
+      readonly batch: boolean
+    }
+  | {
+      readonly kind: 'erc2612_permit'
+      readonly owner: Hex
+      readonly spender: Hex
+      readonly value: bigint
+      readonly deadline: bigint
+      readonly unlimited: boolean
+    }
+  | {
+      readonly kind: 'dai_permit'
+      readonly holder: Hex
+      readonly spender: Hex
+      readonly allowed: boolean
+      readonly expiry: bigint
+    }
+  | ({
+      readonly kind: 'seaport_order'
+      readonly orders: readonly DecodedSeaportOrder[]
+    } & DecodedSeaportOrder)
   | { readonly kind: 'unknown'; readonly primaryType: string }
 
 export interface ParsedTypedData {
@@ -330,6 +714,55 @@ function arr(v: unknown): readonly unknown[] {
   throw new Error('not an array')
 }
 
+/**
+ * Seaport caps a bulk tree at height 24, but the sheet has to render what it
+ * finds and a crafted message should not be able to make the decoder chew on
+ * a million leaves. Past either bound the message reads as `unknown`, which
+ * shows the raw JSON and warns — the honest answer for something the wallet
+ * cannot summarise.
+ */
+const BULK_ORDER_MAX_DEPTH = 24
+const BULK_ORDER_MAX_LEAVES = 256
+
+/** Every leaf of a `BulkOrder` tree, in order; throws on anything malformed. */
+function bulkLeaves(v: unknown, depth = 0): Record<string, unknown>[] {
+  if (depth > BULK_ORDER_MAX_DEPTH) throw new Error('bulk order tree too deep')
+  const out: Record<string, unknown>[] = []
+  for (const node of arr(v)) {
+    if (Array.isArray(node)) out.push(...bulkLeaves(node, depth + 1))
+    else out.push(obj(node))
+    if (out.length > BULK_ORDER_MAX_LEAVES) throw new Error('bulk order tree too wide')
+  }
+  return out
+}
+
+function seaportOrder(order: Record<string, unknown>): DecodedSeaportOrder {
+  const offer = arr(order['offer']).map((x) => {
+    const o = obj(x)
+    return {
+      token: addr(o['token']),
+      itemType: Number(big(o['itemType'])),
+      identifier: big(o['identifierOrCriteria']),
+      amount: big(o['startAmount']),
+    }
+  })
+  const consideration = arr(order['consideration']).map((x) => {
+    const o = obj(x)
+    return {
+      token: addr(o['token']),
+      itemType: Number(big(o['itemType'])),
+      identifier: big(o['identifierOrCriteria']),
+      amount: big(o['startAmount']),
+      recipient: addr(o['recipient']),
+    }
+  })
+  const offerer = addr(order['offerer'])
+  const toOfferer = consideration
+    .filter((c) => c.recipient.toLowerCase() === offerer.toLowerCase())
+    .reduce((s, c) => s + c.amount, 0n)
+  return { offerer, offer, consideration, zeroConsideration: offer.length > 0 && toOfferer === 0n }
+}
+
 /** Accepts the JSON string dApps send for eth_signTypedData_v4 or the parsed object. */
 export function parseTypedData(input: unknown): ParsedTypedData | null {
   let raw: unknown = input
@@ -343,7 +776,12 @@ export function parseTypedData(input: unknown): ParsedTypedData | null {
   if (!raw || typeof raw !== 'object') return null
   const t = raw as Partial<TypedDataJson>
   if (!t.types || typeof t.primaryType !== 'string' || !t.domain || !t.message) return null
-  const typed: TypedDataJson = { types: t.types, primaryType: t.primaryType, domain: t.domain, message: t.message }
+  const typed: TypedDataJson = {
+    types: t.types,
+    primaryType: t.primaryType,
+    domain: t.domain,
+    message: t.message,
+  }
   const d = typed.domain
   /*
     Cap the free-text fields where they enter, not only where they render.
@@ -357,9 +795,16 @@ export function parseTypedData(input: unknown): ParsedTypedData | null {
     ...(typeof d['name'] === 'string' ? { name: d['name'].slice(0, 64) } : {}),
     ...(typeof d['version'] === 'string' ? { version: d['version'].slice(0, 32) } : {}),
     ...(d['chainId'] !== undefined ? { chainId: safeBig(d['chainId']) } : {}),
-    ...(typeof d['verifyingContract'] === 'string' && isAddress(d['verifyingContract']) ? { verifyingContract: d['verifyingContract'] as Hex } : {}),
+    ...(typeof d['verifyingContract'] === 'string' && isAddress(d['verifyingContract'])
+      ? { verifyingContract: d['verifyingContract'] as Hex }
+      : {}),
   }
-  return { domain, primaryType: typed.primaryType.slice(0, 64), decoded: decodeTypedMessage(typed), raw: typed }
+  return {
+    domain,
+    primaryType: typed.primaryType.slice(0, 64),
+    decoded: decodeTypedMessage(typed),
+    raw: typed,
+  }
 }
 
 function safeBig(v: unknown): bigint | undefined {
@@ -377,48 +822,90 @@ function decodeTypedMessage(t: TypedDataJson): DecodedTypedData {
     if (p === 'PermitSingle') {
       const details = obj(m['details'])
       const amount = big(details['amount'])
-      return { kind: 'permit2_permit_single', spender: addr(m['spender']), token: addr(details['token']), amount, expiration: big(details['expiration']), sigDeadline: big(m['sigDeadline']), unlimited: isUnlimited(amount, 160) }
+      return {
+        kind: 'permit2_permit_single',
+        spender: addr(m['spender']),
+        token: addr(details['token']),
+        amount,
+        expiration: big(details['expiration']),
+        sigDeadline: big(m['sigDeadline']),
+        unlimited: isUnlimited(amount, 160),
+      }
     }
     if (p === 'PermitBatch') {
       const details = arr(m['details']).map((d) => {
         const o = obj(d)
         const amount = big(o['amount'])
-        return { token: addr(o['token']), amount, expiration: big(o['expiration']), unlimited: isUnlimited(amount, 160) }
+        return {
+          token: addr(o['token']),
+          amount,
+          expiration: big(o['expiration']),
+          unlimited: isUnlimited(amount, 160),
+        }
       })
       return { kind: 'permit2_permit_batch', spender: addr(m['spender']), details }
     }
     if (p === 'PermitTransferFrom' || p === 'PermitWitnessTransferFrom') {
       const permitted = obj(m['permitted'])
-      return { kind: 'permit2_transfer', spender: addr(m['spender']), transfers: [{ token: addr(permitted['token']), amount: big(permitted['amount']) }], witness: p === 'PermitWitnessTransferFrom', batch: false }
+      return {
+        kind: 'permit2_transfer',
+        spender: addr(m['spender']),
+        transfers: [{ token: addr(permitted['token']), amount: big(permitted['amount']) }],
+        witness: p === 'PermitWitnessTransferFrom',
+        batch: false,
+      }
     }
     if (p === 'PermitBatchTransferFrom' || p === 'PermitBatchWitnessTransferFrom') {
       const transfers = arr(m['permitted']).map((x) => {
         const o = obj(x)
         return { token: addr(o['token']), amount: big(o['amount']) }
       })
-      return { kind: 'permit2_transfer', spender: addr(m['spender']), transfers, witness: p === 'PermitBatchWitnessTransferFrom', batch: true }
+      return {
+        kind: 'permit2_transfer',
+        spender: addr(m['spender']),
+        transfers,
+        witness: p === 'PermitBatchWitnessTransferFrom',
+        batch: true,
+      }
     }
     if (p === 'Permit') {
       const fields = new Set((t.types['Permit'] ?? []).map((f) => f.name))
       if (fields.has('allowed') && fields.has('holder')) {
-        return { kind: 'dai_permit', holder: addr(m['holder']), spender: addr(m['spender']), allowed: m['allowed'] === true || m['allowed'] === 'true' || m['allowed'] === 1, expiry: big(m['expiry']) }
+        return {
+          kind: 'dai_permit',
+          holder: addr(m['holder']),
+          spender: addr(m['spender']),
+          allowed: m['allowed'] === true || m['allowed'] === 'true' || m['allowed'] === 1,
+          expiry: big(m['expiry']),
+        }
       }
       const value = big(m['value'])
-      return { kind: 'erc2612_permit', owner: addr(m['owner']), spender: addr(m['spender']), value, deadline: big(m['deadline']), unlimited: isUnlimited(value) }
+      return {
+        kind: 'erc2612_permit',
+        owner: addr(m['owner']),
+        spender: addr(m['spender']),
+        value,
+        deadline: big(m['deadline']),
+        unlimited: isUnlimited(value),
+      }
     }
     if (p === 'OrderComponents' || p === 'BulkOrder') {
-      const order = p === 'BulkOrder' ? obj(arr(m['tree'])[0]) : m
-      const offer = arr(order['offer']).map((x) => {
-        const o = obj(x)
-        return { token: addr(o['token']), itemType: Number(big(o['itemType'])), identifier: big(o['identifierOrCriteria']), amount: big(o['startAmount']) }
-      })
-      const consideration = arr(order['consideration']).map((x) => {
-        const o = obj(x)
-        return { token: addr(o['token']), itemType: Number(big(o['itemType'])), identifier: big(o['identifierOrCriteria']), amount: big(o['startAmount']), recipient: addr(o['recipient']) }
-      })
-      const offerer = addr(order['offerer'])
-      const toOfferer = consideration.filter((c) => c.recipient.toLowerCase() === offerer.toLowerCase()).reduce((s, c) => s + c.amount, 0n)
-      return { kind: 'seaport_order', offerer, offer, consideration, zeroConsideration: offer.length > 0 && toOfferer === 0n }
+      /*
+        A `BulkOrder` is one signature over a Merkle tree of orders, and the
+        proof lets the filler redeem any leaf in it. Reading `tree[0]` alone
+        showed the user a fair listing while the same signature gave away
+        everything else in the tree, so every leaf is decoded here and the
+        rules run over all of them. A leaf that cannot be read throws, which
+        falls through to `unknown` for the whole message rather than a
+        confident statement about the part that happened to parse.
+      */
+      const leaves = p === 'BulkOrder' ? bulkLeaves(m['tree']) : [m]
+      if (!leaves.length) throw new Error('empty bulk order')
+      const orders = leaves.map(seaportOrder)
+      // The single-order fields describe the message as a whole; a give-away
+      // leaf anywhere is what the sheet and the older callers must see.
+      const worst = orders.find((o) => o.zeroConsideration) ?? orders[0]!
+      return { kind: 'seaport_order', ...worst, orders }
     }
   } catch {
     return { kind: 'unknown', primaryType: p }
@@ -429,27 +916,57 @@ function decodeTypedMessage(t: TypedDataJson): DecodedTypedData {
 // ---- personal_sign ------------------------------------------------------------------
 
 export interface DecodedMessage {
-  /** UTF-8 text when the bytes are printable text; null for binary. */
+  /** UTF-8 text when the bytes are printable text; null for binary, and for text that would not read as its bytes. */
   readonly text: string | null
+  /** The message carries characters that reorder or hide what is drawn (§3.4 WYSIWYS). */
+  readonly hidden: boolean
   readonly bytes: number
   /** 32 bytes exactly, or RLP that starts like a transaction — the "sign this hash" drain. */
   readonly looksLikeHashOrTx: boolean
 }
 
 export function decodeMessage(message: Hex | string): DecodedMessage {
-  if (!isHex(message)) return { text: message, bytes: new TextEncoder().encode(message).length, looksLikeHashOrTx: false }
+  if (!isHex(message))
+    return {
+      text: isPrintable(message) ? message : null,
+      bytes: new TextEncoder().encode(message).length,
+      looksLikeHashOrTx: false,
+      hidden: hasHiddenFormatting(message),
+    }
   const bytes = size(message)
   let text: string | null = null
+  let hidden = false
   try {
     const s = hexToString(message)
-    // Printable: no control characters other than whitespace, and no replacement chars.
+    // Printable: no control characters other than whitespace, no replacement
+    // chars, and nothing that reorders what is drawn.
+    hidden = hasHiddenFormatting(s)
     text = isPrintable(s) ? s : null
   } catch {
     text = null
   }
   const first = parseInt(message.slice(2, 4), 16)
-  const rlpTx = bytes > 40 && (first === 0x02 || first === 0x01 || first === 0x04 || (first >= 0xc0 && first <= 0xff))
-  return { text, bytes, looksLikeHashOrTx: text === null && (bytes === 32 || rlpTx) }
+  const rlpTx =
+    bytes > 40 &&
+    (first === 0x02 || first === 0x01 || first === 0x04 || (first >= 0xc0 && first <= 0xff))
+  return { text, bytes, looksLikeHashOrTx: text === null && (bytes === 32 || rlpTx), hidden }
+}
+
+/**
+ * Characters that move text about without printing anything themselves —
+ * `\p{Cf}` (the bidi overrides, embeddings and isolates, the zero-width
+ * joiners), and the line and paragraph separators.
+ *
+ * A message carrying U+202E renders right-to-left from that point on, so
+ * "Sign in to app.electroswap.io" can be written in bytes that name another
+ * domain entirely. Typed-data names and symbols already went through
+ * `untrusted()` in the explainer, which strips exactly these; a `personal_sign`
+ * body did not, and it is the one place where the bytes ARE the sentence.
+ */
+const HIDDEN_FORMATTING = /[\p{Cf}\p{Zl}\p{Zp}]/u
+
+function hasHiddenFormatting(s: string): boolean {
+  return HIDDEN_FORMATTING.test(s)
 }
 
 function isPrintable(s: string): boolean {
@@ -459,5 +976,7 @@ function isPrintable(s: string): boolean {
     if (c < 0x20 && c !== 0x09 && c !== 0x0a && c !== 0x0d) return false
     if (c === 0x7f) return false
   }
-  return true
+  // A bidi override is printable in the sense that a font draws around it, and
+  // that is the problem: what the reader sees is not the order of the bytes.
+  return !hasHiddenFormatting(s)
 }

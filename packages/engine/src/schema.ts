@@ -225,6 +225,30 @@ export const SettingsSchema = z.object({
    */
   largeSendPercent: z.number().int().min(1).max(100).default(10),
   autoLock: AutoLockSchema,
+  /**
+   * The password is required to reveal a recovery phrase, whatever else the
+   * vault is wrapped under (§3.2).
+   *
+   * `reveal` accepted any enrolled factor, so a household member who could
+   * pass a registered fingerprint could open Accounts → Back up and read the
+   * words — while Security and Onboarding both told the user the password
+   * "is still required to reveal or export your phrase", and export really did
+   * require it. Code and copy now agree by default. It is a setting rather
+   * than a hard rule because a wallet set up behind a passkey may have a
+   * password nobody has typed in months, and locking somebody out of their own
+   * phrase is its own kind of loss — but the default is on, and turning it off
+   * is a deliberate act on the Security screen.
+   *
+   * `.default(true)` so an existing settings document does not quarantine.
+   */
+  revealNeedsPassword: z.boolean().default(true),
+  /**
+   * The home-screen widget may show the portfolio total (§7.13). Off by
+   * default: the snapshot is a plaintext file the widget process can read, so
+   * anything in it is readable from a stolen phone or a backup of the App
+   * Group container while the wallet is locked.
+   */
+  widgetShowsTotal: z.boolean().default(false),
   displayCurrency: z.enum(['USD', 'ETN']),
   reducedMotion: z.boolean(),
   /**
@@ -1201,6 +1225,14 @@ export const WcProposalViewSchema = z.object({
   icon: z.string().nullable(),
   origin: z.string(),
   verified: z.boolean(),
+  /**
+   * The site the peer's CLAIMED url looks like, when it looks like one it is
+   * not (§3.6). Null otherwise. The claim is never the origin — only Verify
+   * can supply one — but it is the single thing the peer says about itself,
+   * and it went unread: a typosquat of a first-party domain reached the sheet
+   * as an anonymous "unverified" line.
+   */
+  claimLooksLike: z.string().nullable().default(null),
   requiredChains: z.array(z.string()),
   optionalChains: z.array(z.string()),
 })

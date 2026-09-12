@@ -54,6 +54,72 @@ describe('the families of §6', () => {
     expect((await b.engine.accounts.list()).map((x) => x.label)).toContain('Cold')
   })
 
+  /*
+    ATT-BV-007. §6 says a paired device is not trusted for security-relevant
+    state; the collector shipped every setting but two and the receiver applied
+    whatever arrived, so one pushed record could turn `eth_sign` back on, empty
+    the send allow-list, put slippage at fifty percent and switch the preview
+    off — silently, on the next pull.
+  */
+  it('will not carry a security setting, in either direction', async () => {
+    const relay = new MemoryRelay()
+    const a = device(relay)
+    const b = device(relay)
+    await pair(a, b)
+
+    const before = await a.engine.settings.get()
+    await b.engine.settings.set({ ethSignEnabled: true, sendWhitelist: false, exactApprovals: false, txPreview: 'off', crashReports: true, displayCurrency: 'ETN' })
+    await b.engine.sync.push()
+    await a.engine.sync.pull()
+
+    const after = await a.engine.settings.get()
+    expect(after.ethSignEnabled).toBe(before.ethSignEnabled)
+    expect(after.sendWhitelist).toBe(before.sendWhitelist)
+    expect(after.exactApprovals).toBe(before.exactApprovals)
+    expect(after.txPreview).toBe(before.txPreview)
+    expect(after.crashReports).toBe(before.crashReports)
+    // …while what is on the list still travels, so sync is not simply broken.
+    expect(after.displayCurrency).toBe('ETN')
+  })
+
+  it('lands a synced watch or hardware account hidden, waiting to be claimed here', async () => {
+    const relay = new MemoryRelay()
+    const a = device(relay)
+    const b = device(relay)
+    await pair(a, b)
+
+    const PLANTED = '0x00000000000000000000000000000000000000cc'
+    await b.engine.accounts.addHardware({ kind: 'ledger', address: PLANTED, path: "m/44'/60'/0'/0/0", label: 'Ledger' })
+    await b.engine.sync.push()
+    await a.engine.sync.pull()
+
+    const seated = (await a.engine.accounts.list()).find((x) => x.address.toLowerCase() === PLANTED)
+    expect(seated).toBeDefined()
+    // It is here, but it is not offered: hidden keeps it off Receive and the
+    // Send picker until somebody at this device says it is theirs.
+    expect(seated?.hidden).toBe(true)
+    const waiting = await a.engine.sync.incoming()
+    expect(waiting.map((i) => i.collection)).toContain('account')
+    expect(waiting.find((i) => i.collection === 'account')).toMatchObject({ key: PLANTED, fromLabel: 'Pixel 8' })
+
+    await a.engine.sync.confirmIncoming({ collection: 'account', key: PLANTED })
+    expect((await a.engine.accounts.list()).find((x) => x.address.toLowerCase() === PLANTED)?.hidden).toBe(false)
+  })
+
+  it('refusing a planted account takes it off this device', async () => {
+    const relay = new MemoryRelay()
+    const a = device(relay)
+    const b = device(relay)
+    await pair(a, b)
+
+    const PLANTED = '0x00000000000000000000000000000000000000dd'
+    await b.engine.accounts.addWatch({ address: PLANTED, label: 'Savings' })
+    await b.engine.sync.push()
+    await a.engine.sync.pull()
+    await a.engine.sync.rejectIncoming({ collection: 'account', key: PLANTED })
+    expect((await a.engine.accounts.list()).some((x) => x.address.toLowerCase() === PLANTED)).toBe(false)
+  })
+
   it('lands a rename instead of bailing out because the address is already here', async () => {
     const relay = new MemoryRelay()
     const a = device(relay)

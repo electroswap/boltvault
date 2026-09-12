@@ -26,9 +26,9 @@ interface DappClient {
   channel: MemoryChannel
 }
 
-function dapp(engine: Engine, origin: string, session = 'sess'): DappClient {
+function dapp(engine: Engine, origin: string, session = 'sess', info: { tabId?: number } = {}): DappClient {
   const [a, b] = createChannelPair()
-  engine.provider.serve(b, origin)
+  engine.provider.serve(b, origin, info)
   const events: DappClient['events'] = []
   const waiters = new Map<number, { resolve: (v: unknown) => void; reject: (e: unknown) => void }>()
   let next = 1
@@ -263,6 +263,63 @@ describe('provider service', () => {
     expect(s1).toBe(s2)
   })
 
+  it('records which tab asked, so the host can decline to raise a window over the user', async () => {
+    /*
+      ATT-BV-010. The tab reached `serve()` and stopped there, so the worker
+      opened a focused signing window for a request from any tab, foreground or
+      three windows back. It is on the record now — and on the record, so it
+      survives the restart that re-attaches the sheet.
+    */
+    const a = dapp(engine, ORIGIN_A, 'tabbed', { tabId: 42 })
+    const message = `0x${Buffer.from('from a tab').toString('hex')}` as Hex
+    const p = a.request('personal_sign', [message, address], 61)
+    const req = await nextApproval(engine)
+    expect((req.payload as { tabId?: number }).tabId).toBe(42)
+    await engine.engine.approvals.decide({ id: req.id, approve: true })
+    await p
+  })
+
+  it('gives a rejected sheet\u2019s place in the queue back', async () => {
+    /*
+      ATT-BV-014. `reserveNonce` pruned only by age or by the chain moving
+      past, so rejecting a sheet held its number for the full five-minute TTL:
+      the next send took N+1 and sat behind a hole nothing would ever fill,
+      showing "pending" until the reservation expired. Electroneum has no
+      speed-up path, so there was nothing the person could do but wait.
+    */
+    const a = dapp(engine, ORIGIN_A, 'queue')
+    const first = a.request('eth_sendTransaction', [{ from: address, to: UNKNOWN, value: '0x1' }], 71)
+    const req = await nextApproval(engine, (r) => r.kind === 'send_transaction')
+    const held = (req.payload as { tx: { nonce: number } }).tx.nonce
+    await engine.engine.approvals.decide({ id: req.id, approve: false })
+    await expect(first).rejects.toMatchObject({ code: 4001 })
+
+    const b = dapp(engine, ORIGIN_A, 'queue-2')
+    const second = b.request('eth_sendTransaction', [{ from: address, to: UNKNOWN, value: '0x1' }], 72)
+    const next = await nextApproval(engine, (r) => r.kind === 'send_transaction')
+    expect((next.payload as { tx: { nonce: number } }).tx.nonce).toBe(held)
+    await engine.engine.approvals.decide({ id: next.id, approve: true })
+    await second
+  })
+
+  it('runs the revert check even when the site supplies a gas limit', async () => {
+    /*
+      ATT-BV-013. `eth_estimateGas` is two things at once — a size, and the one
+      cheap proof the call does not revert. Skipping it because `gas` was given
+      dropped both, and `SIM_INCOMPLETE` then told the user "only the revert
+      check ran" about a check that had not.
+    */
+    const before = rpc.requests.length
+    const a = dapp(engine, ORIGIN_A, 'gassy')
+    const p = a.request('eth_sendTransaction', [{ from: address, to: UNKNOWN, value: '0x1', gas: '0x30d40' }], 73)
+    const req = await nextApproval(engine, (r) => r.kind === 'send_transaction')
+    expect(rpc.requests.slice(before).map((r) => r.method)).toContain('eth_estimateGas')
+    // The supplied limit is still what gets signed.
+    expect((req.payload as { tx: { gas: string } }).tx.gas).toBe('0x30d40')
+    await engine.engine.approvals.decide({ id: req.id, approve: true })
+    await p
+  })
+
   it('disconnecting from Settings tells the site, with a real disconnect event', async () => {
     const a = dapp(engine, ORIGIN_A)
     await engine.engine.sites.disconnect({ origin: ORIGIN_A })
@@ -275,5 +332,121 @@ describe('provider service', () => {
 
   it('the Port name constant is shared with the extension', () => {
     expect(PROVIDER_PORT_NAME).toBe('bv-provider')
+  })
+})
+
+/*
+ * ATT-BV-002 — what a re-sent request may inherit from a pending sheet.
+ *
+ * Inside one live worker `RpcFlow.exclusive` already joins a re-send to the
+ * open promise by client id, so the interesting case is the one the design
+ * supports and the audit reproduced: the worker died with a sheet up, the
+ * bridge reconnected, and the request arrives again against an approval store
+ * that hydrated from session storage. It re-attaches by origin plus the page's
+ * own `clientRequestId`, neither of which says anything about the contents —
+ * so the contents are what these tests pin.
+ */
+describe('a re-attached approval after a worker restart', () => {
+  const PAGE = 'page-restart'
+  const MESSAGE = `0x${Buffer.from('the message the sheet showed').toString('hex')}` as Hex
+
+  async function upToTheSheet(): Promise<{
+    platform: ReturnType<typeof createMemoryPlatform>
+    rpc: MockRpc
+    engine: Engine
+    address: Hex
+    accountId: string
+  }> {
+    const platform = createMemoryPlatform()
+    const rpc = await startMockRpc({ chainId: TESTNET })
+    const engine = createEngine({ platform, kdf: KDF, receiptPollMs: 20 })
+    await engine.ready
+    const created = await engine.engine.vault.create({ password: PASSWORD })
+    const address = created.accounts[0]?.address as Hex
+    const accountId = created.accounts[0]?.id ?? ''
+    await engine.chains.setRpc(TESTNET, rpc.url)
+    const site = dapp(engine, ORIGIN_A, PAGE)
+    const connecting = site.request('eth_requestAccounts', undefined, 1)
+    const hello = await nextApproval(engine)
+    await engine.engine.approvals.decide({ id: hello.id, approve: true, data: { accountId, chainId: TESTNET } })
+    await connecting
+    // The sheet the user is reading when the worker dies.
+    void site.request('personal_sign', [MESSAGE, address], 2)
+    await nextApproval(engine, (r) => r.kind === 'sign_message')
+    return { platform, rpc, engine, address, accountId }
+  }
+
+  async function restart(platform: ReturnType<typeof createMemoryPlatform>, dead: Engine): Promise<Engine> {
+    dead.dispose()
+    const engine = createEngine({ platform, kdf: KDF, receiptPollMs: 20 })
+    await engine.ready
+    await engine.engine.vault.unlock({ password: PASSWORD })
+    return engine
+  }
+
+  it('refuses a re-send whose bytes differ, leaves the sheet alone, and still re-attaches the real one', async () => {
+    const first = await upToTheSheet()
+    const engine = await restart(first.platform, first.engine)
+    try {
+      const pending = engine.approvals.list()
+      expect(pending).toHaveLength(1)
+      const req = pending[0]
+      if (!req) throw new Error('the sheet did not survive the restart')
+
+      const page = dapp(engine, ORIGIN_A, PAGE)
+      const other = `0x${Buffer.from('something else entirely').toString('hex')}` as Hex
+      await expect(page.request('personal_sign', [other, first.address], 2)).rejects.toMatchObject({ code: -32002 })
+      // Untouched: same request, same id, still waiting for its human.
+      expect(engine.approvals.list().map((r) => r.id)).toEqual([req.id])
+
+      // The genuine re-send does re-attach, and signs what the sheet showed.
+      const again = dapp(engine, ORIGIN_A, PAGE)
+      const p = again.request('personal_sign', [MESSAGE, first.address], 2)
+      await new Promise((r) => setTimeout(r, 10))
+      expect(engine.approvals.list()).toHaveLength(1)
+      await engine.engine.approvals.decide({ id: req.id, approve: true })
+      const sig = (await p) as Hex
+      expect(await verifyMessage({ address: first.address, message: 'the message the sheet showed', signature: sig })).toBe(true)
+    } finally {
+      engine.dispose()
+      await first.rpc.close()
+    }
+  })
+
+  it('refuses a re-send on a chain the sheet was not built for', async () => {
+    const first = await upToTheSheet()
+    const engine = await restart(first.platform, first.engine)
+    try {
+      const req = engine.approvals.list()[0]
+      if (!req) throw new Error('the sheet did not survive the restart')
+      expect(req.chainId).toBe(TESTNET)
+      // The site moved its session chain, as §8.14 lets a connected site do.
+      await engine.engine.sites.setChain({ origin: ORIGIN_A, chainId: 52014 })
+      const page = dapp(engine, ORIGIN_A, PAGE)
+      await expect(page.request('personal_sign', [MESSAGE, first.address], 2)).rejects.toMatchObject({ code: -32002 })
+      expect(engine.approvals.list().map((r) => r.chainId)).toEqual([TESTNET])
+    } finally {
+      engine.dispose()
+      await first.rpc.close()
+    }
+  })
+
+  it('refuses a re-send seated on another account', async () => {
+    const first = await upToTheSheet()
+    const engine = await restart(first.platform, first.engine)
+    try {
+      const req = engine.approvals.list()[0]
+      if (!req) throw new Error('the sheet did not survive the restart')
+      expect(req.accountId).toBe(first.accountId)
+      const seeds = await engine.engine.accounts.list()
+      const derived = await engine.engine.accounts.derive({ seedId: seeds[0]?.seedId ?? '' })
+      await engine.engine.sites.setAccount({ origin: ORIGIN_A, accountId: derived.id })
+      const page = dapp(engine, ORIGIN_A, PAGE)
+      await expect(page.request('personal_sign', [MESSAGE, derived.address], 2)).rejects.toMatchObject({ code: -32002 })
+      expect(engine.approvals.list().map((r) => r.accountId)).toEqual([first.accountId])
+    } finally {
+      engine.dispose()
+      await first.rpc.close()
+    }
   })
 })

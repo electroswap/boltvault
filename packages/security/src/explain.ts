@@ -6,11 +6,17 @@
 import { feeRecipient } from '@boltvault/chains'
 import { formatUnits, type Hex } from 'viem'
 import { decodeCalldata, decodeMessage, type DecodedCall, type ParsedTypedData } from './decode'
+import { nativeSymbolOf } from './rules'
 import { knownContract } from './registry'
-import { UR_MSG_SENDER, UR_ROUTER_SELF, type UrCommand } from './ur'
+import { UR_MSG_SENDER, UR_ROUTER_SELF, urDeliveredAfter, urPathTokens } from './ur'
 import type { AssessmentContext, SignRequest, Simulation, Statement } from './types'
 
-const DOMAIN_NAMES: Readonly<Record<number, string>> = { 52014: 'Electroneum', 1: 'Ethereum', 8453: 'Base', 43114: 'Avalanche' }
+const DOMAIN_NAMES: Readonly<Record<number, string>> = {
+  52014: 'Electroneum',
+  1: 'Ethereum',
+  8453: 'Base',
+  43114: 'Avalanche',
+}
 
 /*
   Text a site or a contract chose, rendered at a length and a character set a
@@ -51,10 +57,18 @@ function who(ctx: AssessmentContext, chainId: number, address: string): string {
  * user's own accounts is "you" — so anything that is *not* "you" stands out,
  * which is the whole point of printing it.
  */
-function urWho(ctx: AssessmentContext, chainId: number, recipient: Hex): string {
+function urWho(ctx: AssessmentContext, chainId: number, recipient: Hex, swept = false): string {
   const r = recipient.toLowerCase()
   if (r === UR_MSG_SENDER.toLowerCase()) return 'you'
-  if (r === UR_ROUTER_SELF.toLowerCase()) return 'the router, to be swept below'
+  /*
+    "to be swept below" was said for every `ADDRESS_THIS` recipient, sweep or
+    no sweep — a sentence about a command that need not exist, and the most
+    reassuring thing on the sheet for calldata that strands the whole output
+    in the router for a searcher to take. It is only said when something
+    downstream actually delivers.
+  */
+  if (r === UR_ROUTER_SELF.toLowerCase())
+    return swept ? 'the router, to be swept below' : 'the router'
   if (ctx.own.some((a) => a.toLowerCase() === r)) return 'you'
   return who(ctx, chainId, recipient)
 }
@@ -64,31 +78,25 @@ function urWho(ctx: AssessmentContext, chainId: number, recipient: Hex): string 
  * symbol and decimals instead of as raw integers labelled "units".
  * V2 carries an address array; V3 packs `token | fee | token | …` into bytes.
  */
-function pathTokens(c: Extract<UrCommand, { type: `V${'2' | '3'}_SWAP_EXACT_${'IN' | 'OUT'}` }>): ['native' | Hex, 'native' | Hex] {
-  if (Array.isArray(c.path)) {
-    const p = c.path as readonly Hex[]
-    const first = p[0]
-    const last = p[p.length - 1]
-    return [first ?? 'native', last ?? 'native']
-  }
-  const hex = (c.path as Hex).slice(2)
-  if (hex.length < 40) return ['native', 'native']
-  const tin = `0x${hex.slice(0, 40)}` as Hex
-  const tout = `0x${hex.slice(-40)}` as Hex
-  // An exact-out path is encoded backwards: the output token comes first.
-  return c.type === 'V3_SWAP_EXACT_OUT' ? [tout, tin] : [tin, tout]
-}
+const pathTokens = urPathTokens
 
-function amount(ctx: AssessmentContext, token: 'native' | Hex, raw: bigint, chainId: number): string {
+function amount(
+  ctx: AssessmentContext,
+  token: 'native' | Hex,
+  raw: bigint,
+  chainId: number,
+): string {
   const abs = raw < 0n ? -raw : raw
   if (token === 'native') {
-    const symbol = chainId === 52014 || chainId === 5201420 ? 'ETN' : 'native'
-    return `${trim(formatUnits(abs, 18))} ${symbol}`
+    // The chain's own coin, from the registry — "Send 1 native to 0x2222…"
+    // named no asset at all (§8.14 Networks).
+    return `${trim(formatUnits(abs, 18))} ${nativeSymbolOf(chainId, ctx)}`
   }
   const t = ctx.tokens[token.toLowerCase()]
   if (t) return `${trim(formatUnits(abs, t.decimals))} ${untrusted(t.symbol, 12)}`
   // Wrapped ETN is known by role even when the universe has not loaded (offers are priced in it).
-  if (knownContract(chainId, token)?.role === 'wrapped_native') return `${trim(formatUnits(abs, 18))} WETN`
+  if (knownContract(chainId, token)?.role === 'wrapped_native')
+    return `${trim(formatUnits(abs, 18))} WETN`
   return `${abs.toString()} of ${who(ctx, chainId, token)}`
 }
 
@@ -104,7 +112,12 @@ function amount(ctx: AssessmentContext, token: 'native' | Hex, raw: bigint, chai
  * the web UI in the in-app browser and a WalletConnect peer all describe the
  * same bytes the same way.
  */
-function payPortionText(ctx: AssessmentContext, chainId: number, recipient: Hex, bips: bigint): string {
+function payPortionText(
+  ctx: AssessmentContext,
+  chainId: number,
+  recipient: Hex,
+  bips: bigint,
+): string {
   const pct = `${(Number(bips) / 100).toFixed(2)}%`
   const ours = feeRecipient(chainId)
   if (!ours || recipient.toLowerCase() !== ours.toLowerCase()) {
@@ -138,22 +151,40 @@ function siteName(origin: string): string {
  *   expansion is enough to see an approval hidden in a batch; expanding
  *   further lets a batch of batches fill the sheet.
  */
-export function explainCall(decoded: DecodedCall, ctx: AssessmentContext, chainId: number, origin: string, depth = 0): Statement[] {
+export function explainCall(
+  decoded: DecodedCall,
+  ctx: AssessmentContext,
+  chainId: number,
+  origin: string,
+  depth = 0,
+): Statement[] {
   const site = siteName(origin)
   switch (decoded.kind) {
     case 'native_transfer':
-      return [{ text: `Send ${amount(ctx, 'native', decoded.value, chainId)} to ${who(ctx, chainId, decoded.to)}`, tone: 'out' }]
+      return [
+        {
+          text: `Send ${amount(ctx, 'native', decoded.value, chainId)} to ${who(ctx, chainId, decoded.to)}`,
+          tone: 'out',
+        },
+      ]
     case 'deploy':
       return [{ text: 'Deploy a new contract', tone: 'neutral' }]
     case 'erc20_transfer': {
       // `transferFrom` moves someone else's balance; say whose, rather than
       // describing it as a plain send from the signer.
       const src = decoded.from
-      const thirdParty = src !== undefined && !ctx.own.some((a) => a.toLowerCase() === src.toLowerCase())
+      const thirdParty =
+        src !== undefined && !ctx.own.some((a) => a.toLowerCase() === src.toLowerCase())
       return [
         thirdParty && src !== undefined
-          ? { text: `Move ${amount(ctx, decoded.token, decoded.amount, chainId)} from ${who(ctx, chainId, src)} to ${who(ctx, chainId, decoded.to)}`, tone: 'out' }
-          : { text: `Send ${amount(ctx, decoded.token, decoded.amount, chainId)} to ${who(ctx, chainId, decoded.to)}`, tone: 'out' },
+          ? {
+              text: `Move ${amount(ctx, decoded.token, decoded.amount, chainId)} from ${who(ctx, chainId, src)} to ${who(ctx, chainId, decoded.to)}`,
+              tone: 'out',
+            }
+          : {
+              text: `Send ${amount(ctx, decoded.token, decoded.amount, chainId)} to ${who(ctx, chainId, decoded.to)}`,
+              tone: 'out',
+            },
       ]
     }
     case 'ambiguous_transfer_from':
@@ -168,24 +199,76 @@ export function explainCall(decoded: DecodedCall, ctx: AssessmentContext, chainI
         },
       ]
     case 'erc20_approve':
-      if (decoded.amount === 0n) return [{ text: `Revoke ${who(ctx, chainId, decoded.spender)}'s allowance for ${who(ctx, chainId, decoded.token)}`, tone: 'in' }]
-      return [{ text: decoded.unlimited ? `Allow ${who(ctx, chainId, decoded.spender)} to move an unlimited amount of ${who(ctx, chainId, decoded.token)}` : `Allow ${who(ctx, chainId, decoded.spender)} to move up to ${amount(ctx, decoded.token, decoded.amount, chainId)}`, tone: decoded.unlimited ? 'warn' : 'neutral' }]
+      if (decoded.amount === 0n)
+        return [
+          {
+            text: `Revoke ${who(ctx, chainId, decoded.spender)}'s allowance for ${who(ctx, chainId, decoded.token)}`,
+            tone: 'in',
+          },
+        ]
+      return [
+        {
+          text: decoded.unlimited
+            ? `Allow ${who(ctx, chainId, decoded.spender)} to move an unlimited amount of ${who(ctx, chainId, decoded.token)}`
+            : `Allow ${who(ctx, chainId, decoded.spender)} to move up to ${amount(ctx, decoded.token, decoded.amount, chainId)}`,
+          tone: decoded.unlimited ? 'warn' : 'neutral',
+        },
+      ]
     case 'erc721_transfer':
-      return [{ text: `Send ${who(ctx, chainId, decoded.token)} #${decoded.tokenId.toString()} to ${who(ctx, chainId, decoded.to)}`, tone: 'out' }]
+      return [
+        {
+          text: `Send ${who(ctx, chainId, decoded.token)} #${decoded.tokenId.toString()} to ${who(ctx, chainId, decoded.to)}`,
+          tone: 'out',
+        },
+      ]
     case 'erc721_approve':
-      return [{ text: `Allow ${who(ctx, chainId, decoded.to)} to move ${who(ctx, chainId, decoded.token)} #${decoded.tokenId.toString()}`, tone: 'neutral' }]
+      return [
+        {
+          text: `Allow ${who(ctx, chainId, decoded.to)} to move ${who(ctx, chainId, decoded.token)} #${decoded.tokenId.toString()}`,
+          tone: 'neutral',
+        },
+      ]
     case 'approval_for_all':
-      return [{ text: decoded.approved ? `Allow ${who(ctx, chainId, decoded.operator)} to move any item in ${who(ctx, chainId, decoded.token)}` : `Revoke ${who(ctx, chainId, decoded.operator)}'s access to ${who(ctx, chainId, decoded.token)}`, tone: decoded.approved ? 'warn' : 'in' }]
+      return [
+        {
+          text: decoded.approved
+            ? `Allow ${who(ctx, chainId, decoded.operator)} to move any item in ${who(ctx, chainId, decoded.token)}`
+            : `Revoke ${who(ctx, chainId, decoded.operator)}'s access to ${who(ctx, chainId, decoded.token)}`,
+          tone: decoded.approved ? 'warn' : 'in',
+        },
+      ]
     case 'erc1155_transfer':
-      return [{ text: `Send ${decoded.ids.length} item${decoded.ids.length === 1 ? '' : 's'} from ${who(ctx, chainId, decoded.token)} to ${who(ctx, chainId, decoded.to)}`, tone: 'out' }]
+      return [
+        {
+          text: `Send ${decoded.ids.length} item${decoded.ids.length === 1 ? '' : 's'} from ${who(ctx, chainId, decoded.token)} to ${who(ctx, chainId, decoded.to)}`,
+          tone: 'out',
+        },
+      ]
     case 'permit2_approve':
-      return [{ text: decoded.amount === 0n ? `Revoke ${who(ctx, chainId, decoded.spender)}'s Permit2 allowance for ${who(ctx, chainId, decoded.token)}` : decoded.unlimited ? `Allow ${who(ctx, chainId, decoded.spender)} to move an unlimited amount of ${who(ctx, chainId, decoded.token)} through Permit2` : `Allow ${who(ctx, chainId, decoded.spender)} to move up to ${amount(ctx, decoded.token, decoded.amount, chainId)} through Permit2`, tone: decoded.amount === 0n ? 'in' : decoded.unlimited ? 'warn' : 'neutral' }]
+      return [
+        {
+          text:
+            decoded.amount === 0n
+              ? `Revoke ${who(ctx, chainId, decoded.spender)}'s Permit2 allowance for ${who(ctx, chainId, decoded.token)}`
+              : decoded.unlimited
+                ? `Allow ${who(ctx, chainId, decoded.spender)} to move an unlimited amount of ${who(ctx, chainId, decoded.token)} through Permit2`
+                : `Allow ${who(ctx, chainId, decoded.spender)} to move up to ${amount(ctx, decoded.token, decoded.amount, chainId)} through Permit2`,
+          tone: decoded.amount === 0n ? 'in' : decoded.unlimited ? 'warn' : 'neutral',
+        },
+      ]
     case 'permit2_lockdown':
-      return [{ text: `Revoke ${decoded.approvals.length} Permit2 allowance${decoded.approvals.length === 1 ? '' : 's'}`, tone: 'in' }]
+      return [
+        {
+          text: `Revoke ${decoded.approvals.length} Permit2 allowance${decoded.approvals.length === 1 ? '' : 's'}`,
+          tone: 'in',
+        },
+      ]
     case 'wrap':
       return [{ text: `Wrap ${amount(ctx, 'native', decoded.amount, chainId)}`, tone: 'neutral' }]
     case 'unwrap':
-      return [{ text: `Unwrap ${amount(ctx, decoded.token, decoded.amount, chainId)}`, tone: 'neutral' }]
+      return [
+        { text: `Unwrap ${amount(ctx, decoded.token, decoded.amount, chainId)}`, tone: 'neutral' },
+      ]
     case 'multicall': {
       /*
         Say what the batch does, not how many things it does.
@@ -198,80 +281,203 @@ export function explainCall(decoded: DecodedCall, ctx: AssessmentContext, chainI
         exhaust the sheet.
       */
       const out: Statement[] = []
-      if (decoded.value > 0n) out.push({ text: `Send ${amount(ctx, 'native', decoded.value, chainId)} to ${who(ctx, chainId, decoded.to)}`, tone: 'out' })
+      if (decoded.value > 0n)
+        out.push({
+          text: `Send ${amount(ctx, 'native', decoded.value, chainId)} to ${who(ctx, chainId, decoded.to)}`,
+          tone: 'out',
+        })
       if (depth >= 1) {
-        out.push({ text: `Run ${decoded.calls.length} more calls through Multicall3 — not expanded here`, tone: 'warn' })
+        out.push({
+          text: `Run ${decoded.calls.length} more calls through Multicall3 — not expanded here`,
+          tone: 'warn',
+        })
         return out
       }
       const shown = decoded.calls.slice(0, 10)
       shown.forEach((c, i) => {
         const inner = decodeCalldata({ chainId, to: c.target, data: c.data, value: 0n })
-        for (const s of explainCall(inner, ctx, chainId, origin, depth + 1)) out.push({ ...s, text: `${i + 1}. ${s.text}` })
+        for (const s of explainCall(inner, ctx, chainId, origin, depth + 1))
+          out.push({ ...s, text: `${i + 1}. ${s.text}` })
       })
-      if (decoded.calls.length > shown.length) out.push({ text: `+${decoded.calls.length - shown.length} more calls in this batch`, tone: 'warn' })
-      if (out.length === 0) out.push({ text: `Run ${decoded.calls.length} calls through Multicall3`, tone: 'neutral' })
+      if (decoded.calls.length > shown.length)
+        out.push({
+          text: `+${decoded.calls.length - shown.length} more calls in this batch`,
+          tone: 'warn',
+        })
+      if (out.length === 0)
+        out.push({ text: `Run ${decoded.calls.length} calls through Multicall3`, tone: 'neutral' })
       return out
     }
     case 'farm_deposit': {
       const parts = [`Deposit into farm #${decoded.farmId.toString()}`]
       if (decoded.value > 0n) parts.push(`with ${amount(ctx, 'native', decoded.value, chainId)}`)
-      if (decoded.amountBolt > 0n) parts.push(`and ${amount(ctx, ctx.boltToken ?? 'native', decoded.amountBolt, chainId)} as boost`)
-      return [{ text: parts.join(' '), tone: 'out' }, { text: 'Unused amounts come back; a second deposit re-weights your duration multiplier.', tone: 'neutral' }]
+      if (decoded.amountBolt > 0n)
+        parts.push(
+          `and ${amount(ctx, ctx.boltToken ?? 'native', decoded.amountBolt, chainId)} as boost`,
+        )
+      return [
+        { text: parts.join(' '), tone: 'out' },
+        {
+          text: 'Unused amounts come back; a second deposit re-weights your duration multiplier.',
+          tone: 'neutral',
+        },
+      ]
     }
     case 'farm_withdraw':
       return decoded.liquidity === 0n
         ? [{ text: `Collect rewards and fees from farm #${decoded.farmId.toString()}`, tone: 'in' }]
-        : [{ text: `Withdraw ${decoded.liquidity.toString()} liquidity units from farm #${decoded.farmId.toString()}${decoded.asNative ? ' as ETN' : ''}`, tone: 'in' }, { text: 'Rewards and fees are collected with it; withdrawing everything returns your BOLT boost.', tone: 'neutral' }]
+        : [
+            {
+              text: `Withdraw ${decoded.liquidity.toString()} liquidity units from farm #${decoded.farmId.toString()}${decoded.asNative ? ' as ETN' : ''}`,
+              tone: 'in',
+            },
+            {
+              text: 'Rewards and fees are collected with it; withdrawing everything returns your BOLT boost.',
+              tone: 'neutral',
+            },
+          ]
     case 'launchpad':
       switch (decoded.action) {
         case 'contribute':
-          return [{ text: `Contribute ${amount(ctx, 'native', decoded.value, chainId)} to the campaign at ${who(ctx, chainId, decoded.pool)}`, tone: 'out' }]
+          return [
+            {
+              text: `Contribute ${amount(ctx, 'native', decoded.value, chainId)} to the campaign at ${who(ctx, chainId, decoded.pool)}`,
+              tone: 'out',
+            },
+          ]
         case 'claim_tokens':
-          return [{ text: `Claim your tokens from the campaign at ${who(ctx, chainId, decoded.pool)}`, tone: 'in' }]
+          return [
+            {
+              text: `Claim your tokens from the campaign at ${who(ctx, chainId, decoded.pool)}`,
+              tone: 'in',
+            },
+          ]
         case 'claim_refund':
-          return [{ text: `Claim your refund from the campaign at ${who(ctx, chainId, decoded.pool)}`, tone: 'in' }]
+          return [
+            {
+              text: `Claim your refund from the campaign at ${who(ctx, chainId, decoded.pool)}`,
+              tone: 'in',
+            },
+          ]
         case 'claim_referral':
           return [{ text: 'Claim your referral rewards', tone: 'in' }]
       }
       return []
     case 'seaport_fulfill': {
-      const piece = decoded.offer.find((o) => o.itemType === 2 || o.itemType === 3) ?? decoded.consideration.find((c) => c.itemType === 2 || c.itemType === 3)
-      const label = piece ? `${who(ctx, chainId, piece.token)} #${piece.identifier.toString()}` : 'the item'
+      const piece =
+        decoded.offer.find((o) => o.itemType === 2 || o.itemType === 3) ??
+        decoded.consideration.find((c) => c.itemType === 2 || c.itemType === 3)
+      const label = piece
+        ? `${who(ctx, chainId, piece.token)} #${piece.identifier.toString()}`
+        : 'the item'
       const buying = decoded.offer.some((o) => o.itemType === 2 || o.itemType === 3)
       if (buying) {
         const total = decoded.consideration.reduce((s, c) => s + c.amount, 0n)
-        const token = decoded.consideration[0]?.itemType === 0 ? 'native' : (decoded.consideration[0]?.token ?? 'native')
-        return [{ text: `Buy ${label} for ${amount(ctx, token, total, chainId)}`, tone: 'out' }, { text: 'Includes the 3% marketplace fee and any creator royalty in the price.', tone: 'neutral' }]
+        const token =
+          decoded.consideration[0]?.itemType === 0
+            ? 'native'
+            : (decoded.consideration[0]?.token ?? 'native')
+        return [
+          { text: `Buy ${label} for ${amount(ctx, token, total, chainId)}`, tone: 'out' },
+          {
+            text: 'Includes the 3% marketplace fee and any creator royalty in the price.',
+            tone: 'neutral',
+          },
+        ]
       }
       const paid = decoded.offer[0]
-      const yours = decoded.consideration.filter((c) => c.itemType !== 2 && c.itemType !== 3 && c.recipient.toLowerCase() !== decoded.offerer.toLowerCase())
+      const yours = decoded.consideration.filter(
+        (c) =>
+          c.itemType !== 2 &&
+          c.itemType !== 3 &&
+          c.recipient.toLowerCase() !== decoded.offerer.toLowerCase(),
+      )
       const gross = paid ? paid.amount : 0n
-      const net = yours.length ? yours.reduce((s, c) => s + c.amount, 0n) - (decoded.consideration.filter((c) => c.itemType !== 2 && c.itemType !== 3).reduce((s, c) => s + c.amount, 0n) - (yours[0]?.amount ?? 0n)) : gross
-      return [{ text: `Sell ${label} for ${paid ? amount(ctx, paid.token, gross, chainId) : 'the offer'}`, tone: 'in' }, { text: `You receive ${paid ? amount(ctx, paid.token, yours[0]?.amount ?? net, chainId) : 'the amount'} after the 3% marketplace fee and any creator royalty.`, tone: 'neutral' }]
+      const net = yours.length
+        ? yours.reduce((s, c) => s + c.amount, 0n) -
+          (decoded.consideration
+            .filter((c) => c.itemType !== 2 && c.itemType !== 3)
+            .reduce((s, c) => s + c.amount, 0n) -
+            (yours[0]?.amount ?? 0n))
+        : gross
+      return [
+        {
+          text: `Sell ${label} for ${paid ? amount(ctx, paid.token, gross, chainId) : 'the offer'}`,
+          tone: 'in',
+        },
+        {
+          text: `You receive ${paid ? amount(ctx, paid.token, yours[0]?.amount ?? net, chainId) : 'the amount'} after the 3% marketplace fee and any creator royalty.`,
+          tone: 'neutral',
+        },
+      ]
     }
     case 'seaport_cancel':
-      return [{ text: decoded.count === 1 ? 'Cancel your marketplace order' : `Cancel ${decoded.count} marketplace orders`, tone: 'in' }]
+      return [
+        {
+          text:
+            decoded.count === 1
+              ? 'Cancel your marketplace order'
+              : `Cancel ${decoded.count} marketplace orders`,
+          tone: 'in',
+        },
+      ]
     case 'dividends':
       return decoded.action === 'register'
-        ? [{ text: `Activate dividends for ${decoded.tokenIds.length} Electric Legend${decoded.tokenIds.length === 1 ? '' : 's'}`, tone: 'neutral' }]
-        : [{ text: `Claim marketplace dividends for ${decoded.tokenIds.length} Electric Legend${decoded.tokenIds.length === 1 ? '' : 's'}`, tone: 'in' }]
+        ? [
+            {
+              text: `Activate dividends for ${decoded.tokenIds.length} Electric Legend${decoded.tokenIds.length === 1 ? '' : 's'}`,
+              tone: 'neutral',
+            },
+          ]
+        : [
+            {
+              text: `Claim marketplace dividends for ${decoded.tokenIds.length} Electric Legend${decoded.tokenIds.length === 1 ? '' : 's'}`,
+              tone: 'in',
+            },
+          ]
     case 'bridge': {
       const known = knownContract(chainId, decoded.router)
       const symbol = known?.name.includes('USDT') ? 'USDT' : 'USDC'
       const dest = DOMAIN_NAMES[decoded.destinationDomain] ?? `chain ${decoded.destinationDomain}`
       return [
-        { text: `Bridge ${trim(formatUnits(decoded.amount, 6))} ${symbol} to ${dest} for ${who(ctx, chainId, decoded.recipient)}`, tone: 'out' },
-        { text: `Pays ${amount(ctx, 'native', decoded.value, chainId)} of interchain gas to Hyperlane`, tone: 'neutral' },
+        {
+          text: `Bridge ${trim(formatUnits(decoded.amount, 6))} ${symbol} to ${dest} for ${who(ctx, chainId, decoded.recipient)}`,
+          tone: 'out',
+        },
+        {
+          text: `Pays ${amount(ctx, 'native', decoded.value, chainId)} of interchain gas to Hyperlane`,
+          tone: 'neutral',
+        },
       ]
     }
     case 'nft_mint':
-      return [{ text: `Mint ${decoded.count.toString()} from ${who(ctx, chainId, decoded.collection)} for ${amount(ctx, 'native', decoded.value, chainId)}`, tone: 'out' }]
-    case 'limit_order': {
-      if (decoded.action === 'close') return [{ text: decoded.orderIds.length === 1 ? `Cancel order #${decoded.orderIds[0]?.toString() ?? '?'} and take back what is left` : `Cancel ${decoded.orderIds.length} orders and take back what is left`, tone: 'in' }]
-      const days = Number(decoded.durationSeconds) / 86_400
-      const open = days >= 1 ? `${Math.round(days)} day${Math.round(days) === 1 ? '' : 's'}` : `${Math.max(1, Math.round(Number(decoded.durationSeconds) / 3600))} hours`
       return [
-        { text: `Place an order: ${amount(ctx, decoded.tokenIn ?? 'native', decoded.amountIn, chainId)} for at least ${amount(ctx, decoded.tokenOut ?? 'native', decoded.minOut, chainId)}, open for ${open}`, tone: 'out' },
+        {
+          text: `Mint ${decoded.count.toString()} from ${who(ctx, chainId, decoded.collection)} for ${amount(ctx, 'native', decoded.value, chainId)}`,
+          tone: 'out',
+        },
+      ]
+    case 'limit_order': {
+      if (decoded.action === 'close')
+        return [
+          {
+            text:
+              decoded.orderIds.length === 1
+                ? `Cancel order #${decoded.orderIds[0]?.toString() ?? '?'} and take back what is left`
+                : `Cancel ${decoded.orderIds.length} orders and take back what is left`,
+            tone: 'in',
+          },
+        ]
+      const days = Number(decoded.durationSeconds) / 86_400
+      const open =
+        days >= 1
+          ? `${Math.round(days)} day${Math.round(days) === 1 ? '' : 's'}`
+          : `${Math.max(1, Math.round(Number(decoded.durationSeconds) / 3600))} hours`
+      return [
+        {
+          text: `Place an order: ${amount(ctx, decoded.tokenIn ?? 'native', decoded.amountIn, chainId)} for at least ${amount(ctx, decoded.tokenOut ?? 'native', decoded.minOut, chainId)}, open for ${open}`,
+          tone: 'out',
+        },
         { text: 'Platform fee 0.1% on fill · no wallet fee', tone: 'neutral' },
       ]
     }
@@ -288,26 +494,44 @@ export function explainCall(decoded: DecodedCall, ctx: AssessmentContext, chainI
         is the opposite of what was about to happen.
       */
       const out: Statement[] = []
-      for (const c of decoded.decoded.commands) {
+      const cmds = decoded.decoded.commands
+      const mine = (a: Hex): boolean =>
+        a.toLowerCase() === UR_MSG_SENDER.toLowerCase() ||
+        ctx.own.some((o) => o.toLowerCase() === a.toLowerCase())
+      for (let ci = 0; ci < cmds.length; ci++) {
+        const c = cmds[ci]
+        if (!c) continue
         switch (c.type) {
           case 'V3_SWAP_EXACT_IN':
           case 'V2_SWAP_EXACT_IN': {
             const [tin, tout] = pathTokens(c)
-            out.push({ text: `Swap ${amount(ctx, tin, c.amountIn, chainId)} for at least ${amount(ctx, tout, c.amountOut, chainId)}, sent to ${urWho(ctx, chainId, c.recipient)}`, tone: 'neutral' })
+            out.push({
+              text: `Swap ${amount(ctx, tin, c.amountIn, chainId)} for at least ${amount(ctx, tout, c.amountOut, chainId)}, sent to ${urWho(ctx, chainId, c.recipient, urDeliveredAfter(cmds, ci, tout, mine))}`,
+              tone: 'neutral',
+            })
             break
           }
           case 'V3_SWAP_EXACT_OUT':
           case 'V2_SWAP_EXACT_OUT': {
             const [tin, tout] = pathTokens(c)
-            out.push({ text: `Swap at most ${amount(ctx, tin, c.amountIn, chainId)} for ${amount(ctx, tout, c.amountOut, chainId)}, sent to ${urWho(ctx, chainId, c.recipient)}`, tone: 'neutral' })
+            out.push({
+              text: `Swap at most ${amount(ctx, tin, c.amountIn, chainId)} for ${amount(ctx, tout, c.amountOut, chainId)}, sent to ${urWho(ctx, chainId, c.recipient, urDeliveredAfter(cmds, ci, tout, mine))}`,
+              tone: 'neutral',
+            })
             break
           }
           case 'PERMIT2_PERMIT':
-            out.push({ text: `Allow ${who(ctx, chainId, c.spender)} to move ${amount(ctx, c.token, c.amount, chainId)} until the permit expires`, tone: 'neutral' })
+            out.push({
+              text: `Allow ${who(ctx, chainId, c.spender)} to move ${amount(ctx, c.token, c.amount, chainId)} until the permit expires`,
+              tone: 'neutral',
+            })
             break
           case 'PERMIT2_PERMIT_BATCH':
             for (const d of c.details)
-              out.push({ text: `Allow ${who(ctx, chainId, c.spender)} to move ${amount(ctx, d.token, d.amount, chainId)} until the permit expires`, tone: 'neutral' })
+              out.push({
+                text: `Allow ${who(ctx, chainId, c.spender)} to move ${amount(ctx, d.token, d.amount, chainId)} until the permit expires`,
+                tone: 'neutral',
+              })
             break
           case 'PAY_PORTION':
             out.push({ text: payPortionText(ctx, chainId, c.recipient, c.bips), tone: 'out' })
@@ -316,64 +540,171 @@ export function explainCall(decoded: DecodedCall, ctx: AssessmentContext, chainI
             out.push({ text: `Wrap ${amount(ctx, 'native', c.amount, chainId)}`, tone: 'neutral' })
             break
           case 'UNWRAP_WETH':
-            out.push({ text: `Unwrap to ETN, sent to ${urWho(ctx, chainId, c.recipient)}`, tone: 'in' })
+            out.push({
+              text: `Unwrap to ETN, sent to ${urWho(ctx, chainId, c.recipient)}`,
+              tone: 'in',
+            })
             break
           case 'PERMIT2_TRANSFER_FROM':
-            out.push({ text: `Move ${amount(ctx, c.token, c.amount, chainId)} to ${urWho(ctx, chainId, c.recipient)}`, tone: 'out' })
+            out.push({
+              text: `Move ${amount(ctx, c.token, c.amount, chainId)} to ${urWho(ctx, chainId, c.recipient)}`,
+              tone: 'out',
+            })
             break
           case 'PERMIT2_TRANSFER_FROM_BATCH':
             for (const tr of c.transfers)
-              out.push({ text: `Move ${amount(ctx, tr.token, tr.amount, chainId)} to ${urWho(ctx, chainId, tr.to)}`, tone: 'out' })
+              out.push({
+                text: `Move ${amount(ctx, tr.token, tr.amount, chainId)} to ${urWho(ctx, chainId, tr.to)}`,
+                tone: 'out',
+              })
             break
           case 'SWEEP':
-            out.push({ text: `Send everything left of ${who(ctx, chainId, c.token)} to ${urWho(ctx, chainId, c.recipient)}`, tone: 'out' })
+            out.push({
+              text: `Send everything left of ${who(ctx, chainId, c.token)} to ${urWho(ctx, chainId, c.recipient)}`,
+              tone: 'out',
+            })
             break
           case 'TRANSFER':
-            out.push({ text: `Send ${amount(ctx, c.token, c.amount, chainId)} to ${urWho(ctx, chainId, c.recipient)}`, tone: 'out' })
+            out.push({
+              text: `Send ${amount(ctx, c.token, c.amount, chainId)} to ${urWho(ctx, chainId, c.recipient)}`,
+              tone: 'out',
+            })
             break
           case 'BALANCE_CHECK_ERC20':
-            out.push({ text: `Check the balance of ${who(ctx, chainId, c.token)} — nothing moves`, tone: 'neutral' })
+            out.push({
+              text: `Check the balance of ${who(ctx, chainId, c.token)} — nothing moves`,
+              tone: 'neutral',
+            })
             break
           case 'SEAPORT_V1_5':
-            out.push({ text: `Fulfil a marketplace order through the router for ${amount(ctx, 'native', c.value, chainId)}`, tone: 'out' })
-            out.push({ text: 'The order inside this call was not decoded — what you receive for it cannot be shown here', tone: 'warn' })
+            out.push({
+              text: `Fulfil a marketplace order through the router for ${amount(ctx, 'native', c.value, chainId)}`,
+              tone: 'out',
+            })
+            out.push({
+              text: 'The order inside this call was not decoded — what you receive for it cannot be shown here',
+              tone: 'warn',
+            })
             break
           case 'UNKNOWN':
             out.push({ text: `Unknown router command 0x${c.byte.toString(16)}`, tone: 'warn' })
             break
         }
       }
-      if (out.length === 0) out.push({ text: `Call ${who(ctx, chainId, decoded.router)}`, tone: 'neutral' })
+      if (out.length === 0)
+        out.push({ text: `Call ${who(ctx, chainId, decoded.router)}`, tone: 'neutral' })
       return out
     }
     case 'contract_call':
-      return [{ text: decoded.functionName ? `Call ${decoded.functionName} on ${who(ctx, chainId, decoded.to)}` : `Call an unknown function (${decoded.selector}) on ${who(ctx, chainId, decoded.to)}${decoded.value > 0n ? ` with ${amount(ctx, 'native', decoded.value, chainId)}` : ''}`, tone: decoded.functionName ? 'neutral' : 'warn' }, ...(site !== 'BoltVault' ? [] : [])]
+      return [
+        {
+          text: decoded.functionName
+            ? `Call ${decoded.functionName} on ${who(ctx, chainId, decoded.to)}`
+            : `Call an unknown function (${decoded.selector}) on ${who(ctx, chainId, decoded.to)}${decoded.value > 0n ? ` with ${amount(ctx, 'native', decoded.value, chainId)}` : ''}`,
+          tone: decoded.functionName ? 'neutral' : 'warn',
+        },
+        ...(site !== 'BoltVault' ? [] : []),
+      ]
   }
 }
 
-export function explainTypedData(typed: ParsedTypedData | null, ctx: AssessmentContext, chainId: number): Statement[] {
+export function explainTypedData(
+  typed: ParsedTypedData | null,
+  ctx: AssessmentContext,
+  chainId: number,
+): Statement[] {
   if (!typed) return [{ text: 'Sign a message BoltVault could not read', tone: 'warn' }]
   const d = typed.decoded
   switch (d.kind) {
     case 'permit2_permit_single':
-      return [{ text: `Allow ${who(ctx, chainId, d.spender)} to move ${d.unlimited ? 'an unlimited amount of ' + who(ctx, chainId, d.token) : amount(ctx, d.token, d.amount, chainId)} through Permit2 until ${expiry(d.expiration)}`, tone: d.unlimited ? 'warn' : 'neutral' }]
+      return [
+        {
+          text: `Allow ${who(ctx, chainId, d.spender)} to move ${d.unlimited ? 'an unlimited amount of ' + who(ctx, chainId, d.token) : amount(ctx, d.token, d.amount, chainId)} through Permit2 until ${expiry(d.expiration)}`,
+          tone: d.unlimited ? 'warn' : 'neutral',
+        },
+      ]
     case 'permit2_permit_batch':
-      return d.details.map((x) => ({ text: `Allow ${who(ctx, chainId, d.spender)} to move ${x.unlimited ? 'an unlimited amount of ' + who(ctx, chainId, x.token) : amount(ctx, x.token, x.amount, chainId)} through Permit2`, tone: x.unlimited ? 'warn' : 'neutral' }) as Statement)
+      return d.details.map(
+        (x) =>
+          ({
+            text: `Allow ${who(ctx, chainId, d.spender)} to move ${x.unlimited ? 'an unlimited amount of ' + who(ctx, chainId, x.token) : amount(ctx, x.token, x.amount, chainId)} through Permit2`,
+            tone: x.unlimited ? 'warn' : 'neutral',
+          }) as Statement,
+      )
     case 'permit2_transfer':
-      return d.transfers.map((t) => ({ text: `Let ${who(ctx, chainId, d.spender)} take ${amount(ctx, t.token, t.amount, chainId)} from you`, tone: 'warn' }) as Statement)
+      return d.transfers.map(
+        (t) =>
+          ({
+            text: `Let ${who(ctx, chainId, d.spender)} take ${amount(ctx, t.token, t.amount, chainId)} from you`,
+            tone: 'warn',
+          }) as Statement,
+      )
     case 'erc2612_permit':
-      return [{ text: `Allow ${who(ctx, chainId, d.spender)} to move ${d.unlimited ? 'an unlimited amount' : amount(ctx, typed.domain.verifyingContract ?? '0x', d.value, chainId)} until ${expiry(d.deadline)}`, tone: d.unlimited ? 'warn' : 'neutral' }]
+      return [
+        {
+          text: `Allow ${who(ctx, chainId, d.spender)} to move ${d.unlimited ? 'an unlimited amount' : amount(ctx, typed.domain.verifyingContract ?? '0x', d.value, chainId)} until ${expiry(d.deadline)}`,
+          tone: d.unlimited ? 'warn' : 'neutral',
+        },
+      ]
     case 'dai_permit':
-      return [{ text: d.allowed ? `Allow ${who(ctx, chainId, d.spender)} to move all of this token` : `Revoke ${who(ctx, chainId, d.spender)}'s allowance`, tone: d.allowed ? 'warn' : 'in' }]
+      return [
+        {
+          text: d.allowed
+            ? `Allow ${who(ctx, chainId, d.spender)} to move all of this token`
+            : `Revoke ${who(ctx, chainId, d.spender)}'s allowance`,
+          tone: d.allowed ? 'warn' : 'in',
+        },
+      ]
     case 'seaport_order': {
-      const give = d.offer.map((o) => (o.itemType >= 2 ? `${who(ctx, chainId, o.token)} #${o.identifier.toString()}` : amount(ctx, o.token, o.amount, chainId))).join(', ')
-      const get = d.consideration.filter((c) => c.recipient.toLowerCase() === d.offerer.toLowerCase()).map((c) => (c.itemType >= 2 ? `${who(ctx, chainId, c.token)} #${c.identifier.toString()}` : amount(ctx, c.itemType === 0 ? 'native' : c.token, c.amount, chainId))).join(' + ')
-      return [{ text: `List ${give}`, tone: 'out' }, { text: get ? `You receive ${get}` : 'You receive nothing', tone: get ? 'in' : 'warn' }]
+      /*
+        One pair of lines per order. A `BulkOrder` authorises every leaf of its
+        tree with the one signature, so showing only the first was a statement
+        about a fraction of what was being signed. Long trees are capped so the
+        sheet stays readable, and the cap itself is stated.
+      */
+      const out: Statement[] = []
+      for (const o of d.orders.slice(0, SEAPORT_MAX_ORDERS_SHOWN)) {
+        const give = o.offer
+          .map((x) =>
+            x.itemType >= 2
+              ? `${who(ctx, chainId, x.token)} #${x.identifier.toString()}`
+              : amount(ctx, x.token, x.amount, chainId),
+          )
+          .join(', ')
+        const get = o.consideration
+          .filter((c) => c.recipient.toLowerCase() === o.offerer.toLowerCase())
+          .map((c) =>
+            c.itemType >= 2
+              ? `${who(ctx, chainId, c.token)} #${c.identifier.toString()}`
+              : amount(ctx, c.itemType === 0 ? 'native' : c.token, c.amount, chainId),
+          )
+          .join(' + ')
+        out.push({ text: `List ${give}`, tone: 'out' })
+        out.push({
+          text: get ? `You receive ${get}` : 'You receive nothing',
+          tone: get ? 'in' : 'warn',
+        })
+      }
+      const rest = d.orders.length - SEAPORT_MAX_ORDERS_SHOWN
+      if (rest > 0)
+        out.push({
+          text: `+${rest} more order${rest === 1 ? '' : 's'} in this signature`,
+          tone: 'warn',
+        })
+      return out
     }
     case 'unknown':
-      return [{ text: `Sign a "${untrusted(d.primaryType)}" message${typed.domain.name ? ` for ${untrusted(typed.domain.name)}` : ''}`, tone: 'neutral' }]
+      return [
+        {
+          text: `Sign a "${untrusted(d.primaryType)}" message${typed.domain.name ? ` for ${untrusted(typed.domain.name)}` : ''}`,
+          tone: 'neutral',
+        },
+      ]
   }
 }
+
+/** How many orders of a bulk tree the sheet spells out before it says "+N more". */
+const SEAPORT_MAX_ORDERS_SHOWN = 5
 
 function expiry(v: bigint): string {
   if (v === 0n) return 'revoked'
@@ -384,25 +715,59 @@ function expiry(v: bigint): string {
 
 export function explainMessage(message: Hex | string): Statement[] {
   const d = decodeMessage(message)
-  if (d.text !== null) return [{ text: d.text.length > 400 ? `${d.text.slice(0, 400)}…` : d.text, tone: 'neutral' }]
+  if (d.text !== null)
+    return [{ text: d.text.length > 400 ? `${d.text.slice(0, 400)}…` : d.text, tone: 'neutral' }]
+  /*
+    Text carrying bidi overrides or other invisible formatting is not shown as
+    text at all: what a font draws for it is not the order of the bytes being
+    signed, which is the one promise the sheet makes. It falls back to the byte
+    count, and says why rather than leaving the reader to wonder.
+  */
+  if (d.hidden)
+    return [
+      {
+        text: `Sign ${d.bytes} bytes of text that contains hidden formatting characters — what it would draw is not the order of what it says`,
+        tone: 'warn',
+      },
+    ]
   return [{ text: `Sign ${d.bytes} bytes of binary data`, tone: 'warn' }]
 }
 
-export function explainSimulation(sim: Simulation | null, ctx: AssessmentContext, chainId: number): Statement[] {
+export function explainSimulation(
+  sim: Simulation | null,
+  ctx: AssessmentContext,
+  chainId: number,
+): Statement[] {
   if (!sim || sim.mode !== 'trace' || !sim.ok) return []
   const out: Statement[] = []
   for (const d of sim.deltas) {
     const sign = d.amount < 0n ? '−' : '+'
-    const text = d.standard === 'erc721' ? `${sign} ${who(ctx, chainId, d.asset as string)} #${(d.tokenId ?? 0n).toString()}` : `${sign} ${amount(ctx, d.asset, d.amount, chainId)}`
+    const text =
+      d.standard === 'erc721'
+        ? `${sign} ${who(ctx, chainId, d.asset as string)} #${(d.tokenId ?? 0n).toString()}`
+        : `${sign} ${amount(ctx, d.asset, d.amount, chainId)}`
     out.push({ text, tone: d.amount < 0n ? 'out' : 'in' })
   }
   for (const a of sim.approvals) {
-    out.push({ text: a.amount === 'all' ? `${who(ctx, chainId, a.spender)} can move any ${who(ctx, chainId, a.token)}` : `${who(ctx, chainId, a.spender)} can move up to ${amount(ctx, a.token, a.amount, chainId)}`, tone: 'warn' })
+    out.push({
+      text:
+        a.amount === 'all'
+          ? `${who(ctx, chainId, a.spender)} can move any ${who(ctx, chainId, a.token)}`
+          : `${who(ctx, chainId, a.spender)} can move up to ${amount(ctx, a.token, a.amount, chainId)}`,
+      tone: 'warn',
+    })
   }
   return out
 }
 
-export function explain(request: SignRequest, decoded: DecodedCall | null, typed: ParsedTypedData | null, ctx: AssessmentContext, chainId: number, origin: string): Statement[] {
+export function explain(
+  request: SignRequest,
+  decoded: DecodedCall | null,
+  typed: ParsedTypedData | null,
+  ctx: AssessmentContext,
+  chainId: number,
+  origin: string,
+): Statement[] {
   switch (request.kind) {
     case 'transaction':
       return decoded ? explainCall(decoded, ctx, chainId, origin) : []

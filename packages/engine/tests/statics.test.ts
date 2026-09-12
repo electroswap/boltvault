@@ -107,6 +107,40 @@ describe('signed flags and the scam list', () => {
     phone.dispose()
   })
 
+  /*
+    ATT-BV-020. `statics.isDisabled` accepted six features and only `swap` and
+    `bridge` ever called it, so four of the six documented emergency controls
+    did nothing at all: ops could publish `limit: disabled` during an incident
+    and the wallet would go on placing orders. Hiding a screen is not the
+    control either — every namespace is callable from any UI page — so the
+    check is at the top of each verb that starts a flow, and this asserts one
+    verb per feature.
+  */
+  it('switches off limit orders, the launchpad, the marketplace and farms', async () => {
+    const fresh = createMemoryPlatform()
+    const host = staticHost({ 'flags.json': { body: { v: 1, issuedAt: 1, disabled: { limit: true, launchpad: true, nft: true, farms: true } } } })
+    const engine = createEngine({ platform: fresh, kdf: KDF, receiptPollMs: 20, fetch: host, electroswapUrl: null, pricesUrl: null, staticsUrl: 'https://static.test/wallet', staticsPublicKey: keys.publicKeyHex })
+    await engine.ready
+    await engine.statics.refresh()
+    const created = await engine.engine.vault.create({ password: PASSWORD })
+    const quiz = await engine.engine.vault.backupQuiz({ seedId: created.seedId })
+    const words = created.mnemonic.split(' ')
+    await engine.engine.vault.confirmBackup({ seedId: created.seedId, answers: quiz.positions.map((position) => ({ position, word: words[position - 1] ?? '' })) })
+    await engine.chains.setRpc(TESTNET, rpc.url)
+    const accountId = created.accounts[0]?.id ?? ''
+    const off = /switched off/
+    try {
+      const TOKEN = '0x1111111111111111111111111111111111111111'
+      await expect(engine.engine.limit.place({ accountId, chainId: TESTNET, tokenIn: 'native', tokenOut: TOKEN, amountIn: '1', minOut: '1', durationSeconds: 86_400 })).rejects.toThrow(off)
+      await expect(engine.engine.launchpad.contribute({ accountId, chainId: TESTNET, pool: TOKEN, amountEtn: '1' })).rejects.toThrow(off)
+      await expect(engine.engine.nft.buy({ accountId, chainId: TESTNET, address: TOKEN, tokenId: '1' })).rejects.toThrow(off)
+      await expect(engine.engine.farm.deposit({ accountId, chainId: TESTNET, farmId: 1, amount0: '1' })).rejects.toThrow(off)
+      await expect(engine.engine.legends.mint({ accountId, chainId: TESTNET, count: 1 })).rejects.toThrow(off)
+    } finally {
+      engine.dispose()
+    }
+  })
+
   it('switches off swaps and a bridge corridor, and blocks a listed origin on any signature', async () => {
     const fresh = createMemoryPlatform()
     const host = staticHost({ 'flags.json': { body: { v: 1, issuedAt: 1, disabled: { swap: true, bridgeCorridors: ['52014:8453:USDC'] } } }, 'scam-origins.json': { body: { v: 1, issuedAt: 1, origins: ['free-mint.xyz'] } } })

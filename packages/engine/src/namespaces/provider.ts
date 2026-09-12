@@ -30,6 +30,7 @@ import {
 import {
   assess,
   clampNewContractDays,
+  decodeCalldata,
   emptyContext,
   estimateSimulation,
   isFirstPartyOrigin,
@@ -131,7 +132,10 @@ export interface ProviderDeps {
    * source is verified (§3.4). Absent in a build with no API; an answer of null,
    * or one that knows neither fact, falls through to the explorer.
    */
-  readonly contractFacts?: (chainId: number, address: Hex) => Promise<(ContractFactsAt & { newAfterDays?: number | null }) | null>
+  readonly contractFacts?: (
+    chainId: number,
+    address: Hex,
+  ) => Promise<(ContractFactsAt & { newAfterDays?: number | null }) | null>
   /** Our own API, for the trace the public RPCs cannot do (§9.2). */
   readonly apiOrigin?: string
   /** The wallet key. `POST /api/wallet/trace` is key-gated; without one there is no preview off a self-hosted node. */
@@ -157,6 +161,12 @@ export interface PortInfo {
   /** 'content' ports are verified by construction (the sender's URL); a WebView is the committed URL; WalletConnect only when Verify said VALID (§2.7 S9). */
   readonly kind?: 'content' | 'webview' | 'walletconnect'
   readonly verified?: boolean
+  /**
+   * What an attestation service said, where one spoke — `verified` is the one
+   * bit, and this is the sentence behind it. "Nobody could tell" and "the
+   * domain does not match" are different findings on the sheet (§5.3).
+   */
+  readonly verify?: 'valid' | 'invalid' | 'unknown'
 }
 
 /**
@@ -260,7 +270,8 @@ function snapshotOf(sim: Simulation | null): SimulationSnapshot | null {
 }
 
 function floorToWei(floorEtn: number | null): bigint | null {
-  if (floorEtn === null || !Number.isFinite(floorEtn) || floorEtn <= 0 || floorEtn >= 1e21) return null
+  if (floorEtn === null || !Number.isFinite(floorEtn) || floorEtn <= 0 || floorEtn >= 1e21)
+    return null
   try {
     return parseUnits(floorEtn.toFixed(18), 18)
   } catch {
@@ -268,10 +279,95 @@ function floorToWei(floorEtn: number | null): bigint | null {
   }
 }
 
+/**
+ * A canonical fingerprint of what an approval asks to sign (§3.3).
+ *
+ * `approve()` re-attaches a re-sent request to a pending sheet by origin and
+ * the page-supplied `clientRequestId` — both of which the page chooses and
+ * neither of which says anything about the contents. A worker restart while a
+ * sheet is open is a supported, tested path, so the window is real: without
+ * this a site could move its session to another chain or another account,
+ * re-send, and have the user's "yes" to one thing sign another. Everything the
+ * sheet rendered goes into the digest, fee fields included — a re-send that
+ * changes them is a different request, and the gas editor is the only door
+ * that may change a price.
+ */
+function intentDigest(intent: ApprovalIntent): string {
+  const from = 'from' in intent ? intent.from.toLowerCase() : ''
+  const accountId = 'accountId' in intent ? intent.accountId : ''
+  const params = (): string => {
+    switch (intent.kind) {
+      case 'connect':
+      case 'switch_chain':
+      case 'add_chain':
+        return ''
+      case 'watch_asset':
+        return stableJson({ type: intent.type, options: intent.options })
+      case 'sign_message':
+        return intent.message.toLowerCase()
+      case 'eth_sign':
+        return intent.hash.toLowerCase()
+      case 'sign_typed_data':
+        return stableJson(
+          typeof intent.typedData === 'string' ? safeJson(intent.typedData) : intent.typedData,
+        )
+      case 'send_transaction': {
+        const t = intent.tx
+        return stableJson({
+          to: t.to?.toLowerCase() ?? null,
+          value: t.value ?? null,
+          data: t.data ?? null,
+          nonce: t.nonce ?? null,
+          gas: t.gas ?? null,
+          gasPrice: t.gasPrice ?? null,
+          maxFeePerGas: t.maxFeePerGas ?? null,
+          maxPriorityFeePerGas: t.maxPriorityFeePerGas ?? null,
+          signOnly: intent.signOnly === true,
+        })
+      }
+    }
+  }
+  return [intent.kind, intent.chainId, accountId, from, params()].join('|')
+}
+
+/** JSON with object keys in a fixed order, so two equal requests digest alike. */
+/**
+ * Was this a refusal the person can simply undo?
+ *
+ * The narrow case, deliberately: the wrong button on a Ledger, which `settle`
+ * already returns to `pending` so the very same request can be approved again.
+ * Everything else — the wallet's own `RpcError` refusals, a device that cannot
+ * do what was asked, a transport that broke — is a transaction that did not
+ * happen and is recorded as one.
+ */
+function isRetryable(err: unknown): boolean {
+  if (err instanceof RpcError) return false
+  // A Ledger says so in its code; Trezor and the rest say so in words.
+  if ((err as { code?: unknown } | null)?.code === 'rejected') return true
+  return err instanceof Error && /\brejected\b|\bdenied\b|\bcancell?ed\b/i.test(err.message)
+}
+
+function stableJson(v: unknown): string {
+  if (v === null || typeof v !== 'object') return JSON.stringify(v) ?? 'null'
+  if (Array.isArray(v)) return `[${v.map(stableJson).join(',')}]`
+  const o = v as Record<string, unknown>
+  return `{${Object.keys(o)
+    .sort()
+    .map((k) => `${JSON.stringify(k)}:${stableJson(o[k])}`)
+    .join(',')}}`
+}
+
 export class ProviderService {
   private remote: RemoteSigner | null = null
   /** Origins whose transport could not vouch for them (WalletConnect without Verify). */
+  /** `clientRequestId` → the port that is asking, while it is asking. */
+  private readonly senders = new Map<string, PortInfo>()
   private unverified = new Set<string>()
+  /** What an attestation service said about an origin, and over which transport. */
+  private readonly verdicts = new Map<
+    string,
+    { verify: 'valid' | 'invalid' | 'unknown'; kind: 'content' | 'webview' | 'walletconnect' }
+  >()
   /** Explorer answers by `chainId:address`; failures are cached too, so a dead explorer is asked once. */
   private readonly contractFactsCache = new Map<string, { at: number; facts: ContractFactsAt }>()
   /**
@@ -328,7 +424,9 @@ export class ProviderService {
    * gone yields an empty array, which is the honest thing to tell a page.
    */
   private async reseat(origin: string, accountId: string): Promise<void> {
-    const account = (await this.deps.vault.accounts().catch(() => [])).find((a) => a.id === accountId)
+    const account = (await this.deps.vault.accounts().catch(() => [])).find(
+      (a) => a.id === accountId,
+    )
     const addresses = account ? [account.address] : []
     this.flow.accountsChanged(origin, addresses)
     await this.deps.sites.noteExposed(origin, addresses).catch(() => undefined)
@@ -338,6 +436,11 @@ export class ProviderService {
   serve(channel: MessageChannelLike, origin: string, info: PortInfo = {}): () => void {
     if (info.verified === false) this.unverified.add(origin)
     else this.unverified.delete(origin)
+    if (info.verify || info.kind)
+      this.verdicts.set(origin, {
+        verify: info.verify ?? (info.verified === false ? 'unknown' : 'valid'),
+        kind: info.kind ?? 'content',
+      })
     const onEvent = (event: ProviderEvent): void => {
       try {
         channel.post({ kind: 'event', event: event.event, payload: event.payload })
@@ -351,6 +454,13 @@ export class ProviderService {
     const offMessage = channel.onMessage((raw) => {
       if (!isProviderPortMessage(raw) || raw.kind !== 'request') return
       const clientRequestId = `${origin}#${raw.session ?? 'nosession'}#${raw.id}`
+      /*
+        Which tab is asking, for as long as it is asking. The approval payload
+        copies it so the host can decline to throw a focused window over the
+        user's work on behalf of a tab three windows back.
+      */
+      if (info.tabId !== undefined || info.frameId !== undefined)
+        this.senders.set(clientRequestId, info)
       void this.flow
         .request(origin, raw.method, raw.params, clientRequestId)
         .then((result) => channel.post({ kind: 'response', id: raw.id, result: result ?? null }))
@@ -362,6 +472,7 @@ export class ProviderService {
             // gone
           }
         })
+        .finally(() => this.senders.delete(clientRequestId))
     })
     const stop = (): void => {
       offMessage()
@@ -373,6 +484,21 @@ export class ProviderService {
       stop()
       offDisconnect()
     }
+  }
+
+  /**
+   * Does a connect for this origin have to put a sheet in front of somebody,
+   * even when the origin is already connected?
+   *
+   * Over WalletConnect, yes. A proposal ran `eth_requestAccounts` through the
+   * virtual session and `RpcFlow.connect()` answered from the existing
+   * session — so scanning a pairing URI for an origin the user had already
+   * connected in the in-app browser completed silently, handing the peer the
+   * address and a second live session under a first-party name. One extra tap
+   * per pairing is the whole cost.
+   */
+  alwaysPrompt(origin: string): boolean {
+    return this.verdicts.get(origin)?.kind === 'walletconnect'
   }
 
   isPending(origin: string): boolean {
@@ -416,10 +542,12 @@ export class ProviderService {
       payload,
     })
     const result = (async () => {
-      const outcome = await d.approvals.waitFor(request.id)
       const view = payload as { assessment: AssessmentView }
-      if (!outcome.approved) throw new EngineError('rejected', 'User rejected the request.')
-      /*
+      // The same wait-again loop the dApp path uses; see `approve()`.
+      for (;;) {
+        const outcome = await d.approvals.waitFor(request.id)
+        if (!outcome.approved) throw new EngineError('rejected', 'User rejected the request.')
+        /*
         Tell the store what the signer got. `decide` is holding its promise
         open on this, so the approving screen stays up — showing "confirm on
         your Ledger" — until the device answers, and a refusal returns the
@@ -430,25 +558,32 @@ export class ProviderService {
         included: any path that does not settle leaves `decide` waiting for an
         answer that never comes, and the screen hanging with it.
       */
-      let blockedHere = false
-      try {
-        // Defence in depth: a blocked assessment is never signed, whatever a UI page says (§3.4).
-        if (view.assessment.presentation.blocked) {
-          blockedHere = true
-          throw new EngineError('rejected', 'User rejected the request.')
+        let blockedHere = false
+        try {
+          // Defence in depth: a blocked assessment is never signed, whatever a UI page says (§3.4).
+          if (view.assessment.presentation.blocked) {
+            blockedHere = true
+            throw new EngineError('rejected', 'User rejected the request.')
+          }
+          const done = await this.execute(intent, request, outcome.data)
+          await d.approvals.settle(request.id, true)
+          return done
+        } catch (err) {
+          const retryable = !blockedHere && isRetryable(err)
+          if (!retryable) {
+            const held = ProviderService.reservationOf(request)
+            if (held) this.releaseNonce(held.chainId, held.from, held.nonce)
+          }
+          // Our refusal is final; a device's is not. See ApprovalStore.settle.
+          await d.approvals.settle(
+            request.id,
+            false,
+            err instanceof Error ? err.message : String(err),
+            !blockedHere,
+          )
+          if (retryable && d.approvals.get(request.id)?.status === 'pending') continue
+          throw err
         }
-        const done = await this.execute(intent, request, outcome.data)
-        await d.approvals.settle(request.id, true)
-        return done
-      } catch (err) {
-        // Our refusal is final; a device's is not. See ApprovalStore.settle.
-        await d.approvals.settle(
-          request.id,
-          false,
-          err instanceof Error ? err.message : String(err),
-          !blockedHere,
-        )
-        throw err
       }
     })()
     // A broadcast failure is already recorded in Activity as failed; nobody has to await this.
@@ -483,6 +618,7 @@ export class ProviderService {
         },
       },
       knownChain: (chainId) => d.chains.known(chainId),
+      alwaysPrompt: (origin) => this.alwaysPrompt(origin),
       session: (origin) => this.sessionFor(origin),
       executeSafe: (chainId, method, params) => d.chains.rpc(chainId, method, params),
       approve: (intent) => this.approve(intent),
@@ -495,7 +631,9 @@ export class ProviderService {
   }
 
   /** The account a connected origin is seated on, or null while locked, disconnected or re-seated away. */
-  private async sessionFor(origin: string): Promise<{ accountId: string; addresses: readonly string[] } | null> {
+  private async sessionFor(
+    origin: string,
+  ): Promise<{ accountId: string; addresses: readonly string[] } | null> {
     const d = this.deps
     const row = d.sites.registry.get(origin)
     if (!row?.connected) return null
@@ -520,12 +658,18 @@ export class ProviderService {
    * swap; the alternative — guessing a tier — would overcharge someone.
    */
   /** `{ walletFee }` for a first-party sheet, or `{}` so the context key stays absent for everyone else. */
-  private async walletFeeFor(origin: string, chainId: number): Promise<{ walletFee?: { sink: Hex; bips: number; tier: string } }> {
+  private async walletFeeFor(
+    origin: string,
+    chainId: number,
+  ): Promise<{ walletFee?: { sink: Hex; bips: number; tier: string } }> {
     const policy = await this.feePolicyFor(origin, chainId)
     return policy ? { walletFee: policy } : {}
   }
 
-  private async feePolicyFor(origin: string, chainId: number): Promise<{ sink: Hex; bips: number; tier: string } | null> {
+  private async feePolicyFor(
+    origin: string,
+    chainId: number,
+  ): Promise<{ sink: Hex; bips: number; tier: string } | null> {
     if (!isFirstPartyOrigin(origin)) return null
     const policy = this.deps.walletFeePolicy
     if (!policy) return null
@@ -601,6 +745,7 @@ export class ProviderService {
 
   private async approve(intent: ApprovalIntent): Promise<unknown> {
     const d = this.deps
+    const digest = intentDigest(intent)
     // Re-attach: a worker restart re-sends the request with the same client id.
     const existing = d.approvals.findPending(
       (r) =>
@@ -608,10 +753,32 @@ export class ProviderService {
         (r.payload as { clientRequestId?: string } | null)?.clientRequestId ===
           intent.clientRequestId,
     )
+    /*
+      …but only when it is the same request. The client id is the page's own
+      string and the sheet is already up, so adopting a pending request without
+      checking would let a site re-send different bytes, a different chain or a
+      different account under a sheet the user is reading. A mismatch is
+      refused outright and the pending request is left exactly as it was, for
+      the person to finish or reject on its own terms.
+    */
+    if (existing) {
+      const stored = (existing.payload as { intentDigest?: string } | null)?.intentDigest ?? ''
+      const wantedAccount = 'accountId' in intent ? intent.accountId : null
+      if (
+        stored !== digest ||
+        existing.chainId !== intent.chainId ||
+        existing.accountId !== wantedAccount
+      )
+        throw new RpcError(
+          RPC.RESOURCE_UNAVAILABLE,
+          'A different request from this site is already waiting. Finish it first.',
+        )
+    }
     let request = existing
     if (!request) {
       // An already-permitted site only needs the vault unlocked, not a new Connect.
-      if (intent.kind === 'connect') {
+      // Except over WalletConnect: see `alwaysPrompt`.
+      if (intent.kind === 'connect' && !this.alwaysPrompt(intent.origin)) {
         const row = d.sites.registry.get(intent.origin)
         const status = await d.vault.status()
         if (row?.connected && status.unlocked) {
@@ -620,7 +787,13 @@ export class ProviderService {
             return { accountId: account.id, addresses: [account.address], chainId: row.chainId }
         }
       }
-      const payload = await this.payloadFor(intent)
+      const from = this.senders.get(intent.clientRequestId)
+      const payload = {
+        ...(await this.payloadFor(intent)),
+        intentDigest: digest,
+        ...(from?.tabId !== undefined ? { tabId: from.tabId } : {}),
+        ...(from?.frameId !== undefined ? { frameId: from.frameId } : {}),
+      }
       request = await d.approvals.create({
         kind: intent.kind === 'eth_sign' ? 'sign_message' : intent.kind,
         origin: intent.origin,
@@ -630,7 +803,6 @@ export class ProviderService {
       })
       if (!intent.origin.startsWith('internal:')) d.openApproval?.(request)
     }
-    const outcome = await d.approvals.waitFor(request.id)
     const payload = request.payload as { assessment?: AssessmentView } | null
     const blockedBy = payload?.assessment?.presentation.blocked
       ? payload.assessment.rules.filter((r) => r.severity === 'block').map((r) => r.code)
@@ -638,8 +810,23 @@ export class ProviderService {
     // Defence in depth: a blocked assessment is never signed, whatever a UI page says (§3.4).
     // The dApp path settles the same way, blocked check included; see runInternal.
     const blockedHere = blockedBy.length > 0
-    if (!outcome.approved) {
-      /*
+    /*
+      Approved, refused, approved again.
+
+      `ApprovalStore.settle` returns a device refusal to `pending` precisely so
+      "the same request can simply be approved again" — but nothing was waiting
+      for the second yes, because the signer awaited the decision once and left.
+      The request sat pending until it expired and the person's retry did
+      nothing. So the wait is a loop, bounded by the approval's own TTL: each
+      turn needs a fresh human decision, and an expiry resolves it as a refusal.
+    */
+    for (;;) {
+      const outcome = await d.approvals.waitFor(request.id)
+      if (!outcome.approved) {
+        // Whatever place in the queue this sheet was holding goes back.
+        const held = ProviderService.reservationOf(request)
+        if (held) this.releaseNonce(held.chainId, held.from, held.nonce)
+        /*
         A rejection still says why, when the wallet had already blocked it.
 
         `6cb688c` moved the blocked check inside the settle try and dropped the
@@ -649,22 +836,38 @@ export class ProviderService {
         Nothing here is a secret, and `e2e/provider.spec.ts` has been asking for
         it since M3.
       */
-      throw new RpcError(RPC.USER_REJECTED, 'User rejected the request.', blockedHere ? { rules: blockedBy } : undefined)
-    }
-    try {
-      if (blockedHere)
-        throw new RpcError(RPC.USER_REJECTED, 'User rejected the request.', { rules: blockedBy })
-      const done = await this.execute(intent, request, outcome.data)
-      await d.approvals.settle(request.id, true)
-      return done
-    } catch (err) {
-      await d.approvals.settle(
-        request.id,
-        false,
-        err instanceof Error ? err.message : String(err),
-        !blockedHere,
-      )
-      throw err
+        throw new RpcError(
+          RPC.USER_REJECTED,
+          'User rejected the request.',
+          blockedHere ? { rules: blockedBy } : undefined,
+        )
+      }
+      try {
+        if (blockedHere)
+          throw new RpcError(RPC.USER_REJECTED, 'User rejected the request.', { rules: blockedBy })
+        const done = await this.execute(intent, request, outcome.data)
+        await d.approvals.settle(request.id, true)
+        return done
+      } catch (err) {
+        const retryable = !blockedHere && isRetryable(err)
+        /*
+        A signature that cannot be retried is finished with its nonce. One that
+        can — a device refusal, which `settle` returns to `pending` — keeps it,
+        because the same request is about to ask for the same place again.
+      */
+        if (!retryable) {
+          const held = ProviderService.reservationOf(request)
+          if (held) this.releaseNonce(held.chainId, held.from, held.nonce)
+        }
+        await d.approvals.settle(
+          request.id,
+          false,
+          err instanceof Error ? err.message : String(err),
+          !blockedHere,
+        )
+        if (retryable && d.approvals.get(request.id)?.status === 'pending') continue
+        throw err
+      }
     }
   }
 
@@ -675,7 +878,11 @@ export class ProviderService {
         return {
           kind: 'connect',
           requestedChainId: intent.chainId,
-          reconnect: d.sites.registry.get(intent.origin)?.connected === true,
+          // `reconnect` is what the sheet auto-approves after an unlock. A
+          // pairing is never that, whatever the origin already holds.
+          reconnect:
+            !this.alwaysPrompt(intent.origin) &&
+            d.sites.registry.get(intent.origin)?.connected === true,
           firstTime: d.sites.registry.isFirstTime(intent.origin),
           clientRequestId: intent.clientRequestId,
         }
@@ -804,6 +1011,27 @@ export class ProviderService {
         const simulation = await this.simulate(intent.chainId, prepared, request)
         // §3.4 step 7: the history row must be able to show the preview the user was shown.
         this.rememberSnapshot(ProviderService.snapshotKey(intent.chainId, prepared.tx), simulation)
+        /*
+          What the site chose for itself, so the firewall can say so. Only the
+          fields it actually set: a price the wallet worked out has nothing to
+          answer for, and neither has a nonce the wallet reserved.
+        */
+        const theirPerGas = intent.tx.gasPrice ?? intent.tx.maxFeePerGas
+        const nodePerGas = prepared.tx.nodePerGas ? BigInt(prepared.tx.nodePerGas) : 0n
+        const supplied: AssessmentContext['supplied'] = {
+          ...(theirPerGas !== undefined && nodePerGas > 0n
+            ? {
+                perGas: {
+                  theirs: BigInt(theirPerGas),
+                  node: nodePerGas,
+                  gasLimit: BigInt(prepared.tx.gas),
+                },
+              }
+            : {}),
+          ...(intent.tx.nonce !== undefined
+            ? { nonce: { theirs: parseInt(intent.tx.nonce, 16), next: prepared.nextNonce } }
+            : {}),
+        }
         const assessment = await this.assessment(
           intent.origin,
           intent.chainId,
@@ -812,6 +1040,7 @@ export class ProviderService {
           simulation,
           intent.expectedFee ?? null,
           intent.bridgeRecipient ?? null,
+          Object.keys(supplied).length > 0 ? supplied : null,
         )
         const perGas =
           prepared.tx.type === 'eip1559'
@@ -821,6 +1050,7 @@ export class ProviderService {
         return {
           kind: 'send_transaction',
           tx: prepared.tx,
+          ...(intent.signOnly ? { signOnly: true as const } : {}),
           fee: {
             gasLimit: BigInt(prepared.tx.gas).toString(),
             maxTotalWei: (perGas * BigInt(prepared.tx.gas)).toString(),
@@ -846,6 +1076,8 @@ export class ProviderService {
       hasCodeOnOrigin: boolean
       hasCodeOnDestination: boolean | null
     } | null = null,
+    /** Fee and nonce the requester named itself, when it named them (§3.4). */
+    supplied: AssessmentContext['supplied'] = null,
   ): Promise<Assessment> {
     const d = this.deps
     const settings = await d.settings.get()
@@ -868,9 +1100,7 @@ export class ProviderService {
       attack — but choosing one as a recipient is worth saying out loud, and
       anything the user has actually sent to, saved, or owns is not a duster.
     */
-    const referenced = new Set(
-      [...sentTo, ...addressBook, ...own].map((a) => a.toLowerCase()),
-    )
+    const referenced = new Set([...sentTo, ...addressBook, ...own].map((a) => a.toLowerCase()))
     const inboundOnly = [
       ...new Set(
         activity
@@ -883,6 +1113,41 @@ export class ProviderService {
     const balances: Record<string, bigint> = {}
     const probe: Hex[] = []
     if (request.kind === 'transaction' && request.tx.to) probe.push(request.tx.to)
+    /*
+      …and whatever the call is actually about, when the decoder names it
+      separately: a launchpad pool, a bridge router, a farm, a marketplace.
+      `newContract` reads `context.contracts` for the age and the verified
+      flag, so a target nobody probed is a target the rule cannot judge.
+    */
+    if (request.kind === 'transaction') {
+      const inner = decodeCalldata({
+        chainId,
+        to: request.tx.to,
+        data: request.tx.data,
+        value: request.tx.value,
+      })
+      const named =
+        inner && 'to' in inner
+          ? null
+          : inner?.kind === 'launchpad'
+            ? inner.pool
+            : inner?.kind === 'limit_order'
+              ? inner.manager
+              : inner?.kind === 'farm_deposit' || inner?.kind === 'farm_withdraw'
+                ? inner.farm
+                : inner?.kind === 'seaport_fulfill'
+                  ? inner.marketplace
+                  : inner?.kind === 'dividends'
+                    ? inner.distributor
+                    : inner?.kind === 'nft_mint'
+                      ? inner.minter
+                      : inner?.kind === 'bridge'
+                        ? inner.router
+                        : inner?.kind === 'universal_router'
+                          ? inner.router
+                          : null
+      if (named && !probe.some((a) => a.toLowerCase() === named.toLowerCase())) probe.push(named)
+    }
     if (request.kind === 'typed_data') {
       const parsed = parseTypedData(request.typedData)
       const dec = parsed?.decoded
@@ -919,7 +1184,11 @@ export class ProviderService {
       one `eth_call`; the selector is spelled out to avoid pulling an ABI into
       this file.
     */
-    if (request.kind === 'transaction' && request.tx.to && request.tx.data.startsWith('0xa9059cbb')) {
+    if (
+      request.kind === 'transaction' &&
+      request.tx.to &&
+      request.tx.data.startsWith('0xa9059cbb')
+    ) {
       const token = request.tx.to.toLowerCase()
       const callData = `0x70a08231${account.slice(2).toLowerCase().padStart(64, '0')}` as Hex
       const raw = (await d.chains
@@ -990,9 +1259,16 @@ export class ProviderService {
       */
       ...(await this.walletFeeFor(origin, chainId)),
       ...(origin === 'internal:bridge' ? { bridgeRecipient } : {}),
+      ...(supplied ? { supplied } : {}),
       originBudget: this.originBudget(origin, activity),
       lastCopiedAddress: this.lastCopiedAddress(),
+      // The chain's own coin, so the primary statement names an asset rather
+      // than the word "native" (§8.14 Networks).
+      nativeSymbol: getChain(chainId)?.nativeCurrency.symbol ?? null,
       originVerified: !this.unverified.has(origin),
+      ...(this.verdicts.get(origin)
+        ? { originVerify: this.verdicts.get(origin)?.verify ?? null }
+        : {}),
       scamOrigins: d.statics?.scamOrigins() ?? [],
     })
     return assess({ origin, chainId, account, request, context, simulation })
@@ -1062,20 +1338,32 @@ export class ProviderService {
     const ask = this.deps.counterpartyNames
     if (!ask) return
     const wanted = new Set<string>()
-    if (request.kind === 'transaction' && request.tx.to && contracts[request.tx.to.toLowerCase()]?.hasCode !== true) wanted.add(request.tx.to.toLowerCase())
+    if (
+      request.kind === 'transaction' &&
+      request.tx.to &&
+      contracts[request.tx.to.toLowerCase()]?.hasCode !== true
+    )
+      wanted.add(request.tx.to.toLowerCase())
     /*
       transfer(address,uint256): the recipient is the low 20 bytes of the first
       word. Read off the calldata rather than decoded, because `to` here is the
       token contract and the person being paid is never in `probe` — the
       commonest send in the wallet would otherwise be the one case with no name.
     */
-    if (request.kind === 'transaction' && request.tx.data.startsWith('0xa9059cbb') && request.tx.data.length >= 74) wanted.add(`0x${request.tx.data.slice(34, 74)}`.toLowerCase())
+    if (
+      request.kind === 'transaction' &&
+      request.tx.data.startsWith('0xa9059cbb') &&
+      request.tx.data.length >= 74
+    )
+      wanted.add(`0x${request.tx.data.slice(34, 74)}`.toLowerCase())
     const addresses = [...wanted].filter((a) => labels[a] === undefined)
     if (addresses.length === 0) return
     const none: ReadonlyArray<{ address: string; name: string | null }> = []
     const named = await Promise.race([
       ask(chainId, addresses).catch(() => none),
-      new Promise<ReadonlyArray<{ address: string; name: string | null }>>((resolve) => setTimeout(() => resolve(none), NAME_BUDGET_MS)),
+      new Promise<ReadonlyArray<{ address: string; name: string | null }>>((resolve) =>
+        setTimeout(() => resolve(none), NAME_BUDGET_MS),
+      ),
     ])
     for (const { address, name } of named) if (name !== null) labels[address.toLowerCase()] ??= name
   }
@@ -1108,8 +1396,11 @@ export class ProviderService {
     const now = this.deps.platform.now()
     const hit = this.contractFactsCache.get(key)
     const facts =
-      hit && now - hit.at < CONTRACT_FACTS_TTL_MS ? hit.facts : await this.lookUpContract(chainId, address)
-    if (!hit || now - hit.at >= CONTRACT_FACTS_TTL_MS) this.contractFactsCache.set(key, { at: now, facts })
+      hit && now - hit.at < CONTRACT_FACTS_TTL_MS
+        ? hit.facts
+        : await this.lookUpContract(chainId, address)
+    if (!hit || now - hit.at >= CONTRACT_FACTS_TTL_MS)
+      this.contractFactsCache.set(key, { at: now, facts })
     // Derived on every read, never stored: see `ContractFactsAt`.
     return { ageDays: this.ageDaysOf(facts.deployedAt), verified: facts.verified }
   }
@@ -1138,7 +1429,8 @@ export class ProviderService {
     if (!contractFactsAnswerable(chainId)) return UNKNOWN_CONTRACT_FACTS
     const fromApi = await this.deps.contractFacts?.(chainId, address).catch(() => null)
     if (typeof fromApi?.newAfterDays === 'number') this.servedNewContractDays = fromApi.newAfterDays
-    if (fromApi && (fromApi.deployedAt !== null || fromApi.verified !== null)) return { deployedAt: fromApi.deployedAt, verified: fromApi.verified }
+    if (fromApi && (fromApi.deployedAt !== null || fromApi.verified !== null))
+      return { deployedAt: fromApi.deployedAt, verified: fromApi.verified }
     return this.readExplorer(chainId, address).catch(() => UNKNOWN_CONTRACT_FACTS)
   }
 
@@ -1194,7 +1486,10 @@ export class ProviderService {
     if (!decoded || decoded.kind !== 'seaport_order') return {}
     const collections = [
       ...new Set(
-        decoded.offer
+        // Every leaf of a bulk tree, so the floor check covers the orders the
+        // signature authorises rather than only the one it shows first.
+        decoded.orders
+          .flatMap((o) => o.offer)
           .filter((o) => o.itemType === SEAPORT_ERC721 || o.itemType === SEAPORT_ERC1155)
           .map((o) => o.token.toLowerCase()),
       ),
@@ -1267,7 +1562,12 @@ export class ProviderService {
       url,
       fetchImpl: d.fetch ?? globalThis.fetch,
       // The API verifies the signature over an EMPTY body on this route (see create.ts).
-      ...(key ? { authHeaders: (method: string, at: string) => authHeaders({ key, method, url: at, now: d.platform.now() }) } : {}),
+      ...(key
+        ? {
+            authHeaders: (method: string, at: string) =>
+              authHeaders({ key, method, url: at, now: d.platform.now() }),
+          }
+        : {}),
     })
     return this.marketClient
   }
@@ -1325,7 +1625,9 @@ export class ProviderService {
                 gas: prepared.tx.gas,
                 nonce: `0x${prepared.tx.nonce.toString(16)}`,
                 ...(prepared.tx.maxFeePerGas ? { maxFeePerGas: prepared.tx.maxFeePerGas } : {}),
-                ...(prepared.tx.maxPriorityFeePerGas ? { maxPriorityFeePerGas: prepared.tx.maxPriorityFeePerGas } : {}),
+                ...(prepared.tx.maxPriorityFeePerGas
+                  ? { maxPriorityFeePerGas: prepared.tx.maxPriorityFeePerGas }
+                  : {}),
                 ...(prepared.tx.gasPrice ? { gasPrice: prepared.tx.gasPrice } : {}),
               },
               'latest',
@@ -1373,12 +1675,28 @@ export class ProviderService {
     try {
       const url = `${d.apiOrigin}/api/wallet/trace`
       // Same fields as the direct trace above: the preview must describe the transaction that will be sent.
-      const body = JSON.stringify({ chainId, from: prepared.tx.from, to, value: prepared.tx.value, data: prepared.tx.data, gas: prepared.tx.gas, nonce: `0x${prepared.tx.nonce.toString(16)}`, ...(prepared.tx.maxFeePerGas ? { maxFeePerGas: prepared.tx.maxFeePerGas } : {}), ...(prepared.tx.maxPriorityFeePerGas ? { maxPriorityFeePerGas: prepared.tx.maxPriorityFeePerGas } : {}), ...(prepared.tx.gasPrice ? { gasPrice: prepared.tx.gasPrice } : {}) })
+      const body = JSON.stringify({
+        chainId,
+        from: prepared.tx.from,
+        to,
+        value: prepared.tx.value,
+        data: prepared.tx.data,
+        gas: prepared.tx.gas,
+        nonce: `0x${prepared.tx.nonce.toString(16)}`,
+        ...(prepared.tx.maxFeePerGas ? { maxFeePerGas: prepared.tx.maxFeePerGas } : {}),
+        ...(prepared.tx.maxPriorityFeePerGas
+          ? { maxPriorityFeePerGas: prepared.tx.maxPriorityFeePerGas }
+          : {}),
+        ...(prepared.tx.gasPrice ? { gasPrice: prepared.tx.gasPrice } : {}),
+      })
       const res = await f(url, {
         method: 'POST',
         // A signature over this exact call, not the key (§9.1): a header lifted
         // out of devtools cannot be pointed at a different, more expensive trace.
-        headers: { 'content-type': 'application/json', ...authHeaders({ key: d.clientKey, method: 'POST', url, body, now: d.platform.now() }) },
+        headers: {
+          'content-type': 'application/json',
+          ...authHeaders({ key: d.clientKey, method: 'POST', url, body, now: d.platform.now() }),
+        },
         body,
       })
       const json = (await res.json()) as {
@@ -1410,11 +1728,58 @@ export class ProviderService {
   /** (chain:account) → the nonces this wallet has handed out but not yet seen on chain. */
   private readonly reservedNonces = new Map<string, Array<{ nonce: number; at: number }>>()
 
+  /**
+   * Give a reserved nonce back (§3.4).
+   *
+   * Reservations were pruned only by age or by the chain moving past them, so
+   * rejecting a sheet held its number for the full five minutes: the next send
+   * took N+1 and sat behind a hole that nothing would ever fill, showing
+   * "pending" until the reservation expired and the user re-sent. Electroneum
+   * has no speed-up path, so there was nothing the person could do about it.
+   */
+  private releaseNonce(chainId: number, from: Hex, nonce: number): void {
+    const key = `${chainId}:${from.toLowerCase()}`
+    const live = this.reservedNonces.get(key)
+    if (!live) return
+    const i = live.findIndex((r) => r.nonce === nonce)
+    if (i >= 0) live.splice(i, 1)
+    if (live.length === 0) this.reservedNonces.delete(key)
+  }
+
+  /** The nonce an approval is holding, when it is holding one. */
+  private static reservationOf(
+    request: ApprovalRequest,
+  ): { chainId: number; from: Hex; nonce: number } | null {
+    const payload = request.payload as {
+      kind?: string
+      tx?: { from?: string; nonce?: number }
+    } | null
+    if (payload?.kind !== 'send_transaction' || !payload.tx || request.chainId === null) return null
+    const { from, nonce } = payload.tx
+    if (typeof from !== 'string' || typeof nonce !== 'number') return null
+    return { chainId: request.chainId, from: from as Hex, nonce }
+  }
+
+  /**
+   * Is there a number below this one that neither the chain nor this wallet
+   * accounts for? That is a transaction which will sit in the pool for ever.
+   */
+  private nonceHole(chainId: number, from: Hex, pending: number, nonce: number): boolean {
+    if (nonce <= pending) return false
+    const held = new Set(
+      (this.reservedNonces.get(`${chainId}:${from.toLowerCase()}`) ?? []).map((r) => r.nonce),
+    )
+    for (let n = pending; n < nonce; n++) if (!held.has(n)) return true
+    return false
+  }
+
   private reserveNonce(chainId: number, from: Hex, onChain: number): number {
     const key = `${chainId}:${from.toLowerCase()}`
     const now = this.deps.platform.now()
     // An approval cannot outlive its TTL, so neither can its claim on a nonce.
-    const live = (this.reservedNonces.get(key) ?? []).filter((r) => now - r.at < APPROVAL_TTL_MS && r.nonce >= onChain)
+    const live = (this.reservedNonces.get(key) ?? []).filter(
+      (r) => now - r.at < APPROVAL_TTL_MS && r.nonce >= onChain,
+    )
     const highest = live.reduce((m, r) => Math.max(m, r.nonce), onChain - 1)
     const nonce = Math.max(onChain, highest + 1)
     live.push({ nonce, at: now })
@@ -1425,7 +1790,7 @@ export class ProviderService {
   private async prepare(
     chainId: number,
     tx: TxParams,
-  ): Promise<{ tx: PreparedTx; estimateError: string | null }> {
+  ): Promise<{ tx: PreparedTx; estimateError: string | null; nextNonce: number }> {
     const rpc = (method: string, params: readonly unknown[]): Promise<unknown> =>
       this.deps.chains.rpc(chainId, method, params)
     const value = tx.value ?? '0x0'
@@ -1444,40 +1809,66 @@ export class ProviderService {
       pruned by age, so a request that is abandoned or expires gives its number
       back without needing a settle hook.
     */
+    const pendingCount = parseInt(
+      String(await rpc('eth_getTransactionCount', [tx.from, 'pending'])),
+      16,
+    )
+    const nextNonce = Number.isFinite(pendingCount) ? pendingCount : 0
+    /*
+      A supplied nonce is honoured — replacement flows need one — but it is no
+      longer silent. `nonceNotNext` says so on the sheet when it is not this
+      account's next free number, because a nonce above the pending count sits
+      in the pool as a gap and executes whenever later sends fill it in.
+    */
     const nonce =
       tx.nonce !== undefined
         ? parseInt(tx.nonce, 16)
-        : this.reserveNonce(chainId, tx.from, parseInt(String(await rpc('eth_getTransactionCount', [tx.from, 'pending'])), 16))
+        : this.reserveNonce(chainId, tx.from, nextNonce)
     let gas: bigint
     let estimateError: string | null = null
-    if (tx.gas !== undefined) {
-      gas = BigInt(tx.gas)
-    } else {
-      try {
-        const est = BigInt(
-          String(
-            await rpc('eth_estimateGas', [{ from: tx.from, ...(to ? { to } : {}), value, data }]),
-          ),
-        )
-        gas = (est * 12n) / 10n
-      } catch (err) {
-        estimateError = err instanceof Error ? err.message : String(err)
-        gas = data === '0x' && to ? 21_000n : 500_000n
-      }
+    /*
+      The revert check runs whether or not a limit was supplied.
+
+      `eth_estimateGas` is two things at once: a size, and the only cheap proof
+      that the call does not revert. Skipping it because `tx.gas` was given
+      dropped the second along with the first, and `SIM_INCOMPLETE` then told
+      the user "only the revert check ran" about a check that had not. The
+      supplied limit is still what gets signed; the estimate only decides
+      whether the sheet may claim the call goes through.
+    */
+    try {
+      const est = BigInt(
+        String(
+          await rpc('eth_estimateGas', [{ from: tx.from, ...(to ? { to } : {}), value, data }]),
+        ),
+      )
+      gas = tx.gas !== undefined ? BigInt(tx.gas) : (est * 12n) / 10n
+    } catch (err) {
+      estimateError = err instanceof Error ? err.message : String(err)
+      gas = tx.gas !== undefined ? BigInt(tx.gas) : data === '0x' && to ? 21_000n : 500_000n
     }
     const block = (await rpc('eth_getBlockByNumber', ['latest', false]).catch(() => null)) as {
       baseFeePerGas?: string
     } | null
     const baseFee = block?.baseFeePerGas ? BigInt(block.baseFeePerGas) : 0n
     let fees: Pick<PreparedTx, 'type' | 'maxFeePerGas' | 'maxPriorityFeePerGas' | 'gasPrice'>
+    /*
+      What the node itself would charge, worked out even when the request names
+      a price. It is what the fee editor's band is anchored on and what
+      `feeExcessive` compares against; without it, a dApp's number was both the
+      price and the yardstick for judging the price.
+    */
+    let nodePerGas = 0n
     if (tx.gasPrice !== undefined) {
       fees = { type: 'legacy', gasPrice: tx.gasPrice }
+      nodePerGas = BigInt(String(await rpc('eth_gasPrice', []).catch(() => '0x0')))
     } else if (baseFee > 0n || tx.maxFeePerGas !== undefined) {
-      const tip =
-        tx.maxPriorityFeePerGas !== undefined
-          ? BigInt(tx.maxPriorityFeePerGas)
-          : BigInt(String(await rpc('eth_maxPriorityFeePerGas', []).catch(() => '0x3b9aca00')))
+      const nodeTip = BigInt(
+        String(await rpc('eth_maxPriorityFeePerGas', []).catch(() => '0x3b9aca00')),
+      )
+      const tip = tx.maxPriorityFeePerGas !== undefined ? BigInt(tx.maxPriorityFeePerGas) : nodeTip
       const max = tx.maxFeePerGas !== undefined ? BigInt(tx.maxFeePerGas) : baseFee * 2n + tip
+      nodePerGas = baseFee * 2n + nodeTip
       fees = {
         type: 'eip1559',
         maxFeePerGas: `0x${max.toString(16)}`,
@@ -1485,11 +1876,22 @@ export class ProviderService {
       }
     } else {
       const gasPrice = BigInt(String(await rpc('eth_gasPrice', [])))
+      nodePerGas = gasPrice
       fees = { type: 'legacy', gasPrice: `0x${gasPrice.toString(16)}` }
     }
     return {
-      tx: { from: tx.from, to, value, data, nonce, gas: `0x${gas.toString(16)}`, ...fees },
+      tx: {
+        from: tx.from,
+        to,
+        value,
+        data,
+        nonce,
+        gas: `0x${gas.toString(16)}`,
+        ...fees,
+        ...(nodePerGas > 0n ? { nodePerGas: `0x${nodePerGas.toString(16)}` } : {}),
+      },
       estimateError,
+      nextNonce,
     }
   }
 
@@ -1499,6 +1901,18 @@ export class ProviderService {
     data: unknown,
   ): Promise<unknown> {
     const d = this.deps
+    /*
+      Who, where and on whose behalf come from the record, never from the live
+      intent. The record is what the sheet rendered and the firewall assessed;
+      the intent can still be replaced after the sheet is up, because a re-sent
+      request re-attaches to a pending one. `approve()` now refuses a re-attach
+      that does not match, and this is the second half of the same guarantee:
+      even if one slipped through, the signature would still be taken on the
+      approved chain, for the approved account, in the approved origin's name.
+    */
+    const chainId = request.chainId ?? intent.chainId
+    const accountId = request.accountId ?? ('accountId' in intent ? intent.accountId : '')
+    const origin = request.origin
     switch (intent.kind) {
       case 'connect': {
         const parsed = ConnectDecisionDataSchema.safeParse(data)
@@ -1507,11 +1921,9 @@ export class ProviderService {
           ? accounts.find((a) => a.id === parsed.data.accountId)
           : ((await d.vault.active()) ?? accounts[0])
         if (!account) throw new RpcError(RPC.UNAUTHORIZED, 'No account to connect.')
-        const chainId =
-          parsed.success && d.chains.known(parsed.data.chainId)
-            ? parsed.data.chainId
-            : intent.chainId
-        return { accountId: account.id, addresses: [account.address], chainId }
+        const connectChainId =
+          parsed.success && d.chains.known(parsed.data.chainId) ? parsed.data.chainId : chainId
+        return { accountId: account.id, addresses: [account.address], chainId: connectChainId }
       }
       case 'switch_chain':
       case 'add_chain':
@@ -1525,9 +1937,9 @@ export class ProviderService {
             'wallet_watchAsset needs an ERC20 with a contract address.',
           )
         await d.watchAsset?.({
-          chainId: intent.chainId,
+          chainId,
           address: opts.data.address,
-          origin: intent.origin,
+          origin,
           claimed: {
             ...(opts.data.symbol ? { symbol: opts.data.symbol } : {}),
             ...(opts.data.decimals !== undefined ? { decimals: opts.data.decimals } : {}),
@@ -1535,17 +1947,11 @@ export class ProviderService {
         })
         return true
       }
-      /*
-        Every case below signs what the approval record holds, never what the
-        live intent holds. The record is the object the sheet rendered and the
-        firewall assessed; the intent can still be replaced after the sheet is
-        up, because `approve()` re-attaches to a pending request by the
-        page-supplied `clientRequestId`. Signing the intent would mean signing
-        something the user was never shown (§3.3, §3.4).
-      */
+      // Every case below signs the bytes the approval record holds, for the
+      // account and on the chain it names (§3.3, §3.4).
       case 'sign_message': {
         const payload = request.payload as Extract<ApprovalPayload, { kind: 'sign_message' }>
-        const account = await this.signer(intent.accountId)
+        const account = await this.signer(accountId)
         const message = { raw: payload.message as Hex }
         const signature = await account.signMessage({ message })
         ProviderService.assertSignedBy(
@@ -1557,7 +1963,7 @@ export class ProviderService {
       }
       case 'eth_sign': {
         const payload = request.payload as Extract<ApprovalPayload, { kind: 'eth_sign' }>
-        const account = await this.signer(intent.accountId)
+        const account = await this.signer(accountId)
         // A device never signs a raw hash (§4.6: eth_sign is 4200 for hardware accounts).
         if (!account.sign)
           throw new RpcError(RPC.UNSUPPORTED_METHOD, 'This account cannot sign a raw hash.')
@@ -1571,7 +1977,7 @@ export class ProviderService {
       }
       case 'sign_typed_data': {
         const payload = request.payload as Extract<ApprovalPayload, { kind: 'sign_typed_data' }>
-        const account = await this.signer(intent.accountId)
+        const account = await this.signer(accountId)
         const typed = normaliseTypedData(
           typeof payload.typedData === 'string' ? safeJson(payload.typedData) : payload.typedData,
         )
@@ -1599,8 +2005,10 @@ export class ProviderService {
         */
         const fee = applyGasDecision(payload.tx, data)
         const tx = fee ? { ...payload.tx, ...fee } : payload.tx
-        if (intent.signOnly) return this.signOnly(intent, tx)
-        return this.broadcast(intent, request, tx, payload.assessment)
+        // Sign-and-return versus broadcast is a property of the approved
+        // request, not of whatever re-sent it.
+        if (payload.signOnly === true) return this.signOnly(chainId, accountId, tx)
+        return this.broadcast({ chainId, accountId, origin }, request, tx, payload.assessment)
       }
     }
   }
@@ -1650,12 +2058,9 @@ export class ProviderService {
   }
 
   /** Remote sign, the signing side: the prepared fields exactly as the requester sent them, signed and returned raw (§6). */
-  private async signOnly(
-    intent: Extract<ApprovalIntent, { kind: 'send_transaction' }>,
-    tx: PreparedTx,
-  ): Promise<Hex> {
-    const account = await this.signer(intent.accountId)
-    const serialized = await account.signTransaction(toSerializable(intent.chainId, tx))
+  private async signOnly(chainId: number, accountId: string, tx: PreparedTx): Promise<Hex> {
+    const account = await this.signer(accountId)
+    const serialized = await account.signTransaction(toSerializable(chainId, tx))
     ProviderService.assertSignedBy(
       await recoverTransactionAddress({ serializedTransaction: serialized as never }),
       account.address,
@@ -1665,23 +2070,25 @@ export class ProviderService {
   }
 
   private async broadcast(
-    intent: Extract<ApprovalIntent, { kind: 'send_transaction' }>,
+    /** Chain, account and origin as the approved record names them — never the live intent's. */
+    bound: { readonly chainId: number; readonly accountId: string; readonly origin: string },
     request: ApprovalRequest,
     tx: PreparedTx,
     assessment: AssessmentView,
   ): Promise<Hex> {
     const d = this.deps
+    const { chainId, accountId, origin } = bound
     // Already broadcast before a restart? The write-ahead entry carries the hash.
     const prior = (
-      await d.activity.list({ chainId: intent.chainId }).catch(() => [] as ActivityEntry[])
+      await d.activity.list({ chainId: chainId }).catch(() => [] as ActivityEntry[])
     ).find((e) => e.id === request.id)
     if (prior?.hash) return prior.hash as Hex
-    const snapshot = this.takeSnapshot(ProviderService.snapshotKey(intent.chainId, tx))
+    const snapshot = this.takeSnapshot(ProviderService.snapshotKey(chainId, tx))
     const entry: ActivityEntry = {
       id: request.id,
       hash: null,
-      chainId: intent.chainId,
-      accountId: intent.accountId,
+      chainId: chainId,
+      accountId: accountId,
       to: tx.to,
       value: BigInt(tx.value).toString(),
       nonce: tx.nonce,
@@ -1689,8 +2096,8 @@ export class ProviderService {
       // higher fee; without it Speed up has nothing to repeat (§8.12).
       ...(tx.data && tx.data !== '0x' ? { data: tx.data } : {}),
       submittedAt: d.platform.now(),
-      origin: intent.origin,
-      category: categoryFor(assessment, tx, intent.origin),
+      origin: origin,
+      category: categoryFor(assessment, tx, origin),
       statements: assessment.statements.map((s) => s.text),
       riskCodes: assessment.rules.map((r) => r.code),
       status: 'pending',
@@ -1707,16 +2114,38 @@ export class ProviderService {
     if (!prior) await d.activity.append(entry)
     let raw: Hex
     try {
-      const account = await this.signer(intent.accountId)
+      const account = await this.signer(accountId)
       /*
         The queue may have moved while the sheet was open. Re-signing with a
         new nonce here would sign something the user never saw, so the request
         fails instead and can be raised again with a current one.
       */
-      const pending = parseInt(String(await d.chains.rpc(intent.chainId, 'eth_getTransactionCount', [tx.from, 'pending'])), 16)
+      const pending = parseInt(
+        String(await d.chains.rpc(chainId, 'eth_getTransactionCount', [tx.from, 'pending'])),
+        16,
+      )
       if (Number.isFinite(pending) && pending > tx.nonce)
-        throw new RpcError(RPC.INTERNAL, 'This transaction\u2019s place in the queue was taken while the sheet was open. Ask again.')
-      raw = await account.signTransaction(toSerializable(intent.chainId, tx))
+        throw new RpcError(
+          RPC.INTERNAL,
+          'This transaction\u2019s place in the queue was taken while the sheet was open. Ask again.',
+        )
+      /*
+        …and a hole below it is just as bad. Broadcasting behind a gap that
+        nothing will ever fill leaves a transaction that says "pending" and
+        does not mine, which is the shape a stale reservation used to produce.
+
+        "Behind the pending count" is not the test, though: a node takes a
+        moment to report what it has just accepted, so a second send moments
+        after the first would be refused for a gap this wallet is itself about
+        to fill. What is refused is a gap nothing holds — a number below this
+        one that no live reservation of ours accounts for.
+      */
+      if (Number.isFinite(pending) && this.nonceHole(chainId, tx.from as Hex, pending, tx.nonce))
+        throw new RpcError(
+          RPC.INTERNAL,
+          'This transaction would wait behind one that was never sent. Ask again.',
+        )
+      raw = await account.signTransaction(toSerializable(chainId, tx))
       // Before it can be broadcast, it has to have come from the account we asked.
       ProviderService.assertSignedBy(
         await recoverTransactionAddress({ serializedTransaction: raw as never }),
@@ -1725,15 +2154,39 @@ export class ProviderService {
       )
     } catch (err) {
       const reason = err instanceof Error ? err.message : 'signing failed'
+      /*
+        A mis-pressed reject on a Ledger is not a failed transaction.
+
+        `settle(…, retryable)` returns such a request to `pending` so the same
+        approval can be signed again — but the row was marked `failed` for any
+        signing error at all, the successful retry found the write-ahead entry
+        and skipped the append, and the hash update did not reset the status.
+        The row then read `failed` with a hash on it, and `resumeWatchers`
+        (which re-watches `pending` rows only) would not pick it up after a
+        restart, so a confirmed transaction stayed recorded as failed forever.
+      */
+      const retryable = isRetryable(err)
       await d.activity
-        .update(request.id, { status: 'failed', statements: [...entry.statements, reason] })
+        .update(request.id, {
+          ...(retryable ? {} : { status: 'failed' as const }),
+          statements: [...entry.statements, reason],
+        })
         .catch(() => undefined)
-      throw err instanceof RpcError ? err : new RpcError(RPC.INTERNAL, reason)
+      /*
+        A device refusal goes back up as itself. Wrapping it in an `RpcError`
+        told the caller "the wallet refused", which is how a mis-pressed reject
+        came to be final: the retry loop reads an `RpcError` as our own,
+        unrepeatable answer. The port boundary converts whatever reaches it for
+        the dApp, so nothing downstream loses an error shape it needs.
+      */
+      throw err instanceof RpcError || retryable ? err : new RpcError(RPC.INTERNAL, reason)
     }
     try {
-      const sent = (await d.chains.rpc(intent.chainId, 'eth_sendRawTransaction', [raw])) as string
-      await d.activity.update(request.id, { hash: sent })
-      this.watch(intent.chainId, request.id, sent as Hex)
+      const sent = (await d.chains.rpc(chainId, 'eth_sendRawTransaction', [raw])) as string
+      // `status` back to pending along with the hash: a retry after a refusal
+      // is a transaction that happened, whatever the last attempt wrote.
+      await d.activity.update(request.id, { hash: sent, status: 'pending' })
+      this.watch(chainId, request.id, sent as Hex)
       return sent as Hex
     } catch (err) {
       await d.activity.update(request.id, { status: 'failed' }).catch(() => undefined)
@@ -1890,7 +2343,10 @@ export function normaliseTypedData(input: unknown): unknown {
     if (typeof value === 'bigint') return value
     if (typeof value === 'number' && Number.isSafeInteger(value)) return BigInt(value)
     if (typeof value === 'string' && /^(0x[0-9a-fA-F]+|\d+)$/.test(value)) return BigInt(value)
-    throw new EngineError('invalid_argument', `typed data domain field ${field} is not a plain integer`)
+    throw new EngineError(
+      'invalid_argument',
+      `typed data domain field ${field} is not a plain integer`,
+    )
   }
   const domainFields = types['EIP712Domain']
   const domain: Record<string, unknown> = { ...(t.domain ?? {}) }

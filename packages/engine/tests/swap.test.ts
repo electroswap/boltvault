@@ -519,10 +519,15 @@ describe('swap on the testnet mock', () => {
 
       A full candidate search is fifteen simulated swaps here — five direct plus
       five through each of the two bases — and none of them run when the service
-      answers. The only thing the chain is asked is the impact probe, on the
-      winning route at a thousandth of the size.
+      answers. What the chain IS asked, since ATT-BV-021, is the served route
+      itself: one call, at full size, to check that the route the service named
+      pays what the service said it pays. §8.6 and docs/security.md have always
+      promised that check and nothing performed it, so a service that was
+      compromised or stale moved the floor of every swap down with it. Quoting
+      one named route is not a second router — the mini-router's fifteen
+      candidates still do not run.
     */
-    it('does not ask the chain to price the trade at all when the service answers', async () => {
+    it('asks the chain about the served route, and nothing else, when the service answers', async () => {
       // Ten per cent above what the chain's own quoter says, so the figure in the
       // quote can only have come from the service.
       const apiOut = (ONCHAIN_OUT * 11_000n) / 10_000n
@@ -530,10 +535,37 @@ describe('swap on the testnet mock', () => {
       forgetQuotes()
       const q = await quote()
       expect(q.route.source).toBe('api')
+      // Over-quoting is left alone: the service walks the whole pool graph and
+      // may have found what one call cannot.
       expect(q.amountOutRaw).toBe(apiOut.toString())
-      expect(atFullSize()).toEqual([])
+      // One full-size call, and it is the served route — not a candidate search.
+      expect(atFullSize()).toEqual([{ kind: 'v3-single', amountIn: ONE_FIX, fee: 3000 }])
       expect(atProbeSize()).toEqual([{ kind: 'v3-single', amountIn: ONE_FIX / 1000n, fee: 3000 }])
-      expect(quoted).toHaveLength(1)
+      expect(quoted).toHaveLength(2)
+    })
+
+    /*
+      ATT-BV-021. A service that names a route and then misstates what that
+      route pays is not a better router, it is a wrong number — and the wallet
+      can tell the difference for one call. Below the bound, the chain's own
+      figure for the SAME route is what the floor is built from.
+    */
+    it('takes the chain\u2019s figure when the service under-quotes its own route', async () => {
+      const under = (ONCHAIN_OUT * 90n) / 100n
+      const { quote } = await withQuoter({ serve: () => routingQuote([[v3hop(TOKEN, WETN, '3000')]], under) })
+      const q = await quote()
+      // Still the service's route — it is the better router — with the chain's
+      // own figure for it, which is what "on-chain wins" was supposed to mean.
+      expect(q.route.source).toBe('api')
+      expect(q.amountOutRaw).toBe(ONCHAIN_OUT.toString())
+    })
+
+    it('leaves a served quote inside the bound alone', async () => {
+      // Half a percent under: within the noise of a block, and not a finding.
+      const nearly = (ONCHAIN_OUT * 9_950n) / 10_000n
+      const { quote } = await withQuoter({ serve: () => routingQuote([[v3hop(TOKEN, WETN, '3000')]], nearly) })
+      const q = await quote()
+      expect(q.amountOutRaw).toBe(nearly.toString())
     })
 
     /*
@@ -553,11 +585,14 @@ describe('swap on the testnet mock', () => {
     */
     it('takes the served price even when a pool it could quote itself would pay more', async () => {
       const { quote } = await withQuoter({ serve: () => routingQuote([[v2hop(TOKEN, WETN)]], shortBy(264n)) })
+      forgetQuotes()
       const q = await quote()
       expect(q.route.source).toBe('api')
       expect(q.amountOutRaw).toBe(shortBy(264n).toString())
       expect(q.route.label).toBe('V2')
-      expect(atFullSize()).toEqual([])
+      // The served route is quoted, and only the served route: a better pool
+      // elsewhere is still the service's business, not the wallet's.
+      expect(atFullSize().map((c) => c.kind)).toEqual(['v2'])
     })
 
     /*

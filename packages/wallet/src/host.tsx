@@ -78,12 +78,27 @@ export interface UiHost {
   readonly version?: string
   readonly buildHash?: string | null
   /** The home-screen widget's snapshot (§7.13): written where the widget extension reads it. */
-  readonly widget?: { publish(snapshot: WidgetSnapshot): Promise<void> }
+  readonly widget?: {
+    publish(snapshot: WidgetSnapshot): Promise<void>
+    /** Take it back: on lock, and when the account it described is removed. */
+    clear?(): Promise<void>
+  }
 }
 
-/** What the home-screen widget shows (§7.13): the Field signature, the name, the tier — and the total the user opted into. */
+/**
+ * What the home-screen widget shows (§7.13): the Field signature, the name,
+ * the tier — and the total the user opted into.
+ *
+ * `seed`, not `address`. The snapshot is a plaintext JSON file in a container
+ * the widget process can open, so everything in it is readable from a stolen
+ * phone or a backup while the wallet is locked — and it carried the account's
+ * address, which ties a real chain identity to a real person and a real
+ * balance. The widget only ever wanted the four numbers the Field is drawn
+ * from, and those come from a 32-bit FNV-1a hash that does not run backwards.
+ */
 export interface WidgetSnapshot {
-  readonly address: string
+  /** `fnv1a32(address)` — for the Field's arcs, and nothing else. */
+  readonly seed: number
   readonly label: string
   readonly tier: number
   readonly total: number | null

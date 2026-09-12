@@ -175,11 +175,43 @@ const StampSchema = z.object({ seq: z.number().int().nonnegative(), authorDevice
 /**
  * Something a paired device sent that this device has not vouched for yet
  * (§6). It is already in the local store, but marked untrusted: an unconfirmed
- * address-book entry is out of the lookalike reference set, and an unconfirmed
- * custom token is out of the firewall's "known token" set.
+ * address-book entry is out of the lookalike reference set, an unconfirmed
+ * custom token is out of the firewall's "known token" set, and an unconfirmed
+ * watch or hardware account is hidden — off Receive, off the Send picker, off
+ * the account list — until somebody at this device says it is theirs.
  */
+/**
+ * The settings a paired device may carry (§6).
+ *
+ * It used to be everything except `reducedMotion` and `autoLock`, which meant
+ * a compromised phone could push `{ ethSignEnabled: true, sendWhitelist:
+ * false, exactApprovals: false, slippageBips: 5000, txPreview: 'off' }` and
+ * the desktop would adopt it on the next pull without a word. §6 says a paired
+ * device is not trusted for security-relevant state, so the list is stated
+ * rather than subtracted: what is here is taste and convenience, and anything
+ * that decides what the firewall refuses or how much a signature may spend is
+ * deliberately absent — including from the receiving end, which applies the
+ * same list so an older peer's push cannot widen it.
+ */
+export const SYNCED_SETTINGS = [
+  'displayCurrency',
+  'enabledChains',
+  'showTestnet',
+  'haptics',
+  'blockTick',
+  'sound',
+  'scene',
+  'slippageBips',
+] as const
+
+function onlySyncedSettings(value: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const k of SYNCED_SETTINGS) if (k in value) out[k] = value[k]
+  return out
+}
+
 export const SyncIncomingItemSchema = z.object({
-  collection: z.enum(['contact', 'customToken']),
+  collection: z.enum(['contact', 'customToken', 'account']),
   key: z.string(),
   /** What to call it on screen — a contact's name, a token's symbol. */
   label: z.string(),
@@ -540,10 +572,13 @@ export class SyncService {
   private async collect(): Promise<Draft[]> {
     const out: Draft[] = []
 
-    // Settings, minus the two that describe *this* device rather than the user.
+    // Only the settings on the allow-list travel; see `SYNCED_SETTINGS`.
     const settings = await this.deps.settings.get()
-    const { reducedMotion: _os, autoLock: _local, ...shared } = settings
-    out.push({ collection: 'settings', key: 'settings', value: shared })
+    out.push({
+      collection: 'settings',
+      key: 'settings',
+      value: onlySyncedSettings({ ...settings }),
+    })
 
     for (const s of this.deps.sites.list())
       out.push({ collection: 'siteChain', key: s.origin, value: s.chainId })
@@ -762,7 +797,7 @@ export class SyncService {
       case 'siteChain':
         return this.applySiteChain(rec, gone)
       case 'account':
-        return this.applyAccount(rec, gone)
+        return this.applyAccount(rec, from, gone, state)
       case 'contact':
         return this.applyContact(rec, from, gone, state)
       case 'customToken':
@@ -775,8 +810,14 @@ export class SyncService {
   }
 
   private async applySettings(rec: SyncRecord): Promise<boolean> {
-    const patch = SettingsSchema.partial().safeParse(rec.value)
-    if (!patch.success) return false
+    // The same list on the way in, so a peer that predates it — or one that
+    // has been told to lie — cannot reach a key this device does not sync.
+    const patch = SettingsSchema.partial().safeParse(
+      rec.value && typeof rec.value === 'object'
+        ? onlySyncedSettings(rec.value as Record<string, unknown>)
+        : rec.value,
+    )
+    if (!patch.success || Object.keys(patch.data).length === 0) return false
     const current: Record<string, unknown> = { ...(await this.deps.settings.get()) }
     // An echo of what this device already holds is not a change, and refusing
     // to count it keeps "Applied N records" honest.
@@ -801,7 +842,12 @@ export class SyncService {
     return true
   }
 
-  private async applyAccount(rec: SyncRecord, gone: boolean): Promise<boolean> {
+  private async applyAccount(
+    rec: SyncRecord,
+    from: PairedDeviceRow,
+    gone: boolean,
+    state: SyncState,
+  ): Promise<boolean> {
     const key = rec.key.toLowerCase()
     const accounts = await this.deps.vault.accounts()
     const existing = accounts.find((a) => a.address.toLowerCase() === key)
@@ -819,6 +865,7 @@ export class SyncService {
         existing.kind === 'keystone'
       if (!secretless) return false
       await this.deps.vault.remove(existing.id)
+      forget(state, 'account', key)
       return true
     }
     const parsed = AccountValueSchema.safeParse(rec.value)
@@ -837,20 +884,40 @@ export class SyncService {
       real name — provenance ate the label in one round trip. Provenance
       belongs beside the record, not inside it.
     */
-    if (v.kind === 'watch') {
-      await this.deps.vault.addWatch({ address: v.address, label: v.label })
+    /*
+      §6 again, and for the same reason contacts are quarantined: a compromised
+      phone must not be able to seat an account here. A pushed row labelled
+      "Ledger" carrying the attacker's address used to appear in the account
+      list and on Receive with nothing to say where it came from, which is an
+      invitation to fund it. It lands hidden and waits to be claimed.
+    */
+    const quarantine = async (id: string): Promise<true> => {
+      await this.deps.vault.setHidden(id, true)
+      this.waitOn(state, {
+        collection: 'account',
+        key,
+        label: v.label,
+        detail: v.address,
+        fromDeviceId: from.deviceId,
+        fromLabel: rec.authorLabel || from.label,
+        at: rec.at,
+      })
       return true
+    }
+    if (v.kind === 'watch') {
+      const added = await this.deps.vault.addWatch({ address: v.address, label: v.label })
+      return quarantine(added.id)
     }
     // A signing account's key cannot travel (§6), so there is nothing to create.
     if (v.kind === 'local' || !v.path) return false
-    await this.deps.vault.addHardware({
+    const added = await this.deps.vault.addHardware({
       kind: v.kind,
       address: v.address,
       path: v.path,
       ...(v.deviceId ? { deviceId: v.deviceId } : {}),
       label: v.label,
     })
-    return true
+    return quarantine(added.id)
   }
 
   private async applyContact(
@@ -1000,6 +1067,10 @@ export class SyncService {
       )
       if (c) await this.deps.contacts.confirm(c.id)
     }
+    if (item.collection === 'account') {
+      const a = (await this.deps.vault.accounts()).find((x) => x.address.toLowerCase() === item.key)
+      if (a) await this.deps.vault.setHidden(a.id, false)
+    }
     forget(state, item.collection, item.key)
     await this.deps.state.set(SYNC_STATE_ID, state)
     await this.emit()
@@ -1021,6 +1092,9 @@ export class SyncService {
         (x) => x.address.toLowerCase() === item.key,
       )
       if (c) await this.deps.contacts.remove(c.id)
+    } else if (item.collection === 'account') {
+      const a = (await this.deps.vault.accounts()).find((x) => x.address.toLowerCase() === item.key)
+      if (a) await this.deps.vault.remove(a.id)
     } else {
       const parts = splitTokenKey(item.key)
       if (parts) await this.deps.tokens.removeCustom(parts.chainId, parts.address)
@@ -1043,7 +1117,7 @@ function forget(state: SyncState, collection: IncomingCollection, key: string): 
 }
 
 const IncomingRef = z.object({
-  collection: z.enum(['contact', 'customToken']),
+  collection: z.enum(['contact', 'customToken', 'account']),
   key: z.string().min(1).max(256),
 })
 

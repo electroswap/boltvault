@@ -70,7 +70,12 @@ export { LaunchpadService } from './namespaces/launchpad'
 export { WatchlistService, WATCH_ALARM } from './namespaces/watchlist'
 export { PositionsService } from './namespaces/positions'
 export { BridgeService } from './namespaces/bridge'
-export { RemoteSignService } from './namespaces/remote'
+export {
+  RemoteSignService,
+  assertSignedTheTransaction,
+  assertSignedTheMessage,
+  assertSignedTheTypedData,
+} from './namespaces/remote'
 export { DappsService } from './namespaces/dapps'
 export { ConnectService } from './namespaces/connect'
 export { StaticsService, STATICS_ALARM, STATICS_BASE } from './namespaces/statics'

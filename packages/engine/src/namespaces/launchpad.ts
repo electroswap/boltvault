@@ -7,9 +7,26 @@
  * Referrals from links are remembered per pool for a day.
  */
 import { ELECTRONEUM_ADDRESSES } from '@boltvault/chains'
-import { AFFILIATE_ABI, LAUNCHPAD_MANAGER_ABI, LAUNCHPAD_POOL_ABI, campaignKeys, campaignPhase, encodeClaimRefund, encodeClaimReferralRewards, encodeClaimTokens, encodeContribute, fetchCampaign, fetchCampaigns, poolStatus, referrerFromLink, type CampaignView as EsCampaign, type ElectroSwapClient, type PresaleWireStatus } from '@boltvault/electroswap'
+import {
+  AFFILIATE_ABI,
+  LAUNCHPAD_MANAGER_ABI,
+  LAUNCHPAD_POOL_ABI,
+  campaignKeys,
+  campaignPhase,
+  encodeClaimRefund,
+  encodeClaimReferralRewards,
+  encodeClaimTokens,
+  encodeContribute,
+  fetchCampaign,
+  fetchCampaigns,
+  poolStatus,
+  referrerFromLink,
+  type CampaignView as EsCampaign,
+  type ElectroSwapClient,
+  type PresaleWireStatus,
+} from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
-import { parseUnits, type Hex } from 'viem'
+import { encodeFunctionData, parseUnits, type Hex } from 'viem'
 import { z } from 'zod'
 import type { SealedMap } from '../sealed'
 import { EngineError } from '../errors'
@@ -25,6 +42,8 @@ import type { VaultManager } from './vault'
 import type { WatchlistService } from './watchlist'
 
 export interface LaunchpadDeps {
+  /** Signed kill-switches (§3.7); absent in hosts that serve no statics. */
+  readonly statics?: { isDisabled(feature: 'launchpad'): boolean }
   readonly platform: Platform
   readonly chains: ChainsService
   readonly vault: VaultManager
@@ -40,17 +59,44 @@ export interface LaunchpadDeps {
 
 /** A campaign list is good for a minute; phases move in blocks, not frames. */
 const LIST_TTL_MS = 60_000
-const listSpec = (chainId: number, accountId: string | undefined) => ({ key: cacheKey('launchpad', 'list', chainId, accountId ?? '-'), schema: z.array(CampaignViewSchema) })
+const listSpec = (chainId: number, accountId: string | undefined) => ({
+  key: cacheKey('launchpad', 'list', chainId, accountId ?? '-'),
+  schema: z.array(CampaignViewSchema),
+})
 
 const REFERRAL_TTL_MS = 24 * 3_600_000
-const isEtn = (chainId: number): chainId is 52014 | 5201420 => chainId === 52014 || chainId === 5201420
+const isEtn = (chainId: number): chainId is 52014 | 5201420 =>
+  chainId === 52014 || chainId === 5201420
 const hex = (n: bigint): Hex => `0x${n.toString(16)}`
-const big = (r: ReadResult | undefined): bigint => (r !== undefined && r.ok && typeof r.value === 'bigint' ? r.value : 0n)
-const tuple = (r: ReadResult | undefined): readonly unknown[] | null => (r !== undefined && r.ok && Array.isArray(r.value) ? (r.value as readonly unknown[]) : null)
+const big = (r: ReadResult | undefined): bigint =>
+  r !== undefined && r.ok && typeof r.value === 'bigint' ? r.value : 0n
+const tuple = (r: ReadResult | undefined): readonly unknown[] | null =>
+  r !== undefined && r.ok && Array.isArray(r.value) ? (r.value as readonly unknown[]) : null
 /** Small integers (uint8/uint16/uint32) come back from viem as numbers, wider ones as bigints. */
-const int = (r: ReadResult | undefined): number | null => (r !== undefined && r.ok && (typeof r.value === 'number' || typeof r.value === 'bigint') ? Number(r.value) : null)
+const int = (r: ReadResult | undefined): number | null =>
+  r !== undefined && r.ok && (typeof r.value === 'number' || typeof r.value === 'bigint')
+    ? Number(r.value)
+    : null
 
 export class LaunchpadService {
+  /**
+   * The signed kill-switch for this surface (§3.7, docs/security.md).
+   *
+   * `statics.isDisabled` accepted six features and only `swap` and `bridge` ever
+   * called it, so four of the six documented emergency controls did nothing: ops
+   * could publish `limit: disabled` during an incident and the wallet would keep
+   * placing orders. Hiding a screen is not the control either — every namespace
+   * is callable from any UI page — so the check lives at the top of each verb
+   * that starts a flow.
+   */
+  private assertEnabled(): void {
+    if (this.deps.statics?.isDisabled('launchpad'))
+      throw new EngineError(
+        'invalid_argument',
+        'The launchpad is switched off right now by a signed flag from ElectroSwap.',
+      )
+  }
+
   constructor(private readonly deps: LaunchpadDeps) {}
 
   private async account(accountId: string): Promise<{ id: string; address: Hex; kind: string }> {
@@ -59,7 +105,11 @@ export class LaunchpadService {
     return { id: a.id, address: a.address as Hex, kind: a.kind }
   }
 
-  private async enrich(chainId: 52014 | 5201420, rows: readonly EsCampaign[], owner: Hex | null): Promise<CampaignView[]> {
+  private async enrich(
+    chainId: 52014 | 5201420,
+    rows: readonly EsCampaign[],
+    owner: Hex | null,
+  ): Promise<CampaignView[]> {
     const d = this.deps
     if (rows.length === 0) return []
     const A = ELECTRONEUM_ADDRESSES[chainId]
@@ -70,19 +120,52 @@ export class LaunchpadService {
       { address: pool, abi: LAUNCHPAD_POOL_ABI, functionName: 'totalEtnRaised', args: [] },
       { address: pool, abi: LAUNCHPAD_POOL_ABI, functionName: 'maxContribution', args: [] },
       { address: pool, abi: LAUNCHPAD_POOL_ABI, functionName: 'minEtnToLaunch', args: [] },
-      { address: pool, abi: LAUNCHPAD_POOL_ABI, functionName: 'contributionByAddress', args: [owner ?? '0x0000000000000000000000000000000000000000'] },
-      { address: pool, abi: LAUNCHPAD_POOL_ABI, functionName: 'claimableTokens', args: [owner ?? '0x0000000000000000000000000000000000000000'] },
+      {
+        address: pool,
+        abi: LAUNCHPAD_POOL_ABI,
+        functionName: 'contributionByAddress',
+        args: [owner ?? '0x0000000000000000000000000000000000000000'],
+      },
+      {
+        address: pool,
+        abi: LAUNCHPAD_POOL_ABI,
+        functionName: 'claimableTokens',
+        args: [owner ?? '0x0000000000000000000000000000000000000000'],
+      },
     ])
-    calls.push({ address: A.launchpadManager as Hex, abi: LAUNCHPAD_MANAGER_ABI, functionName: 'minContribution', args: [] })
-    if (owner) calls.push({ address: A.launchpadAffiliate as Hex, abi: AFFILIATE_ABI, functionName: 'getReferrerEarnings', args: [owner] })
+    calls.push({
+      address: A.launchpadManager as Hex,
+      abi: LAUNCHPAD_MANAGER_ABI,
+      functionName: 'minContribution',
+      args: [],
+    })
+    if (owner)
+      calls.push({
+        address: A.launchpadAffiliate as Hex,
+        abi: AFFILIATE_ABI,
+        functionName: 'getReferrerEarnings',
+        args: [owner],
+      })
     const res = await readMany(d.chains, chainId, calls)
     const minContribution = res[pools.length * perPool]
     const earnings = owner ? res[pools.length * perPool + 1] : undefined
     const earningsTuple = tuple(earnings)
-    const referralClaimable = earningsTuple ? (earningsTuple as readonly [bigint, bigint, bigint])[2] : 0n
+    const referralClaimable = earningsTuple
+      ? (earningsTuple as readonly [bigint, bigint, bigint])[2]
+      : 0n
     const nowS = Math.floor(d.platform.now() / 1000)
-    const starred = new Set(d.watchlist.cached().filter((w) => w.kind === 'campaign').map((w) => `${w.chainId}:${w.address.toLowerCase()}`))
-    const creatorNames = await d.names.lookup(chainId, rows.map((r) => r.creator)).catch(() => [] as Array<{ address: string; name: string | null }>)
+    const starred = new Set(
+      d.watchlist
+        .cached()
+        .filter((w) => w.kind === 'campaign')
+        .map((w) => `${w.chainId}:${w.address.toLowerCase()}`),
+    )
+    const creatorNames = await d.names
+      .lookup(
+        chainId,
+        rows.map((r) => r.creator),
+      )
+      .catch(() => [] as Array<{ address: string; name: string | null }>)
     return rows.map((r, i) => {
       const o = i * perPool
       const statusRead = res[o]
@@ -93,9 +176,14 @@ export class LaunchpadService {
       const maxRead = res[o + 2]
       const maxC = maxRead !== undefined && maxRead.ok ? big(maxRead) : null
       const minRead = res[o + 3]
-      const minLaunch = minRead !== undefined && minRead.ok ? big(minRead) : parseUnits(String(r.minEtnToLaunch), 18)
+      const minLaunch =
+        minRead !== undefined && minRead.ok
+          ? big(minRead)
+          : parseUnits(String(r.minEtnToLaunch), 18)
       const contribTuple = tuple(res[o + 4])
-      const contrib: [bigint, boolean] = contribTuple ? [contribTuple[0] as bigint, contribTuple[1] === true] : [0n, false]
+      const contrib: [bigint, boolean] = contribTuple
+        ? [contribTuple[0] as bigint, contribTuple[1] === true]
+        : [0n, false]
       const claimable = big(res[o + 5])
       const phase = campaignPhase(status, nowS, r.starts, r.ends)
       return {
@@ -103,9 +191,16 @@ export class LaunchpadService {
         pool: r.pool,
         status,
         phase,
-        token: { name: r.token.name, symbol: r.token.symbol, decimals: r.token.decimals, address: r.token.address },
+        token: {
+          name: r.token.name,
+          symbol: r.token.symbol,
+          decimals: r.token.decimals,
+          address: r.token.address,
+        },
         creator: r.creator,
-        creatorName: creatorNames.find((n) => n.address.toLowerCase() === r.creator.toLowerCase())?.name ?? null,
+        creatorName:
+          creatorNames.find((n) => n.address.toLowerCase() === r.creator.toLowerCase())?.name ??
+          null,
         logoUrl: r.logoUrl,
         bannerUrl: r.bannerUrl,
         description: r.description,
@@ -115,7 +210,10 @@ export class LaunchpadService {
         raisedWei: raised.toString(),
         minEtnToLaunchWei: minLaunch.toString(),
         maxContributionWei: maxC === null ? null : maxC.toString(),
-        minContributionWei: minContribution !== undefined && minContribution.ok ? big(minContribution).toString() : null,
+        minContributionWei:
+          minContribution !== undefined && minContribution.ok
+            ? big(minContribution).toString()
+            : null,
         fill: minLaunch > 0n ? Math.min(1, Number((raised * 10_000n) / minLaunch) / 10_000) : 0,
         contributorCount: r.contributorCount,
         affiliatePercent: r.affiliatePercent,
@@ -124,14 +222,24 @@ export class LaunchpadService {
         claimed: contrib[1],
         claimableTokensRaw: claimable.toString(),
         referralClaimableWei: referralClaimable.toString(),
-        keys: campaignKeys({ phase, contributedWei: contrib[0], claimed: contrib[1], claimableTokens: claimable, referralClaimable }),
+        keys: campaignKeys({
+          phase,
+          contributedWei: contrib[0],
+          claimed: contrib[1],
+          claimableTokens: claimable,
+          referralClaimable,
+        }),
         starred: starred.has(`${chainId}:${r.pool.toLowerCase()}`),
       }
     })
   }
 
   /** The Sky: live first, then upcoming, then ended (§8.9). */
-  async list(chainId: number, accountId?: string, statuses?: PresaleWireStatus[]): Promise<CampaignView[]> {
+  async list(
+    chainId: number,
+    accountId?: string,
+    statuses?: PresaleWireStatus[],
+  ): Promise<CampaignView[]> {
     const d = this.deps
     if (!d.electroswap || !isEtn(chainId)) return []
     const client = d.electroswap
@@ -139,7 +247,16 @@ export class LaunchpadService {
       const owner = accountId ? (await this.account(accountId)).address : null
       const rows = await fetchCampaigns(client, chainId, statuses).catch(() => [] as EsCampaign[])
       const views = await this.enrich(chainId, rows.slice(0, 40), owner)
-      const rank = (p: CampaignView['phase']): number => (p === 'live' ? 0 : p === 'upcoming' ? 1 : p === 'awaiting_finalize' ? 2 : p === 'launched' ? 3 : 4)
+      const rank = (p: CampaignView['phase']): number =>
+        p === 'live'
+          ? 0
+          : p === 'upcoming'
+            ? 1
+            : p === 'awaiting_finalize'
+              ? 2
+              : p === 'launched'
+                ? 3
+                : 4
       views.sort((a, b) => rank(a.phase) - rank(b.phase) || b.starts - a.starts)
       return views
     }
@@ -159,9 +276,44 @@ export class LaunchpadService {
     const d = this.deps
     if (!d.electroswap || !isEtn(chainId)) return null
     const owner = accountId ? (await this.account(accountId)).address : null
-    const row = await fetchCampaign(d.electroswap, chainId, pool, owner ?? undefined).catch(() => null)
+    const row = await fetchCampaign(d.electroswap, chainId, pool, owner ?? undefined).catch(
+      () => null,
+    )
     if (!row) return null
     return (await this.enrich(chainId, [row], owner))[0] ?? null
+  }
+
+  /**
+   * Refuse an address that is not a launchpad pool on this chain.
+   *
+   * `eth_getCode` first, because an EOA answering nothing is the cheap case;
+   * then the two views every pool has. A read that fails is a refusal, not a
+   * shrug: this is the last gate before native ETN leaves for an address the
+   * index chose.
+   */
+  private async assertPoolOnChain(chainId: number, pool: string): Promise<void> {
+    const d = this.deps
+    const code = (await d.chains
+      .rpc(chainId, 'eth_getCode', [pool, 'latest'])
+      .catch(() => '0x')) as string
+    if (typeof code !== 'string' || code.length <= 2)
+      throw new EngineError(
+        'invalid_argument',
+        'That campaign address has no contract on this chain.',
+      )
+    const call = async (data: Hex): Promise<string | null> =>
+      (await d.chains
+        .rpc(chainId, 'eth_call', [{ to: pool, data }, 'latest'])
+        .catch(() => null)) as string | null
+    const [status, token] = await Promise.all([
+      call(encodeFunctionData({ abi: LAUNCHPAD_POOL_ABI, functionName: 'status' })),
+      call(encodeFunctionData({ abi: LAUNCHPAD_POOL_ABI, functionName: 'token' })),
+    ])
+    if (!status || status.length <= 2 || !token || token.length <= 2)
+      throw new EngineError(
+        'invalid_argument',
+        'That address does not answer as a launchpad campaign.',
+      )
   }
 
   /** Sealed under the DEK; the id used to be the storage key. */
@@ -170,15 +322,23 @@ export class LaunchpadService {
   }
 
   /** A referral from a deep link is kept a day per pool (§8.9). */
-  async rememberReferral(input: { chainId: number; pool: string; referrer: string }): Promise<void> {
+  async rememberReferral(input: {
+    chainId: number
+    pool: string
+    referrer: string
+  }): Promise<void> {
     if (!/^0x[0-9a-fA-F]{40}$/.test(input.referrer)) return
-    await this.deps.referrals.set(this.referralKey(input.chainId, input.pool), { referrer: input.referrer, at: this.deps.platform.now() })
+    await this.deps.referrals.set(this.referralKey(input.chainId, input.pool), {
+      referrer: input.referrer,
+      at: this.deps.platform.now(),
+    })
   }
 
   async rememberFromLink(url: string): Promise<{ pool: string; referrer: string | null } | null> {
     const parsed = referrerFromLink(url)
     if (!parsed) return null
-    if (parsed.referrer) await this.rememberReferral({ chainId: 52014, pool: parsed.pool, referrer: parsed.referrer })
+    if (parsed.referrer)
+      await this.rememberReferral({ chainId: 52014, pool: parsed.pool, referrer: parsed.referrer })
     return parsed
   }
 
@@ -190,14 +350,31 @@ export class LaunchpadService {
   }
 
   /** Contribute native ETN within the pool's min/max while it is live; the referrer rides along. */
-  async contribute(input: { accountId: string; chainId: number; pool: string; amountEtn: string }): Promise<{ flowId: string; requestId: string | null }> {
+  async contribute(input: {
+    accountId: string
+    chainId: number
+    pool: string
+    amountEtn: string
+  }): Promise<{ flowId: string; requestId: string | null }> {
+    this.assertEnabled()
     const chainId = input.chainId
-    if (!isEtn(chainId)) throw new EngineError('invalid_argument', 'The launchpad lives on Electroneum.')
+    if (!isEtn(chainId))
+      throw new EngineError('invalid_argument', 'The launchpad lives on Electroneum.')
     const account = await this.account(input.accountId)
-    if (account.kind === 'watch') throw new EngineError('invalid_argument', 'Watch-only — import a key or pair a device to contribute.')
+    if (account.kind === 'watch')
+      throw new EngineError(
+        'invalid_argument',
+        'Watch-only — import a key or pair a device to contribute.',
+      )
     const c = await this.detail(chainId, input.pool, input.accountId)
     if (!c) throw new EngineError('not_found', 'No such campaign.')
-    if (c.phase !== 'live') throw new EngineError('invalid_argument', c.phase === 'upcoming' ? 'This campaign has not started yet.' : 'This campaign is no longer taking contributions.')
+    if (c.phase !== 'live')
+      throw new EngineError(
+        'invalid_argument',
+        c.phase === 'upcoming'
+          ? 'This campaign has not started yet.'
+          : 'This campaign is no longer taking contributions.',
+      )
     let amount = 0n
     try {
       amount = parseUnits(input.amountEtn.trim() || '0', 18)
@@ -205,39 +382,132 @@ export class LaunchpadService {
       throw new EngineError('invalid_argument', 'That amount is not a number.')
     }
     if (amount <= 0n) throw new EngineError('invalid_argument', 'Enter an amount above zero.')
-    if (c.minContributionWei && amount < BigInt(c.minContributionWei)) throw new EngineError('invalid_argument', 'Below the minimum contribution.')
-    if (c.maxContributionWei && BigInt(c.maxContributionWei) > 0n && amount + BigInt(c.contributedWei) > BigInt(c.maxContributionWei)) throw new EngineError('invalid_argument', 'Above this campaign’s maximum per wallet.')
-    const native = BigInt(String((await this.deps.chains.rpc(chainId, 'eth_getBalance', [account.address, 'latest']).catch(() => '0x0')) ?? '0x0'))
-    if (amount + 300_000n * 1_000_000_000n > native) throw new EngineError('invalid_argument', 'Not enough ETN for the contribution plus the network fee.')
+    if (c.minContributionWei && amount < BigInt(c.minContributionWei))
+      throw new EngineError('invalid_argument', 'Below the minimum contribution.')
+    if (
+      c.maxContributionWei &&
+      BigInt(c.maxContributionWei) > 0n &&
+      amount + BigInt(c.contributedWei) > BigInt(c.maxContributionWei)
+    )
+      throw new EngineError('invalid_argument', 'Above this campaign’s maximum per wallet.')
+    const native = BigInt(
+      String(
+        (await this.deps.chains
+          .rpc(chainId, 'eth_getBalance', [account.address, 'latest'])
+          .catch(() => '0x0')) ?? '0x0',
+      ),
+    )
+    if (amount + 300_000n * 1_000_000_000n > native)
+      throw new EngineError(
+        'invalid_argument',
+        'Not enough ETN for the contribution plus the network fee.',
+      )
+    /*
+      The pool is index-supplied, and this call sends native ETN straight to
+      it. A compromised campaign row naming an attacker contract read "Contribute
+      100 ETN to the campaign at 0x…" at `info`, because the decoder matches
+      `contribute(address)` by selector on any address and `NEW_CONTRACT` only
+      ever looked at `to`.
+
+      Two things changed. `newContract` now age-checks the pool itself, so a
+      contract deployed last week says so on the sheet. And the address is read
+      on chain before a flow starts: a pool that has no code, or that cannot
+      answer the pool interface, is not a campaign whatever the index says.
+
+      This proves the address is a launchpad pool, not that it is *this*
+      campaign's — provenance needs a registry view on the manager, and the
+      deployed manager ABI (`minContribution`, `teamWallet`) exposes none. That
+      is the stronger check and it needs a selector confirmed against the
+      deployed bytecode first.
+    */
+    await this.assertPoolOnChain(chainId, input.pool)
     const referrer = await this.referralFor(chainId, input.pool)
     const flow = await this.deps.flows.start({
       kind: 'launchpad',
       accountId: input.accountId,
       chainId,
       quote: null,
-      steps: [{ step: 'contribute', waitReceipt: true, run: () => this.deps.provider.runInternal({ kind: 'send_transaction', origin: 'internal:launchpad:contribute', chainId, accountId: input.accountId, tx: { from: account.address, to: input.pool as Hex, value: hex(amount), data: encodeContribute(referrer) }, clientRequestId: `launchpad:contribute:${input.pool}:${this.deps.platform.now()}` }) }],
+      steps: [
+        {
+          step: 'contribute',
+          waitReceipt: true,
+          run: () =>
+            this.deps.provider.runInternal({
+              kind: 'send_transaction',
+              origin: 'internal:launchpad:contribute',
+              chainId,
+              accountId: input.accountId,
+              tx: {
+                from: account.address,
+                to: input.pool as Hex,
+                value: hex(amount),
+                data: encodeContribute(referrer),
+              },
+              clientRequestId: `launchpad:contribute:${input.pool}:${this.deps.platform.now()}`,
+            }),
+        },
+      ],
     })
     return { flowId: flow.id, requestId: flow.steps[0]?.requestId ?? null }
   }
 
   /** Claim tokens, a refund, or referral rewards — whichever the state table allows (§8.9). */
-  async claim(input: { accountId: string; chainId: number; pool: string; kind: 'tokens' | 'refund' | 'referral' }): Promise<{ flowId: string; requestId: string | null }> {
+  async claim(input: {
+    accountId: string
+    chainId: number
+    pool: string
+    kind: 'tokens' | 'refund' | 'referral'
+  }): Promise<{ flowId: string; requestId: string | null }> {
+    this.assertEnabled()
     const chainId = input.chainId
-    if (!isEtn(chainId)) throw new EngineError('invalid_argument', 'The launchpad lives on Electroneum.')
+    if (!isEtn(chainId))
+      throw new EngineError('invalid_argument', 'The launchpad lives on Electroneum.')
     const account = await this.account(input.accountId)
     const c = await this.detail(chainId, input.pool, input.accountId)
     if (!c) throw new EngineError('not_found', 'No such campaign.')
-    const key = input.kind === 'tokens' ? 'claim_tokens' : input.kind === 'refund' ? 'claim_refund' : 'claim_referral'
-    if (!c.keys.includes(key)) throw new EngineError('invalid_argument', input.kind === 'tokens' ? 'Nothing to claim from this campaign.' : input.kind === 'refund' ? 'No refund to claim here.' : 'No referral rewards to claim.')
+    const key =
+      input.kind === 'tokens'
+        ? 'claim_tokens'
+        : input.kind === 'refund'
+          ? 'claim_refund'
+          : 'claim_referral'
+    if (!c.keys.includes(key))
+      throw new EngineError(
+        'invalid_argument',
+        input.kind === 'tokens'
+          ? 'Nothing to claim from this campaign.'
+          : input.kind === 'refund'
+            ? 'No refund to claim here.'
+            : 'No referral rewards to claim.',
+      )
     const A = ELECTRONEUM_ADDRESSES[chainId]
     const to = input.kind === 'referral' ? (A.launchpadAffiliate as Hex) : (input.pool as Hex)
-    const data = input.kind === 'tokens' ? encodeClaimTokens(account.address) : input.kind === 'refund' ? encodeClaimRefund(account.address) : encodeClaimReferralRewards()
+    const data =
+      input.kind === 'tokens'
+        ? encodeClaimTokens(account.address)
+        : input.kind === 'refund'
+          ? encodeClaimRefund(account.address)
+          : encodeClaimReferralRewards()
     const flow = await this.deps.flows.start({
       kind: 'launchpad',
       accountId: input.accountId,
       chainId,
       quote: null,
-      steps: [{ step: 'claim', waitReceipt: true, run: () => this.deps.provider.runInternal({ kind: 'send_transaction', origin: `internal:launchpad:${input.kind}`, chainId, accountId: input.accountId, tx: { from: account.address, to, value: '0x0', data }, clientRequestId: `launchpad:${input.kind}:${input.pool}:${this.deps.platform.now()}` }) }],
+      steps: [
+        {
+          step: 'claim',
+          waitReceipt: true,
+          run: () =>
+            this.deps.provider.runInternal({
+              kind: 'send_transaction',
+              origin: `internal:launchpad:${input.kind}`,
+              chainId,
+              accountId: input.accountId,
+              tx: { from: account.address, to, value: '0x0', data },
+              clientRequestId: `launchpad:${input.kind}:${input.pool}:${this.deps.platform.now()}`,
+            }),
+        },
+      ],
     })
     return { flowId: flow.id, requestId: flow.steps[0]?.requestId ?? null }
   }
@@ -247,12 +517,75 @@ const Chain = z.object({ chainId: z.number().int().positive() })
 
 export function launchpadNamespace(launchpad: LaunchpadService): NamespaceSpec {
   return {
-    list: { input: Chain.extend({ accountId: AccountIdSchema.optional(), statuses: z.array(z.enum(['ACTIVE', 'LAUNCHED', 'FAILED', 'CANCELLED', 'PENDING'])).optional() }), handler: (arg) => launchpad.list((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId, (arg as { statuses?: PresaleWireStatus[] }).statuses) },
-    cachedList: { input: z.object({ chainId: z.number().int().positive(), accountId: AccountIdSchema.optional() }), handler: (arg) => launchpad.cachedList((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId) },
-    detail: { input: Chain.extend({ pool: z.string(), accountId: AccountIdSchema.optional() }), handler: (arg) => launchpad.detail((arg as { chainId: number }).chainId, (arg as { pool: string }).pool, (arg as { accountId?: string }).accountId) },
-    contribute: { input: Chain.extend({ accountId: AccountIdSchema, pool: z.string(), amountEtn: z.string().max(60) }), handler: (arg) => launchpad.contribute(arg as { accountId: string; chainId: number; pool: string; amountEtn: string }) },
-    claim: { input: Chain.extend({ accountId: AccountIdSchema, pool: z.string(), kind: z.enum(['tokens', 'refund', 'referral']) }), handler: (arg) => launchpad.claim(arg as { accountId: string; chainId: number; pool: string; kind: 'tokens' | 'refund' | 'referral' }) },
-    rememberReferral: { input: Chain.extend({ pool: z.string(), referrer: z.string() }), handler: (arg) => launchpad.rememberReferral(arg as { chainId: number; pool: string; referrer: string }) },
-    rememberFromLink: { input: z.object({ url: z.string().max(2_000) }), handler: (arg) => launchpad.rememberFromLink((arg as { url: string }).url) },
+    list: {
+      input: Chain.extend({
+        accountId: AccountIdSchema.optional(),
+        statuses: z
+          .array(z.enum(['ACTIVE', 'LAUNCHED', 'FAILED', 'CANCELLED', 'PENDING']))
+          .optional(),
+      }),
+      handler: (arg) =>
+        launchpad.list(
+          (arg as { chainId: number }).chainId,
+          (arg as { accountId?: string }).accountId,
+          (arg as { statuses?: PresaleWireStatus[] }).statuses,
+        ),
+    },
+    cachedList: {
+      input: z.object({
+        chainId: z.number().int().positive(),
+        accountId: AccountIdSchema.optional(),
+      }),
+      handler: (arg) =>
+        launchpad.cachedList(
+          (arg as { chainId: number }).chainId,
+          (arg as { accountId?: string }).accountId,
+        ),
+    },
+    detail: {
+      input: Chain.extend({ pool: z.string(), accountId: AccountIdSchema.optional() }),
+      handler: (arg) =>
+        launchpad.detail(
+          (arg as { chainId: number }).chainId,
+          (arg as { pool: string }).pool,
+          (arg as { accountId?: string }).accountId,
+        ),
+    },
+    contribute: {
+      input: Chain.extend({
+        accountId: AccountIdSchema,
+        pool: z.string(),
+        amountEtn: z.string().max(60),
+      }),
+      handler: (arg) =>
+        launchpad.contribute(
+          arg as { accountId: string; chainId: number; pool: string; amountEtn: string },
+        ),
+    },
+    claim: {
+      input: Chain.extend({
+        accountId: AccountIdSchema,
+        pool: z.string(),
+        kind: z.enum(['tokens', 'refund', 'referral']),
+      }),
+      handler: (arg) =>
+        launchpad.claim(
+          arg as {
+            accountId: string
+            chainId: number
+            pool: string
+            kind: 'tokens' | 'refund' | 'referral'
+          },
+        ),
+    },
+    rememberReferral: {
+      input: Chain.extend({ pool: z.string(), referrer: z.string() }),
+      handler: (arg) =>
+        launchpad.rememberReferral(arg as { chainId: number; pool: string; referrer: string }),
+    },
+    rememberFromLink: {
+      input: z.object({ url: z.string().max(2_000) }),
+      handler: (arg) => launchpad.rememberFromLink((arg as { url: string }).url),
+    },
   }
 }

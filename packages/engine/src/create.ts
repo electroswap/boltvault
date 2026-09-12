@@ -584,6 +584,7 @@ export function createEngine(deps: EngineDeps): Engine {
     safety: { level: (chainId, address) => explore.safetyLevel(chainId, address) },
   })
   const limit = new LimitService({
+    statics,
     platform: deps.platform,
     bus: host.events,
     chains,
@@ -604,6 +605,7 @@ export function createEngine(deps: EngineDeps): Engine {
     watchlist: sealed.watchlist,
   })
   const legends = new LegendsService({
+    statics,
     platform: deps.platform,
     chains,
     vault,
@@ -630,6 +632,7 @@ export function createEngine(deps: EngineDeps): Engine {
     legends,
   })
   const nft = new NftService({
+    statics,
     platform: deps.platform,
     chains,
     vault,
@@ -643,6 +646,7 @@ export function createEngine(deps: EngineDeps): Engine {
     custom: customCollections,
   })
   const farm = new FarmService({
+    statics,
     platform: deps.platform,
     chains,
     tokens,
@@ -654,6 +658,7 @@ export function createEngine(deps: EngineDeps): Engine {
     cache,
   })
   const launchpad = new LaunchpadService({
+    statics,
     platform: deps.platform,
     chains,
     vault,
@@ -701,6 +706,8 @@ export function createEngine(deps: EngineDeps): Engine {
     vault,
     sites,
     bus: host.events,
+    scamOrigins: () => statics?.scamOrigins() ?? [],
+    sessions: sealed.wcSessions,
   })
   connect.init()
   const bridge = new BridgeService({
@@ -788,6 +795,29 @@ export function createEngine(deps: EngineDeps): Engine {
           if (status.exists && !status.unlocked) {
             throw new EngineError('locked', 'Unlock BoltVault before approving this request.')
           }
+          /*
+            The record was written when the sheet went up, and a sheet may sit
+            for minutes. Signing reads the chain and the account from that
+            record rather than from the live request, so this is where the two
+            are checked to still exist: a chain dropped from the registry or an
+            account removed from the vault in the meantime must fail here,
+            while the request can still be raised again, rather than at the
+            signer with a spent approval.
+          */
+          const pending = approvals.get(decision.id)
+          if (pending?.chainId != null && !chains.known(pending.chainId))
+            throw new EngineError(
+              'invalid_argument',
+              'That network is no longer available. Ask the site again.',
+            )
+          if (
+            pending?.accountId != null &&
+            !(await vault.accounts()).some((a) => a.id === pending.accountId)
+          )
+            throw new EngineError(
+              'invalid_argument',
+              'That account is no longer in this wallet. Ask the site again.',
+            )
         }
         const decided = await approvals.decide(decision)
         // A signing decision is activity: the idle timer restarts.

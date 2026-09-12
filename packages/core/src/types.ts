@@ -163,6 +163,23 @@ export interface BoltVaultSettings {
   crashReports: boolean
   /** Unknown-recipient extra confirm (default off; poison 4+4 is always on). */
   sendWhitelist: boolean
+  /**
+   * The password is required to reveal a recovery phrase, whatever else the
+   * vault is wrapped under (§3.2). On by default — the Security and Onboarding
+   * copy has always said so, and a fingerprint should not be enough for the
+   * one secret that is the whole wallet on any device for ever.
+   */
+  revealNeedsPassword: boolean
+  /**
+   * The home-screen widget may show the portfolio total (§7.13).
+   *
+   * Off by default, which is what the docs always claimed and the code never
+   * did: the snapshot is a plaintext file in the App Group container, so a
+   * stolen phone or an iCloud backup of that container gave up the total —
+   * and, until this, the account's address beside it — while the wallet itself
+   * was locked. A widget that shows a balance is a choice, and it is made here.
+   */
+  widgetShowsTotal: boolean
   autoLock: AutoLock
   /** UI language/currency for totals display. */
   displayCurrency: 'USD' | 'ETN'
@@ -192,6 +209,8 @@ export const DEFAULT_SETTINGS: BoltVaultSettings = {
   pushEnabled: false,
   crashReports: false,
   sendWhitelist: false,
+  revealNeedsPassword: true,
+  widgetShowsTotal: false,
   autoLock: '15min',
   displayCurrency: 'USD',
   reducedMotion: false,

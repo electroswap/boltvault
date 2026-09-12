@@ -5,8 +5,42 @@
  * on the dock. Tapping the total opens the Portfolio. The Grid is drawn by
  * TabShell behind this screen; the holder tier warms it.
  */
-import { ActionGrid, Body, BoltMark, ChainMark, Column, EsWordmark, Icon, IconButton, Ignition, Key, LiveFilament, Pill, Plate, Pressable, Rotor, Row, RollingReadout, Seat, ScrollView, edge, metrics, paint, radius, type ActionTileBadge, type IconName, type RotorItem } from '@boltvault/ui'
-import { cacheKey, type BridgeStatus, type CampaignView, type Inventory, type TokenDetailView } from '@boltvault/engine'
+import { fnv1a32 } from '@boltvault/ui'
+import {
+  ActionGrid,
+  Body,
+  BoltMark,
+  ChainMark,
+  Column,
+  EsWordmark,
+  Icon,
+  IconButton,
+  Ignition,
+  Key,
+  LiveFilament,
+  Pill,
+  Plate,
+  Pressable,
+  Rotor,
+  Row,
+  RollingReadout,
+  Seat,
+  ScrollView,
+  edge,
+  metrics,
+  paint,
+  radius,
+  type ActionTileBadge,
+  type IconName,
+  type RotorItem,
+} from '@boltvault/ui'
+import {
+  cacheKey,
+  type BridgeStatus,
+  type CampaignView,
+  type Inventory,
+  type TokenDetailView,
+} from '@boltvault/engine'
 import { useEffect, useRef, useState } from 'react'
 import { ChainScopeSheet, ScopePill, useHomeScope } from '../components/ChainScope'
 import { PortfolioHistory } from '../components/PortfolioHistory'
@@ -80,7 +114,9 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   const igniteRef = useRef<boolean | null>(null)
   if (igniteRef.current === null && !loading) igniteRef.current = takeIgnition(unlocked)
   const ignite = igniteRef.current ?? false
-  const dapp = useDappStatus(unlocked && (host.body === 'extension-popup' || host.body === 'harness'))
+  const dapp = useDappStatus(
+    unlocked && (host.body === 'extension-popup' || host.body === 'harness'),
+  )
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   /** No vault yet: Home is a title screen, not a list with one card on it. */
   const firstRun = !loading && !vault?.exists
@@ -96,13 +132,18 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   // Badges from data one cached call away (plan B3): live campaigns refresh a minute at a time; offers are read, never fetched, from here.
   const campaigns = useCached<CampaignView[]>({
     key: accountId && unlocked ? cacheKey('launchpad', 'list', ETN, accountId) : null,
-    cached: (e) => (accountId ? e.launchpad.cachedList({ chainId: ETN, accountId }) : Promise.resolve(null)),
-    fresh: (e) => (accountId ? e.launchpad.list({ chainId: ETN, accountId }) : Promise.reject(new Error('no account'))),
+    cached: (e) =>
+      accountId ? e.launchpad.cachedList({ chainId: ETN, accountId }) : Promise.resolve(null),
+    fresh: (e) =>
+      accountId
+        ? e.launchpad.list({ chainId: ETN, accountId })
+        : Promise.reject(new Error('no account')),
     maxAgeMs: 60_000,
   })
   const inventory = useCached<Inventory>({
     key: accountId && unlocked ? cacheKey('nft', 'inventory', ETN, accountId) : null,
-    cached: (e) => (accountId ? e.nft.cachedInventory({ accountId, chainId: ETN }) : Promise.resolve(null)),
+    cached: (e) =>
+      accountId ? e.nft.cachedInventory({ accountId, chainId: ETN }) : Promise.resolve(null),
   })
 
   // The home-screen widget reads what Home shows (§7.13); never more.
@@ -110,13 +151,49 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   // The shell draws one loader over the whole screen while this is true.
   useScreenBusy('home', loading)
 
+  /** Settings › the widget may show the total (§7.13). Off until it is asked for. */
+  const [widgetTotal, setWidgetTotal] = useState(false)
+  useEffect(() => {
+    engine.settings.get().then(
+      (v) => setWidgetTotal(v.widgetShowsTotal),
+      () => undefined,
+    )
+    return engine.events.subscribe((e) => {
+      if (e.type === 'settings.changed') setWidgetTotal(e.settings.widgetShowsTotal)
+    })
+  }, [engine])
+
+  /*
+    The widget snapshot is a plaintext file, so what goes into it is what a
+    stolen phone gives up while the wallet is locked (§7.13, ATT-BV-033). The
+    address is replaced by the hash the Field is drawn from, and the total is
+    there only when the user asked for it.
+  */
   useEffect(() => {
     if (!host.widget || !active || !portfolio.snapshot) return
-    void host.widget.publish({ address: active.address, label: active.label, tier: tier?.tier ?? 0, total: portfolio.snapshot.total, change24h: portfolio.snapshot.change24h, currency: portfolio.snapshot.currency, at: Date.now() })
-  }, [host, active, portfolio.snapshot, tier])
+    const showTotal = widgetTotal
+    void host.widget.publish({
+      seed: fnv1a32(active.address.toLowerCase()),
+      label: active.label,
+      tier: tier?.tier ?? 0,
+      total: showTotal ? portfolio.snapshot.total : null,
+      change24h: showTotal ? portfolio.snapshot.change24h : null,
+      currency: portfolio.snapshot.currency,
+      at: Date.now(),
+    })
+  }, [host, active, portfolio.snapshot, tier, widgetTotal])
+
+  // Locked is locked: the widget stops showing an account that is no longer open.
+  useEffect(() => {
+    if (!host.widget || unlocked) return
+    void host.widget.clear?.()
+  }, [host, unlocked])
 
   useEffect(() => {
-    engine.flags.get().then((f) => setNotice(f.flags.notice), () => undefined)
+    engine.flags.get().then(
+      (f) => setNotice(f.flags.notice),
+      () => undefined,
+    )
     return engine.events.subscribe((e) => {
       if (e.type === 'flags.changed') setNotice(e.flags.flags.notice)
     })
@@ -125,10 +202,18 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     if (!accountId || !unlocked) return
     let alive = true
     const load = (): void => {
-      engine.bridge.list({ accountId }).then((xs) => alive && setBridges(xs), () => undefined)
+      engine.bridge.list({ accountId }).then(
+        (xs) => alive && setBridges(xs),
+        () => undefined,
+      )
     }
     load()
-    engine.allowances.cached({ accountId, chainId: ETN }).then((c) => alive && setUnlimited(c.rows.filter((r) => r.amount === 'unlimited' || r.amount === 'all').length), () => undefined)
+    engine.allowances.cached({ accountId, chainId: ETN }).then(
+      (c) =>
+        alive &&
+        setUnlimited(c.rows.filter((r) => r.amount === 'unlimited' || r.amount === 'all').length),
+      () => undefined,
+    )
     const off = engine.events.subscribe((e) => {
       if (e.type === 'bridge.changed') load()
     })
@@ -139,16 +224,22 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   }, [engine, accountId, unlocked])
 
   const pendingTx = entries.filter((e) => e.status === 'pending').length
-  const bridgeInFlight = bridges.find((b) => b.state === 'pending' || b.state === 'dispatched') ?? null
+  const bridgeInFlight =
+    bridges.find((b) => b.state === 'pending' || b.state === 'dispatched') ?? null
   const live = (campaigns.value ?? []).filter((c) => c.phase === 'live').length
   const offers = inventory.value?.withOffersCount ?? 0
-  const toCollect = (positions?.farms ?? []).reduce((sum, f) => sum + BigInt(f.position?.pendingRewards ?? '0'), 0n)
+  const toCollect = (positions?.farms ?? []).reduce(
+    (sum, f) => sum + BigInt(f.position?.pendingRewards ?? '0'),
+    0n,
+  )
   const dyno = Number(toCollect) / 1e18
   const total = portfolio.snapshot?.total ?? null
   const currency = portfolio.snapshot?.currency ?? 'USD'
   const totalText = total === null ? '—' : formatFiat(total, currency)
   const change = formatChange(portfolio.snapshot?.change24h ?? null)
-  const tokenCount = portfolio.snapshot ? portfolio.snapshot.rows.filter((r) => !r.hidden).length : 0
+  const tokenCount = portfolio.snapshot
+    ? portfolio.snapshot.rows.filter((r) => !r.hidden).length
+    : 0
   const unpriced = portfolio.snapshot?.unpricedCount ?? 0
 
   /*
@@ -170,15 +261,107 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     foot instead (below), which is both more room and a truer shape for it.
   */
   const tiles: readonly Tile[] = [
-    { id: 'swap', icon: 'swap', label: t({ id: 'tab.swap', message: 'Swap' }), badge: null, onPress: () => router.setTab('swap') },
-    { id: 'send', icon: 'send', label: t({ id: 'key.send', message: 'Send' }), badge: null, onPress: () => router.navigate('send') },
-    { id: 'receive', icon: 'receive', label: t({ id: 'key.receive', message: 'Receive' }), badge: null, onPress: () => router.navigate('receive') },
-    { id: 'bridge', icon: 'bridge', label: t({ id: 'key.bridge', message: 'Bridge' }), badge: bridgeInFlight ? { text: t({ id: 'home.badge.arriving', message: 'Arriving' }), tone: 'arc' } : null, onPress: () => router.navigate('bridge', scope.scope !== 'all' && scope.scope !== ETN ? { chainId: scope.scope } : undefined) },
-    { id: 'tokens', icon: 'coins', label: t({ id: 'key.tokens', message: 'Tokens' }), badge: null, onPress: () => router.navigate('explore', { segment: 'tokens' }) },
-    { id: 'collectibles', icon: 'nft', label: t({ id: 'key.collectibles', message: 'Collectibles' }), badge: offers > 0 ? { text: t({ id: 'home.badge.offers', message: '{n} offers', values: { n: offers } }), tone: 'ember' } : null, onPress: () => router.navigate('explore', { segment: 'collectibles' }) },
-    { id: 'launchpad', icon: 'launch', label: t({ id: 'key.launchpad', message: 'Launchpad' }), badge: live > 0 ? { text: t({ id: 'home.badge.live', message: '{n} live', values: { n: live } }), tone: 'arc' } : null, onPress: () => router.navigate('explore', { segment: 'launch' }) },
-    { id: 'farms', icon: 'farm', label: t({ id: 'key.farms', message: 'Farms' }), badge: toCollect > 0n ? { text: t({ id: 'home.badge.collect', message: '{d} DYNO', values: { d: dyno >= 10 ? dyno.toFixed(0) : dyno.toFixed(1) } }), tone: 'surge' } : null, onPress: () => router.navigate('explore', { segment: 'farms' }) },
-    { id: 'activity', icon: 'activity', label: t({ id: 'tab.activity', message: 'Activity' }), badge: pendingTx > 0 ? { text: t({ id: 'home.badge.pending', message: '{n} pending', values: { n: pendingTx } }), tone: 'arc' } : null, onPress: () => router.setTab('activity') },
+    {
+      id: 'swap',
+      icon: 'swap',
+      label: t({ id: 'tab.swap', message: 'Swap' }),
+      badge: null,
+      onPress: () => router.setTab('swap'),
+    },
+    {
+      id: 'send',
+      icon: 'send',
+      label: t({ id: 'key.send', message: 'Send' }),
+      badge: null,
+      onPress: () => router.navigate('send'),
+    },
+    {
+      id: 'receive',
+      icon: 'receive',
+      label: t({ id: 'key.receive', message: 'Receive' }),
+      badge: null,
+      onPress: () => router.navigate('receive'),
+    },
+    {
+      id: 'bridge',
+      icon: 'bridge',
+      label: t({ id: 'key.bridge', message: 'Bridge' }),
+      badge: bridgeInFlight
+        ? { text: t({ id: 'home.badge.arriving', message: 'Arriving' }), tone: 'arc' }
+        : null,
+      onPress: () =>
+        router.navigate(
+          'bridge',
+          scope.scope !== 'all' && scope.scope !== ETN ? { chainId: scope.scope } : undefined,
+        ),
+    },
+    {
+      id: 'tokens',
+      icon: 'coins',
+      label: t({ id: 'key.tokens', message: 'Tokens' }),
+      badge: null,
+      onPress: () => router.navigate('explore', { segment: 'tokens' }),
+    },
+    {
+      id: 'collectibles',
+      icon: 'nft',
+      label: t({ id: 'key.collectibles', message: 'Collectibles' }),
+      badge:
+        offers > 0
+          ? {
+              text: t({ id: 'home.badge.offers', message: '{n} offers', values: { n: offers } }),
+              tone: 'ember',
+            }
+          : null,
+      onPress: () => router.navigate('explore', { segment: 'collectibles' }),
+    },
+    {
+      id: 'launchpad',
+      icon: 'launch',
+      label: t({ id: 'key.launchpad', message: 'Launchpad' }),
+      badge:
+        live > 0
+          ? {
+              text: t({ id: 'home.badge.live', message: '{n} live', values: { n: live } }),
+              tone: 'arc',
+            }
+          : null,
+      onPress: () => router.navigate('explore', { segment: 'launch' }),
+    },
+    {
+      id: 'farms',
+      icon: 'farm',
+      label: t({ id: 'key.farms', message: 'Farms' }),
+      badge:
+        toCollect > 0n
+          ? {
+              text: t({
+                id: 'home.badge.collect',
+                message: '{d} DYNO',
+                values: { d: dyno >= 10 ? dyno.toFixed(0) : dyno.toFixed(1) },
+              }),
+              tone: 'surge',
+            }
+          : null,
+      onPress: () => router.navigate('explore', { segment: 'farms' }),
+    },
+    {
+      id: 'activity',
+      icon: 'activity',
+      label: t({ id: 'tab.activity', message: 'Activity' }),
+      badge:
+        pendingTx > 0
+          ? {
+              text: t({
+                id: 'home.badge.pending',
+                message: '{n} pending',
+                values: { n: pendingTx },
+              }),
+              tone: 'arc',
+            }
+          : null,
+      onPress: () => router.setTab('activity'),
+    },
   ]
   /*
     ETN's own price does not come from the market list.
@@ -206,7 +389,17 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   })
   const etn = etnDetail.value ?? null
   const etnChange = etn && etn.change24h !== null ? formatChange(etn.change24h / 100) : null
-  const copy = host.copy && active ? () => void host.copy?.(active.address).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }, () => undefined) : undefined
+  const copy =
+    host.copy && active
+      ? () =>
+          void host.copy?.(active.address).then(
+            () => {
+              setCopied(true)
+              setTimeout(() => setCopied(false), 1500)
+            },
+            () => undefined,
+          )
+      : undefined
 
   /*
     The strip under the console (plan B3).
@@ -225,7 +418,14 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   let gate: React.ReactNode = null
   if (vault?.unlocked && !vault.backupComplete && vault.seeds.length > 0) {
     gate = (
-      <Plate role="raised" paddingVertical={6} paddingHorizontal={12} minHeight={44} justifyContent="center" testID="backup-gate">
+      <Plate
+        role="raised"
+        paddingVertical={6}
+        paddingHorizontal={12}
+        minHeight={44}
+        justifyContent="center"
+        testID="backup-gate"
+      >
         <Row gap="$2" alignItems="center">
           <Icon name="shield" size={16} color={paint.ember} />
           <Column flex={1} minWidth={0} alignItems="flex-start">
@@ -233,10 +433,19 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
               {t({ id: 'home.backup.title', message: 'Back up your recovery phrase' })}
             </Body>
             <Body tone="mute" size="caption" fontSize={11} lineHeight={13} numberOfLines={1}>
-              {t({ id: 'home.backup.body', message: 'Swapping and signing stay locked until you do.' })}
+              {t({
+                id: 'home.backup.body',
+                message: 'Swapping and signing stay locked until you do.',
+              })}
             </Body>
           </Column>
-          <Pill label={t({ id: 'home.backup.key', message: 'Back up' })} tone="ember" size="sm" onPress={() => router.navigate('backup')} testID="backup-key" />
+          <Pill
+            label={t({ id: 'home.backup.key', message: 'Back up' })}
+            tone="ember"
+            size="sm"
+            onPress={() => router.navigate('backup')}
+            testID="backup-key"
+          />
         </Row>
       </Plate>
     )
@@ -255,10 +464,21 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     the snapshot always carries the native coin, so no rows at all means the
     read failed, and a failed read must not be reported as "you have nothing".
   */
-  const unfunded = !!portfolio.snapshot && active?.kind !== 'watch' && portfolio.snapshot.rows.length > 0 && portfolio.snapshot.rows.every((r) => BigInt(r.raw || '0') === 0n)
+  const unfunded =
+    !!portfolio.snapshot &&
+    active?.kind !== 'watch' &&
+    portfolio.snapshot.rows.length > 0 &&
+    portfolio.snapshot.rows.every((r) => BigInt(r.raw || '0') === 0n)
 
   const rotor: RotorItem[] = []
-  if (notice) rotor.push({ id: 'notice', icon: 'warn', tone: paint.ember, text: notice, testID: 'home-notice' })
+  if (notice)
+    rotor.push({
+      id: 'notice',
+      icon: 'warn',
+      tone: paint.ember,
+      text: notice,
+      testID: 'home-notice',
+    })
   /*
     First in the rotor, because with an empty wallet there is nothing else it
     could be showing that matters more — and because this is the advice the
@@ -276,8 +496,38 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
       testID: 'accessory-fund',
     })
   }
-  if (bridgeInFlight) rotor.push({ id: 'bridge', icon: 'bridge', tone: paint.arc, text: t({ id: 'home.acc.bridge', message: '{s} arriving on {c} in about {m} min', values: { s: bridgeInFlight.symbol, c: scope.chains.find((c) => c.chainId === bridgeInFlight.toChainId)?.name ?? `chain ${bridgeInFlight.toChainId}`, m: bridgeInFlight.toChainId === 1 || bridgeInFlight.fromChainId === 1 ? 20 : 5 } }), onPress: () => router.navigate('bridge'), testID: 'accessory-bridge' })
-  if (pendingTx > 0) rotor.push({ id: 'pending', icon: 'clock', tone: paint.arc, text: t({ id: 'home.acc.pending', message: '{n} transaction pending', values: { n: pendingTx } }), onPress: () => router.setTab('activity'), testID: 'accessory-pending' })
+  if (bridgeInFlight)
+    rotor.push({
+      id: 'bridge',
+      icon: 'bridge',
+      tone: paint.arc,
+      text: t({
+        id: 'home.acc.bridge',
+        message: '{s} arriving on {c} in about {m} min',
+        values: {
+          s: bridgeInFlight.symbol,
+          c:
+            scope.chains.find((c) => c.chainId === bridgeInFlight.toChainId)?.name ??
+            `chain ${bridgeInFlight.toChainId}`,
+          m: bridgeInFlight.toChainId === 1 || bridgeInFlight.fromChainId === 1 ? 20 : 5,
+        },
+      }),
+      onPress: () => router.navigate('bridge'),
+      testID: 'accessory-bridge',
+    })
+  if (pendingTx > 0)
+    rotor.push({
+      id: 'pending',
+      icon: 'clock',
+      tone: paint.arc,
+      text: t({
+        id: 'home.acc.pending',
+        message: '{n} transaction pending',
+        values: { n: pendingTx },
+      }),
+      onPress: () => router.setTab('activity'),
+      testID: 'accessory-pending',
+    })
   /*
     The second line, built here rather than in the engine.
 
@@ -287,19 +537,50 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     translated — so the new one is built where `t()` is, off the same snapshot
     the entry came from.
   */
-  const earning = (positions?.farms ?? []).filter((f) => BigInt(f.position?.pendingRewards ?? '0') > 0n)
-  const bestApy = earning.reduce<number | null>((best, f) => (f.baseApy !== null && (best === null || f.baseApy > best) ? f.baseApy : best), null)
+  const earning = (positions?.farms ?? []).filter(
+    (f) => BigInt(f.position?.pendingRewards ?? '0') > 0n,
+  )
+  const bestApy = earning.reduce<number | null>(
+    (best, f) => (f.baseApy !== null && (best === null || f.baseApy > best) ? f.baseApy : best),
+    null,
+  )
   const legends = positions?.legends ?? null
   const subFor = (kind: string): string | null => {
     if (kind === 'dividends' && legends) {
       const paid = BigInt(legends.lifetimePaidWei)
-      const pieces = legends.activeTokenCount === 1 ? t({ id: 'home.acc.div.one', message: '1 Legends piece' }) : t({ id: 'home.acc.div.many', message: '{n} Legends pieces', values: { n: legends.activeTokenCount } })
+      const pieces =
+        legends.activeTokenCount === 1
+          ? t({ id: 'home.acc.div.one', message: '1 Legends piece' })
+          : t({
+              id: 'home.acc.div.many',
+              message: '{n} Legends pieces',
+              values: { n: legends.activeTokenCount },
+            })
       // Only once there is a lifetime to speak of: "0 ETN paid so far" is a discouragement, not a fact worth the line.
-      return paid > 0n ? t({ id: 'home.acc.div.sub', message: '{pieces} · {p} ETN paid so far', values: { pieces, p: formatRaw(legends.lifetimePaidWei, 18) } }) : pieces
+      return paid > 0n
+        ? t({
+            id: 'home.acc.div.sub',
+            message: '{pieces} · {p} ETN paid so far',
+            values: { pieces, p: formatRaw(legends.lifetimePaidWei, 18) },
+          })
+        : pieces
     }
     if (kind === 'collect' && earning.length > 0) {
-      const where = earning.length === 1 ? (earning[0]?.name ?? '') : t({ id: 'home.acc.collect.many', message: 'across {n} farms', values: { n: earning.length } })
-      return bestApy !== null ? t({ id: 'home.acc.collect.sub', message: '{where} · {a}% APY, still earning', values: { where, a: bestApy.toFixed(1) } }) : where
+      const where =
+        earning.length === 1
+          ? (earning[0]?.name ?? '')
+          : t({
+              id: 'home.acc.collect.many',
+              message: 'across {n} farms',
+              values: { n: earning.length },
+            })
+      return bestApy !== null
+        ? t({
+            id: 'home.acc.collect.sub',
+            message: '{where} · {a}% APY, still earning',
+            values: { where, a: bestApy.toFixed(1) },
+          })
+        : where
     }
     return null
   }
@@ -310,21 +591,50 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
       tone: paint.ember,
       text: a.text,
       sub: subFor(a.kind),
-      onPress: () => (a.target === 'legends' ? router.navigate('legends') : a.target.startsWith('farm:') ? router.navigate('farm', { chainId: ETN, farmId: Number(a.target.slice(5)) }) : router.navigate('campaign', { chainId: ETN, pool: a.target.slice(9) })),
+      onPress: () =>
+        a.target === 'legends'
+          ? router.navigate('legends')
+          : a.target.startsWith('farm:')
+            ? router.navigate('farm', { chainId: ETN, farmId: Number(a.target.slice(5)) })
+            : router.navigate('campaign', { chainId: ETN, pool: a.target.slice(9) }),
       testID: `accessory-${a.kind}`,
     })
   }
-  if (unlimited > 0) rotor.push({ id: 'approvals', icon: 'approvals', tone: paint.burn, text: t({ id: 'home.acc.unlimited', message: '{n} unlimited approvals', values: { n: unlimited } }), onPress: () => router.navigate('allowances'), testID: 'accessory-approvals' })
+  if (unlimited > 0)
+    rotor.push({
+      id: 'approvals',
+      icon: 'approvals',
+      tone: paint.burn,
+      text: t({
+        id: 'home.acc.unlimited',
+        message: '{n} unlimited approvals',
+        values: { n: unlimited },
+      }),
+      onPress: () => router.navigate('allowances'),
+      testID: 'accessory-approvals',
+    })
   if (tier) {
     rotor.push({
       id: 'tier',
       icon: 'bolt',
       tone: paint.ember,
-      text: t({ id: 'home.acc.tier', message: '{name} tier · {p} wallet fee', values: { name: tier.name, p: formatPct(tier.bips) } }),
+      text: t({
+        id: 'home.acc.tier',
+        message: '{name} tier · {p} wallet fee',
+        values: { name: tier.name, p: formatPct(tier.bips) },
+      }),
       // The nudge is the point: a rung you can name, and what it costs to reach it.
       sub:
         tier.nextTierAt && tier.nextTierName && tier.nextTierBips !== null
-          ? t({ id: 'home.acc.tier.next', message: '{n} more BOLT-eq for {next} at {p}', values: { n: formatBolt((BigInt(tier.nextTierAt) - BigInt(tier.score)).toString()), next: tier.nextTierName, p: formatPct(tier.nextTierBips) } })
+          ? t({
+              id: 'home.acc.tier.next',
+              message: '{n} more BOLT-eq for {next} at {p}',
+              values: {
+                n: formatBolt((BigInt(tier.nextTierAt) - BigInt(tier.score)).toString()),
+                next: tier.nextTierName,
+                p: formatPct(tier.nextTierBips),
+              },
+            })
           : t({ id: 'home.acc.tier.top', message: 'Top tier — the lowest fee there is.' }),
       onPress: () => setFeeOpen(true),
       testID: 'accessory-tier',
@@ -346,19 +656,58 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
         content is taller than the box, `flexGrow` does nothing, and nothing
         moves.
       */}
-      <ScrollView contentContainerStyle={{ paddingHorizontal: inset, paddingTop: 12, paddingBottom: 12, gap, flexGrow: 1 }}>
+      <ScrollView
+        contentContainerStyle={{
+          paddingHorizontal: inset,
+          paddingTop: 12,
+          paddingBottom: 12,
+          gap,
+          flexGrow: 1,
+        }}
+      >
         <Ignition active={ignite} reducedMotion={reducedMotion} order={0}>
-          <Row justifyContent="space-between" alignItems="center" minHeight={metrics.header} gap="$2">
+          <Row
+            justifyContent="space-between"
+            alignItems="center"
+            minHeight={metrics.header}
+            gap="$2"
+          >
             {active ? (
-              <Seat address={active.address} label={active.label} name={seatName} onPress={() => router.navigate('accounts')} onCopy={copy} copied={copied} testID="seat" />
+              <Seat
+                address={active.address}
+                label={active.label}
+                name={seatName}
+                onPress={() => router.navigate('accounts')}
+                onCopy={copy}
+                copied={copied}
+                testID="seat"
+              />
             ) : (
               <Body size="title">BoltVault</Body>
             )}
             <Row gap="$1" flexShrink={0}>
-              {openInTab ? <IconButton icon="expand" label={t({ id: 'header.expand', message: 'Open in a full tab' })} onPress={() => openInTab()} testID="open-tab" /> : null}
+              {openInTab ? (
+                <IconButton
+                  icon="expand"
+                  label={t({ id: 'header.expand', message: 'Open in a full tab' })}
+                  onPress={() => openInTab()}
+                  testID="open-tab"
+                />
+              ) : null}
               {/* Alerts lost its tile to Activity; the bell is the better place for it anyway. */}
-              <IconButton icon="bell" label={t({ id: 'key.alerts', message: 'Alerts' })} badge={unread > 0 ? String(unread) : undefined} onPress={() => router.navigate('alerts')} testID="alerts-key" />
-              <IconButton icon="settings" label={t({ id: 'home.settings', message: 'Settings' })} onPress={() => router.navigate('settings')} testID="settings-key" />
+              <IconButton
+                icon="bell"
+                label={t({ id: 'key.alerts', message: 'Alerts' })}
+                badge={unread > 0 ? String(unread) : undefined}
+                onPress={() => router.navigate('alerts')}
+                testID="alerts-key"
+              />
+              <IconButton
+                icon="settings"
+                label={t({ id: 'home.settings', message: 'Settings' })}
+                onPress={() => router.navigate('settings')}
+                testID="settings-key"
+              />
             </Row>
           </Row>
         </Ignition>
@@ -372,9 +721,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
           shapes of the console, the action grid and the strip, so nothing
           moves when the real thing replaces them.
         */}
-        {loading ? (
-          null
-        ) : null}
+        {loading ? null : null}
 
         {/*
           A first run is not Home with one card on it.
@@ -401,11 +748,21 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
             </Ignition>
             <Ignition active={ignite} reducedMotion={reducedMotion} order={2}>
               <Plate role="raised" gap="$3" testID="create-plate">
-                <Body size="title">{t({ id: 'home.create.title', message: 'Your vault is not created yet' })}</Body>
-                <Body tone="mute">
-                  {t({ id: 'home.create.body', message: 'Create a new recovery phrase or import one you already have. Electroneum is your home chain.' })}
+                <Body size="title">
+                  {t({ id: 'home.create.title', message: 'Your vault is not created yet' })}
                 </Body>
-                <Key label={t({ id: 'home.create.key', message: 'Create vault' })} onPress={() => router.navigate('onboarding')} testID="create-vault" />
+                <Body tone="mute">
+                  {t({
+                    id: 'home.create.body',
+                    message:
+                      'Create a new recovery phrase or import one you already have. Electroneum is your home chain.',
+                  })}
+                </Body>
+                <Key
+                  label={t({ id: 'home.create.key', message: 'Create vault' })}
+                  onPress={() => router.navigate('onboarding')}
+                  testID="create-vault"
+                />
               </Plate>
             </Ignition>
           </Column>
@@ -427,8 +784,14 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
                 <Icon name="lock" color={paint.mute} size={18} />
                 <Body size="title">{t({ id: 'home.locked.title', message: 'Locked' })}</Body>
               </Row>
-              <Body tone="mute">{t({ id: 'home.locked.body', message: 'Unlock to see balances and sign.' })}</Body>
-              <Key label={t({ id: 'home.locked.key', message: 'Unlock' })} onPress={() => router.navigate('unlock')} testID="unlock" />
+              <Body tone="mute">
+                {t({ id: 'home.locked.body', message: 'Unlock to see balances and sign.' })}
+              </Body>
+              <Key
+                label={t({ id: 'home.locked.key', message: 'Unlock' })}
+                onPress={() => router.navigate('unlock')}
+                testID="unlock"
+              />
             </Plate>
           </Ignition>
         ) : null}
@@ -439,25 +802,65 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
             <Ignition active={ignite} reducedMotion={reducedMotion} order={1}>
               <Plate role="console" gap={6} padding={12} testID="home-console">
                 <Row justifyContent="space-between" alignItems="center">
-                  <ScopePill scope={scope.scope} label={scope.label} onPress={() => setScopeOpen(true)} testID="home-scope" />
+                  <ScopePill
+                    scope={scope.scope}
+                    label={scope.label}
+                    onPress={() => setScopeOpen(true)}
+                    testID="home-scope"
+                  />
                   {portfolio.snapshot && !unfunded ? (
                     <Body tone="mute" size="caption" testID="home-token-count">
-                      {tokenCount === 1 ? t({ id: 'home.tokens.one', message: '1 token' }) : t({ id: 'home.tokens.many', message: '{n} tokens', values: { n: tokenCount } })}
-                      {unpriced > 0 ? ` · ${t({ id: 'home.unpriced', message: '{n} without price', values: { n: unpriced } })}` : ''}
+                      {tokenCount === 1
+                        ? t({ id: 'home.tokens.one', message: '1 token' })
+                        : t({
+                            id: 'home.tokens.many',
+                            message: '{n} tokens',
+                            values: { n: tokenCount },
+                          })}
+                      {unpriced > 0
+                        ? ` · ${t({ id: 'home.unpriced', message: '{n} without price', values: { n: unpriced } })}`
+                        : ''}
                     </Body>
                   ) : null}
                 </Row>
-                <Pressable onPress={() => router.navigate('portfolio')} accessibilityRole="button" accessibilityLabel={t({ id: 'home.portfolio.a11y', message: 'Open your portfolio' })} testID="home-portfolio" style={{ minHeight: 44, justifyContent: 'center' }}>
+                <Pressable
+                  onPress={() => router.navigate('portfolio')}
+                  accessibilityRole="button"
+                  accessibilityLabel={t({
+                    id: 'home.portfolio.a11y',
+                    message: 'Open your portfolio',
+                  })}
+                  testID="home-portfolio"
+                  style={{ minHeight: 44, justifyContent: 'center' }}
+                >
                   <Row alignItems="flex-end" gap="$2">
-                    <RollingReadout value={totalText} hero reducedMotion={reducedMotion} testID="total" />
+                    <RollingReadout
+                      value={totalText}
+                      hero
+                      reducedMotion={reducedMotion}
+                      testID="total"
+                    />
                     <Column flex={1} minWidth={0} paddingBottom={8} alignItems="flex-start">
                       {change ? (
-                        <Body tone={change.startsWith('+') ? 'surge' : change.startsWith('−') ? 'burn' : 'mute'} size="caption" fontWeight="600" numberOfLines={1}>
+                        <Body
+                          tone={
+                            change.startsWith('+')
+                              ? 'surge'
+                              : change.startsWith('−')
+                                ? 'burn'
+                                : 'mute'
+                          }
+                          size="caption"
+                          fontWeight="600"
+                          numberOfLines={1}
+                        >
                           {change} {t({ id: 'home.today', message: 'today' })}
                         </Body>
                       ) : (
                         <Body tone="mute" size="caption" numberOfLines={1}>
-                          {portfolio.snapshot ? '' : t({ id: 'home.scope.none', message: 'No balances yet' })}
+                          {portfolio.snapshot
+                            ? ''
+                            : t({ id: 'home.scope.none', message: 'No balances yet' })}
                         </Body>
                       )}
                     </Column>
@@ -480,8 +883,20 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
                   It draws only once there is a shape to draw; a fresh wallet
                   gets no empty box in a 600-pixel window.
                 */}
-                <PortfolioHistory points={portfolio.snapshot?.history ?? []} currency={currency} body={body} inset={inset} reducedMotion={reducedMotion} testID="home-history" />
-                <LiveFilament tick={head?.blockNumber ?? null} live={head?.live ?? false} reducedMotion={reducedMotion} testID="filament" />
+                <PortfolioHistory
+                  points={portfolio.snapshot?.history ?? []}
+                  currency={currency}
+                  body={body}
+                  inset={inset}
+                  reducedMotion={reducedMotion}
+                  testID="home-history"
+                />
+                <LiveFilament
+                  tick={head?.blockNumber ?? null}
+                  live={head?.live ?? false}
+                  reducedMotion={reducedMotion}
+                  testID="filament"
+                />
               </Plate>
             </Ignition>
 
@@ -528,7 +943,10 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
                 <Pressable
                   onPress={() => router.navigate('browser')}
                   accessibilityRole="button"
-                  accessibilityLabel={t({ id: 'home.browser.a11y', message: 'Open the in-app browser' })}
+                  accessibilityLabel={t({
+                    id: 'home.browser.a11y',
+                    message: 'Open the in-app browser',
+                  })}
                   testID="home-browser-bar"
                   style={{
                     // The `Input` face exactly, down to the four pixels over
@@ -571,14 +989,29 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
                     chain mark is a number without a noun: the symbol goes after
                     it (owner: "show $0.00XXXX ETN").
                   */}
-                  <Pressable onPress={() => router.navigate('token', { chainId: ETN, address: 'native' })} accessibilityRole="button" accessibilityLabel={t({ id: 'home.price.a11y', message: 'ETN price' })} testID="home-price" style={{ flexShrink: 0, justifyContent: 'center', paddingHorizontal: 12 }}>
+                  <Pressable
+                    onPress={() => router.navigate('token', { chainId: ETN, address: 'native' })}
+                    accessibilityRole="button"
+                    accessibilityLabel={t({ id: 'home.price.a11y', message: 'ETN price' })}
+                    testID="home-price"
+                    style={{ flexShrink: 0, justifyContent: 'center', paddingHorizontal: 12 }}
+                  >
                     <Row gap={6} alignItems="center" justifyContent="flex-end">
                       <ChainMark chainId={ETN} size={14} />
                       <Body size="caption" fontWeight="600" numberOfLines={1}>
                         {etn ? `${formatPrice(etn.price, 'USD')} ETN` : '—'}
                       </Body>
                       {etnChange ? (
-                        <Body size="caption" tone={etnChange.startsWith('+') ? 'surge' : etnChange.startsWith('−') ? 'burn' : 'mute'}>
+                        <Body
+                          size="caption"
+                          tone={
+                            etnChange.startsWith('+')
+                              ? 'surge'
+                              : etnChange.startsWith('−')
+                                ? 'burn'
+                                : 'mute'
+                          }
+                        >
                           {etnChange}
                         </Body>
                       ) : null}
@@ -617,7 +1050,12 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
         }}
         reducedMotion={reducedMotion}
       />
-      <DappSheet open={dappOpen} onClose={() => setDappOpen(false)} state={dapp} reducedMotion={reducedMotion} />
+      <DappSheet
+        open={dappOpen}
+        onClose={() => setDappOpen(false)}
+        state={dapp}
+        reducedMotion={reducedMotion}
+      />
       {/* The tier entry's door. Get BOLT hands over to Swap with BOLT on the receiving side. */}
       <FeeScheduleSheet
         open={feeOpen}
@@ -633,4 +1071,3 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     </Column>
   )
 }
-

@@ -46,9 +46,25 @@ export interface InputProps {
   readonly testID?: string
   readonly autoCapitalize?: TextInputProps['autoCapitalize']
   readonly disabled?: boolean
+  /**
+   * A field holding something that must not be remembered by anything but the
+   * person typing it: a recovery-phrase word, a passphrase, a quiz answer, an
+   * export code, a password.
+   *
+   * `secureTextEntry` hides the glyphs and `autoCorrect`/`spellCheck` keep the
+   * keyboard from learning — but none of them stops the OS from *offering the
+   * field to an autofill service*, and that is a different pipe. On Android a
+   * third-party autofill provider or keyboard is handed the field unless
+   * `importantForAutofill` says otherwise; on iOS a password-shaped field
+   * without a `textContentType` gets "Save password?" and the phrase lands in
+   * the keychain of whatever offered. `oneTimeCode` is the deliberate choice
+   * for quiz words and export codes: it is the one content type iOS will not
+   * try to store or reuse.
+   */
+  readonly sensitive?: boolean | 'code'
 }
 
-export const Input = forwardRef<TextInput, InputProps>(function Input({ value, onChange, label, placeholder, secure, multiline, bare, big, louder, numeric, error, hint, autoFocus, onSubmit, testID, autoCapitalize = 'none', disabled }, ref) {
+export const Input = forwardRef<TextInput, InputProps>(function Input({ value, onChange, label, placeholder, secure, multiline, bare, big, louder, numeric, error, hint, autoFocus, onSubmit, testID, autoCapitalize = 'none', disabled, sensitive }, ref) {
   const [focused, setFocused] = useState(false)
   const handleChange = (next: string): void => {
     if (!numeric) {
@@ -78,9 +94,29 @@ export const Input = forwardRef<TextInput, InputProps>(function Input({ value, o
         multiline={multiline}
         autoFocus={autoFocus}
         autoCapitalize={autoCapitalize}
-        {...(numeric ? { inputMode: 'decimal' as const, keyboardType: 'decimal-pad' as const } : {})}
+        {...(numeric
+          ? { inputMode: 'decimal' as const, keyboardType: 'decimal-pad' as const }
+          : {})}
         autoCorrect={false}
         spellCheck={false}
+        {...(sensitive
+          ? ({
+              autoComplete: 'off',
+              // iOS: `none` for a phrase word, `oneTimeCode` for the codes —
+              // the one type it will neither store nor offer back.
+              textContentType: sensitive === 'code' ? 'oneTimeCode' : 'none',
+              // Android: keep the field out of every autofill service.
+              importantForAutofill: 'no',
+              autoCorrect: false,
+              /*
+                A keyboard that does not learn. `visible-password` is Android's
+                own "this is a secret, do not predict it" type; on a multiline
+                phrase field it would also fight the return key, so it is only
+                asked for on the single-line ones.
+              */
+              ...(multiline ? {} : { keyboardType: 'visible-password' as const }),
+            } as Partial<TextInputProps>)
+          : {})}
         editable={!disabled}
         onSubmitEditing={onSubmit}
         onFocus={() => setFocused(true)}

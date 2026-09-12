@@ -12,7 +12,10 @@ import SwiftUI
 import WidgetKit
 
 struct Snapshot: Decodable {
-    let address: String
+    // The FNV-1a hash of the address, not the address (ATT-BV-033): this file
+    // is plaintext in a container a backup picks up, and the widget only ever
+    // needed the four numbers the Field is drawn from.
+    let seed: UInt32
     let label: String
     let tier: Int
     let total: Double?
@@ -30,15 +33,12 @@ func readSnapshot() -> Snapshot? {
     return try? JSONDecoder().decode(Snapshot.self, from: data)
 }
 
-// FNV-1a over the address, as packages/ui/src/hash.ts, so the widget's arcs match the app's seat.
-func fieldSeed(_ address: String) -> [Double] {
-    var h: UInt32 = 0x811c9dc5
-    for b in address.lowercased().utf8 {
-        h ^= UInt32(b)
-        h = h &* 0x01000193
-    }
+// The same xorshift as packages/ui/src/hash.ts `seededRandom`, so the widget's
+// arcs match the app's seat. The FNV-1a step now happens in the app, and only
+// its result travels — see `Snapshot.seed`.
+func fieldSeed(_ hash: UInt32) -> [Double] {
     var out: [Double] = []
-    var x = h
+    var x = hash
     for _ in 0..<4 {
         x ^= x << 13; x ^= x >> 17; x ^= x << 5
         out.append(Double(x) / Double(UInt32.max))
@@ -47,10 +47,10 @@ func fieldSeed(_ address: String) -> [Double] {
 }
 
 struct FieldSignature: View {
-    let address: String
+    let hash: UInt32
     var body: some View {
         Canvas { ctx, size in
-            let seed = fieldSeed(address)
+            let seed = fieldSeed(hash)
             let c = CGPoint(x: size.width / 2, y: size.height / 2)
             let r = min(size.width, size.height) * 0.42
             let colours: [Color] = [Color(red: 0.93, green: 0.97, blue: 1), Color(red: 0.37, green: 0.85, blue: 1), Color(red: 0.65, green: 0.55, blue: 1)]
@@ -86,7 +86,7 @@ struct BoltVaultWidgetView: View {
             Color(red: 0.024, green: 0.035, blue: 0.075)
             if let s = entry.snapshot {
                 HStack(spacing: 12) {
-                    FieldSignature(address: s.address).frame(width: 56, height: 56)
+                    FieldSignature(hash: s.seed).frame(width: 56, height: 56)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(s.label).font(.system(size: 15, weight: .semibold)).foregroundColor(Color(red: 0.86, green: 0.9, blue: 0.96)).lineLimit(1)
                         if let total = s.total {

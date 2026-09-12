@@ -24,11 +24,58 @@ export default defineBackground(() => {
   /** request id → window id, for the approval windows this worker opened. */
   const signWindows = new Map<string, number>()
 
+  /** Approvals raised by a tab that was not in front; they open when it is. */
+  const waiting = new Map<string, { tabId: number; request: ApprovalRequest }>()
+
+  /*
+    §3.5 says an approval-class request from a hidden tab is queued so a
+    background tab cannot spawn a signing window over whatever the person is
+    doing. That hold was implemented in the MAIN-world provider — page code, so
+    a page skips it by posting to the bridge itself — and the worker opened
+    `sign.html` with `focused: true` for anything that arrived. The tab is on
+    the approval record now, and this is where the hold actually lives.
+  */
+  const badge = (): void => {
+    const n = waiting.size
+    void browser.action.setBadgeText({ text: n > 0 ? String(n) : '' }).catch(() => undefined)
+    void browser.action.setBadgeBackgroundColor({ color: '#F5A524' }).catch(() => undefined)
+  }
+
+  const tabOf = (request: ApprovalRequest): number | undefined => {
+    const tabId = (request.payload as { tabId?: unknown } | null)?.tabId
+    return typeof tabId === 'number' ? tabId : undefined
+  }
+
+  /** Is the tab that asked the one being looked at, in the window being used? */
+  const inFront = async (tabId: number): Promise<boolean> => {
+    try {
+      const tab = await browser.tabs.get(tabId)
+      if (!tab.active) return false
+      if (tab.windowId === undefined) return true
+      const w = await browser.windows.get(tab.windowId)
+      return w.focused === true
+    } catch {
+      // The tab has gone; its port goes with it and the request will expire.
+      return false
+    }
+  }
+
   const openApproval = (request: ApprovalRequest): void => {
     // A cap on windows, not on requests: further approvals still queue and are
     // rendered by the popup's pending list, but nothing else steals focus.
     if (signWindows.size >= 3) return
     void (async () => {
+      const tabId = tabOf(request)
+      /*
+        No tab means our own surfaces and the transports that have no tab at
+        all (WalletConnect, a paired device). Those are the user asking, so
+        they open.
+      */
+      if (tabId !== undefined && !(await inFront(tabId))) {
+        waiting.set(request.id, { tabId, request })
+        badge()
+        return
+      }
       let left: number | undefined
       let top: number | undefined
       try {
@@ -69,6 +116,27 @@ export default defineBackground(() => {
     if (details.reason === 'install') void engine.ready
   })
 
+  // A held approval opens the moment its tab is the one in front.
+  const release = (tabId: number): void => {
+    for (const [id, held] of waiting) {
+      if (held.tabId !== tabId) continue
+      waiting.delete(id)
+      if (engine.approvals.list().some((r) => r.id === id)) openApproval(held.request)
+    }
+    badge()
+  }
+  browser.tabs.onActivated.addListener(({ tabId }) => release(tabId))
+  browser.windows.onFocusChanged.addListener((windowId) => {
+    if (windowId === browser.windows.WINDOW_ID_NONE) return
+    void browser.tabs
+      .query({ active: true, windowId })
+      .then((tabs) => {
+        const id = tabs[0]?.id
+        if (id !== undefined) release(id)
+      })
+      .catch(() => undefined)
+  })
+
   // Closing an approval window is a rejection (§3.5).
   browser.windows.onRemoved.addListener((windowId) => {
     for (const [id, wid] of signWindows) {
@@ -78,7 +146,7 @@ export default defineBackground(() => {
     }
   })
 
-  // A decided request closes its window.
+  // A decided request closes its window, and stops waiting for a tab.
   engine.host.events.subscribe((e) => {
     if (e.type !== 'approvals.changed') return
     for (const [id, wid] of signWindows) {
@@ -86,6 +154,13 @@ export default defineBackground(() => {
       signWindows.delete(id)
       void browser.windows.remove(wid).catch(() => undefined)
     }
+    let dropped = false
+    for (const id of [...waiting.keys()]) {
+      if (e.pending.some((p) => p.id === id)) continue
+      waiting.delete(id)
+      dropped = true
+    }
+    if (dropped) badge()
   })
 
   browser.runtime.onConnect.addListener((port) => {

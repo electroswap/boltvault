@@ -64,7 +64,13 @@ vi.mock('expo-file-system', () => {
   }
 })
 
-const SNAPSHOT = { address: '0xD6Cf49CbCF84B2cd2472a376B5f791689A0769d0', label: 'Main', tier: 2, total: 1234.5, change24h: 0.031, currency: 'USD' as const, at: 1_700_000_000_000 }
+/*
+  The Field's hash, not the address, and no total unless the user asked for one
+  (ATT-BV-033). The snapshot is plaintext in a container a backup picks up, so
+  it used to link a real chain identity to a real balance on disk while the
+  wallet was locked. `Home.tsx` decides what goes in; this is the shape.
+*/
+const SNAPSHOT = { seed: 2_166_136_261, label: 'Main', tier: 2, total: null, change24h: null, currency: 'USD' as const, at: 1_700_000_000_000 }
 
 const GROUP = 'group.io.electroswap.boltvault'
 const CONTAINER = 'file:///private/Shared/AppGroup/boltvault'
@@ -96,6 +102,24 @@ describe('publishWidgetSnapshot', () => {
     const { publishWidgetSnapshot } = await import('../src/widget')
     await publishWidgetSnapshot(SNAPSHOT)
     expect(state.written[0]?.uri).toBe('file:///app/Documents/widget/widget-snapshot.json')
+  })
+
+  it('writes no address and no total', async () => {
+    state.containers = { [GROUP]: CONTAINER }
+    const { publishWidgetSnapshot } = await import('../src/widget')
+    await publishWidgetSnapshot(SNAPSHOT)
+    const body = state.written[0]?.body ?? ''
+    // Nothing that looks like an address, and nothing that looks like money.
+    expect(body).not.toMatch(/0x[0-9a-fA-F]{40}/)
+    expect(JSON.parse(body)).toMatchObject({ total: null, change24h: null })
+    expect(Object.keys(JSON.parse(body))).not.toContain('address')
+  })
+
+  it('takes the snapshot back when asked', async () => {
+    state.containers = { [GROUP]: CONTAINER }
+    const { publishWidgetSnapshot, clearWidgetSnapshot } = await import('../src/widget')
+    await publishWidgetSnapshot(SNAPSHOT)
+    await expect(clearWidgetSnapshot()).resolves.toBeUndefined()
   })
 
   it('warns rather than throwing when the iOS entitlement is missing', async () => {

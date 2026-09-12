@@ -148,6 +148,38 @@ describe('typed data', () => {
     })
     expect(t?.decoded).toMatchObject({ kind: 'seaport_order', zeroConsideration: true })
   })
+  it('reads every leaf of a BulkOrder tree, at height 1 and height 2', () => {
+    const leaf = (id: string, paid: string) => ({
+      offerer: ME,
+      offer: [{ itemType: 2, token: TOKEN, identifierOrCriteria: id, startAmount: '1', endAmount: '1' }],
+      consideration: [{ itemType: 0, token: '0x0000000000000000000000000000000000000000', identifierOrCriteria: '0', startAmount: paid, endAmount: paid, recipient: ME }],
+    })
+    const bulk = (tree: unknown) =>
+      parseTypedData({
+        types: { BulkOrder: [] },
+        primaryType: 'BulkOrder',
+        domain: { name: 'Seaport', version: '1.5', chainId: 52014, verifyingContract: A.seaport15 },
+        message: { tree },
+      })
+    const two = bulk([leaf('1', '1000'), leaf('2', '0')])
+    expect(two?.decoded.kind).toBe('seaport_order')
+    expect(two?.decoded.kind === 'seaport_order' && two.decoded.orders.length).toBe(2)
+    // The single-order fields describe the worst leaf, not the first.
+    expect(two?.decoded).toMatchObject({ zeroConsideration: true })
+    const four = bulk([[leaf('1', '1000'), leaf('2', '1000')], [leaf('3', '1000'), leaf('4', '1000')]])
+    expect(four?.decoded.kind === 'seaport_order' && four.decoded.orders.length).toBe(4)
+    expect(four?.decoded).toMatchObject({ zeroConsideration: false })
+  })
+  it('treats a BulkOrder with an undecodable leaf as unknown rather than reading the good ones', () => {
+    const good = { offerer: ME, offer: [{ itemType: 2, token: TOKEN, identifierOrCriteria: '1', startAmount: '1', endAmount: '1' }], consideration: [] }
+    const t = parseTypedData({
+      types: { BulkOrder: [] },
+      primaryType: 'BulkOrder',
+      domain: { name: 'Seaport', version: '1.5', chainId: 52014, verifyingContract: A.seaport15 },
+      message: { tree: [good, { offerer: 'not-an-address', offer: [], consideration: [] }] },
+    })
+    expect(t?.decoded).toEqual({ kind: 'unknown', primaryType: 'BulkOrder' })
+  })
   it('returns unknown for anything else and null for garbage', () => {
     expect(parseTypedData({ types: {}, primaryType: 'Ping', domain: {}, message: {} })?.decoded).toEqual({ kind: 'unknown', primaryType: 'Ping' })
     expect(parseTypedData('not json')).toBeNull()
@@ -159,6 +191,23 @@ describe('decodeMessage', () => {
     const hex = `0x${Buffer.from('Sign in to ElectroSwap').toString('hex')}` as Hex
     expect(decodeMessage(hex)).toMatchObject({ text: 'Sign in to ElectroSwap', looksLikeHashOrTx: false })
   })
+  it('will not render text that reorders itself', () => {
+    /*
+      ATT-BV-015. `isPrintable` rejected C0 controls, DEL and U+FFFD and
+      nothing else, so U+202E survived into the statement and the exact-message
+      plate: "Sign in to app.electroswap.io" could be written in bytes naming
+      another domain, and the sheet drew the reassuring version. Typed-data
+      names already went through `untrusted()`; the one place where the bytes
+      ARE the sentence did not.
+    */
+    const evil = `0x${Buffer.from('Sign in to \u202Eoi.paws\u202C').toString('hex')}` as Hex
+    const d = decodeMessage(evil)
+    expect(d.hidden).toBe(true)
+    expect(d.text).toBeNull()
+    // Plain text is untouched, including the whitespace that has always passed.
+    expect(decodeMessage(`0x${Buffer.from('line one\nline two').toString('hex')}`)).toMatchObject({ hidden: false, text: 'line one\nline two' })
+  })
+
   it('flags a 32-byte hash', () => {
     expect(decodeMessage(`0x${'ab'.repeat(32)}`).looksLikeHashOrTx).toBe(true)
   })

@@ -89,11 +89,26 @@ describe('a name where an address would go', () => {
 
   it('every slot that shows one falls back to the shortened address', () => {
     expect(ACCOUNT_ROW).toContain('name ?? shortAddress(account.address)')
-    expect(ACTIVITY).toContain('toName ?? shortAddress(open.to)')
+    expect(ACTIVITY).toContain('toName ?? shortAddress(counterparty)')
   })
 
   it('Activity asks for the open row only, never for the whole list', () => {
-    expect(ACTIVITY).toContain('const toName = useName(open?.to)')
+    expect(ACTIVITY).toMatch(/const toName = useName\(/)
     expect(ACTIVITY).not.toMatch(/useNames\(\s*entries/)
+  })
+
+  /*
+    ATT-BV-026. A row's `to` is what the transaction was addressed to, which
+    for an ERC-20 send is the token contract — so the detail sheet printed the
+    token under "To" and then resolved a reverse name for it. A scam token that
+    sets its own reverse record to `usdc.etn` had the wallet print
+    "To: usdc.etn" after every transfer of it: a contract identity rendered as
+    a person's name, which §3.6 and §8.1 both say the wallet does not do.
+  */
+  it('Activity names the counterparty, never the contract the call went to', () => {
+    // The recipient comes out of the calldata, the way the firewall reads it.
+    expect(ACTIVITY).toContain("recipientOf({ to: open.to, data: open.data ?? '0x' })")
+    // …and a contract that is itself the target is never handed to the resolver.
+    expect(ACTIVITY).toMatch(/useName\(isContractItself \? undefined :/)
   })
 })

@@ -17,6 +17,7 @@ import { useName } from '../hooks/useNames'
 import { useNotifications } from '../hooks/useNotifications'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
+import { recipientOf } from '../state/safeguards'
 import { useReducedMotion } from '../state/useReducedMotion'
 import { useWalletState } from '../state/useWalletState'
 import { useScreenBusy } from '../state/useScreenBusy'
@@ -81,7 +82,26 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
     open row alone rather than for every row in the list: a history of two
     hundred sends is two hundred resolver lookups nobody reads.
   */
-  const toName = useName(open?.to)
+  /*
+    The counterparty, not the contract the call went to.
+
+    A row's `to` is whatever the transaction was addressed to, which for an
+    ERC-20 send is the token contract — so the detail sheet printed the token
+    under "To", and `useName` then resolved a reverse record for it. A scam
+    token whose contract sets its own reverse name to `usdc.etn` therefore had
+    the wallet print "To: usdc.etn" after every transfer of it: a contract
+    identity rendered as a person's name, which §3.6 and §8.1 both say the
+    wallet does not do. `recipientOf` reads the recipient out of the calldata,
+    exactly as the firewall does before signing.
+  */
+  const counterparty = open ? recipientOf({ to: open.to, data: open.data ?? '0x' }) : null
+  const isContractItself =
+    !!open?.to &&
+    !!counterparty &&
+    counterparty.toLowerCase() === open.to.toLowerCase() &&
+    (open.data ?? '0x').length > 2
+  // A name is for a person's address. A contract the call went to is not one.
+  const toName = useName(isContractItself ? undefined : (counterparty ?? undefined))
   const [chains, setChains] = useState<ChainView[]>([])
   /*
     Whether the open row can still be replaced, and why not when it cannot
@@ -355,7 +375,9 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
               <Body tone="mute" size="caption">
                 {t({ id: 'activity.to', message: 'To' })}
               </Body>
-              <Body size="caption">{open.to ? (toName ?? shortAddress(open.to)) : '—'}</Body>
+              <Body size="caption">
+                {counterparty ? (toName ?? shortAddress(counterparty)) : '—'}
+              </Body>
             </Row>
             <Row justifyContent="space-between">
               <Body tone="mute" size="caption">

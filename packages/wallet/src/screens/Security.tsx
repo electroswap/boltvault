@@ -1,5 +1,18 @@
 /** Settings › Security (master plan §8.14): password, auto-lock, passkeys, export. */
-import { AnimatedQR, Body, Column, Icon, Input, Key, Plate, Row, ScrollView, Toggle, metrics, paint } from '@boltvault/ui'
+import {
+  AnimatedQR,
+  Body,
+  Column,
+  Icon,
+  Input,
+  Key,
+  Plate,
+  Row,
+  ScrollView,
+  Toggle,
+  metrics,
+  paint,
+} from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
 import type { AutoLock, Settings } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
@@ -42,7 +55,10 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
 
   useEffect(() => {
     let alive = true
-    host.passkeys?.supported().then((ok) => alive && setPasskeysSupported(ok), () => undefined)
+    host.passkeys?.supported().then(
+      (ok) => alive && setPasskeysSupported(ok),
+      () => undefined,
+    )
     return () => {
       alive = false
     }
@@ -72,7 +88,11 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
   const [biometricOk, setBiometricOk] = useState(false)
   useEffect(() => {
     let alive = true
-    if (host.deviceKey) host.deviceKey.available().then((ok) => alive && setBiometricOk(ok), () => undefined)
+    if (host.deviceKey)
+      host.deviceKey.available().then(
+        (ok) => alive && setBiometricOk(ok),
+        () => undefined,
+      )
     return () => {
       alive = false
     }
@@ -85,18 +105,45 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
       <Plate gap="$3" testID="autolock">
         <Body size="title">{t({ id: 'security.autolock', message: 'Auto-lock' })}</Body>
         <Body tone="mute" size="caption">
-          {t({ id: 'security.autolock.hint', message: 'Locks after this long without activity. Always locks when the browser closes.' })}
+          {t({
+            id: 'security.autolock.hint',
+            message:
+              'Locks after this long without activity. Always locks when the browser closes.',
+          })}
         </Body>
         <Row gap="$2" flexWrap="wrap">
           {AUTO_LOCKS.map((a) => (
-            <Key key={a} label={a === '5min' ? t({ id: 'al.5', message: '5 min' }) : a === '15min' ? t({ id: 'al.15', message: '15 min' }) : a === '60min' ? t({ id: 'al.60', message: '1 hour' }) : t({ id: 'al.never', message: 'Never' })} kind={vault?.autoLock === a ? 'primary' : 'secondary'} size="compact" onPress={() => run(() => engine.vault.setAutoLock({ autoLock: a }).then(() => undefined))} testID={`autolock-${a}`} />
+            <Key
+              key={a}
+              label={
+                a === '5min'
+                  ? t({ id: 'al.5', message: '5 min' })
+                  : a === '15min'
+                    ? t({ id: 'al.15', message: '15 min' })
+                    : a === '60min'
+                      ? t({ id: 'al.60', message: '1 hour' })
+                      : t({ id: 'al.never', message: 'Never' })
+              }
+              kind={vault?.autoLock === a ? 'primary' : 'secondary'}
+              size="compact"
+              onPress={() =>
+                run(() => engine.vault.setAutoLock({ autoLock: a }).then(() => undefined))
+              }
+              testID={`autolock-${a}`}
+            />
           ))}
         </Row>
       </Plate>
 
       <Plate gap="$3" testID="change-password">
         <Body size="title">{t({ id: 'security.password', message: 'Change password' })}</Body>
-        <Input value={current} onChange={setCurrent} secure placeholder={t({ id: 'security.current', message: 'Current password' })} />
+        <Input
+          value={current}
+          onChange={setCurrent}
+          secure
+          sensitive
+          placeholder={t({ id: 'security.current', message: 'Current password' })}
+        />
         {/*
           The same rule onboarding applies, from the same function.
 
@@ -105,8 +152,26 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
           one. A second, weaker definition of "strong enough" is worse than no
           check, because it is the one an attacker gets to choose.
         */}
-        <Input value={next} onChange={setNext} secure placeholder={t({ id: 'security.new', message: 'New password' })} hint={next ? nextStrength.label : null} />
-        <Key label={t({ id: 'security.password.key', message: 'Change password' })} disabled={busy || !current || nextStrength.score === 0} onPress={() => run(async () => { await engine.vault.changePassword({ current, next }); setCurrent(''); setNext(''); setNote(t({ id: 'security.password.done', message: 'Password changed.' })) })} />
+        <Input
+          value={next}
+          onChange={setNext}
+          secure
+          sensitive
+          placeholder={t({ id: 'security.new', message: 'New password' })}
+          hint={next ? nextStrength.label : null}
+        />
+        <Key
+          label={t({ id: 'security.password.key', message: 'Change password' })}
+          disabled={busy || !current || nextStrength.score === 0}
+          onPress={() =>
+            run(async () => {
+              await engine.vault.changePassword({ current, next })
+              setCurrent('')
+              setNext('')
+              setNote(t({ id: 'security.password.done', message: 'Password changed.' }))
+            })
+          }
+        />
       </Plate>
 
       {/*
@@ -123,7 +188,8 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
         <Body tone="mute" size="caption">
           {t({
             id: 'security.quick.body',
-            message: 'Unlock with your face or fingerprint instead of typing your password. What gets stored is a key this device will only release once you have authenticated — never your password, and never your keys. The password keeps working, and is still required to reveal or export your phrase.',
+            message:
+              'Unlock with your face or fingerprint instead of typing your password. What gets stored is a key this device will only release once you have authenticated — never your password, and never your keys. The password keeps working, and is still required to reveal or export your phrase.',
           })}
         </Body>
         <Input
@@ -131,12 +197,19 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
           onChange={setQuickPassword}
           secure
           placeholder={t({ id: 'security.current', message: 'Current password' })}
-          hint={t({ id: 'security.quick.why', message: 'Required to add or remove a way into this vault.' })}
+          hint={t({
+            id: 'security.quick.why',
+            message: 'Required to add or remove a way into this vault.',
+          })}
+          sensitive
           testID="quick-password"
         />
         {passkeys.length === 0 && devices.length === 0 ? (
           <Body tone="mute" size="caption">
-            {t({ id: 'security.quick.none', message: 'Nothing enrolled yet, so the password is the only way in.' })}
+            {t({
+              id: 'security.quick.none',
+              message: 'Nothing enrolled yet, so the password is the only way in.',
+            })}
           </Body>
         ) : (
           <Column gap="$2">
@@ -145,7 +218,17 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
                 <Body tone="mute" size="caption">
                   {t({ id: 'security.quick.passkey', message: 'Passkey' })} · {w.id.slice(0, 8)}…
                 </Body>
-                <Body tone="burn" size="caption" onPress={() => run(() => engine.vault.removePasskey({ credentialId: w.id, password: quickPassword }).then(() => undefined))}>
+                <Body
+                  tone="burn"
+                  size="caption"
+                  onPress={() =>
+                    run(() =>
+                      engine.vault
+                        .removePasskey({ credentialId: w.id, password: quickPassword })
+                        .then(() => undefined),
+                    )
+                  }
+                >
                   {t({ id: 'remove', message: 'Remove' })}
                 </Body>
               </Row>
@@ -153,7 +236,10 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
             {devices.map((w) => (
               <Row key={w.id} justifyContent="space-between" alignItems="center">
                 <Body tone="mute" size="caption">
-                  {t({ id: 'security.quick.device', message: 'Fingerprint or face on this device' })}
+                  {t({
+                    id: 'security.quick.device',
+                    message: 'Fingerprint or face on this device',
+                  })}
                 </Body>
                 <Body
                   tone="burn"
@@ -185,8 +271,16 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
                 // The same handle onboarding enrols with: "one vault, one user
                 // handle, re-enrolling replaces the credential" only holds if
                 // both places agree. This used to be '01' and did not.
-                const r = await host.passkeys.create({ userName: 'BoltVault', userIdHex: PASSKEY_USER_ID, rpName: 'BoltVault' })
-                await engine.vault.enrolPasskey({ credentialId: r.credentialId, prfSecretHex: r.prfSecretHex, password: quickPassword })
+                const r = await host.passkeys.create({
+                  userName: 'BoltVault',
+                  userIdHex: PASSKEY_USER_ID,
+                  rpName: 'BoltVault',
+                })
+                await engine.vault.enrolPasskey({
+                  credentialId: r.credentialId,
+                  prfSecretHex: r.prfSecretHex,
+                  password: quickPassword,
+                })
               })
             }
           />
@@ -202,21 +296,60 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
                 run(async () => {
                   if (!host.deviceKey) return
                   const keyHex = await host.deviceKey.ensure()
-                  await engine.vault.enrolDevice({ keyId: host.deviceKey.id, keyHex, password: quickPassword })
+                  await engine.vault.enrolDevice({
+                    keyId: host.deviceKey.id,
+                    keyHex,
+                    password: quickPassword,
+                  })
                 })
               }
             />
           ) : (
             <Body tone="mute" size="caption">
-              {t({ id: 'security.biometrics.none', message: 'No fingerprint or face is enrolled on this device yet. Add one in the system settings, then come back.' })}
+              {t({
+                id: 'security.biometrics.none',
+                message:
+                  'No fingerprint or face is enrolled on this device yet. Add one in the system settings, then come back.',
+              })}
             </Body>
           )
         ) : null}
         {!passkeysSupported && !host.deviceKey ? (
           <Body tone="mute" size="caption">
-            {t({ id: 'security.quick.unsupported', message: 'Neither passkeys nor a device keystore are available here.' })}
+            {t({
+              id: 'security.quick.unsupported',
+              message: 'Neither passkeys nor a device keystore are available here.',
+            })}
           </Body>
         ) : null}
+      </Plate>
+
+      {/*
+        The phrase is the whole wallet, for ever, on any device — and `reveal`
+        used to accept any enrolled factor, so a household member who could
+        pass a registered fingerprint could open Accounts → Back up and read
+        the words, while this screen told the user the password was still
+        required. Code and copy agree now, and the switch is here because a
+        wallet set up behind a passkey may have a password nobody has typed in
+        months, and locking somebody out of their own phrase is its own loss.
+      */}
+      <Plate gap="$2" testID="reveal-password">
+        <Toggle
+          value={settings?.revealNeedsPassword ?? true}
+          onChange={(v) =>
+            engine.settings.set({ revealNeedsPassword: v }).then(setSettings, () => undefined)
+          }
+          label={t({
+            id: 'security.reveal',
+            message: 'Require your password to show a recovery phrase',
+          })}
+          hint={t({
+            id: 'security.reveal.hint',
+            message:
+              'On. Your face or fingerprint unlocks the wallet on this device; the phrase opens it on any device, for ever, so it costs the password. Turn this off only if you would rather use a device factor for that too.',
+          })}
+          testID="reveal-password-toggle"
+        />
       </Plate>
 
       {/*
@@ -230,31 +363,56 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
       <Plate gap="$2" testID="eth-sign">
         <Toggle
           value={settings?.ethSignEnabled ?? false}
-          onChange={(v) => engine.settings.set({ ethSignEnabled: v }).then(setSettings, () => undefined)}
+          onChange={(v) =>
+            engine.settings.set({ ethSignEnabled: v }).then(setSettings, () => undefined)
+          }
           label={t({ id: 'security.ethsign', message: 'Allow raw hash signatures (eth_sign)' })}
-          hint={t({ id: 'security.ethsign.hint', message: 'Off. A site asking for one asks you to sign 32 bytes nobody can read back — it may be a transaction that moves everything you hold, and BoltVault cannot tell you which. Turn it on only for a site you trust that will not work otherwise, and turn it off again afterwards.' })}
+          hint={t({
+            id: 'security.ethsign.hint',
+            message:
+              'Off. A site asking for one asks you to sign 32 bytes nobody can read back — it may be a transaction that moves everything you hold, and BoltVault cannot tell you which. Turn it on only for a site you trust that will not work otherwise, and turn it off again afterwards.',
+          })}
           testID="eth-sign-toggle"
         />
         {settings?.ethSignEnabled ? (
           <Body tone="burn" size="caption" testID="eth-sign-on">
-            {t({ id: 'security.ethsign.on', message: 'On. Every eth_sign request still opens the full sheet with the hash shown, and it is still the most dangerous thing this wallet will do.' })}
+            {t({
+              id: 'security.ethsign.on',
+              message:
+                'On. Every eth_sign request still opens the full sheet with the hash shown, and it is still the most dangerous thing this wallet will do.',
+            })}
           </Body>
         ) : null}
       </Plate>
 
       {host.secretsAllowed ? (
         <Plate gap="$3" testID="export">
-          <Body size="title">{t({ id: 'security.export', message: 'Move this vault to another device' })}</Body>
+          <Body size="title">
+            {t({ id: 'security.export', message: 'Move this vault to another device' })}
+          </Body>
           <Body tone="mute" size="caption">
-            {t({ id: 'security.export.body', message: 'An animated code the other device scans, sealed under a one-time phrase you type there. Your seeds never touch the internet.' })}
+            {t({
+              id: 'security.export.body',
+              message:
+                'An animated code the other device scans, sealed under a one-time phrase you type there. Your seeds never touch the internet.',
+            })}
           </Body>
           {frames ? (
             <>
               {masked ? (
-                <Column minHeight={168} alignItems="center" justifyContent="center" gap="$2" testID="export-masked">
+                <Column
+                  minHeight={168}
+                  alignItems="center"
+                  justifyContent="center"
+                  gap="$2"
+                  testID="export-masked"
+                >
                   <Icon name="eyeOff" size={20} color={paint.mute} />
                   <Body tone="mute" size="caption">
-                    {t({ id: 'secret.masked', message: 'Hidden while this window is not in front' })}
+                    {t({
+                      id: 'secret.masked',
+                      message: 'Hidden while this window is not in front',
+                    })}
                   </Body>
                 </Column>
               ) : (
@@ -267,29 +425,64 @@ export function Security({ body }: { body: 'extension-popup' | 'extension-tab' |
                 on the other device and out of reach of an offline search.
               */}
               <Body size="caption" tone="mute">
-                {t({ id: 'security.export.phrase', message: 'Type this phrase on the other device:' })}
+                {t({
+                  id: 'security.export.phrase',
+                  message: 'Type this phrase on the other device:',
+                })}
               </Body>
               <Body selectable testID="export-code">
                 {exportCode}
               </Body>
-              <Key label={t({ id: 'security.export.done', message: 'Done' })} kind="secondary" onPress={() => { setFrames(null); setExportCode('') }} />
+              <Key
+                label={t({ id: 'security.export.done', message: 'Done' })}
+                kind="secondary"
+                onPress={() => {
+                  setFrames(null)
+                  setExportCode('')
+                }}
+              />
             </>
           ) : (
             <>
-              <Input value={exportPassword} onChange={setExportPassword} secure placeholder={t({ id: 'security.current', message: 'Current password' })} />
-              <Key label={t({ id: 'security.export.key', message: 'Show export code' })} disabled={busy || !exportPassword} onPress={() => run(async () => { const r = await engine.vault.export({ password: exportPassword }); setFrames(r.frames); setExportCode(r.code); setExportPassword('') })} />
+              <Input
+                value={exportPassword}
+                onChange={setExportPassword}
+                secure
+                sensitive
+                placeholder={t({ id: 'security.current', message: 'Current password' })}
+              />
+              <Key
+                label={t({ id: 'security.export.key', message: 'Show export code' })}
+                disabled={busy || !exportPassword}
+                onPress={() =>
+                  run(async () => {
+                    const r = await engine.vault.export({ password: exportPassword })
+                    setFrames(r.frames)
+                    setExportCode(r.code)
+                    setExportPassword('')
+                  })
+                }
+              />
             </>
           )}
         </Plate>
       ) : (
-        <Key label={t({ id: 'security.export.tab', message: 'Export vault (opens a full tab)' })} kind="secondary" onPress={() => host.openSecretScreen?.('security')} />
+        <Key
+          label={t({ id: 'security.export.tab', message: 'Export vault (opens a full tab)' })}
+          kind="secondary"
+          onPress={() => host.openSecretScreen?.('security')}
+        />
       )}
 
       {error ? <Body tone="burn">{error}</Body> : null}
       {note ? <Body tone="arc">{note}</Body> : null}
       <Column gap="$1">
         <Body tone="mute" size="caption">
-          {t({ id: 'security.about', message: 'Encryption: Argon2id → XChaCha20-Poly1305, one data key per vault, wrapped per unlock factor.' })}
+          {t({
+            id: 'security.about',
+            message:
+              'Encryption: Argon2id → XChaCha20-Poly1305, one data key per vault, wrapped per unlock factor.',
+          })}
         </Body>
       </Column>
     </ScrollView>

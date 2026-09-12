@@ -28,6 +28,7 @@ export type RiskCode =
   | 'TYPED_DATA_DOMAIN_MISMATCH'
   | 'SEAPORT_ZERO_CONSIDERATION'
   | 'SEAPORT_UNDERPRICED'
+  | 'SEAPORT_OFFERER_MISMATCH'
   | 'ETH_SIGN_BLOCKED'
   | 'PERSONAL_SIGN_LOOKS_LIKE_TX'
   | 'AUTHORIZATION_LIST'
@@ -45,16 +46,20 @@ export type RiskCode =
   | 'SIM_FAILED'
   | 'SIM_INCOMPLETE'
   | 'SIM_UNAVAILABLE'
+  | 'FEE_EXCESSIVE'
+  | 'NONCE_NOT_NEXT'
   | 'FEE_SINK_MISMATCH'
   | 'FEE_TIER_MISMATCH'
   | 'WALLET_FEE_OVERCHARGE'
   | 'DAPP_TIPS_THIRD_PARTY'
   | 'ORIGIN_UNVERIFIED'
+  | 'ORIGIN_VERIFY_MISMATCH'
   | 'ORIGIN_TYPOSQUAT'
   | 'ORIGIN_SCAM'
   | 'ORIGIN_FIRST_TIME'
   | 'CHAIN_MISMATCH'
   | 'UR_RECIPIENT_NOT_SELF'
+  | 'UR_OUTPUT_STRANDED'
   | 'SWAP_MIN_OUT_IMPLAUSIBLE'
   | 'MULTICALL_OPAQUE'
 
@@ -133,6 +138,17 @@ export interface AssessmentContext {
   readonly firstTimeOrigin: boolean
   /** False for a WalletConnect peer without Verify (§5.3). */
   readonly originVerified: boolean
+  /**
+   * What an attestation service actually said about the peer's domain, where
+   * one spoke (§5.3).
+   *
+   * `originVerified` is one bit and collapsed two different answers into it:
+   * "nobody could tell" and "the domain does not match what this app says it
+   * is" both came out as `ORIGIN_UNVERIFIED` at `warn`. The second is a much
+   * stronger signal than the first and gets its own finding. Absent when
+   * nothing attested either way, which is every transport but WalletConnect.
+   */
+  readonly originVerify?: 'valid' | 'invalid' | 'unknown' | null
   readonly scamOrigins: readonly string[]
   readonly contracts: Readonly<Record<string, ContractInfo>>
   readonly tokens: Readonly<Record<string, TokenInfo>>
@@ -172,6 +188,29 @@ export interface AssessmentContext {
    * The clipboard check has nothing to compare against but this.
    */
   readonly lastCopiedAddress?: { readonly address: Hex; readonly at: number } | null
+  /**
+   * What the request itself supplied that the wallet would otherwise have
+   * worked out: the price per unit of gas, and the nonce (§3.4).
+   *
+   * Both are honoured — a dApp may have a reason for either — but neither is
+   * checked by anything else, so they are put in front of the reader here. The
+   * field is only set when the dApp actually supplied the value; a fee the
+   * wallet computed has nothing to say about itself.
+   */
+  readonly supplied?: {
+    readonly perGas?: { readonly theirs: bigint; readonly node: bigint; readonly gasLimit: bigint }
+    readonly nonce?: { readonly theirs: number; readonly next: number }
+  } | null
+  /**
+   * The chain's native currency symbol (§8.14 Networks).
+   *
+   * `explain.ts` and `rules.ts` each carried the same two-line table — ETN for
+   * 52014 and 5201420, the literal word "native" for everything else — so the
+   * primary statement of a send on Ethereum read "Send 1 native to 0x2222…",
+   * which names no asset at all. The registry knows; it just was not asked.
+   * Absent means the old behaviour, which keeps every existing fixture honest.
+   */
+  readonly nativeSymbol?: string | null
   /** BOLT's address on this chain, for farm-boost statements; optional. */
   readonly boltToken?: Hex
   /** For `internal:bridge`: whether the recipient is a contract on the origin and on the destination (§8.7). */

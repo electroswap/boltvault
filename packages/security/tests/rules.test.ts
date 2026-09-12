@@ -2,7 +2,7 @@ import { ELECTRONEUM_ADDRESSES, feeRecipient } from '@boltvault/chains'
 import { encodeAbiParameters, encodeFunctionData, maxUint256, parseAbiParameters, type Hex } from 'viem'
 import { describe, expect, it } from 'vitest'
 import { ERC20_ABI, ERC721_ABI, MULTICALL3_ABI, UNIVERSAL_ROUTER_ABI } from '../src/abis'
-import { assess, emptyContext, type AssessmentInput } from '../src/assess'
+import { assess, emptyContext, presentationFor, type AssessmentInput } from '../src/assess'
 import { UR_COMMAND } from '../src/ur'
 import type { SignRequest } from '../src/types'
 
@@ -10,7 +10,14 @@ const A = ELECTRONEUM_ADDRESSES[52014]
 const TOKEN = '0x1111111111111111111111111111111111111111' as Hex
 const UNKNOWN = '0x2222222222222222222222222222222222222222' as Hex
 const ME = '0x3333333333333333333333333333333333333333' as Hex
+const USDC = '0x4444444444444444444444444444444444444444' as Hex
 const ORIGIN = 'https://app.example.com'
+/*
+  `SWAP_MIN_OUT_IMPLAUSIBLE` compares whole tokens, so it needs decimals and
+  says nothing without them. Every router fixture below declares the universe
+  it swaps in, the way the engine does from the token catalogue.
+*/
+const DECIMALS = { own: [ME], tokens: { [TOKEN.toLowerCase()]: { symbol: 'TKN', decimals: 18 }, [USDC.toLowerCase()]: { symbol: 'USDC', decimals: 6 } } }
 
 function run(request: SignRequest, ctx: Partial<Parameters<typeof emptyContext>[0]> = {}, origin = ORIGIN) {
   const input: AssessmentInput = { origin, chainId: 52014, account: ME, request, context: emptyContext(ctx) }
@@ -76,12 +83,115 @@ describe('permit family', () => {
     const a = run(typed('Ping', { note: 'hi' }, {}, { chainId: 1 }))
     expect(codes(a)).toContain('TYPED_DATA_DOMAIN_MISMATCH')
   })
+  it('a BulkOrder is judged by its worst leaf, not its first', () => {
+    const leaf = (offerer: Hex, id: string, paid: string) => ({
+      offerer,
+      offer: [{ itemType: 2, token: TOKEN, identifierOrCriteria: id, startAmount: '1' }],
+      consideration: paid === '0' ? [] : [{ itemType: 0, token: '0x0000000000000000000000000000000000000000', identifierOrCriteria: '0', startAmount: paid, recipient: offerer }],
+    })
+    const bulk = (tree: unknown) => typed('BulkOrder', { tree }, {}, { chainId: 52014, verifyingContract: A.seaport15 })
+    // Leaf 0 is a fair listing; leaf 1 gives the piece away. Before this fix the
+    // sheet armed at `info` on the strength of leaf 0 alone.
+    const a = run(bulk([leaf(ME, '1', '1000000000000000000'), leaf(ME, '2', '0')]))
+    expect(codes(a)).toContain('SEAPORT_ZERO_CONSIDERATION')
+    expect(a.presentation.blocked).toBe(true)
+    const fair = run(bulk([leaf(ME, '1', '1000000000000000000'), leaf(ME, '2', '1000000000000000000')]))
+    expect(codes(fair)).not.toContain('SEAPORT_ZERO_CONSIDERATION')
+    expect(fair.severity).toBe('info')
+  })
+  it('a leaf offered by somebody other than the signer is danger', () => {
+    const leaf = (offerer: Hex) => ({
+      offerer,
+      offer: [{ itemType: 2, token: TOKEN, identifierOrCriteria: '1', startAmount: '1' }],
+      consideration: [{ itemType: 0, token: '0x0000000000000000000000000000000000000000', identifierOrCriteria: '0', startAmount: '1000000000000000000', recipient: offerer }],
+    })
+    const a = run(typed('BulkOrder', { tree: [leaf(ME), leaf(UNKNOWN)] }, {}, { chainId: 52014, verifyingContract: A.seaport15 }))
+    expect(codes(a)).toContain('SEAPORT_OFFERER_MISMATCH')
+    expect(a.severity).toBe('danger')
+  })
+  it('every order in a bulk signature is spelled out, and a long tree says how many are left', () => {
+    const leaf = (id: string) => ({
+      offerer: ME,
+      offer: [{ itemType: 2, token: TOKEN, identifierOrCriteria: id, startAmount: '1' }],
+      consideration: [{ itemType: 0, token: '0x0000000000000000000000000000000000000000', identifierOrCriteria: '0', startAmount: '1000000000000000000', recipient: ME }],
+    })
+    const two = run(typed('BulkOrder', { tree: [leaf('1'), leaf('2')] }, {}, { chainId: 52014, verifyingContract: A.seaport15 }))
+    expect(two.statements.filter((s) => s.text.startsWith('List ')).length).toBe(2)
+    const eight = run(typed('BulkOrder', { tree: ['1', '2', '3', '4', '5', '6', '7', '8'].map(leaf) }, {}, { chainId: 52014, verifyingContract: A.seaport15 }))
+    expect(eight.statements.filter((s) => s.text.startsWith('List ')).length).toBe(5)
+    expect(eight.statements.at(-1)?.text).toBe('+3 more orders in this signature')
+  })
   it('a Seaport order with zero consideration is blocked', () => {
     const a = run(
       typed('OrderComponents', { offerer: ME, offer: [{ itemType: 2, token: TOKEN, identifierOrCriteria: '1', startAmount: '1' }], consideration: [] }, {}, { chainId: 52014, verifyingContract: A.seaport15 }),
     )
     expect(codes(a)).toContain('SEAPORT_ZERO_CONSIDERATION')
     expect(a.presentation.blocked).toBe(true)
+  })
+})
+
+describe('what the site chose for itself', () => {
+  /*
+    ATT-BV-013. `prepare()` honours a supplied `gasPrice`/`maxFeePerGas` and
+    the fee editor then bands 50–400 % of it, so a site could make the cheapest
+    signable fee twenty-five times the going rate with nothing said on the
+    sheet; and a supplied `nonce` above the pending count sits in the pool as a
+    gap, executing weeks later at a price nobody is watching.
+  */
+  const send = (value: bigint): SignRequest => ({ kind: 'transaction', tx: { from: ME, to: UNKNOWN, data: '0x', value, chainId: 52014 } })
+  const gwei = 1_000_000_000n
+
+  it('says nothing about a fee within sight of the node\u2019s own', () => {
+    expect(codes(run(send(10n ** 18n), { supplied: { perGas: { theirs: gwei, node: gwei, gasLimit: 21_000n } } }))).not.toContain('FEE_EXCESSIVE')
+    expect(codes(run(send(10n ** 18n), { supplied: { perGas: { theirs: gwei * 2n, node: gwei, gasLimit: 21_000n } } }))).not.toContain('FEE_EXCESSIVE')
+  })
+
+  it('warns above double, and demands a word above ten times', () => {
+    const warned = run(send(10n ** 18n), { supplied: { perGas: { theirs: gwei * 3n, node: gwei, gasLimit: 21_000n } } })
+    expect(warned.rules.find((r) => r.code === 'FEE_EXCESSIVE')?.severity).toBe('warn')
+    const wild = run(send(10n ** 18n), { supplied: { perGas: { theirs: gwei * 50n, node: gwei, gasLimit: 21_000n } } })
+    expect(wild.rules.find((r) => r.code === 'FEE_EXCESSIVE')?.severity).toBe('danger')
+    expect(wild.presentation.typedConfirmation).toBe('app.example.com')
+  })
+
+  it('is danger when the fee is worth more than what is being sent', () => {
+    // 21 000 × 3 gwei is 63 000 gwei; the transfer is 1 gwei.
+    const a = run(send(gwei), { supplied: { perGas: { theirs: gwei * 3n, node: gwei, gasLimit: 21_000n } } })
+    expect(a.rules.find((r) => r.code === 'FEE_EXCESSIVE')?.severity).toBe('danger')
+    expect(a.rules.find((r) => r.code === 'FEE_EXCESSIVE')?.detail).toContain('more than')
+  })
+
+  it('names a nonce that is not this account\u2019s next one', () => {
+    expect(codes(run(send(1n), { supplied: { nonce: { theirs: 7, next: 7 } } }))).not.toContain('NONCE_NOT_NEXT')
+    const ahead = run(send(1n), { supplied: { nonce: { theirs: 10, next: 7 } } })
+    expect(codes(ahead)).toContain('NONCE_NOT_NEXT')
+    expect(ahead.rules.find((r) => r.code === 'NONCE_NOT_NEXT')?.detail).toContain('3 more transactions')
+    expect(codes(run(send(1n), { supplied: { nonce: { theirs: 3, next: 7 } } }))).toContain('NONCE_NOT_NEXT')
+  })
+
+  it('says nothing at all when the wallet worked the numbers out itself', () => {
+    expect(codes(run(send(10n ** 18n)))).not.toContain('FEE_EXCESSIVE')
+    expect(codes(run(send(10n ** 18n)))).not.toContain('NONCE_NOT_NEXT')
+  })
+})
+
+describe('the typed confirmation word', () => {
+  /*
+    ATT-BV-012. `confirmationWord` answered `new URL(origin).hostname`, which
+    is the empty string for `device:Pixel 8` — and the Approval screen read a
+    falsy word as "none required". Every `danger` remote-sign sheet therefore
+    armed after 1.5 s with nothing typed: the phone forwards an
+    `approve(unknownSpender, max)` for a Trezor account and the laptop shows
+    the danger plate but asks for nothing.
+  */
+  it('is never empty, whatever the origin is', () => {
+    for (const origin of ['device:Pixel 8', 'device:', 'internal:swap', 'not a url at all'])
+      expect(presentationFor('danger', origin).typedConfirmation).toBe('confirm')
+  })
+  it('is still the site for a site', () => {
+    expect(presentationFor('danger', 'https://www.app.example.com/x').typedConfirmation).toBe('app.example.com')
+    // …and no word at all below danger.
+    expect(presentationFor('warn', 'device:Pixel 8').typedConfirmation).toBeNull()
   })
 })
 
@@ -155,10 +265,12 @@ describe('transactions', () => {
       encodeAbiParameters(parseAbiParameters('address, address, uint256'), [TOKEN, UNKNOWN, 0n]),
     ]
     const data = encodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commands, inputs, 1n] })
-    const a = run(tx(A.universalRouter as Hex, data))
+    const a = run(tx(A.universalRouter as Hex, data), DECIMALS)
     expect(codes(a)).toContain('UR_RECIPIENT_NOT_SELF')
     // A minimum-out of one wei against a whole token is not a floor.
     expect(codes(a)).toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
+    // …and nothing in the call sends the router's balance back to the user.
+    expect(codes(a)).toContain('UR_OUTPUT_STRANDED')
     expect(a.severity).toBe('danger')
     // The sweep is on the sheet, and it names where the money goes.
     const text = a.statements.map((s) => s.text).join('\n')
@@ -207,23 +319,131 @@ describe('transactions', () => {
       return encodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commands, inputs, 1n] })
     }
 
+    /** One V3 section, 18 decimals in, 6 decimals out — the ordinary ETN → USDC shape. */
+    const acrossDecimals = (min: bigint): Hex => {
+      const commands = `0x${UR_COMMAND.V3_SWAP_EXACT_IN.toString(16).padStart(2, '0')}` as Hex
+      const path = `0x${TOKEN.slice(2)}000bb8${USDC.slice(2)}` as Hex
+      const inputs = [encodeAbiParameters(parseAbiParameters('address, uint256, uint256, bytes, bool'), [ME, ONE_TOKEN, min, path, true])]
+      return encodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commands, inputs, 1n] })
+    }
+
+    /** The same route backwards: 6 decimals in, 18 out. */
+    const backwards = (min: bigint): Hex => {
+      const commands = `0x${UR_COMMAND.V3_SWAP_EXACT_IN.toString(16).padStart(2, '0')}` as Hex
+      const path = `0x${USDC.slice(2)}000bb8${TOKEN.slice(2)}` as Hex
+      const inputs = [encodeAbiParameters(parseAbiParameters('address, uint256, uint256, bytes, bool'), [ME, 1_000_000n, min, path, true])]
+      return encodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commands, inputs, 1n] })
+    }
+
     it('a partitioned route with a real floor at the end is not flagged', () => {
       // Two whole tokens out for one token in: a floor, by any reading.
-      expect(codes(run(tx(A.universalRouter as Hex, partitioned(2n * ONE_TOKEN))))).not.toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
+      expect(codes(run(tx(A.universalRouter as Hex, partitioned(2n * ONE_TOKEN)), DECIMALS))).not.toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
+    })
+
+    it('a chained section is the rest of the swap, not output left in the router', () => {
+      expect(codes(run(tx(A.universalRouter as Hex, partitioned(2n * ONE_TOKEN)), DECIMALS))).not.toContain('UR_OUTPUT_STRANDED')
     })
 
     it('a partitioned route that would accept a wei at the end is still flagged', () => {
-      const a = run(tx(A.universalRouter as Hex, partitioned(1n)))
+      const a = run(tx(A.universalRouter as Hex, partitioned(1n)), DECIMALS)
       expect(codes(a)).toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
       expect(a.severity).toBe('danger')
     })
 
     it('a single swap that would accept a wei is still flagged, and a sane one is not', () => {
-      expect(codes(run(tx(A.universalRouter as Hex, oneSwap(1n))))).toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
-      expect(codes(run(tx(A.universalRouter as Hex, oneSwap(2n * ONE_TOKEN))))).not.toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
+      expect(codes(run(tx(A.universalRouter as Hex, oneSwap(1n)), DECIMALS))).toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
+      expect(codes(run(tx(A.universalRouter as Hex, oneSwap(2n * ONE_TOKEN)), DECIMALS))).not.toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
       // A millionth of the input is the line itself: at it, not below it.
-      expect(codes(run(tx(A.universalRouter as Hex, oneSwap(ONE_TOKEN / 1_000_000n))))).toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
-      expect(codes(run(tx(A.universalRouter as Hex, oneSwap(ONE_TOKEN / 1_000_000n + 1n))))).not.toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
+      expect(codes(run(tx(A.universalRouter as Hex, oneSwap(ONE_TOKEN / 1_000_000n)), DECIMALS))).toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
+      expect(codes(run(tx(A.universalRouter as Hex, oneSwap(ONE_TOKEN / 1_000_000n + 1n)), DECIMALS))).not.toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
+    })
+
+    /*
+      ATT-BV-006. The comparison was made on raw integers, so it scaled with
+      the decimals rather than with the price: one 18-decimal token in against
+      a correct 6-decimal minimum out is a factor of 10^12 apart before any
+      price is involved, and every ETN → USDC swap — the wallet's own included
+      — demanded a typed danger word. The same arithmetic reversed let a floor
+      of one millionth of a token through without a murmur.
+    */
+    it('an 18 → 6 decimal swap with an honest floor says nothing', () => {
+      // 1 TKN in, 2 932 USDC out — a real quote, at six decimals.
+      expect(codes(run(tx(A.universalRouter as Hex, acrossDecimals(2_932_000_000n)), DECIMALS))).not.toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
+    })
+
+    it('a 6 → 18 decimal swap with a worthless floor is danger', () => {
+      // 1 USDC in for a floor of 10^6 wei — a millionth of a millionth of a token.
+      const a = run(tx(A.universalRouter as Hex, backwards(1_000_000n)), DECIMALS)
+      expect(codes(a)).toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
+      expect(a.severity).toBe('danger')
+      expect(codes(run(tx(A.universalRouter as Hex, backwards(10n ** 18n)), DECIMALS))).not.toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
+    })
+
+    it('says nothing at all when a token\u2019s decimals are unknown', () => {
+      // Never a fall-back to raw units: that is the false positive again.
+      expect(codes(run(tx(A.universalRouter as Hex, acrossDecimals(1n))))).not.toContain('SWAP_MIN_OUT_IMPLAUSIBLE')
+    })
+  })
+
+  /*
+    ATT-BV-004 and ATT-BV-005: the two shapes that reached the sheet at `info`.
+  */
+  describe('where a router swap actually puts the output', () => {
+    const ONE_TOKEN = 10n ** 18n
+    const PATH = `0x${TOKEN.slice(2)}000bb8${A.wetn.slice(2)}` as Hex
+    const ROUTER = '0x0000000000000000000000000000000000000002' as Hex
+    const SINK = feeRecipient(52014) as Hex
+    const build = (cmds: number[], inputs: Hex[]): Hex =>
+      encodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [`0x${cmds.map((b) => b.toString(16).padStart(2, '0')).join('')}` as Hex, inputs, 1n] })
+    const swapInto = (recipient: Hex, min = ONE_TOKEN): Hex => encodeAbiParameters(parseAbiParameters('address, uint256, uint256, bytes, bool'), [recipient, ONE_TOKEN, min, PATH, true])
+    const portion = (recipient: Hex, bips: bigint): Hex => encodeAbiParameters(parseAbiParameters('address, address, uint256'), [A.wetn as Hex, recipient, bips])
+    const sweep = (recipient: Hex): Hex => encodeAbiParameters(parseAbiParameters('address, address, uint256'), [A.wetn as Hex, recipient, 0n])
+
+    it('every portion is inspected, not just the first', () => {
+      // A token portion to our own sink, then ninety percent to a stranger.
+      const data = build([UR_COMMAND.V3_SWAP_EXACT_IN, UR_COMMAND.PAY_PORTION, UR_COMMAND.PAY_PORTION, UR_COMMAND.SWEEP], [swapInto(ROUTER), portion(SINK, 1n), portion(UNKNOWN, 9000n), sweep(ME)])
+      const a = run(tx(A.universalRouter as Hex, data), DECIMALS)
+      expect(codes(a)).toContain('DAPP_TIPS_THIRD_PARTY')
+      expect(a.severity).toBe('danger')
+      expect(a.presentation.typedConfirmation).toBe('app.example.com')
+      expect(a.rules.find((r) => r.code === 'DAPP_TIPS_THIRD_PARTY')?.detail).toContain('90.00%')
+    })
+
+    it('a portion of the whole output is a sweep to a stranger, not a tip', () => {
+      const data = build([UR_COMMAND.V3_SWAP_EXACT_IN, UR_COMMAND.PAY_PORTION, UR_COMMAND.SWEEP], [swapInto(ROUTER), portion(UNKNOWN, 9999n), sweep(ME)])
+      const a = run(tx(A.universalRouter as Hex, data), DECIMALS)
+      expect(a.severity).toBe('danger')
+      expect(codes(a)).toEqual(expect.arrayContaining(['DAPP_TIPS_THIRD_PARTY', 'UR_RECIPIENT_NOT_SELF']))
+    })
+
+    it('a small portion to a stranger is still only a warning', () => {
+      const data = build([UR_COMMAND.V3_SWAP_EXACT_IN, UR_COMMAND.PAY_PORTION, UR_COMMAND.SWEEP], [swapInto(ROUTER), portion(UNKNOWN, 50n), sweep(ME)])
+      expect(run(tx(A.universalRouter as Hex, data), DECIMALS).rules.find((r) => r.code === 'DAPP_TIPS_THIRD_PARTY')?.severity).toBe('warn')
+    })
+
+    it('our own sink is never a stranger, whichever command carries it', () => {
+      const data = build([UR_COMMAND.V3_SWAP_EXACT_IN, UR_COMMAND.PAY_PORTION, UR_COMMAND.SWEEP], [swapInto(ROUTER), portion(SINK, 50n), sweep(ME)])
+      const a = run(tx(A.universalRouter as Hex, data), DECIMALS)
+      expect(codes(a)).not.toContain('UR_RECIPIENT_NOT_SELF')
+      expect(codes(a)).not.toContain('DAPP_TIPS_THIRD_PARTY')
+      expect(a.severity).toBe('info')
+    })
+
+    it('a swap that leaves its output in the router is danger, and the sheet stops promising a sweep', () => {
+      const data = build([UR_COMMAND.V3_SWAP_EXACT_IN], [swapInto(ROUTER)])
+      const a = run(tx(A.universalRouter as Hex, data), DECIMALS)
+      expect(codes(a)).toContain('UR_OUTPUT_STRANDED')
+      expect(a.severity).toBe('danger')
+      const text = a.statements.map((s) => s.text).join('\n')
+      expect(text).toContain('sent to the router')
+      expect(text).not.toContain('to be swept below')
+    })
+
+    it('…and says nothing when a sweep does deliver', () => {
+      const data = build([UR_COMMAND.V3_SWAP_EXACT_IN, UR_COMMAND.SWEEP], [swapInto(ROUTER), sweep(ME)])
+      const a = run(tx(A.universalRouter as Hex, data), DECIMALS)
+      expect(codes(a)).not.toContain('UR_OUTPUT_STRANDED')
+      expect(a.statements.map((s) => s.text).join('\n')).toContain('to be swept below')
     })
   })
 

@@ -4,7 +4,21 @@
  * sink, read-only — and the spend policy of §3.4 point 6: the large-send
  * threshold in token units, and the send allow-list.
  */
-import { Body, Column, Icon, Input, Key, Pill, Plate, Row, ScrollView, Toggle, metrics, paint, shortAddress } from '@boltvault/ui'
+import {
+  Body,
+  Column,
+  Icon,
+  Input,
+  Key,
+  Pill,
+  Plate,
+  Row,
+  ScrollView,
+  Toggle,
+  metrics,
+  paint,
+  shortAddress,
+} from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
 import type { ContactView, HolderTier, Settings } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
@@ -41,7 +55,8 @@ export function Spending({ body }: { body: 'extension-popup' | 'extension-tab' |
   useEffect(() => {
     engine.settings.get().then(setSettings, () => undefined)
     engine.contacts.list().then(setContacts, () => undefined)
-    if (active) engine.holder.tier({ accountId: active.id, chainId: ETN }).then(setTier, () => undefined)
+    if (active)
+      engine.holder.tier({ accountId: active.id, chainId: ETN }).then(setTier, () => undefined)
   }, [engine, active])
 
   const set = (patch: Partial<Settings>): void => {
@@ -51,7 +66,8 @@ export function Spending({ body }: { body: 'extension-popup' | 'extension-tab' |
   const allowList = settings?.sendAllowList ?? []
   const percent = settings?.largeSendPercent ?? 10
   const typed = draft.trim().toLowerCase()
-  const typedOk = ADDRESS.test(typed) && !allowList.includes(typed) && allowList.length < ALLOW_LIST_MAX
+  const typedOk =
+    ADDRESS.test(typed) && !allowList.includes(typed) && allowList.length < ALLOW_LIST_MAX
 
   const addAddress = (address: string): void => {
     const a = address.trim().toLowerCase()
@@ -63,7 +79,19 @@ export function Spending({ body }: { body: 'extension-popup' | 'extension-tab' |
     set({ sendAllowList: allowList.filter((a) => a !== address) })
   }
   /** Address-book entries not already listed — typing forty-two characters is not a control. */
-  const suggestions = contacts.filter((c) => ADDRESS.test(c.address) && !allowList.includes(c.address.toLowerCase())).slice(0, 6)
+  /*
+    Confirmed entries only, for the reason the Send chips give: an allow-list
+    is the one place where adding the wrong address is the whole attack, and an
+    entry a paired device sent has not been vouched for on this device yet.
+  */
+  const suggestions = contacts
+    .filter(
+      (c) =>
+        c.confirmed !== false &&
+        ADDRESS.test(c.address) &&
+        !allowList.includes(c.address.toLowerCase()),
+    )
+    .slice(0, 6)
 
   return (
     <ScrollView contentContainerStyle={{ padding: inset, gap: 14 }} testID="spending">
@@ -72,17 +100,37 @@ export function Spending({ body }: { body: 'extension-popup' | 'extension-tab' |
       <Plate gap="$2" testID="spending-slippage">
         <Body size="title">{t({ id: 'spending.slippage', message: 'Swap slippage' })}</Body>
         <Body tone="mute" size="caption">
-          {t({ id: 'spending.slippage.body', message: 'How far the price may move between your quote and the block that fills it before the swap gives up.' })}
+          {t({
+            id: 'spending.slippage.body',
+            message:
+              'How far the price may move between your quote and the block that fills it before the swap gives up.',
+          })}
         </Body>
         <Row gap="$2" flexWrap="wrap">
           {SLIPPAGES.map((s) => (
-            <Pill key={s} label={formatPct(s)} selected={settings?.slippageBips === s} onPress={() => set({ slippageBips: s })} testID={`spending-slippage-${s}`} />
+            <Pill
+              key={s}
+              label={formatPct(s)}
+              selected={settings?.slippageBips === s}
+              onPress={() => set({ slippageBips: s })}
+              testID={`spending-slippage-${s}`}
+            />
           ))}
         </Row>
       </Plate>
 
       <Plate gap="$2" testID="spending-exact">
-        <Toggle value={settings?.exactApprovals ?? true} onChange={(v) => set({ exactApprovals: v })} label={t({ id: 'spending.exact', message: 'Exact token approvals' })} hint={t({ id: 'spending.exact.hint', message: 'Allow Permit2 only the amount of each swap. Safer; one more transaction per swap of that token.' })} testID="spending-exact-toggle" />
+        <Toggle
+          value={settings?.exactApprovals ?? true}
+          onChange={(v) => set({ exactApprovals: v })}
+          label={t({ id: 'spending.exact', message: 'Exact token approvals' })}
+          hint={t({
+            id: 'spending.exact.hint',
+            message:
+              'Allow Permit2 only the amount of each swap. Safer; one more transaction per swap of that token.',
+          })}
+          testID="spending-exact-toggle"
+        />
       </Plate>
 
       {/*
@@ -97,12 +145,22 @@ export function Spending({ body }: { body: 'extension-popup' | 'extension-tab' |
           value={(settings?.txPreview ?? 'api') === 'api'}
           onChange={(v) => set({ txPreview: v ? 'api' : 'off' })}
           label={t({ id: 'spending.preview', message: 'Preview what a transaction moves' })}
-          hint={t({ id: 'spending.preview.hint', message: 'Electroneum’s public nodes cannot simulate, so the preview is done by ElectroSwap: your address and the transaction’s data are sent there before you sign. Turn this off to keep them on your device — you will still be warned when a transaction would fail.' })}
+          hint={t({
+            id: 'spending.preview.hint',
+            message:
+              'Electroneum’s public nodes cannot simulate, so the preview is done by ElectroSwap: your address and the transaction’s data are sent there before you sign. Turn this off to keep them on your device — you will still be warned when a transaction would fail.',
+          })}
           testID="spending-preview-toggle"
         />
       </Plate>
 
-      <Plate role="raised" gap="$2" onPress={() => setSheet(true)} cursor="pointer" testID="spending-fee">
+      <Plate
+        role="raised"
+        gap="$2"
+        onPress={() => setSheet(true)}
+        cursor="pointer"
+        testID="spending-fee"
+      >
         <Row justifyContent="space-between" alignItems="center">
           <Body size="title">{t({ id: 'spending.fee', message: 'Wallet fee schedule' })}</Body>
           <Icon name="chevronRight" size={18} color={paint.mute} />
@@ -110,13 +168,30 @@ export function Spending({ body }: { body: 'extension-popup' | 'extension-tab' |
         {tier ? (
           <Column gap={2}>
             <Body tone="arc" size="caption" testID="spending-tier">
-              {t({ id: 'spending.tier.v2', message: 'Your tier: {name} · {p} on swaps', values: { name: tier.name, p: formatPct(tier.bips) } })}
+              {t({
+                id: 'spending.tier.v2',
+                message: 'Your tier: {name} · {p} on swaps',
+                values: { name: tier.name, p: formatPct(tier.bips) },
+              })}
             </Body>
             <Body tone="mute" size="caption">
-              {t({ id: 'spending.score', message: '{s} BOLT-eq counted', values: { s: formatBolt(tier.score) } })}
+              {t({
+                id: 'spending.score',
+                message: '{s} BOLT-eq counted',
+                values: { s: formatBolt(tier.score) },
+              })}
             </Body>
             <Body tone="mute" size="caption">
-              {tier.sink ? t({ id: 'spending.recipient', message: 'Fees go to {a}', values: { a: shortAddress(tier.sink) } }) : t({ id: 'spending.recipient.none', message: 'In-wallet swaps are off on this network' })}
+              {tier.sink
+                ? t({
+                    id: 'spending.recipient',
+                    message: 'Fees go to {a}',
+                    values: { a: shortAddress(tier.sink) },
+                  })
+                : t({
+                    id: 'spending.recipient.none',
+                    message: 'In-wallet swaps are off on this network',
+                  })}
             </Body>
           </Column>
         ) : null}
@@ -134,7 +209,11 @@ export function Spending({ body }: { body: 'extension-popup' | 'extension-tab' |
       <Plate gap="$2" testID="spending-stepups">
         <Body size="title">{t({ id: 'spending.stepups', message: 'Step-ups' })}</Body>
         <Body tone="mute" size="caption">
-          {t({ id: 'spending.stepups.body.v3', message: 'A recipient you have never sent to holds the key for ten seconds, with the whole address on screen to check. A large send asks you to unlock again — your face, your fingerprint or your password — before the key opens.' })}
+          {t({
+            id: 'spending.stepups.body.v3',
+            message:
+              'A recipient you have never sent to holds the key for ten seconds, with the whole address on screen to check. A large send asks you to unlock again — your face, your fingerprint or your password — before the key opens.',
+          })}
         </Body>
         <Body size="caption" fontWeight="600">
           {t({ id: 'spending.threshold', message: 'Large means more than' })}
@@ -143,7 +222,11 @@ export function Spending({ body }: { body: 'extension-popup' | 'extension-tab' |
           {THRESHOLDS.map((p) => (
             <Pill
               key={p}
-              label={t({ id: 'spending.threshold.pill', message: '{p}% of that token', values: { p } })}
+              label={t({
+                id: 'spending.threshold.pill',
+                message: '{p}% of that token',
+                values: { p },
+              })}
               selected={percent === p}
               onPress={() => set({ largeSendPercent: p })}
               testID={`spending-threshold-${p}`}
@@ -158,10 +241,18 @@ export function Spending({ body }: { body: 'extension-popup' | 'extension-tab' |
           factor. Sending a tenth of your BOLT is a fact about your BOLT.
         */}
         <Body tone="mute" size="caption">
-          {t({ id: 'spending.threshold.body', message: 'Measured against how much of that token you hold, never against a price. A quarter of your ETN is a quarter of your ETN whatever the market is doing.' })}
+          {t({
+            id: 'spending.threshold.body',
+            message:
+              'Measured against how much of that token you hold, never against a price. A quarter of your ETN is a quarter of your ETN whatever the market is doing.',
+          })}
         </Body>
         <Body tone="mute" size="caption">
-          {t({ id: 'spending.stepups.limits', message: 'Both are always on for a transfer BoltVault can read. A contract call it cannot decode gets the full review sheet instead, because a pause on a transaction nobody can explain would be a comfort, not a check.' })}
+          {t({
+            id: 'spending.stepups.limits',
+            message:
+              'Both are always on for a transfer BoltVault can read. A contract call it cannot decode gets the full review sheet instead, because a pause on a transaction nobody can explain would be a comfort, not a check.',
+          })}
         </Body>
       </Plate>
 
@@ -176,32 +267,66 @@ export function Spending({ body }: { body: 'extension-popup' | 'extension-tab' |
           value={settings?.sendWhitelist ?? false}
           onChange={(v) => set({ sendWhitelist: v })}
           label={t({ id: 'spending.allow', message: 'Only send to addresses I have listed' })}
-          hint={t({ id: 'spending.allow.hint', message: 'Off. With it on, a send to anything not on the list below is refused — there is no way past it in the moment, which is the point. Your own accounts are always allowed.' })}
+          hint={t({
+            id: 'spending.allow.hint',
+            message:
+              'Off. With it on, a send to anything not on the list below is refused — there is no way past it in the moment, which is the point. Your own accounts are always allowed.',
+          })}
           testID="spending-allow-toggle"
         />
         {settings?.sendWhitelist ? (
           <>
             {allowList.length === 0 ? (
               <Body tone="ember" size="caption" testID="spending-allow-empty">
-                {t({ id: 'spending.allow.empty', message: 'The list is empty, so only your own accounts can be sent to. Add the addresses you use.' })}
+                {t({
+                  id: 'spending.allow.empty',
+                  message:
+                    'The list is empty, so only your own accounts can be sent to. Add the addresses you use.',
+                })}
               </Body>
             ) : null}
             {allowList.map((a) => {
               const named = contacts.find((c) => c.address.toLowerCase() === a)
               return (
-                <Row key={a} gap="$2" alignItems="center" minHeight={44} testID={`spending-allow-${a}`}>
+                <Row
+                  key={a}
+                  gap="$2"
+                  alignItems="center"
+                  minHeight={44}
+                  testID={`spending-allow-${a}`}
+                >
                   <Column flex={1} minWidth={0} alignItems="flex-start">
                     {named ? <Body numberOfLines={1}>{named.label}</Body> : null}
                     <Body tone="mute" size="caption" numberOfLines={1}>
                       {shortAddress(a)}
                     </Body>
                   </Column>
-                  <Key label={t({ id: 'spending.allow.remove', message: 'Remove' })} kind="secondary" size="compact" onPress={() => removeAddress(a)} testID={`spending-allow-remove-${a}`} />
+                  <Key
+                    label={t({ id: 'spending.allow.remove', message: 'Remove' })}
+                    kind="secondary"
+                    size="compact"
+                    onPress={() => removeAddress(a)}
+                    testID={`spending-allow-remove-${a}`}
+                  />
                 </Row>
               )
             })}
-            <Input value={draft} onChange={setDraft} placeholder="0x…" autoCapitalize="none" label={t({ id: 'spending.allow.add.label', message: 'Add an address' })} testID="spending-allow-input" />
-            <Key label={t({ id: 'spending.allow.add', message: 'Add' })} kind="secondary" size="compact" disabled={!typedOk} onPress={() => addAddress(draft)} testID="spending-allow-add" />
+            <Input
+              value={draft}
+              onChange={setDraft}
+              placeholder="0x…"
+              autoCapitalize="none"
+              label={t({ id: 'spending.allow.add.label', message: 'Add an address' })}
+              testID="spending-allow-input"
+            />
+            <Key
+              label={t({ id: 'spending.allow.add', message: 'Add' })}
+              kind="secondary"
+              size="compact"
+              disabled={!typedOk}
+              onPress={() => addAddress(draft)}
+              testID="spending-allow-add"
+            />
             {suggestions.length > 0 ? (
               <Column gap="$1">
                 <Body tone="mute" size="caption">
@@ -209,19 +334,34 @@ export function Spending({ body }: { body: 'extension-popup' | 'extension-tab' |
                 </Body>
                 <Row gap="$2" flexWrap="wrap">
                   {suggestions.map((c) => (
-                    <Pill key={c.id} label={c.label} size="sm" onPress={() => addAddress(c.address)} testID={`spending-allow-book-${c.id}`} />
+                    <Pill
+                      key={c.id}
+                      label={c.label}
+                      size="sm"
+                      onPress={() => addAddress(c.address)}
+                      testID={`spending-allow-book-${c.id}`}
+                    />
                   ))}
                 </Row>
               </Column>
             ) : null}
             <Body tone="mute" size="caption">
-              {t({ id: 'spending.allow.body', message: 'This covers sends of coins, tokens and collectibles. Swapping, bridging and anything a site asks you to sign go through the usual review instead — a list of people you pay says nothing about a contract.' })}
+              {t({
+                id: 'spending.allow.body',
+                message:
+                  'This covers sends of coins, tokens and collectibles. Swapping, bridging and anything a site asks you to sign go through the usual review instead — a list of people you pay says nothing about a contract.',
+              })}
             </Body>
           </>
         ) : null}
       </Plate>
 
-      <FeeScheduleSheet open={sheet} onClose={() => setSheet(false)} accountId={active?.id ?? null} chainId={ETN} />
+      <FeeScheduleSheet
+        open={sheet}
+        onClose={() => setSheet(false)}
+        accountId={active?.id ?? null}
+        chainId={ETN}
+      />
     </ScrollView>
   )
 }

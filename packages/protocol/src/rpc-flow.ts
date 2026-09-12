@@ -9,7 +9,13 @@
  * *transport* established.
  */
 import { RPC, RpcError } from './errors'
-import { APPROVAL_METHODS, classify, MAX_LOG_RANGE, SAFE_RATE_PER_SECOND, SESSION_METHODS } from './methods'
+import {
+  APPROVAL_METHODS,
+  classify,
+  MAX_LOG_RANGE,
+  SAFE_RATE_PER_SECOND,
+  SESSION_METHODS,
+} from './methods'
 import type { SiteRegistry } from './sessions'
 
 export type Hex = `0x${string}`
@@ -18,8 +24,14 @@ export type ProviderEvent =
   | { readonly event: 'accountsChanged'; readonly payload: readonly string[] }
   | { readonly event: 'chainChanged'; readonly payload: Hex }
   | { readonly event: 'connect'; readonly payload: { readonly chainId: Hex } }
-  | { readonly event: 'disconnect'; readonly payload: { readonly code: number; readonly message: string } }
-  | { readonly event: 'message'; readonly payload: { readonly type: string; readonly data: unknown } }
+  | {
+      readonly event: 'disconnect'
+      readonly payload: { readonly code: number; readonly message: string }
+    }
+  | {
+      readonly event: 'message'
+      readonly payload: { readonly type: string; readonly data: unknown }
+    }
 
 export interface TxParams {
   readonly from: Hex
@@ -37,14 +49,77 @@ export interface TxParams {
 
 /** What the engine must put in front of a human. The `clientRequestId` lets a re-sent request re-attach after a worker restart. */
 export type ApprovalIntent =
-  | { readonly kind: 'connect'; readonly origin: string; readonly chainId: number; readonly clientRequestId: string }
-  | { readonly kind: 'switch_chain'; readonly origin: string; readonly chainId: number; readonly clientRequestId: string }
-  | { readonly kind: 'add_chain'; readonly origin: string; readonly chainId: number; readonly clientRequestId: string }
-  | { readonly kind: 'sign_message'; readonly origin: string; readonly chainId: number; readonly accountId: string; readonly from: Hex; readonly message: Hex; readonly clientRequestId: string }
-  | { readonly kind: 'eth_sign'; readonly origin: string; readonly chainId: number; readonly accountId: string; readonly from: Hex; readonly hash: Hex; readonly clientRequestId: string }
-  | { readonly kind: 'sign_typed_data'; readonly origin: string; readonly chainId: number; readonly accountId: string; readonly from: Hex; readonly typedData: unknown; readonly version: 'v3' | 'v4'; readonly clientRequestId: string }
-  | { readonly kind: 'send_transaction'; readonly origin: string; readonly chainId: number; readonly accountId: string; readonly tx: TxParams; readonly clientRequestId: string; /** internal:swap only — the fee the encoder wrote, checked by the firewall (T10). */ readonly expectedFee?: { readonly sink: Hex; readonly bips: number } | null; /** internal:bridge only — whether the recipient is a contract here and on the destination (§8.7). */ readonly bridgeRecipient?: { readonly hasCodeOnOrigin: boolean; readonly hasCodeOnDestination: boolean | null } | null; /** device:* only — sign and return the raw transaction; the requesting device broadcasts and records (§6). */ readonly signOnly?: boolean }
-  | { readonly kind: 'watch_asset'; readonly origin: string; readonly chainId: number; readonly type: string; readonly options: unknown; readonly clientRequestId: string }
+  | {
+      readonly kind: 'connect'
+      readonly origin: string
+      readonly chainId: number
+      readonly clientRequestId: string
+    }
+  | {
+      readonly kind: 'switch_chain'
+      readonly origin: string
+      readonly chainId: number
+      readonly clientRequestId: string
+    }
+  | {
+      readonly kind: 'add_chain'
+      readonly origin: string
+      readonly chainId: number
+      readonly clientRequestId: string
+    }
+  | {
+      readonly kind: 'sign_message'
+      readonly origin: string
+      readonly chainId: number
+      readonly accountId: string
+      readonly from: Hex
+      readonly message: Hex
+      readonly clientRequestId: string
+    }
+  | {
+      readonly kind: 'eth_sign'
+      readonly origin: string
+      readonly chainId: number
+      readonly accountId: string
+      readonly from: Hex
+      readonly hash: Hex
+      readonly clientRequestId: string
+    }
+  | {
+      readonly kind: 'sign_typed_data'
+      readonly origin: string
+      readonly chainId: number
+      readonly accountId: string
+      readonly from: Hex
+      readonly typedData: unknown
+      readonly version: 'v3' | 'v4'
+      readonly clientRequestId: string
+    }
+  | {
+      readonly kind: 'send_transaction'
+      readonly origin: string
+      readonly chainId: number
+      readonly accountId: string
+      readonly tx: TxParams
+      readonly clientRequestId: string
+      /** internal:swap only — the fee the encoder wrote, checked by the firewall (T10). */ readonly expectedFee?: {
+        readonly sink: Hex
+        readonly bips: number
+      } | null
+      /** internal:bridge only — whether the recipient is a contract here and on the destination (§8.7). */ readonly bridgeRecipient?: {
+        readonly hasCodeOnOrigin: boolean
+        readonly hasCodeOnDestination: boolean | null
+      } | null
+      /** device:* only — sign and return the raw transaction; the requesting device broadcasts and records (§6). */ readonly signOnly?: boolean
+    }
+  | {
+      readonly kind: 'watch_asset'
+      readonly origin: string
+      readonly chainId: number
+      readonly type: string
+      readonly options: unknown
+      readonly clientRequestId: string
+    }
 
 export interface ConnectResult {
   readonly accountId: string
@@ -58,6 +133,12 @@ export interface RpcContext {
   /** The account and addresses a connected origin sees; null when not connected. */
   session(origin: string): Promise<{ accountId: string; addresses: readonly string[] } | null>
   knownChain(chainId: number): boolean
+  /**
+   * Must a connect for this origin raise a sheet even when the origin already
+   * has a session? True for a WalletConnect pairing (§5.3): a proposal is a
+   * new peer asking, whatever some other transport has already agreed.
+   */
+  alwaysPrompt?(origin: string): boolean
   /** Read-only passthrough on the origin's chain. */
   executeSafe(chainId: number, method: string, params: readonly unknown[]): Promise<unknown>
   /** Put the intent in front of the user and, if approved, execute it. Throws RpcError 4001 on reject. */
@@ -74,7 +155,10 @@ export interface RpcContext {
    * the tier is, because both answers live behind the engine. Absent in hosts
    * that have no fee to serve, which answers null the same way.
    */
-  feePolicy?(origin: string, chainId: number): Promise<{ sink: Hex; bips: number; tier: string } | null>
+  feePolicy?(
+    origin: string,
+    chainId: number,
+  ): Promise<{ sink: Hex; bips: number; tier: string } | null>
   /** The client name reported by web3_clientVersion. */
   readonly clientVersion: string
 }
@@ -138,7 +222,10 @@ class RateLimiter {
 
 export class RpcFlow {
   /** One human-facing request per origin; a re-sent request (same client id) joins it instead of failing. */
-  private readonly inFlight = new Map<string, { clientRequestId: string; promise: Promise<unknown> }>()
+  private readonly inFlight = new Map<
+    string,
+    { clientRequestId: string; promise: Promise<unknown> }
+  >()
   private readonly limiter: RateLimiter
   /*
     An unconnected origin's chain preference, in memory only.
@@ -165,18 +252,31 @@ export class RpcFlow {
     return this.inFlight.has(origin)
   }
 
-  async request(origin: string, method: string, rawParams: unknown, clientRequestId: string): Promise<unknown> {
-    const params: readonly unknown[] = Array.isArray(rawParams) ? rawParams : rawParams === undefined || rawParams === null ? [] : [rawParams]
+  async request(
+    origin: string,
+    method: string,
+    rawParams: unknown,
+    clientRequestId: string,
+  ): Promise<unknown> {
+    const params: readonly unknown[] = Array.isArray(rawParams)
+      ? rawParams
+      : rawParams === undefined || rawParams === null
+        ? []
+        : [rawParams]
     const cls = classify(method)
     const chainId = this.pendingChain.get(origin) ?? this.ctx.sites.chainIdFor(origin)
 
     switch (cls) {
       case 'unknown':
-        throw new RpcError(RPC.METHOD_NOT_FOUND, `The method ${method} does not exist / is not available.`)
+        throw new RpcError(
+          RPC.METHOD_NOT_FOUND,
+          `The method ${method} does not exist / is not available.`,
+        )
       case 'rejected':
         throw new RpcError(RPC.UNSUPPORTED_METHOD, `${method} is not supported by BoltVault.`)
       case 'safe':
-        if (!this.limiter.take(origin)) throw new RpcError(RPC.LIMIT_EXCEEDED, 'Too many requests. Slow down.')
+        if (!this.limiter.take(origin))
+          throw new RpcError(RPC.LIMIT_EXCEEDED, 'Too many requests. Slow down.')
         return this.safe(origin, chainId, method, params)
       case 'connect':
         return this.connect(origin, chainId, method, clientRequestId)
@@ -187,7 +287,12 @@ export class RpcFlow {
     }
   }
 
-  private async safe(origin: string, chainId: number, method: string, params: readonly unknown[]): Promise<unknown> {
+  private async safe(
+    origin: string,
+    chainId: number,
+    method: string,
+    params: readonly unknown[],
+  ): Promise<unknown> {
     // A SAFE method used to need no session at all — the connection gate lived
     // only in `approval()` — so any page could read chain state through the
     // wallet's RPC, and broadcast a signed transaction, without ever asking to
@@ -237,8 +342,13 @@ export class RpcFlow {
         return (await this.ctx.feePolicy?.(origin, chainId)) ?? null
       case 'eth_subscribe': {
         const type = param(params, 0)
-        if (type !== 'newHeads') throw new RpcError(RPC.UNSUPPORTED_METHOD, `Subscription type ${String(type)} is not supported.`)
-        if (!this.ctx.subscribeHeads) throw new RpcError(RPC.UNSUPPORTED_METHOD, 'Subscriptions are not supported here.')
+        if (type !== 'newHeads')
+          throw new RpcError(
+            RPC.UNSUPPORTED_METHOD,
+            `Subscription type ${String(type)} is not supported.`,
+          )
+        if (!this.ctx.subscribeHeads)
+          throw new RpcError(RPC.UNSUPPORTED_METHOD, 'Subscriptions are not supported here.')
         const id = `0x${(++this.subCounter).toString(16).padStart(32, '0')}` as Hex
         this.subscriptions.set(`${origin}:${id}`, this.ctx.subscribeHeads(origin, chainId, id))
         return id
@@ -257,10 +367,23 @@ export class RpcFlow {
           const { fromBlock, toBlock } = f as { fromBlock?: unknown; toBlock?: unknown }
           const from = blockNumber(fromBlock)
           const to = blockNumber(toBlock)
-          if (from !== null && to !== null && to - from > MAX_LOG_RANGE) throw new RpcError(RPC.LIMIT_EXCEEDED, `eth_getLogs range is limited to ${MAX_LOG_RANGE} blocks.`)
-          if (from !== null && to === null && fromBlock !== 'latest') {
-            // An open-ended range from a fixed block is unbounded; refuse rather than melt the RPC.
-            throw new RpcError(RPC.LIMIT_EXCEEDED, `eth_getLogs needs a toBlock within ${MAX_LOG_RANGE} blocks of fromBlock.`)
+          const tooWide = `eth_getLogs needs a numeric toBlock within ${MAX_LOG_RANGE} blocks of fromBlock.`
+          /*
+            A lower bound that names a block — a number, or `earliest`, which is
+            block zero — needs a numeric upper bound within the window. Anything
+            open at the top is a full-history scan under another name: `earliest`
+            alone, `earliest → latest`, `safe → finalized`, or a fixed block with
+            no `toBlock` at all. At the wallet's sixty-a-second budget a
+            connected page could loop those until the registry endpoints cooled
+            down and took the wallet's own polling with them.
+          */
+          if (from !== null && from !== 'head') {
+            if (typeof to !== 'number') throw new RpcError(RPC.LIMIT_EXCEEDED, tooWide)
+            if (to - from > MAX_LOG_RANGE)
+              throw new RpcError(
+                RPC.LIMIT_EXCEEDED,
+                `eth_getLogs range is limited to ${MAX_LOG_RANGE} blocks.`,
+              )
           }
         }
         return this.passthrough(chainId, method, params)
@@ -270,7 +393,11 @@ export class RpcFlow {
     }
   }
 
-  private async passthrough(chainId: number, method: string, params: readonly unknown[]): Promise<unknown> {
+  private async passthrough(
+    chainId: number,
+    method: string,
+    params: readonly unknown[],
+  ): Promise<unknown> {
     try {
       return await this.ctx.executeSafe(chainId, method, params)
     } catch (err) {
@@ -278,21 +405,41 @@ export class RpcFlow {
     }
   }
 
-  private async connect(origin: string, chainId: number, method: string, clientRequestId: string): Promise<unknown> {
-    const existing = await this.ctx.session(origin)
+  private async connect(
+    origin: string,
+    chainId: number,
+    method: string,
+    clientRequestId: string,
+  ): Promise<unknown> {
+    const existing = this.ctx.alwaysPrompt?.(origin) ? null : await this.ctx.session(origin)
     if (existing) {
       await this.ctx.sites.touch(origin, this.ctx.now())
-      return method === 'wallet_requestPermissions' ? permissions(origin, existing.addresses, this.ctx.now()) : [...existing.addresses]
+      return method === 'wallet_requestPermissions'
+        ? permissions(origin, existing.addresses, this.ctx.now())
+        : [...existing.addresses]
     }
     return this.exclusive(origin, clientRequestId, async () => {
-      const result = (await this.ctx.approve({ kind: 'connect', origin, chainId, clientRequestId })) as ConnectResult
+      const result = (await this.ctx.approve({
+        kind: 'connect',
+        origin,
+        chainId,
+        clientRequestId,
+      })) as ConnectResult
       // The preference is spent the moment it becomes a real row.
       this.pendingChain.delete(origin)
-      await this.ctx.sites.connect(origin, { accountId: result.accountId, chainId: result.chainId, accounts: [...result.addresses], now: this.ctx.now() })
+      await this.ctx.sites.connect(origin, {
+        accountId: result.accountId,
+        chainId: result.chainId,
+        accounts: [...result.addresses],
+        now: this.ctx.now(),
+      })
       this.ctx.emit(origin, { event: 'accountsChanged', payload: result.addresses })
       this.ctx.emit(origin, { event: 'connect', payload: { chainId: hexChainId(result.chainId) } })
-      if (result.chainId !== chainId) this.ctx.emit(origin, { event: 'chainChanged', payload: hexChainId(result.chainId) })
-      return method === 'wallet_requestPermissions' ? permissions(origin, result.addresses, this.ctx.now()) : [...result.addresses]
+      if (result.chainId !== chainId)
+        this.ctx.emit(origin, { event: 'chainChanged', payload: hexChainId(result.chainId) })
+      return method === 'wallet_requestPermissions'
+        ? permissions(origin, result.addresses, this.ctx.now())
+        : [...result.addresses]
     })
   }
 
@@ -317,13 +464,22 @@ export class RpcFlow {
     }
   }
 
-  private async chain(origin: string, chainId: number, method: string, params: readonly unknown[], clientRequestId: string): Promise<unknown> {
+  private async chain(
+    origin: string,
+    chainId: number,
+    method: string,
+    params: readonly unknown[],
+    clientRequestId: string,
+  ): Promise<unknown> {
     if (method === 'wallet_revokePermissions') {
       const was = await this.ctx.session(origin)
       await this.ctx.sites.disconnect(origin)
       if (was) {
         this.ctx.emit(origin, { event: 'accountsChanged', payload: [] })
-        this.ctx.emit(origin, { event: 'disconnect', payload: { code: RPC.DISCONNECTED, message: 'This site revoked its own permissions.' } })
+        this.ctx.emit(origin, {
+          event: 'disconnect',
+          payload: { code: RPC.DISCONNECTED, message: 'This site revoked its own permissions.' },
+        })
       }
       return null
     }
@@ -331,7 +487,10 @@ export class RpcFlow {
     const requested = toDecChainId((p as { chainId?: unknown } | undefined)?.chainId)
     if (!this.ctx.knownChain(requested)) {
       // A dApp's RPC/explorer URLs are never honoured (§4.6); an unknown chain is 4902 until the user adds it in Settings.
-      throw new RpcError(RPC.UNRECOGNIZED_CHAIN, `Chain ${hexChainId(requested)} is not available. Add it in BoltVault › Settings › Networks first.`)
+      throw new RpcError(
+        RPC.UNRECOGNIZED_CHAIN,
+        `Chain ${hexChainId(requested)} is not available. Add it in BoltVault › Settings › Networks first.`,
+      )
     }
     if (requested === chainId) return null
     const session = await this.ctx.session(origin)
@@ -356,7 +515,12 @@ export class RpcFlow {
       const key = `${origin}#${requested}`
       if (!this.allowedChains.has(key)) {
         await this.exclusive(origin, clientRequestId, () =>
-          this.ctx.approve({ kind: method === 'wallet_addEthereumChain' ? 'add_chain' : 'switch_chain', origin, chainId: requested, clientRequestId }),
+          this.ctx.approve({
+            kind: method === 'wallet_addEthereumChain' ? 'add_chain' : 'switch_chain',
+            origin,
+            chainId: requested,
+            clientRequestId,
+          }),
         )
         this.rememberAllowedChain(key)
       }
@@ -379,10 +543,19 @@ export class RpcFlow {
     return null
   }
 
-  private async approval(origin: string, chainId: number, method: string, params: readonly unknown[], clientRequestId: string): Promise<unknown> {
+  private async approval(
+    origin: string,
+    chainId: number,
+    method: string,
+    params: readonly unknown[],
+    clientRequestId: string,
+  ): Promise<unknown> {
     if (!APPROVAL_METHODS.has(method)) throw new RpcError(RPC.METHOD_NOT_FOUND, method)
     if (method === 'eth_sign' && !this.ctx.settings.ethSignEnabled) {
-      throw new RpcError(RPC.UNSUPPORTED_METHOD, 'eth_sign is disabled. It can be enabled in BoltVault › Settings › Security.')
+      throw new RpcError(
+        RPC.UNSUPPORTED_METHOD,
+        'eth_sign is disabled. It can be enabled in BoltVault › Settings › Security.',
+      )
     }
     const session = await this.ctx.session(origin)
     /*
@@ -391,7 +564,8 @@ export class RpcFlow {
       of them — repeatedly, from any number of origins. Suggesting a token is
       not a thing an unconnected site needs to do.
     */
-    if (!session) throw new RpcError(RPC.UNAUTHORIZED, 'Not connected. Call eth_requestAccounts first.')
+    if (!session)
+      throw new RpcError(RPC.UNAUTHORIZED, 'Not connected. Call eth_requestAccounts first.')
     const intent = this.intent(origin, chainId, method, params, session, clientRequestId)
     return this.exclusive(origin, clientRequestId, async () => {
       const result = await this.ctx.approve(intent)
@@ -400,59 +574,142 @@ export class RpcFlow {
     })
   }
 
-  private intent(origin: string, chainId: number, method: string, params: readonly unknown[], session: { accountId: string; addresses: readonly string[] } | null, clientRequestId: string): ApprovalIntent {
+  private intent(
+    origin: string,
+    chainId: number,
+    method: string,
+    params: readonly unknown[],
+    session: { accountId: string; addresses: readonly string[] } | null,
+    clientRequestId: string,
+  ): ApprovalIntent {
     const owns = (from: Hex): void => {
-      if (!session || !session.addresses.some((a) => a.toLowerCase() === from.toLowerCase())) throw new RpcError(RPC.UNAUTHORIZED, 'That address is not connected to this site.')
+      if (!session || !session.addresses.some((a) => a.toLowerCase() === from.toLowerCase()))
+        throw new RpcError(RPC.UNAUTHORIZED, 'That address is not connected to this site.')
     }
     switch (method) {
       case 'personal_sign': {
         // MetaMask accepts [message, address] and, historically, [address, message].
         const a = param(params, 0)
         const b = param(params, 1)
-        const [message, from] = typeof a === 'string' && ADDRESS.test(a) && typeof b === 'string' && !ADDRESS.test(b) ? [b, a] : [a, b]
+        const [message, from] =
+          typeof a === 'string' && ADDRESS.test(a) && typeof b === 'string' && !ADDRESS.test(b)
+            ? [b, a]
+            : [a, b]
         const fromHex = requireAddress(from, 'address')
         owns(fromHex)
-        const msg = typeof message === 'string' && HEX.test(message) ? (message as Hex) : (`0x${utf8Hex(String(message))}` as Hex)
-        return { kind: 'sign_message', origin, chainId, accountId: session?.accountId ?? '', from: fromHex, message: msg, clientRequestId }
+        const msg =
+          typeof message === 'string' && HEX.test(message)
+            ? (message as Hex)
+            : (`0x${utf8Hex(String(message))}` as Hex)
+        return {
+          kind: 'sign_message',
+          origin,
+          chainId,
+          accountId: session?.accountId ?? '',
+          from: fromHex,
+          message: msg,
+          clientRequestId,
+        }
       }
       case 'eth_sign': {
         const from = requireAddress(param(params, 0), 'address')
         owns(from)
-        return { kind: 'eth_sign', origin, chainId, accountId: session?.accountId ?? '', from, hash: requireHex(param(params, 1), 'data'), clientRequestId }
+        return {
+          kind: 'eth_sign',
+          origin,
+          chainId,
+          accountId: session?.accountId ?? '',
+          from,
+          hash: requireHex(param(params, 1), 'data'),
+          clientRequestId,
+        }
       }
       case 'eth_signTypedData_v3':
       case 'eth_signTypedData_v4': {
         const from = requireAddress(param(params, 0), 'address')
         owns(from)
         const typed = param(params, 1)
-        if (typed === undefined || typed === null) throw new RpcError(RPC.INVALID_PARAMS, 'typed data is required')
-        return { kind: 'sign_typed_data', origin, chainId, accountId: session?.accountId ?? '', from, typedData: typed, version: method === 'eth_signTypedData_v3' ? 'v3' : 'v4', clientRequestId }
+        if (typed === undefined || typed === null)
+          throw new RpcError(RPC.INVALID_PARAMS, 'typed data is required')
+        return {
+          kind: 'sign_typed_data',
+          origin,
+          chainId,
+          accountId: session?.accountId ?? '',
+          from,
+          typedData: typed,
+          version: method === 'eth_signTypedData_v3' ? 'v3' : 'v4',
+          clientRequestId,
+        }
       }
       case 'eth_sendTransaction': {
         const raw = param(params, 0)
-        if (!raw || typeof raw !== 'object') throw new RpcError(RPC.INVALID_PARAMS, 'transaction object is required')
+        if (!raw || typeof raw !== 'object')
+          throw new RpcError(RPC.INVALID_PARAMS, 'transaction object is required')
         const t = raw as Record<string, unknown>
         const from = requireAddress(t['from'], 'from')
         owns(from)
-        if (t['chainId'] !== undefined && toDecChainId(t['chainId']) !== chainId) throw new RpcError(RPC.INVALID_PARAMS, `Transaction chainId does not match the connected chain ${hexChainId(chainId)}.`)
+        if (t['chainId'] !== undefined && toDecChainId(t['chainId']) !== chainId)
+          throw new RpcError(
+            RPC.INVALID_PARAMS,
+            `Transaction chainId does not match the connected chain ${hexChainId(chainId)}.`,
+          )
         const tx: TxParams = {
           from,
-          ...(t['to'] !== undefined && t['to'] !== null ? { to: requireAddress(t['to'], 'to') } : {}),
-          ...(optionalHex(t['value'], 'value') !== undefined ? { value: optionalHex(t['value'], 'value') } : {}),
-          ...(optionalHex(t['data'] ?? t['input'], 'data') !== undefined ? { data: optionalHex(t['data'] ?? t['input'], 'data') } : {}),
-          ...(optionalHex(t['gas'], 'gas') !== undefined ? { gas: optionalHex(t['gas'], 'gas') } : {}),
-          ...(optionalHex(t['gasPrice'], 'gasPrice') !== undefined ? { gasPrice: optionalHex(t['gasPrice'], 'gasPrice') } : {}),
-          ...(optionalHex(t['maxFeePerGas'], 'maxFeePerGas') !== undefined ? { maxFeePerGas: optionalHex(t['maxFeePerGas'], 'maxFeePerGas') } : {}),
-          ...(optionalHex(t['maxPriorityFeePerGas'], 'maxPriorityFeePerGas') !== undefined ? { maxPriorityFeePerGas: optionalHex(t['maxPriorityFeePerGas'], 'maxPriorityFeePerGas') } : {}),
-          ...(optionalHex(t['nonce'], 'nonce') !== undefined ? { nonce: optionalHex(t['nonce'], 'nonce') } : {}),
-          ...(Array.isArray(t['authorizationList']) ? { authorizationList: t['authorizationList'] } : {}),
+          ...(t['to'] !== undefined && t['to'] !== null
+            ? { to: requireAddress(t['to'], 'to') }
+            : {}),
+          ...(optionalHex(t['value'], 'value') !== undefined
+            ? { value: optionalHex(t['value'], 'value') }
+            : {}),
+          ...(optionalHex(t['data'] ?? t['input'], 'data') !== undefined
+            ? { data: optionalHex(t['data'] ?? t['input'], 'data') }
+            : {}),
+          ...(optionalHex(t['gas'], 'gas') !== undefined
+            ? { gas: optionalHex(t['gas'], 'gas') }
+            : {}),
+          ...(optionalHex(t['gasPrice'], 'gasPrice') !== undefined
+            ? { gasPrice: optionalHex(t['gasPrice'], 'gasPrice') }
+            : {}),
+          ...(optionalHex(t['maxFeePerGas'], 'maxFeePerGas') !== undefined
+            ? { maxFeePerGas: optionalHex(t['maxFeePerGas'], 'maxFeePerGas') }
+            : {}),
+          ...(optionalHex(t['maxPriorityFeePerGas'], 'maxPriorityFeePerGas') !== undefined
+            ? {
+                maxPriorityFeePerGas: optionalHex(
+                  t['maxPriorityFeePerGas'],
+                  'maxPriorityFeePerGas',
+                ),
+              }
+            : {}),
+          ...(optionalHex(t['nonce'], 'nonce') !== undefined
+            ? { nonce: optionalHex(t['nonce'], 'nonce') }
+            : {}),
+          ...(Array.isArray(t['authorizationList'])
+            ? { authorizationList: t['authorizationList'] }
+            : {}),
         }
-        return { kind: 'send_transaction', origin, chainId, accountId: session?.accountId ?? '', tx, clientRequestId }
+        return {
+          kind: 'send_transaction',
+          origin,
+          chainId,
+          accountId: session?.accountId ?? '',
+          tx,
+          clientRequestId,
+        }
       }
       case 'wallet_watchAsset': {
         const p = param(params, 0) as { type?: unknown; options?: unknown } | undefined
-        if (!p || typeof p.type !== 'string') throw new RpcError(RPC.INVALID_PARAMS, 'type is required')
-        return { kind: 'watch_asset', origin, chainId, type: p.type, options: p.options, clientRequestId }
+        if (!p || typeof p.type !== 'string')
+          throw new RpcError(RPC.INVALID_PARAMS, 'type is required')
+        return {
+          kind: 'watch_asset',
+          origin,
+          chainId,
+          type: p.type,
+          options: p.options,
+          clientRequestId,
+        }
       }
       default:
         throw new RpcError(RPC.METHOD_NOT_FOUND, method)
@@ -460,11 +717,20 @@ export class RpcFlow {
   }
 
   /** Run one human-facing request per origin. The same client id re-sent (worker restart) shares the open promise. */
-  private exclusive(origin: string, clientRequestId: string, run: () => Promise<unknown>): Promise<unknown> {
+  private exclusive(
+    origin: string,
+    clientRequestId: string,
+    run: () => Promise<unknown>,
+  ): Promise<unknown> {
     const open = this.inFlight.get(origin)
     if (open) {
       if (open.clientRequestId === clientRequestId) return open.promise
-      return Promise.reject(new RpcError(RPC.RESOURCE_UNAVAILABLE, 'A request is already open for this site. Finish it first.'))
+      return Promise.reject(
+        new RpcError(
+          RPC.RESOURCE_UNAVAILABLE,
+          'A request is already open for this site. Finish it first.',
+        ),
+      )
     }
     const promise = run().finally(() => {
       if (this.inFlight.get(origin)?.promise === promise) this.inFlight.delete(origin)
@@ -480,7 +746,10 @@ export class RpcFlow {
     this.ctx.emit(origin, { event: 'accountsChanged', payload: [] })
     // An empty accounts array alone leaves `isConnected()` true and every dApp that
     // listens for `disconnect` hears nothing (§4.3). Emit the EIP-1193 event too.
-    this.ctx.emit(origin, { event: 'disconnect', payload: { code: RPC.DISCONNECTED, message: 'BoltVault disconnected this site.' } })
+    this.ctx.emit(origin, {
+      event: 'disconnect',
+      payload: { code: RPC.DISCONNECTED, message: 'BoltVault disconnected this site.' },
+    })
   }
 
   /** Called by the engine when the user changes a site's chain from Settings. */
@@ -509,12 +778,30 @@ export class RpcFlow {
 }
 
 function permissions(origin: string, addresses: readonly string[], now: number): unknown[] {
-  return [{ id: `${origin}:eth_accounts`, parentCapability: 'eth_accounts', invoker: origin, caveats: [{ type: 'restrictReturnedAccounts', value: [...addresses] }], date: now }]
+  return [
+    {
+      id: `${origin}:eth_accounts`,
+      parentCapability: 'eth_accounts',
+      invoker: origin,
+      caveats: [{ type: 'restrictReturnedAccounts', value: [...addresses] }],
+      date: now,
+    },
+  ]
 }
 
-function blockNumber(v: unknown): number | null {
+/**
+ * A block tag as a number, or `'head'` for the ones that mean "now", or null
+ * for anything unreadable.
+ *
+ * `earliest` used to answer null along with the rest, which made it invisible
+ * to the range guard — `{ fromBlock: 'earliest' }` is genesis to now, the
+ * largest query a node can be asked for, and it went straight through. It is
+ * block zero and says so.
+ */
+function blockNumber(v: unknown): number | 'head' | null {
   if (typeof v !== 'string') return null
-  if (v === 'latest' || v === 'pending' || v === 'earliest' || v === 'safe' || v === 'finalized') return null
+  if (v === 'earliest') return 0
+  if (v === 'latest' || v === 'pending' || v === 'safe' || v === 'finalized') return 'head'
   if (/^0x[0-9a-fA-F]+$/.test(v)) return parseInt(v, 16)
   if (/^\d+$/.test(v)) return Number(v)
   return null

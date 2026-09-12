@@ -59,9 +59,34 @@ export const PreparedTxSchema = z.object({
   maxFeePerGas: HexSchema.optional(),
   maxPriorityFeePerGas: HexSchema.optional(),
   gasPrice: HexSchema.optional(),
+  /**
+   * What the node itself suggested per unit of gas, whatever the request asked
+   * for. The fee editor's band is anchored here rather than on the price in
+   * the transaction: a site that sets fifty times the going rate does not move
+   * the band up, it moves the whole band, and the editor could then not get
+   * back down to anything a block would sensibly include.
+   */
+  nodePerGas: HexSchema.optional(),
 })
 export type PreparedTx = z.infer<typeof PreparedTxSchema>
 
+/**
+ * `tabId` / `frameId` — which tab asked, when a browser tab did.
+ *
+ * The design queues an approval-class request from a hidden tab rather than
+ * throwing a focused window over whatever the person is doing. That hold lived
+ * only in the MAIN-world provider, which is page code and therefore no hold at
+ * all — a page posts straight to the bridge and skips it. The sender's tab is
+ * on the record so the worker can decide, and it survives a restart with it.
+ *
+ * `intentDigest` — a canonical fingerprint of the request as it arrived.
+ *
+ * A re-sent request re-attaches to a pending sheet by origin plus the
+ * page-supplied `clientRequestId`, which says nothing about what the request
+ * asks for. The digest is taken when the sheet is built and compared when one
+ * re-attaches, so a request that has quietly changed its chain, its account or
+ * its bytes cannot inherit a sheet raised for something else.
+ */
 export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('connect'),
@@ -70,9 +95,31 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
     reconnect: z.boolean(),
     firstTime: z.boolean(),
     clientRequestId: z.string(),
+    intentDigest: z.string().optional(),
+    tabId: z.number().int().optional(),
+    frameId: z.number().int().optional(),
   }),
-  z.object({ kind: z.literal('sign_message'), from: AddressSchema, message: HexSchema, text: z.string().nullable(), assessment: AssessmentViewSchema, clientRequestId: z.string() }),
-  z.object({ kind: z.literal('eth_sign'), from: AddressSchema, hash: HexSchema, assessment: AssessmentViewSchema, clientRequestId: z.string() }),
+  z.object({
+    kind: z.literal('sign_message'),
+    from: AddressSchema,
+    message: HexSchema,
+    text: z.string().nullable(),
+    assessment: AssessmentViewSchema,
+    clientRequestId: z.string(),
+    intentDigest: z.string().optional(),
+    tabId: z.number().int().optional(),
+    frameId: z.number().int().optional(),
+  }),
+  z.object({
+    kind: z.literal('eth_sign'),
+    from: AddressSchema,
+    hash: HexSchema,
+    assessment: AssessmentViewSchema,
+    clientRequestId: z.string(),
+    intentDigest: z.string().optional(),
+    tabId: z.number().int().optional(),
+    frameId: z.number().int().optional(),
+  }),
   z.object({
     kind: z.literal('sign_typed_data'),
     from: AddressSchema,
@@ -82,6 +129,9 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
     primaryType: z.string(),
     assessment: AssessmentViewSchema,
     clientRequestId: z.string(),
+    intentDigest: z.string().optional(),
+    tabId: z.number().int().optional(),
+    frameId: z.number().int().optional(),
   }),
   z.object({
     kind: z.literal('send_transaction'),
@@ -94,10 +144,34 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
       symbol: z.string(),
     }),
     assessment: AssessmentViewSchema,
+    /**
+     * `device:` remote sign only: sign and hand the raw transaction back
+     * rather than broadcasting it. It lives on the record because that is
+     * what `execute()` reads — taking it from the live intent let a re-sent
+     * request flip a sheet the user approved as "sign" into a broadcast.
+     */
+    signOnly: z.boolean().optional(),
     clientRequestId: z.string(),
+    intentDigest: z.string().optional(),
+    tabId: z.number().int().optional(),
+    frameId: z.number().int().optional(),
   }),
-  z.object({ kind: z.literal('switch_chain'), chainId: z.number().int().positive(), clientRequestId: z.string() }),
-  z.object({ kind: z.literal('add_chain'), chainId: z.number().int().positive(), clientRequestId: z.string() }),
+  z.object({
+    kind: z.literal('switch_chain'),
+    chainId: z.number().int().positive(),
+    clientRequestId: z.string(),
+    intentDigest: z.string().optional(),
+    tabId: z.number().int().optional(),
+    frameId: z.number().int().optional(),
+  }),
+  z.object({
+    kind: z.literal('add_chain'),
+    chainId: z.number().int().positive(),
+    clientRequestId: z.string(),
+    intentDigest: z.string().optional(),
+    tabId: z.number().int().optional(),
+    frameId: z.number().int().optional(),
+  }),
   z.object({
     kind: z.literal('watch_asset'),
     type: z.string(),
@@ -106,14 +180,24 @@ export const ApprovalPayloadSchema = z.discriminatedUnion('kind', [
     address: z.string().nullable(),
     symbol: z.string().nullable(),
     decimals: z.number().int().nonnegative().nullable(),
-    onChain: z.object({ name: z.string(), symbol: z.string(), decimals: z.number().int().nonnegative() }).nullable(),
+    onChain: z
+      .object({ name: z.string(), symbol: z.string(), decimals: z.number().int().nonnegative() })
+      .nullable(),
     mismatch: z.boolean(),
     clientRequestId: z.string(),
+    intentDigest: z.string().optional(),
+    tabId: z.number().int().optional(),
+    frameId: z.number().int().optional(),
   }),
 ])
 
 /** EIP-747 `wallet_watchAsset` options for an ERC-20. */
-export const WatchAssetOptionsSchema = z.object({ address: z.string().regex(/^0x[0-9a-fA-F]{40}$/), symbol: z.string().max(16).optional(), decimals: z.number().int().min(0).max(36).optional(), image: z.string().optional() })
+export const WatchAssetOptionsSchema = z.object({
+  address: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+  symbol: z.string().max(16).optional(),
+  decimals: z.number().int().min(0).max(36).optional(),
+  image: z.string().optional(),
+})
 export type WatchAssetOptions = z.infer<typeof WatchAssetOptionsSchema>
 export type ApprovalPayload = z.infer<typeof ApprovalPayloadSchema>
 
@@ -173,10 +257,21 @@ export function suggestedPerGas(tx: PreparedTx): bigint {
   return BigInt((tx.type === 'eip1559' ? tx.maxFeePerGas : tx.gasPrice) ?? '0x0')
 }
 
-/** The band a hand-set price per unit of gas has to stay inside. */
+/**
+ * The band a hand-set price per unit of gas has to stay inside.
+ *
+ * Anchored on the node's own suggestion where there is one, not on the price
+ * the transaction happens to carry — those differ exactly when a dApp supplied
+ * `gasPrice`/`maxFeePerGas`, which is the case the band exists for.
+ */
 export function gasBand(tx: PreparedTx): { floor: bigint; suggested: bigint; ceiling: bigint } {
-  const suggested = suggestedPerGas(tx)
-  return { floor: (suggested * BigInt(GAS_FLOOR_PERCENT)) / 100n, suggested, ceiling: (suggested * BigInt(GAS_CEILING_PERCENT)) / 100n }
+  const node = tx.nodePerGas ? BigInt(tx.nodePerGas) : 0n
+  const suggested = node > 0n ? node : suggestedPerGas(tx)
+  return {
+    floor: (suggested * BigInt(GAS_FLOOR_PERCENT)) / 100n,
+    suggested,
+    ceiling: (suggested * BigInt(GAS_CEILING_PERCENT)) / 100n,
+  }
 }
 
 /** Bring a chosen price per unit of gas inside the band. */
@@ -194,7 +289,10 @@ export function clampPerGas(tx: PreparedTx, chosen: bigint): bigint {
  * from the sheet, because the sheet is a page and this is the last place before
  * a signature.
  */
-export function applyGasDecision(tx: PreparedTx, data: unknown): Pick<PreparedTx, 'maxFeePerGas' | 'maxPriorityFeePerGas' | 'gasPrice'> | null {
+export function applyGasDecision(
+  tx: PreparedTx,
+  data: unknown,
+): Pick<PreparedTx, 'maxFeePerGas' | 'maxPriorityFeePerGas' | 'gasPrice'> | null {
   const parsed = GasDecisionDataSchema.safeParse(data)
   if (!parsed.success) return null
   const choice = parsed.data
@@ -202,7 +300,10 @@ export function applyGasDecision(tx: PreparedTx, data: unknown): Pick<PreparedTx
     if (choice.maxFeePerGas === undefined) return null
     const max = clampPerGas(tx, BigInt(choice.maxFeePerGas))
     // A tip is paid out of the ceiling it sits under, so it can never exceed it.
-    const wanted = choice.maxPriorityFeePerGas !== undefined ? BigInt(choice.maxPriorityFeePerGas) : BigInt(tx.maxPriorityFeePerGas ?? '0x0')
+    const wanted =
+      choice.maxPriorityFeePerGas !== undefined
+        ? BigInt(choice.maxPriorityFeePerGas)
+        : BigInt(tx.maxPriorityFeePerGas ?? '0x0')
     return { maxFeePerGas: hexOf(max), maxPriorityFeePerGas: hexOf(wanted > max ? max : wanted) }
   }
   if (choice.gasPrice === undefined) return null

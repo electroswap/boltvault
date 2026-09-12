@@ -19,7 +19,22 @@
  * (`useSecretGuard`), which is the promise `packages/platform` had been making
  * on the product's behalf without anything implementing it.
  */
-import { Backdrop, Body, Column, EsWordmark, Icon, Input, Key, Plate, Row, ScrollView, WordGrid, metrics, paint, useWindowDimensions } from '@boltvault/ui'
+import {
+  Backdrop,
+  Body,
+  Column,
+  EsWordmark,
+  Icon,
+  Input,
+  Key,
+  Plate,
+  Row,
+  ScrollView,
+  WordGrid,
+  metrics,
+  paint,
+  useWindowDimensions,
+} from '@boltvault/ui'
 import { useEffect, useState } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
@@ -29,7 +44,17 @@ import { useRouter } from '../navigation/router'
 import { useScene } from '../state/useScene'
 import { useWalletState } from '../state/useWalletState'
 import { IntroCarousel } from './onboarding/IntroCarousel'
-import { clampEntryStep, engineErrorCopy, mnemonicHint, mnemonicLengthOk, mnemonicWords, passwordStrength, progressFor, type OnboardingPath as Path, type Step } from './onboarding/rules'
+import {
+  clampEntryStep,
+  engineErrorCopy,
+  mnemonicHint,
+  mnemonicLengthOk,
+  mnemonicWords,
+  passwordStrength,
+  progressFor,
+  type OnboardingPath as Path,
+  type Step,
+} from './onboarding/rules'
 import { useSecretGuard } from './onboarding/useSecretGuard'
 
 /** One vault per install, so one WebAuthn user handle; re-enrolling replaces the credential. */
@@ -76,8 +101,14 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
 
   useEffect(() => {
     let alive = true
-    host.passkeys?.supported().then((ok) => alive && setPasskeysSupported(ok), () => undefined)
-    host.deviceKey?.available().then((ok) => alive && setBiometricsSupported(ok), () => undefined)
+    host.passkeys?.supported().then(
+      (ok) => alive && setPasskeysSupported(ok),
+      () => undefined,
+    )
+    host.deviceKey?.available().then(
+      (ok) => alive && setBiometricsSupported(ok),
+      () => undefined,
+    )
     return () => {
       alive = false
     }
@@ -98,7 +129,10 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
       setStep('blocked')
       return
     }
-    const params = router.current.screen === 'onboarding' ? (router.current.params as { path?: Path; step?: string } | undefined) : undefined
+    const params =
+      router.current.screen === 'onboarding'
+        ? (router.current.params as { path?: Path; step?: string } | undefined)
+        : undefined
     const asked = clampEntryStep(params?.step)
     if (asked) {
       if (params?.path) setPath(params.path)
@@ -143,7 +177,10 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
     }
     if (host.openInTab) {
       // Carry the chosen path, so the tab does not restart at the fork.
-      host.openInTab({ screen: 'onboarding', params: { path: next, step: next === 'create' ? 'welcome' : next } })
+      host.openInTab({
+        screen: 'onboarding',
+        params: { path: next, step: next === 'create' ? 'welcome' : next },
+      })
       return
     }
     if (host.openSecretScreen) {
@@ -151,7 +188,13 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
       return
     }
     // Never a key that does nothing.
-    setError(t({ id: 'ob.needtab', message: 'This step needs the full tab, and this window cannot open one. Open BoltVault from the toolbar and try again.' }))
+    setError(
+      t({
+        id: 'ob.needtab',
+        message:
+          'This step needs the full tab, and this window cannot open one. Open BoltVault from the toolbar and try again.',
+      }),
+    )
   }
 
   const startWords = (): Promise<void> =>
@@ -164,7 +207,9 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
     })
 
   /** The quiz is checked here because the seed does not exist yet; the engine checks it again at the end. */
-  const quizOk = positions.length > 0 && positions.every((p) => (answers[p] ?? '').trim().toLowerCase() === mnemonic[p - 1])
+  const quizOk =
+    positions.length > 0 &&
+    positions.every((p) => (answers[p] ?? '').trim().toLowerCase() === mnemonic[p - 1])
 
   /**
    * The end of onboarding: the passkey offer if this device has a factor, and
@@ -190,8 +235,17 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
     run(async () => {
       const r = await engine.vault.import({ mnemonic: mnemonic.join(' '), password })
       // The engine verifies the same words it stored, so the gate is earned, not asserted.
-      const ok = await engine.vault.confirmBackup({ seedId: r.seedId, answers: positions.map((p) => ({ position: p, word: answers[p] ?? '' })) })
-      if (!ok.ok) throw new Error(t({ id: 'quiz.wrong', message: 'Those words do not match your phrase. Check the numbers and try again.' }))
+      const ok = await engine.vault.confirmBackup({
+        seedId: r.seedId,
+        answers: positions.map((p) => ({ position: p, word: answers[p] ?? '' })),
+      })
+      if (!ok.ok)
+        throw new Error(
+          t({
+            id: 'quiz.wrong',
+            message: 'Those words do not match your phrase. Check the numbers and try again.',
+          }),
+        )
       setMnemonic([])
       setAnswers({})
       finish()
@@ -199,7 +253,11 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
 
   const sealImport = (): Promise<void> =>
     run(async () => {
-      await engine.vault.import({ mnemonic: phrase, password, ...(passphrase ? { passphrase } : {}) })
+      await engine.vault.import({
+        mnemonic: phrase,
+        password,
+        ...(passphrase ? { passphrase } : {}),
+      })
       setPhrase('')
       finish()
     })
@@ -214,7 +272,10 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
       */
       const address = watchResolved ?? watchAddress.trim()
       await engine.vault.createEmpty({ password })
-      await engine.accounts.addWatch({ address, label: t({ id: 'watch.label', message: 'Watch address' }) })
+      await engine.accounts.addWatch({
+        address,
+        label: t({ id: 'watch.label', message: 'Watch address' }),
+      })
       finish()
     })
 
@@ -228,7 +289,10 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
         return
       }
       const hit = await engine.names.resolve({ chainId: 52014, name: raw })
-      if (!hit.address) throw new Error(t({ id: 'ob.watch.noname', message: 'That name does not resolve to an address.' }))
+      if (!hit.address)
+        throw new Error(
+          t({ id: 'ob.watch.noname', message: 'That name does not resolve to an address.' }),
+        )
       setWatchResolved(hit.address)
       go('password')
     })
@@ -245,8 +309,16 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
   const enrolPasskey = (): Promise<void> =>
     run(async () => {
       if (!host.passkeys) return
-      const res = await host.passkeys.create({ userName: 'BoltVault', userIdHex: PASSKEY_USER_ID, rpName: 'BoltVault' })
-      await engine.vault.enrolPasskey({ credentialId: res.credentialId, prfSecretHex: res.prfSecretHex, password })
+      const res = await host.passkeys.create({
+        userName: 'BoltVault',
+        userIdHex: PASSKEY_USER_ID,
+        rpName: 'BoltVault',
+      })
+      await engine.vault.enrolPasskey({
+        credentialId: res.credentialId,
+        prfSecretHex: res.prfSecretHex,
+        password,
+      })
       router.reset()
     })
 
@@ -260,12 +332,28 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
   return (
     <Column flex={1} backgroundColor="$void" testID="onboarding">
       <Backdrop scene={scene} width={width} height={height} reducedMotion={reducedMotion} />
-      <ScrollView style={{ zIndex: 1 }} contentContainerStyle={{ padding: inset, gap: 20, flexGrow: 1, justifyContent: 'center' }}>
+      <ScrollView
+        style={{ zIndex: 1 }}
+        contentContainerStyle={{ padding: inset, gap: 20, flexGrow: 1, justifyContent: 'center' }}
+      >
         {/* Where you are, and only where the flow really is a sequence (§7.2.4). */}
         {progress ? (
-          <Row gap={4} testID="ob-progress" accessibilityRole="progressbar" accessibilityValue={{ now: progress.now, max: progress.max }}>
+          <Row
+            gap={4}
+            testID="ob-progress"
+            accessibilityRole="progressbar"
+            accessibilityValue={{ now: progress.now, max: progress.max }}
+          >
             {Array.from({ length: progress.max }, (_, i) => (
-              <Column key={i} flex={1} height={3} borderRadius={2} backgroundColor={i < progress.now ? paint.arcSoft : 'transparent'} borderWidth={1} borderColor={i < progress.now ? paint.arcEdge : paint.glassRaisedSolid} />
+              <Column
+                key={i}
+                flex={1}
+                height={3}
+                borderRadius={2}
+                backgroundColor={i < progress.now ? paint.arcSoft : 'transparent'}
+                borderWidth={1}
+                borderColor={i < progress.now ? paint.arcEdge : paint.glassRaisedSolid}
+              />
             ))}
           </Row>
         ) : null}
@@ -286,22 +374,67 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
 
         {step === 'blocked' ? (
           <Column gap="$4" testID="ob-blocked">
-            <Body size="title">{t({ id: 'ob.blocked.title', message: 'This device already has a vault' })}</Body>
-            <Body tone="mute">{t({ id: 'ob.blocked.body', message: 'Unlock it to carry on. To use a different recovery phrase, add it as another account once you are in.' })}</Body>
-            <Key label={t({ id: 'ob.blocked.key', message: 'Open my wallet' })} onPress={() => router.reset()} testID="ob-blocked-open" />
+            <Body size="title">
+              {t({ id: 'ob.blocked.title', message: 'This device already has a vault' })}
+            </Body>
+            <Body tone="mute">
+              {t({
+                id: 'ob.blocked.body',
+                message:
+                  'Unlock it to carry on. To use a different recovery phrase, add it as another account once you are in.',
+              })}
+            </Body>
+            <Key
+              label={t({ id: 'ob.blocked.key', message: 'Open my wallet' })}
+              onPress={() => router.reset()}
+              testID="ob-blocked-open"
+            />
           </Column>
         ) : null}
 
         {step === 'welcome' ? (
           <Column gap="$4">
-            <Body size="title">{t({ id: 'ob.welcome.title', message: 'Your keys, your Electroneum' })}</Body>
-            <Body tone="mute">{t({ id: 'ob.welcome.body', message: 'BoltVault keeps your recovery phrase on this device, sealed with your password. Nothing leaves it unless you export it.' })}</Body>
-            <Key label={t({ id: 'ob.create', message: 'Create a new vault' })} disabled={busy} onPress={() => begin('create')} testID="ob-create" />
-            <Key label={t({ id: 'ob.import', message: 'Import a recovery phrase' })} kind="secondary" disabled={busy} onPress={() => begin('import')} testID="ob-import" />
-            <Key label={t({ id: 'ob.watch', message: 'Watch an address' })} kind="secondary" disabled={busy} onPress={() => begin('watch')} testID="ob-watch" />
-            {error ? <Body tone="burn" testID="ob-error">{error}</Body> : null}
+            <Body size="title">
+              {t({ id: 'ob.welcome.title', message: 'Your keys, your Electroneum' })}
+            </Body>
+            <Body tone="mute">
+              {t({
+                id: 'ob.welcome.body',
+                message:
+                  'BoltVault keeps your recovery phrase on this device, sealed with your password. Nothing leaves it unless you export it.',
+              })}
+            </Body>
+            <Key
+              label={t({ id: 'ob.create', message: 'Create a new vault' })}
+              disabled={busy}
+              onPress={() => begin('create')}
+              testID="ob-create"
+            />
+            <Key
+              label={t({ id: 'ob.import', message: 'Import a recovery phrase' })}
+              kind="secondary"
+              disabled={busy}
+              onPress={() => begin('import')}
+              testID="ob-import"
+            />
+            <Key
+              label={t({ id: 'ob.watch', message: 'Watch an address' })}
+              kind="secondary"
+              disabled={busy}
+              onPress={() => begin('watch')}
+              testID="ob-watch"
+            />
+            {error ? (
+              <Body tone="burn" testID="ob-error">
+                {error}
+              </Body>
+            ) : null}
             <Body tone="mute" size="caption">
-              {t({ id: 'ob.hardware.note', message: 'Ledger, Trezor and Keystone accounts are added from the Accounts sheet after your vault exists.' })}
+              {t({
+                id: 'ob.hardware.note',
+                message:
+                  'Ledger, Trezor and Keystone accounts are added from the Accounts sheet after your vault exists.',
+              })}
             </Body>
           </Column>
         ) : null}
@@ -310,25 +443,55 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
           <Column gap="$4" testID="ob-words">
             <Row gap="$2">
               <Icon name="lock" size={18} color={paint.mute} />
-              <Body size="title">{t({ id: 'ob.words.title', message: 'Write these 12 words down, in order' })}</Body>
+              <Body size="title">
+                {t({ id: 'ob.words.title', message: 'Write these 12 words down, in order' })}
+              </Body>
             </Row>
-            <Body tone="mute">{t({ id: 'ob.words.body', message: 'This is the only copy. Anyone with these words controls your funds; BoltVault will never ask for them except on this screen and the check that follows.' })}</Body>
+            <Body tone="mute">
+              {t({
+                id: 'ob.words.body',
+                message:
+                  'This is the only copy. Anyone with these words controls your funds; BoltVault will never ask for them except on this screen and the check that follows.',
+              })}
+            </Body>
             <Plate role="raised">
               {masked ? (
-                <Column minHeight={168} alignItems="center" justifyContent="center" gap="$2" testID="ob-words-masked">
+                <Column
+                  minHeight={168}
+                  alignItems="center"
+                  justifyContent="center"
+                  gap="$2"
+                  testID="ob-words-masked"
+                >
                   <Icon name="eyeOff" size={20} color={paint.mute} />
-                  <Body tone="mute" size="caption">{t({ id: 'secret.masked', message: 'Hidden while this window is not in front' })}</Body>
+                  <Body tone="mute" size="caption">
+                    {t({
+                      id: 'secret.masked',
+                      message: 'Hidden while this window is not in front',
+                    })}
+                  </Body>
                 </Column>
               ) : mnemonic.length > 0 ? (
                 <WordGrid words={mnemonic} testID="word-grid" />
               ) : (
                 <Column minHeight={168} alignItems="center" justifyContent="center">
-                  <Body tone="mute" size="caption">{t({ id: 'ob.words.making', message: 'Making your phrase…' })}</Body>
+                  <Body tone="mute" size="caption">
+                    {t({ id: 'ob.words.making', message: 'Making your phrase…' })}
+                  </Body>
                 </Column>
               )}
             </Plate>
-            {error ? <Body tone="burn" testID="ob-error">{error}</Body> : null}
-            <Key label={t({ id: 'ob.words.done', message: 'I wrote them down' })} onPress={() => go('quiz')} disabled={busy || mnemonic.length === 0} testID="ob-words-done" />
+            {error ? (
+              <Body tone="burn" testID="ob-error">
+                {error}
+              </Body>
+            ) : null}
+            <Key
+              label={t({ id: 'ob.words.done', message: 'I wrote them down' })}
+              onPress={() => go('quiz')}
+              disabled={busy || mnemonic.length === 0}
+              testID="ob-words-done"
+            />
             {/* Nothing is written yet, so leaving here costs nothing and loses nothing. */}
             {back('welcome', t({ id: 'ob.words.back', message: 'Start over' }))}
           </Column>
@@ -337,7 +500,13 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
         {step === 'quiz' ? (
           <Column gap="$4" testID="ob-quiz">
             <Body size="title">{t({ id: 'ob.quiz.title', message: 'Confirm three words' })}</Body>
-            <Body tone="mute">{t({ id: 'ob.quiz.body', message: 'Type the words at these positions. This is the backup check that unlocks swapping and signing.' })}</Body>
+            <Body tone="mute">
+              {t({
+                id: 'ob.quiz.body',
+                message:
+                  'Type the words at these positions. This is the backup check that unlocks swapping and signing.',
+              })}
+            </Body>
             {positions.map((p) => {
               const given = (answers[p] ?? '').trim().toLowerCase()
               const wrong = given.length > 0 && given !== mnemonic[p - 1]
@@ -349,29 +518,80 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
                   onChange={(v) => setAnswers({ ...answers, [p]: v })}
                   autoCapitalize="none"
                   // Per field, as it is typed — one error at the end never said which word was wrong.
-                  error={wrong ? t({ id: 'ob.quiz.nomatch', message: 'Not the word at this position' }) : null}
+                  error={
+                    wrong
+                      ? t({ id: 'ob.quiz.nomatch', message: 'Not the word at this position' })
+                      : null
+                  }
+                  sensitive="code"
                   testID={`quiz-${p}`}
                 />
               )
             })}
-            {error ? <Body tone="burn" testID="ob-error">{error}</Body> : null}
-            <Key label={t({ id: 'continue', message: 'Continue' })} onPress={() => go('password')} disabled={busy || !quizOk} testID="ob-quiz-confirm" />
-            <Key label={t({ id: 'ob.quiz.back', message: 'Show the words again' })} kind="secondary" disabled={busy} onPress={() => go('words')} testID="ob-quiz-back" />
+            {error ? (
+              <Body tone="burn" testID="ob-error">
+                {error}
+              </Body>
+            ) : null}
+            <Key
+              label={t({ id: 'continue', message: 'Continue' })}
+              onPress={() => go('password')}
+              disabled={busy || !quizOk}
+              testID="ob-quiz-confirm"
+            />
+            <Key
+              label={t({ id: 'ob.quiz.back', message: 'Show the words again' })}
+              kind="secondary"
+              disabled={busy}
+              onPress={() => go('words')}
+              testID="ob-quiz-back"
+            />
           </Column>
         ) : null}
 
         {step === 'import' ? (
           <Column gap="$4" testID="ob-import-words">
-            <Body size="title">{t({ id: 'ob.import.title', message: 'Enter your recovery phrase' })}</Body>
-            <Input value={phrase} onChange={setPhrase} multiline placeholder={t({ id: 'ob.import.ph', message: '12 or 24 words, separated by spaces' })} autoFocus hint={mnemonicHint(phrase)} testID="ob-phrase" />
-            <Input label={t({ id: 'ob.passphrase', message: 'BIP-39 passphrase (optional, advanced)' })} value={passphrase} onChange={setPassphrase} secure testID="ob-passphrase" />
-            {error ? <Body tone="burn" testID="ob-error">{error}</Body> : null}
+            <Body size="title">
+              {t({ id: 'ob.import.title', message: 'Enter your recovery phrase' })}
+            </Body>
+            <Input
+              value={phrase}
+              onChange={setPhrase}
+              multiline
+              placeholder={t({
+                id: 'ob.import.ph',
+                message: '12 or 24 words, separated by spaces',
+              })}
+              autoFocus
+              hint={mnemonicHint(phrase)}
+              sensitive
+              testID="ob-phrase"
+            />
+            <Input
+              label={t({ id: 'ob.passphrase', message: 'BIP-39 passphrase (optional, advanced)' })}
+              value={passphrase}
+              onChange={setPassphrase}
+              secure
+              sensitive
+              testID="ob-passphrase"
+            />
+            {error ? (
+              <Body tone="burn" testID="ob-error">
+                {error}
+              </Body>
+            ) : null}
             <Key
               label={t({ id: 'ob.import.preview', message: 'Preview addresses' })}
               disabled={!mnemonicLengthOk(phrase) || busy}
               onPress={() =>
                 run(async () => {
-                  setPreview(await engine.accounts.previewDerivations({ mnemonic: mnemonicWords(phrase).join(' '), ...(passphrase ? { passphrase } : {}), count: 3 }))
+                  setPreview(
+                    await engine.accounts.previewDerivations({
+                      mnemonic: mnemonicWords(phrase).join(' '),
+                      ...(passphrase ? { passphrase } : {}),
+                      count: 3,
+                    }),
+                  )
                   go('preview')
                 })
               }
@@ -383,22 +603,43 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
 
         {step === 'preview' && preview ? (
           <Column gap="$4" testID="ob-preview">
-            <Body size="title">{t({ id: 'ob.preview.title', message: 'Which addresses do you recognise?' })}</Body>
-            <Body tone="mute">{t({ id: 'ob.preview.body', message: 'Wallets derive accounts along two common trees. BoltVault uses the standard (BIP-44) tree; Ledger Live uses another. Both agree on the first address.' })}</Body>
+            <Body size="title">
+              {t({ id: 'ob.preview.title', message: 'Which addresses do you recognise?' })}
+            </Body>
+            <Body tone="mute">
+              {t({
+                id: 'ob.preview.body',
+                message:
+                  'Wallets derive accounts along two common trees. BoltVault uses the standard (BIP-44) tree; Ledger Live uses another. Both agree on the first address.',
+              })}
+            </Body>
             <Plate gap="$2">
               <Body size="title">BIP-44</Body>
               {preview.bip44.map((a) => (
-                <Body key={a} tone="mute" size="caption">{a}</Body>
+                <Body key={a} tone="mute" size="caption">
+                  {a}
+                </Body>
               ))}
             </Plate>
             <Plate gap="$2">
               <Body size="title">Ledger Live</Body>
               {preview.ledgerLive.map((a) => (
-                <Body key={a} tone="mute" size="caption">{a}</Body>
+                <Body key={a} tone="mute" size="caption">
+                  {a}
+                </Body>
               ))}
             </Plate>
-            {error ? <Body tone="burn" testID="ob-error">{error}</Body> : null}
-            <Key label={t({ id: 'continue', message: 'Continue' })} onPress={() => go('password')} disabled={busy} testID="ob-import-confirm" />
+            {error ? (
+              <Body tone="burn" testID="ob-error">
+                {error}
+              </Body>
+            ) : null}
+            <Key
+              label={t({ id: 'continue', message: 'Continue' })}
+              onPress={() => go('password')}
+              disabled={busy}
+              testID="ob-import-confirm"
+            />
             {back('import')}
           </Column>
         ) : null}
@@ -406,10 +647,32 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
         {step === 'watch' ? (
           <Column gap="$4" testID="ob-watch-form">
             <Body size="title">{t({ id: 'ob.watch.title', message: 'Watch an address' })}</Body>
-            <Body tone="mute">{t({ id: 'ob.watch.body', message: 'You will see balances and activity but cannot send or sign. Add a key or pair a device later.' })}</Body>
-            <Input value={watchAddress} onChange={setWatchAddress} placeholder="0x… or name.etn" autoCapitalize="none" autoFocus testID="ob-watch-address" />
-            {error ? <Body tone="burn" testID="ob-error">{error}</Body> : null}
-            <Key label={t({ id: 'continue', message: 'Continue' })} onPress={checkWatch} disabled={busy || watchAddress.trim().length === 0} testID="ob-watch-confirm" />
+            <Body tone="mute">
+              {t({
+                id: 'ob.watch.body',
+                message:
+                  'You will see balances and activity but cannot send or sign. Add a key or pair a device later.',
+              })}
+            </Body>
+            <Input
+              value={watchAddress}
+              onChange={setWatchAddress}
+              placeholder="0x… or name.etn"
+              autoCapitalize="none"
+              autoFocus
+              testID="ob-watch-address"
+            />
+            {error ? (
+              <Body tone="burn" testID="ob-error">
+                {error}
+              </Body>
+            ) : null}
+            <Key
+              label={t({ id: 'continue', message: 'Continue' })}
+              onPress={checkWatch}
+              disabled={busy || watchAddress.trim().length === 0}
+              testID="ob-watch-confirm"
+            />
             {back('welcome')}
           </Column>
         ) : null}
@@ -417,19 +680,64 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
         {step === 'password' ? (
           <Column gap="$4" testID="ob-password-step">
             <Body size="title">{t({ id: 'ob.password.title', message: 'Choose a password' })}</Body>
-            <Body tone="mute">{t({ id: 'ob.password.body', message: 'It seals your vault on this device. A few unrelated words beat a short string of symbols. We cannot reset it.' })}</Body>
-            <Input label={t({ id: 'ob.password', message: 'Password' })} value={password} onChange={setPassword} secure autoFocus hint={password ? strength.label : null} testID="ob-password" />
-            <Input label={t({ id: 'ob.confirm', message: 'Confirm password' })} value={confirm} onChange={setConfirm} secure error={confirm && confirm !== password ? t({ id: 'ob.mismatch', message: 'The passwords differ.' }) : null} testID="ob-confirm" />
+            <Body tone="mute">
+              {t({
+                id: 'ob.password.body',
+                message:
+                  'It seals your vault on this device. A few unrelated words beat a short string of symbols. We cannot reset it.',
+              })}
+            </Body>
+            <Input
+              label={t({ id: 'ob.password', message: 'Password' })}
+              value={password}
+              onChange={setPassword}
+              secure
+              autoFocus
+              hint={password ? strength.label : null}
+              sensitive
+              testID="ob-password"
+            />
+            <Input
+              label={t({ id: 'ob.confirm', message: 'Confirm password' })}
+              value={confirm}
+              onChange={setConfirm}
+              secure
+              error={
+                confirm && confirm !== password
+                  ? t({ id: 'ob.mismatch', message: 'The passwords differ.' })
+                  : null
+              }
+              sensitive
+              testID="ob-confirm"
+            />
             <Row gap="$2">
               {[0, 1, 2].map((i) => (
-                <Row key={i} flex={1} height={4} borderRadius={2} backgroundColor={strength.score > i ? (strength.score === 3 ? paint.arc : paint.ember) : paint.glassRaisedSolid} />
+                <Row
+                  key={i}
+                  flex={1}
+                  height={4}
+                  borderRadius={2}
+                  backgroundColor={
+                    strength.score > i
+                      ? strength.score === 3
+                        ? paint.arc
+                        : paint.ember
+                      : paint.glassRaisedSolid
+                  }
+                />
               ))}
             </Row>
-            {error ? <Body tone="burn" testID="ob-error">{error}</Body> : null}
+            {error ? (
+              <Body tone="burn" testID="ob-error">
+                {error}
+              </Body>
+            ) : null}
             <Key
               label={t({ id: 'ob.password.seal', message: 'Create vault' })}
               disabled={!passwordOk || busy}
-              onPress={() => (path === 'create' ? sealCreate() : path === 'import' ? sealImport() : sealWatch())}
+              onPress={() =>
+                path === 'create' ? sealCreate() : path === 'import' ? sealImport() : sealWatch()
+              }
               testID="ob-password-continue"
             />
             {back(path === 'create' ? 'quiz' : path === 'import' ? 'preview' : 'watch')}
@@ -438,15 +746,47 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
 
         {step === 'passkey' ? (
           <Column gap="$4" testID="ob-passkey">
-            <Body size="title">{passkeysSupported ? t({ id: 'ob.passkey.title', message: 'Unlock with a passkey?' }) : t({ id: 'ob.biometric.title', message: 'Unlock with your fingerprint?' })}</Body>
-            <Body tone="mute">{t({ id: 'ob.passkey.body', message: 'Your face or fingerprint unlocks the vault on this device. Your password still works, and it is still needed to reveal or export the phrase.' })}</Body>
-            {error ? <Body tone="burn" testID="ob-error">{error}</Body> : null}
-            {passkeysSupported ? <Key label={t({ id: 'ob.passkey.yes', message: 'Add passkey' })} onPress={enrolPasskey} disabled={busy} testID="ob-passkey-add" /> : null}
-            {biometricsSupported ? <Key label={t({ id: 'ob.biometric.yes', message: 'Turn on biometric unlock' })} onPress={enrolBiometrics} disabled={busy} testID="ob-biometric-add" /> : null}
-            <Key label={t({ id: 'ob.passkey.skip', message: 'Not now' })} kind="secondary" onPress={() => router.reset()} testID="ob-passkey-skip" />
+            <Body size="title">
+              {passkeysSupported
+                ? t({ id: 'ob.passkey.title', message: 'Unlock with a passkey?' })
+                : t({ id: 'ob.biometric.title', message: 'Unlock with your fingerprint?' })}
+            </Body>
+            <Body tone="mute">
+              {t({
+                id: 'ob.passkey.body',
+                message:
+                  'Your face or fingerprint unlocks the vault on this device. Your password still works, and it is still needed to reveal or export the phrase.',
+              })}
+            </Body>
+            {error ? (
+              <Body tone="burn" testID="ob-error">
+                {error}
+              </Body>
+            ) : null}
+            {passkeysSupported ? (
+              <Key
+                label={t({ id: 'ob.passkey.yes', message: 'Add passkey' })}
+                onPress={enrolPasskey}
+                disabled={busy}
+                testID="ob-passkey-add"
+              />
+            ) : null}
+            {biometricsSupported ? (
+              <Key
+                label={t({ id: 'ob.biometric.yes', message: 'Turn on biometric unlock' })}
+                onPress={enrolBiometrics}
+                disabled={busy}
+                testID="ob-biometric-add"
+              />
+            ) : null}
+            <Key
+              label={t({ id: 'ob.passkey.skip', message: 'Not now' })}
+              kind="secondary"
+              onPress={() => router.reset()}
+              testID="ob-passkey-skip"
+            />
           </Column>
         ) : null}
-
       </ScrollView>
       {/*
         Whose wallet this is, on every step but the intro — the same lock-up as

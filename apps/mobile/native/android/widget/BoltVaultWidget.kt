@@ -27,7 +27,10 @@ import androidx.glance.unit.ColorProvider
 import org.json.JSONObject
 import java.io.File
 
-data class Snapshot(val address: String, val label: String, val tier: Int, val total: Double?, val change24h: Double?, val currency: String)
+// `seed` is the FNV-1a hash of the address, not the address (ATT-BV-033): this
+// file is plaintext on disk and the widget only ever needed the numbers the
+// Field is drawn from.
+data class Snapshot(val seed: Long, val label: String, val tier: Int, val total: Double?, val change24h: Double?, val currency: String)
 
 fun readSnapshot(context: Context): Snapshot? {
     val file = File(context.filesDir, "widget/widget-snapshot.json")
@@ -35,7 +38,7 @@ fun readSnapshot(context: Context): Snapshot? {
     return runCatching {
         val j = JSONObject(file.readText())
         Snapshot(
-            address = j.getString("address"),
+            seed = j.getLong("seed"),
             label = j.getString("label"),
             tier = j.optInt("tier", 0),
             total = if (j.isNull("total")) null else j.getDouble("total"),

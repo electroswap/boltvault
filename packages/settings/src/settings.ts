@@ -72,6 +72,8 @@ export function normalizeSettings(
     pushEnabled: bool('pushEnabled', DEFAULT_SETTINGS.pushEnabled),
     crashReports: bool('crashReports', DEFAULT_SETTINGS.crashReports),
     sendWhitelist: bool('sendWhitelist', DEFAULT_SETTINGS.sendWhitelist),
+    revealNeedsPassword: bool('revealNeedsPassword', DEFAULT_SETTINGS.revealNeedsPassword),
+    widgetShowsTotal: bool('widgetShowsTotal', DEFAULT_SETTINGS.widgetShowsTotal),
     autoLock,
     displayCurrency,
     reducedMotion: bool('reducedMotion', typeof os.reducedMotion === 'boolean' ? os.reducedMotion : DEFAULT_SETTINGS.reducedMotion),

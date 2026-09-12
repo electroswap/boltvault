@@ -26,6 +26,8 @@ import type { VaultManager } from './vault'
 const WETH = parseAbi(['function deposit() payable'])
 
 export interface LimitDeps {
+  /** Signed kill-switches (§3.7); absent in hosts that serve no statics. */
+  readonly statics?: { isDisabled(feature: 'limit'): boolean }
   readonly platform: Platform
   readonly bus: EventBus
   readonly chains: ChainsService
@@ -61,6 +63,24 @@ const isEtn = (chainId: number): chainId is 52014 | 5201420 => chainId === 52014
 const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
 
 export class LimitService {
+  /**
+   * The signed kill-switch for this surface (§3.7, docs/security.md).
+   *
+   * `statics.isDisabled` accepted six features and only `swap` and `bridge` ever
+   * called it, so four of the six documented emergency controls did nothing: ops
+   * could publish `limit: disabled` during an incident and the wallet would keep
+   * placing orders. Hiding a screen is not the control either — every namespace
+   * is callable from any UI page — so the check lives at the top of each verb
+   * that starts a flow.
+   */
+  private assertEnabled(): void {
+    if (this.deps.statics?.isDisabled('limit'))
+      throw new EngineError(
+        'invalid_argument',
+        'Limit orders are switched off right now by a signed flag from ElectroSwap.',
+      )
+  }
+
   constructor(private readonly deps: LimitDeps) {}
 
   private manager(chainId: number): Hex | null {
@@ -101,6 +121,7 @@ export class LimitService {
   }
 
   async quote(input: LimitInput): Promise<LimitQuote> {
+    this.assertEnabled()
     const d = this.deps
     if (!d.enabled) throw new EngineError('not_implemented', 'Limit orders are not enabled in this build.')
     const { chainId } = input
@@ -171,6 +192,7 @@ export class LimitService {
   }
 
   async place(input: LimitInput): Promise<{ flowId: string; requestId: string | null }> {
+    this.assertEnabled()
     const d = this.deps
     if (!d.enabled) throw new EngineError('not_implemented', 'Limit orders are not enabled in this build.')
     const { chainId } = input

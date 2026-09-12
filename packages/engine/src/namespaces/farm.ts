@@ -6,7 +6,27 @@
  * preview, and the flows — Deposit · Withdraw · Collect — through the sheet.
  */
 import { ELECTRONEUM_ADDRESSES } from '@boltvault/chains'
-import { BOLT_STAIRS, V2_PAIR_ABI, V3_POOL_ABI, YIELD_FARM_ABI, blocksUntilMultiplier, boltStair, dilution, durationMultiplier, encodeCollect, encodeDeposit, encodeWithdraw, fetchFarms, nextBoltStair, v2Counterpart, v2LiquidityMinted, v3AmountsForLiquidity, v3Counterpart, type ElectroSwapClient, type FarmIndexView } from '@boltvault/electroswap'
+import {
+  BOLT_STAIRS,
+  V2_PAIR_ABI,
+  V3_POOL_ABI,
+  YIELD_FARM_ABI,
+  blocksUntilMultiplier,
+  boltStair,
+  dilution,
+  durationMultiplier,
+  encodeCollect,
+  encodeDeposit,
+  encodeWithdraw,
+  fetchFarms,
+  nextBoltStair,
+  v2Counterpart,
+  v2LiquidityMinted,
+  v3AmountsForLiquidity,
+  v3Counterpart,
+  type ElectroSwapClient,
+  type FarmIndexView,
+} from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
 import { encodeFunctionData, maxUint256, parseAbi, parseUnits, type Hex } from 'viem'
 import { z } from 'zod'
@@ -14,7 +34,14 @@ import { EngineError } from '../errors'
 import { cacheKey, type Cached, type DocCache } from '../cache'
 import type { NamespaceSpec } from '../host'
 import { readMany, type ReadCall } from '../multicall'
-import { FarmViewSchema, AccountIdSchema, type FarmDepositQuote, type FarmView, type FarmWithdrawQuote, type SwapStep } from '../schema'
+import {
+  FarmViewSchema,
+  AccountIdSchema,
+  type FarmDepositQuote,
+  type FarmView,
+  type FarmWithdrawQuote,
+  type SwapStep,
+} from '../schema'
 import type { SettingsStore } from '../settingsStore'
 import type { ChainsService } from './chains'
 import type { FlowStepRun, FlowStore } from './flows'
@@ -22,9 +49,15 @@ import type { ProviderService } from './provider'
 import type { TokensService } from './tokens'
 import type { VaultManager } from './vault'
 
-const ERC20 = parseAbi(['function balanceOf(address owner) view returns (uint256)', 'function allowance(address owner, address spender) view returns (uint256)', 'function approve(address spender, uint256 amount) returns (bool)'])
+const ERC20 = parseAbi([
+  'function balanceOf(address owner) view returns (uint256)',
+  'function allowance(address owner, address spender) view returns (uint256)',
+  'function approve(address spender, uint256 amount) returns (bool)',
+])
 
 export interface FarmDeps {
+  /** Signed kill-switches (§3.7); absent in hosts that serve no statics. */
+  readonly statics?: { isDisabled(feature: 'farms'): boolean }
   readonly platform: Platform
   readonly chains: ChainsService
   readonly tokens: TokensService
@@ -38,7 +71,10 @@ export interface FarmDeps {
 
 /** A farm list is good for a minute. */
 const LIST_TTL_MS = 60_000
-const listSpec = (chainId: number, accountId: string | undefined) => ({ key: cacheKey('farm', 'list', chainId, accountId ?? '-'), schema: z.array(FarmViewSchema) })
+const listSpec = (chainId: number, accountId: string | undefined) => ({
+  key: cacheKey('farm', 'list', chainId, accountId ?? '-'),
+  schema: z.array(FarmViewSchema),
+})
 
 interface FarmTuple {
   readonly id: bigint
@@ -69,10 +105,12 @@ interface FarmerTuple {
 }
 
 const BLOCK_MS = 5_000
-const isEtn = (chainId: number): chainId is 52014 | 5201420 => chainId === 52014 || chainId === 5201420
+const isEtn = (chainId: number): chainId is 52014 | 5201420 =>
+  chainId === 52014 || chainId === 5201420
 const hex = (n: bigint): Hex => `0x${n.toString(16)}`
 const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
-const big = (r: { ok: boolean; value?: unknown } | undefined): bigint => (r?.ok && typeof r.value === 'bigint' ? r.value : 0n)
+const big = (r: { ok: boolean; value?: unknown } | undefined): bigint =>
+  r?.ok && typeof r.value === 'bigint' ? r.value : 0n
 
 function farmTuple(v: unknown): FarmTuple | null {
   if (!v || typeof v !== 'object') return null
@@ -98,10 +136,38 @@ function farmerTuple(v: unknown): FarmerTuple | null {
   if (!v || typeof v !== 'object') return null
   const f = v as Record<string, unknown>
   const n = (k: string): bigint => BigInt(String(f[k] ?? 0))
-  return { liquidity: n('liquidity'), boltMultiplier: n('boltMultiplier'), boltDeposited: n('boltDeposited'), durationMultiplier: n('durationMultiplier'), startingBlock: n('startingBlock'), rewards: n('rewards'), thirdPartyRewards: n('thirdPartyRewards'), fees0: n('fees0'), fees1: n('fees1') }
+  return {
+    liquidity: n('liquidity'),
+    boltMultiplier: n('boltMultiplier'),
+    boltDeposited: n('boltDeposited'),
+    durationMultiplier: n('durationMultiplier'),
+    startingBlock: n('startingBlock'),
+    rewards: n('rewards'),
+    thirdPartyRewards: n('thirdPartyRewards'),
+    fees0: n('fees0'),
+    fees1: n('fees1'),
+  }
 }
 
 export class FarmService {
+  /**
+   * The signed kill-switch for this surface (§3.7, docs/security.md).
+   *
+   * `statics.isDisabled` accepted six features and only `swap` and `bridge` ever
+   * called it, so four of the six documented emergency controls did nothing: ops
+   * could publish `limit: disabled` during an incident and the wallet would keep
+   * placing orders. Hiding a screen is not the control either — every namespace
+   * is callable from any UI page — so the check lives at the top of each verb
+   * that starts a flow.
+   */
+  private assertEnabled(): void {
+    if (this.deps.statics?.isDisabled('farms'))
+      throw new EngineError(
+        'invalid_argument',
+        'Farms are switched off right now by a signed flag from ElectroSwap.',
+      )
+  }
+
   constructor(private readonly deps: FarmDeps) {}
 
   private farmAddress(chainId: 52014 | 5201420): Hex {
@@ -120,19 +186,34 @@ export class FarmService {
   }
 
   /** Every farm's chain tuple; the API adds APY/TVL when reachable. */
-  private async farms(chainId: 52014 | 5201420, farmer: Hex | null): Promise<Array<{ tuple: FarmTuple; index: FarmIndexView | null }>> {
+  private async farms(
+    chainId: 52014 | 5201420,
+    farmer: Hex | null,
+  ): Promise<Array<{ tuple: FarmTuple; index: FarmIndexView | null }>> {
     const d = this.deps
     const farm = this.farmAddress(chainId)
     let index: FarmIndexView[] = []
-    if (d.electroswap) index = await fetchFarms(d.electroswap, chainId, farmer ?? undefined).catch(() => [])
+    if (d.electroswap)
+      index = await fetchFarms(d.electroswap, chainId, farmer ?? undefined).catch(() => [])
     let ids: bigint[]
     if (index.length) ids = index.map((f) => BigInt(f.id))
     else {
-      const [count] = await readMany(d.chains, chainId, [{ address: farm, abi: YIELD_FARM_ABI, functionName: 'farmCount', args: [] }])
+      const [count] = await readMany(d.chains, chainId, [
+        { address: farm, abi: YIELD_FARM_ABI, functionName: 'farmCount', args: [] },
+      ])
       const n = Number(big(count))
       ids = Array.from({ length: Math.min(n, 100) }, (_, i) => BigInt(i))
     }
-    const tuples = await readMany(d.chains, chainId, ids.map((id) => ({ address: farm, abi: YIELD_FARM_ABI, functionName: 'getFarmById', args: [id] })))
+    const tuples = await readMany(
+      d.chains,
+      chainId,
+      ids.map((id) => ({
+        address: farm,
+        abi: YIELD_FARM_ABI,
+        functionName: 'getFarmById',
+        args: [id],
+      })),
+    )
     const out: Array<{ tuple: FarmTuple; index: FarmIndexView | null }> = []
     ids.forEach((id, i) => {
       const t = tuples[i]?.ok ? farmTuple(tuples[i]?.value) : null
@@ -141,13 +222,27 @@ export class FarmService {
     return out
   }
 
-  private async positionOf(chainId: 52014 | 5201420, tuple: FarmTuple, owner: Hex, currentBlock: bigint, poolState: { reserves?: [bigint, bigint, bigint]; sqrtPriceX96?: bigint }): Promise<FarmView['position']> {
+  private async positionOf(
+    chainId: 52014 | 5201420,
+    tuple: FarmTuple,
+    owner: Hex,
+    currentBlock: bigint,
+    poolState: { reserves?: [bigint, bigint, bigint]; sqrtPriceX96?: bigint },
+  ): Promise<FarmView['position']> {
     const d = this.deps
-    const [r] = await readMany(d.chains, chainId, [{ address: this.farmAddress(chainId), abi: YIELD_FARM_ABI, functionName: 'getFarmerByFarmIdAndAddress', args: [tuple.id, owner] }])
+    const [r] = await readMany(d.chains, chainId, [
+      {
+        address: this.farmAddress(chainId),
+        abi: YIELD_FARM_ABI,
+        functionName: 'getFarmerByFarmIdAndAddress',
+        args: [tuple.id, owner],
+      },
+    ])
     const f = r?.ok ? farmerTuple(r.value) : null
     if (!f || f.liquidity === 0n) return null
     const blocksServed = currentBlock > f.startingBlock ? currentBlock - f.startingBlock : 0n
-    const duration = f.durationMultiplier > 0n ? f.durationMultiplier : durationMultiplier(blocksServed)
+    const duration =
+      f.durationMultiplier > 0n ? f.durationMultiplier : durationMultiplier(blocksServed)
     const to2 = blocksUntilMultiplier(blocksServed, 20_000n)
     const to25 = blocksUntilMultiplier(blocksServed, 25_000n)
     const now = d.platform.now()
@@ -160,14 +255,20 @@ export class FarmService {
         amount1 = (res1 * f.liquidity) / supply
       }
     } else if (poolState.sqrtPriceX96 !== undefined) {
-      const a = v3AmountsForLiquidity(poolState.sqrtPriceX96, tuple.tickLower, tuple.tickUpper, f.liquidity)
+      const a = v3AmountsForLiquidity(
+        poolState.sqrtPriceX96,
+        tuple.tickLower,
+        tuple.tickUpper,
+        f.liquidity,
+      )
       amount0 = a.amount0
       amount1 = a.amount1
     }
     const next = nextBoltStair(f.boltDeposited)
     return {
       liquidity: f.liquidity.toString(),
-      shareOfFarm: tuple.liquidity > 0n ? Number((f.liquidity * 1_000_000n) / tuple.liquidity) / 1_000_000 : 0,
+      shareOfFarm:
+        tuple.liquidity > 0n ? Number((f.liquidity * 1_000_000n) / tuple.liquidity) / 1_000_000 : 0,
       durationMultiplier: Number(duration),
       boltMultiplier: Number(f.boltMultiplier || 10_000n),
       boltDeposited: f.boltDeposited.toString(),
@@ -179,13 +280,22 @@ export class FarmService {
       fees1: f.fees1.toString(),
       at2x: to2 === 0n ? null : now + Number(to2) * BLOCK_MS,
       at25x: to25 === 0n ? null : now + Number(to25) * BLOCK_MS,
-      nextStair: next ? { bolt: next.bolt.toString(), multiplier: Number(next.multiplier), more: next.more.toString() } : null,
+      nextStair: next
+        ? {
+            bolt: next.bolt.toString(),
+            multiplier: Number(next.multiplier),
+            more: next.more.toString(),
+          }
+        : null,
       amount0: amount0.toString(),
       amount1: amount1.toString(),
     }
   }
 
-  private async poolState(chainId: 52014 | 5201420, tuple: FarmTuple): Promise<{ reserves?: [bigint, bigint, bigint]; sqrtPriceX96?: bigint }> {
+  private async poolState(
+    chainId: 52014 | 5201420,
+    tuple: FarmTuple,
+  ): Promise<{ reserves?: [bigint, bigint, bigint]; sqrtPriceX96?: bigint }> {
     const d = this.deps
     if (tuple.version === 2) {
       const [res, supply, t0] = await readMany(d.chains, chainId, [
@@ -199,17 +309,31 @@ export class FarmService {
       const flipped = t0?.ok && typeof t0.value === 'string' && !same(t0.value, tuple.token0)
       return { reserves: [flipped ? r1 : r0, flipped ? r0 : r1, big(supply)] }
     }
-    const [slot] = await readMany(d.chains, chainId, [{ address: tuple.poolAddr, abi: V3_POOL_ABI, functionName: 'slot0', args: [] }])
+    const [slot] = await readMany(d.chains, chainId, [
+      { address: tuple.poolAddr, abi: V3_POOL_ABI, functionName: 'slot0', args: [] },
+    ])
     if (!slot?.ok || !Array.isArray(slot.value)) return {}
     return { sqrtPriceX96: (slot.value as [bigint])[0] }
   }
 
-  private async view(chainId: 52014 | 5201420, tuple: FarmTuple, index: FarmIndexView | null, owner: Hex | null, currentBlock: bigint): Promise<FarmView> {
-    const [t0, t1] = await Promise.all([this.deps.tokens.get(chainId, tuple.token0), this.deps.tokens.get(chainId, tuple.token1)])
+  private async view(
+    chainId: 52014 | 5201420,
+    tuple: FarmTuple,
+    index: FarmIndexView | null,
+    owner: Hex | null,
+    currentBlock: bigint,
+  ): Promise<FarmView> {
+    const [t0, t1] = await Promise.all([
+      this.deps.tokens.get(chainId, tuple.token0),
+      this.deps.tokens.get(chainId, tuple.token1),
+    ])
     const wetn = ELECTRONEUM_ADDRESSES[chainId].wetn
-    const sym = (addr: string, t: { symbol: string } | null): string => (t ? t.symbol : same(addr, wetn) ? 'ETN' : `${addr.slice(0, 6)}…`)
+    const sym = (addr: string, t: { symbol: string } | null): string =>
+      t ? t.symbol : same(addr, wetn) ? 'ETN' : `${addr.slice(0, 6)}…`
     const state = owner ? await this.poolState(chainId, tuple) : {}
-    const position = owner ? await this.positionOf(chainId, tuple, owner, currentBlock, state) : null
+    const position = owner
+      ? await this.positionOf(chainId, tuple, owner, currentBlock, state)
+      : null
     return {
       chainId,
       id: Number(tuple.id),
@@ -226,7 +350,9 @@ export class FarmService {
       tvlUsd: index?.tvlUsd ?? null,
       baseApy: index?.baseApy ?? null,
       thirdPartyApy: index?.thirdPartyApy ?? null,
-      thirdParty: index?.thirdParty ? { token: index.thirdParty.token, symbol: index.thirdParty.symbol } : null,
+      thirdParty: index?.thirdParty
+        ? { token: index.thirdParty.token, symbol: index.thirdParty.symbol }
+        : null,
       farmerCount: index?.farmerCount ?? Number(tuple.farmerCount),
       position,
     }
@@ -246,7 +372,11 @@ export class FarmService {
       // moment, and the multicall coalescer folds them into a single
       // aggregate — then does the same for the position reads. 2N becomes 2.
       // Promise.all keeps the order, and the sort below owns the ordering.
-      const views = await Promise.all(farms.filter((f) => f.tuple.active || owner).map((f) => this.view(chainId, f.tuple, f.index, owner, block)))
+      const views = await Promise.all(
+        farms
+          .filter((f) => f.tuple.active || owner)
+          .map((f) => this.view(chainId, f.tuple, f.index, owner, block)),
+      )
       const out = views.filter((v) => v.active || v.position !== null)
       const rank = (f: FarmView): number => (f.position && f.active ? 0 : f.active ? 1 : 2)
       out.sort((a, b) => rank(a) - rank(b) || (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0))
@@ -265,31 +395,75 @@ export class FarmService {
   async farm(chainId: number, farmId: number, accountId?: string): Promise<FarmView | null> {
     if (!isEtn(chainId)) return null
     const owner = accountId ? (await this.account(accountId)).address : null
-    const [r] = await readMany(this.deps.chains, chainId, [{ address: this.farmAddress(chainId), abi: YIELD_FARM_ABI, functionName: 'getFarmById', args: [BigInt(farmId)] }])
+    const [r] = await readMany(this.deps.chains, chainId, [
+      {
+        address: this.farmAddress(chainId),
+        abi: YIELD_FARM_ABI,
+        functionName: 'getFarmById',
+        args: [BigInt(farmId)],
+      },
+    ])
     const tuple = r?.ok ? farmTuple(r.value) : null
     if (!tuple) return null
     let index: FarmIndexView | null = null
-    if (this.deps.electroswap) index = (await fetchFarms(this.deps.electroswap, chainId, owner ?? undefined).catch(() => [])).find((x) => x.id === farmId) ?? null
+    if (this.deps.electroswap)
+      index =
+        (await fetchFarms(this.deps.electroswap, chainId, owner ?? undefined).catch(() => [])).find(
+          (x) => x.id === farmId,
+        ) ?? null
     return this.view(chainId, tuple, index, owner, await this.head(chainId))
   }
 
   /** The deposit plate: the other side from the pool's ratio, the BOLT stair, the dilution, the sheets it takes. */
-  async quoteDeposit(input: { accountId: string; chainId: number; farmId: number; amount0?: string; amount1?: string; bolt?: string }): Promise<FarmDepositQuote> {
+  async quoteDeposit(input: {
+    accountId: string
+    chainId: number
+    farmId: number
+    amount0?: string
+    amount1?: string
+    bolt?: string
+  }): Promise<FarmDepositQuote> {
+    this.assertEnabled()
     const d = this.deps
     const problems: string[] = []
-    const empty: FarmDepositQuote = { farmId: input.farmId, amount0Raw: '0', amount1Raw: '0', boltRaw: '0', nativeSide: null, liquidityAdded: '0', multiplierBefore: 10_000, multiplierAfter: 10_000, boltStair: null, steps: [], ok: false, problems }
+    const empty: FarmDepositQuote = {
+      farmId: input.farmId,
+      amount0Raw: '0',
+      amount1Raw: '0',
+      boltRaw: '0',
+      nativeSide: null,
+      liquidityAdded: '0',
+      multiplierBefore: 10_000,
+      multiplierAfter: 10_000,
+      boltStair: null,
+      steps: [],
+      ok: false,
+      problems,
+    }
     if (!isEtn(input.chainId)) return { ...empty, problems: ['Farms live on Electroneum.'] }
     const chainId = input.chainId
     const account = await this.account(input.accountId)
     const view = await this.farm(chainId, input.farmId, input.accountId)
     if (!view) return { ...empty, problems: ['No such farm.'] }
     if (!view.active) problems.push('This farm is closed to deposits.')
-    if (account.kind === 'watch') problems.push('Watch-only — import a key or pair a device to deposit.')
-    const [r] = await readMany(d.chains, chainId, [{ address: this.farmAddress(chainId), abi: YIELD_FARM_ABI, functionName: 'getFarmById', args: [BigInt(input.farmId)] }])
+    if (account.kind === 'watch')
+      problems.push('Watch-only — import a key or pair a device to deposit.')
+    const [r] = await readMany(d.chains, chainId, [
+      {
+        address: this.farmAddress(chainId),
+        abi: YIELD_FARM_ABI,
+        functionName: 'getFarmById',
+        args: [BigInt(input.farmId)],
+      },
+    ])
     const tuple = r?.ok ? farmTuple(r.value) : null
     if (!tuple) return { ...empty, problems: ['No such farm.'] }
     const wetn = ELECTRONEUM_ADDRESSES[chainId].wetn
-    const nativeSide: 0 | 1 | null = same(tuple.token0, wetn) ? 0 : same(tuple.token1, wetn) ? 1 : null
+    const nativeSide: 0 | 1 | null = same(tuple.token0, wetn)
+      ? 0
+      : same(tuple.token1, wetn)
+        ? 1
+        : null
     const state = await this.poolState(chainId, tuple)
     let amount0 = 0n
     let amount1 = 0n
@@ -301,19 +475,46 @@ export class FarmService {
     }
     let liquidityAdded = 0n
     if (amount0 > 0n && amount1 === 0n) {
-      if (tuple.version === 2 && state.reserves) amount1 = v2Counterpart(amount0, state.reserves[0], state.reserves[1])
-      else if (state.sqrtPriceX96 !== undefined) amount1 = v3Counterpart(amount0, state.sqrtPriceX96, tuple.tickLower, tuple.tickUpper).amount1
+      if (tuple.version === 2 && state.reserves)
+        amount1 = v2Counterpart(amount0, state.reserves[0], state.reserves[1])
+      else if (state.sqrtPriceX96 !== undefined)
+        amount1 = v3Counterpart(
+          amount0,
+          state.sqrtPriceX96,
+          tuple.tickLower,
+          tuple.tickUpper,
+        ).amount1
     } else if (amount1 > 0n && amount0 === 0n) {
-      if (tuple.version === 2 && state.reserves) amount0 = v2Counterpart(amount1, state.reserves[1], state.reserves[0])
+      if (tuple.version === 2 && state.reserves)
+        amount0 = v2Counterpart(amount1, state.reserves[1], state.reserves[0])
       else if (state.sqrtPriceX96 !== undefined) {
         // Mirror: quote token0 from token1 by inverting the range maths through a token0 probe.
-        const probe = v3Counterpart(10n ** 18n, state.sqrtPriceX96, tuple.tickLower, tuple.tickUpper)
+        const probe = v3Counterpart(
+          10n ** 18n,
+          state.sqrtPriceX96,
+          tuple.tickLower,
+          tuple.tickUpper,
+        )
         amount0 = probe.amount1 > 0n ? (amount1 * 10n ** 18n) / probe.amount1 : 0n
       }
     }
-    if (tuple.version === 2 && state.reserves) liquidityAdded = v2LiquidityMinted(amount0, amount1, state.reserves[0], state.reserves[1], state.reserves[2])
-    else if (state.sqrtPriceX96 !== undefined) liquidityAdded = v3Counterpart(amount0, state.sqrtPriceX96, tuple.tickLower, tuple.tickUpper).liquidity
-    if (amount0 <= 0n || amount1 <= 0n) problems.push('Both sides need an amount; the pool sets the ratio.')
+    if (tuple.version === 2 && state.reserves)
+      liquidityAdded = v2LiquidityMinted(
+        amount0,
+        amount1,
+        state.reserves[0],
+        state.reserves[1],
+        state.reserves[2],
+      )
+    else if (state.sqrtPriceX96 !== undefined)
+      liquidityAdded = v3Counterpart(
+        amount0,
+        state.sqrtPriceX96,
+        tuple.tickLower,
+        tuple.tickUpper,
+      ).liquidity
+    if (amount0 <= 0n || amount1 <= 0n)
+      problems.push('Both sides need an amount; the pool sets the ratio.')
     let bolt = 0n
     try {
       if (input.bolt?.trim()) bolt = parseUnits(input.bolt.trim(), 18)
@@ -323,19 +524,49 @@ export class FarmService {
     const existingBolt = view.position ? BigInt(view.position.boltDeposited) : 0n
     const total = existingBolt + bolt
     const stair = bolt > 0n ? boltStair(total) : boltStair(existingBolt)
-    if (bolt > 0n && !stair) problems.push(`BOLT boosts land on ${BOLT_STAIRS.slice(1).map((s) => (s.bolt / 10n ** 18n).toString()).join(' or ')} BOLT in total.`)
+    if (bolt > 0n && !stair)
+      problems.push(
+        `BOLT boosts land on ${BOLT_STAIRS.slice(1)
+          .map((s) => (s.bolt / 10n ** 18n).toString())
+          .join(' or ')} BOLT in total.`,
+      )
     // Balances and allowances.
     const owner = account.address
     const bolt2 = ELECTRONEUM_ADDRESSES[chainId].bolt as Hex | null
     const calls: ReadCall[] = [
       { address: tuple.token0, abi: ERC20, functionName: 'balanceOf', args: [owner] },
       { address: tuple.token1, abi: ERC20, functionName: 'balanceOf', args: [owner] },
-      { address: tuple.token0, abi: ERC20, functionName: 'allowance', args: [owner, this.farmAddress(chainId)] },
-      { address: tuple.token1, abi: ERC20, functionName: 'allowance', args: [owner, this.farmAddress(chainId)] },
-      ...(bolt2 ? [{ address: bolt2, abi: ERC20, functionName: 'balanceOf', args: [owner] }, { address: bolt2, abi: ERC20, functionName: 'allowance', args: [owner, this.farmAddress(chainId)] }] : []),
+      {
+        address: tuple.token0,
+        abi: ERC20,
+        functionName: 'allowance',
+        args: [owner, this.farmAddress(chainId)],
+      },
+      {
+        address: tuple.token1,
+        abi: ERC20,
+        functionName: 'allowance',
+        args: [owner, this.farmAddress(chainId)],
+      },
+      ...(bolt2
+        ? [
+            { address: bolt2, abi: ERC20, functionName: 'balanceOf', args: [owner] },
+            {
+              address: bolt2,
+              abi: ERC20,
+              functionName: 'allowance',
+              args: [owner, this.farmAddress(chainId)],
+            },
+          ]
+        : []),
     ]
     const st = await readMany(d.chains, chainId, calls)
-    const native = BigInt(String((await d.chains.rpc(chainId, 'eth_getBalance', [owner, 'latest']).catch(() => '0x0')) ?? '0x0'))
+    const native = BigInt(
+      String(
+        (await d.chains.rpc(chainId, 'eth_getBalance', [owner, 'latest']).catch(() => '0x0')) ??
+          '0x0',
+      ),
+    )
     const bal0 = nativeSide === 0 ? native : big(st[0])
     const bal1 = nativeSide === 1 ? native : big(st[1])
     if (amount0 > bal0) problems.push(`Not enough ${view.symbol0}.`)
@@ -347,7 +578,14 @@ export class FarmService {
     if (bolt > 0n && bolt2 && big(st[5]) < bolt) steps.push('approve')
     steps.push('deposit')
     const block = await this.head(chainId)
-    const dil = view.position ? dilution({ existingLiquidity: BigInt(view.position.liquidity), startingBlock: BigInt(view.position.startingBlock), currentBlock: block, addedLiquidity: liquidityAdded }) : { before: 10_000n, after: 10_000n, blocksLost: 0n }
+    const dil = view.position
+      ? dilution({
+          existingLiquidity: BigInt(view.position.liquidity),
+          startingBlock: BigInt(view.position.startingBlock),
+          currentBlock: block,
+          addedLiquidity: liquidityAdded,
+        })
+      : { before: 10_000n, after: 10_000n, blocksLost: 0n }
     return {
       farmId: input.farmId,
       amount0Raw: amount0.toString(),
@@ -357,7 +595,9 @@ export class FarmService {
       liquidityAdded: liquidityAdded.toString(),
       multiplierBefore: Number(dil.before),
       multiplierAfter: Number(dil.after),
-      boltStair: stair ? { total: stair.bolt.toString(), multiplier: Number(stair.multiplier) } : null,
+      boltStair: stair
+        ? { total: stair.bolt.toString(), multiplier: Number(stair.multiplier) }
+        : null,
       steps,
       ok: problems.length === 0,
       problems,
@@ -365,12 +605,28 @@ export class FarmService {
   }
 
   /** Deposit: approve what the farm may not pull yet, then `deposit` with the native side in `value`. */
-  async deposit(input: { accountId: string; chainId: number; farmId: number; amount0?: string; amount1?: string; bolt?: string }): Promise<{ flowId: string; requestId: string | null }> {
+  async deposit(input: {
+    accountId: string
+    chainId: number
+    farmId: number
+    amount0?: string
+    amount1?: string
+    bolt?: string
+  }): Promise<{ flowId: string; requestId: string | null }> {
+    this.assertEnabled()
     const q = await this.quoteDeposit(input)
-    if (!q.ok || !isEtn(input.chainId)) throw new EngineError('invalid_argument', q.problems[0] ?? 'cannot deposit')
+    if (!q.ok || !isEtn(input.chainId))
+      throw new EngineError('invalid_argument', q.problems[0] ?? 'cannot deposit')
     const chainId = input.chainId
     const account = await this.account(input.accountId)
-    const [r] = await readMany(this.deps.chains, chainId, [{ address: this.farmAddress(chainId), abi: YIELD_FARM_ABI, functionName: 'getFarmById', args: [BigInt(input.farmId)] }])
+    const [r] = await readMany(this.deps.chains, chainId, [
+      {
+        address: this.farmAddress(chainId),
+        abi: YIELD_FARM_ABI,
+        functionName: 'getFarmById',
+        args: [BigInt(input.farmId)],
+      },
+    ])
     const tuple = r?.ok ? farmTuple(r.value) : null
     if (!tuple) throw new EngineError('not_found', 'No such farm.')
     const farm = this.farmAddress(chainId)
@@ -383,35 +639,106 @@ export class FarmService {
     const allowances = await readMany(this.deps.chains, chainId, [
       { address: tuple.token0, abi: ERC20, functionName: 'allowance', args: [owner, farm] },
       { address: tuple.token1, abi: ERC20, functionName: 'allowance', args: [owner, farm] },
-      ...(bolt2 ? [{ address: bolt2, abi: ERC20, functionName: 'allowance', args: [owner, farm] }] : []),
+      ...(bolt2
+        ? [{ address: bolt2, abi: ERC20, functionName: 'allowance', args: [owner, farm] }]
+        : []),
     ])
     const steps: FlowStepRun[] = []
     const approve = (token: Hex, amount: bigint): FlowStepRun => ({
       step: 'approve',
       waitReceipt: true,
-      run: () => this.deps.provider.runInternal({ kind: 'send_transaction', origin: 'internal:farm:approve', chainId, accountId: input.accountId, tx: { from: owner, to: token, value: '0x0', data: encodeFunctionData({ abi: ERC20, functionName: 'approve', args: [farm, exact ? amount : maxUint256] }) }, clientRequestId: `farm:approve:${token}:${this.deps.platform.now()}` }),
+      run: () =>
+        this.deps.provider.runInternal({
+          kind: 'send_transaction',
+          origin: 'internal:farm:approve',
+          chainId,
+          accountId: input.accountId,
+          tx: {
+            from: owner,
+            to: token,
+            value: '0x0',
+            data: encodeFunctionData({
+              abi: ERC20,
+              functionName: 'approve',
+              args: [farm, exact ? amount : maxUint256],
+            }),
+          },
+          clientRequestId: `farm:approve:${token}:${this.deps.platform.now()}`,
+        }),
     })
-    if (q.nativeSide !== 0 && big(allowances[0]) < amount0) steps.push(approve(tuple.token0, amount0))
-    if (q.nativeSide !== 1 && big(allowances[1]) < amount1) steps.push(approve(tuple.token1, amount1))
+    if (q.nativeSide !== 0 && big(allowances[0]) < amount0)
+      steps.push(approve(tuple.token0, amount0))
+    if (q.nativeSide !== 1 && big(allowances[1]) < amount1)
+      steps.push(approve(tuple.token1, amount1))
     if (bolt > 0n && bolt2 && big(allowances[2]) < bolt) steps.push(approve(bolt2, bolt))
     const value = q.nativeSide === 0 ? amount0 : q.nativeSide === 1 ? amount1 : 0n
-    steps.push({ step: 'deposit', waitReceipt: true, run: () => this.deps.provider.runInternal({ kind: 'send_transaction', origin: 'internal:farm:deposit', chainId, accountId: input.accountId, tx: { from: owner, to: farm, value: hex(value), data: encodeDeposit(BigInt(input.farmId), amount0, amount1, bolt) }, clientRequestId: `farm:deposit:${input.farmId}:${this.deps.platform.now()}` }) })
-    const flow = await this.deps.flows.start({ kind: 'farm', accountId: input.accountId, chainId, quote: null, steps })
+    steps.push({
+      step: 'deposit',
+      waitReceipt: true,
+      run: () =>
+        this.deps.provider.runInternal({
+          kind: 'send_transaction',
+          origin: 'internal:farm:deposit',
+          chainId,
+          accountId: input.accountId,
+          tx: {
+            from: owner,
+            to: farm,
+            value: hex(value),
+            data: encodeDeposit(BigInt(input.farmId), amount0, amount1, bolt),
+          },
+          clientRequestId: `farm:deposit:${input.farmId}:${this.deps.platform.now()}`,
+        }),
+    })
+    const flow = await this.deps.flows.start({
+      kind: 'farm',
+      accountId: input.accountId,
+      chainId,
+      quote: null,
+      steps,
+    })
     return { flowId: flow.id, requestId: flow.steps[0]?.requestId ?? null }
   }
 
   /** The withdraw slider's preview: what leaves at this percentage, what is collected with it, what multiplier stays. */
-  async quoteWithdraw(input: { accountId: string; chainId: number; farmId: number; percent: number; asNative: boolean }): Promise<FarmWithdrawQuote> {
+  async quoteWithdraw(input: {
+    accountId: string
+    chainId: number
+    farmId: number
+    percent: number
+    asNative: boolean
+  }): Promise<FarmWithdrawQuote> {
+    this.assertEnabled()
     const problems: string[] = []
-    const base: FarmWithdrawQuote = { farmId: input.farmId, liquidityRaw: '0', percent: input.percent, amount0Raw: '0', amount1Raw: '0', rewardsRaw: '0', thirdPartyRaw: '0', fees0Raw: '0', fees1Raw: '0', boltReturnedRaw: '0', keepsMultiplier: true, ok: false, problems }
+    const base: FarmWithdrawQuote = {
+      farmId: input.farmId,
+      liquidityRaw: '0',
+      percent: input.percent,
+      amount0Raw: '0',
+      amount1Raw: '0',
+      rewardsRaw: '0',
+      thirdPartyRaw: '0',
+      fees0Raw: '0',
+      fees1Raw: '0',
+      boltReturnedRaw: '0',
+      keepsMultiplier: true,
+      ok: false,
+      problems,
+    }
     if (!isEtn(input.chainId)) return { ...base, problems: ['Farms live on Electroneum.'] }
     const view = await this.farm(input.chainId, input.farmId, input.accountId)
     if (!view?.position) return { ...base, problems: ['You have nothing in this farm.'] }
     const pct = Math.max(0, Math.min(100, input.percent))
     const liquidity = (BigInt(view.position.liquidity) * BigInt(Math.round(pct * 100))) / 10_000n
     const all = pct >= 100
-    const scale = (raw: string): string => ((BigInt(raw) * BigInt(Math.round(pct * 100))) / 10_000n).toString()
-    if (input.asNative && !same(view.token0, ELECTRONEUM_ADDRESSES[input.chainId].wetn) && !same(view.token1, ELECTRONEUM_ADDRESSES[input.chainId].wetn)) problems.push('This farm has no ETN side to unwrap.')
+    const scale = (raw: string): string =>
+      ((BigInt(raw) * BigInt(Math.round(pct * 100))) / 10_000n).toString()
+    if (
+      input.asNative &&
+      !same(view.token0, ELECTRONEUM_ADDRESSES[input.chainId].wetn) &&
+      !same(view.token1, ELECTRONEUM_ADDRESSES[input.chainId].wetn)
+    )
+      problems.push('This farm has no ETN side to unwrap.')
     return {
       ...base,
       liquidityRaw: (all ? BigInt(view.position.liquidity) : liquidity).toString(),
@@ -428,9 +755,17 @@ export class FarmService {
     }
   }
 
-  async withdraw(input: { accountId: string; chainId: number; farmId: number; percent: number; asNative: boolean }): Promise<{ flowId: string; requestId: string | null }> {
+  async withdraw(input: {
+    accountId: string
+    chainId: number
+    farmId: number
+    percent: number
+    asNative: boolean
+  }): Promise<{ flowId: string; requestId: string | null }> {
+    this.assertEnabled()
     const q = await this.quoteWithdraw(input)
-    if (!q.ok || !isEtn(input.chainId)) throw new EngineError('invalid_argument', q.problems[0] ?? 'cannot withdraw')
+    if (!q.ok || !isEtn(input.chainId))
+      throw new EngineError('invalid_argument', q.problems[0] ?? 'cannot withdraw')
     const chainId = input.chainId
     const account = await this.account(input.accountId)
     const flow = await this.deps.flows.start({
@@ -438,14 +773,40 @@ export class FarmService {
       accountId: input.accountId,
       chainId,
       quote: null,
-      steps: [{ step: 'withdraw', waitReceipt: true, run: () => this.deps.provider.runInternal({ kind: 'send_transaction', origin: 'internal:farm:withdraw', chainId, accountId: input.accountId, tx: { from: account.address, to: this.farmAddress(chainId), value: '0x0', data: encodeWithdraw(BigInt(input.farmId), BigInt(q.liquidityRaw), input.asNative) }, clientRequestId: `farm:withdraw:${input.farmId}:${this.deps.platform.now()}` }) }],
+      steps: [
+        {
+          step: 'withdraw',
+          waitReceipt: true,
+          run: () =>
+            this.deps.provider.runInternal({
+              kind: 'send_transaction',
+              origin: 'internal:farm:withdraw',
+              chainId,
+              accountId: input.accountId,
+              tx: {
+                from: account.address,
+                to: this.farmAddress(chainId),
+                value: '0x0',
+                data: encodeWithdraw(BigInt(input.farmId), BigInt(q.liquidityRaw), input.asNative),
+              },
+              clientRequestId: `farm:withdraw:${input.farmId}:${this.deps.platform.now()}`,
+            }),
+        },
+      ],
     })
     return { flowId: flow.id, requestId: flow.steps[0]?.requestId ?? null }
   }
 
   /** Collect = `withdraw(farmId, 0, asNative)`: rewards and fees out, liquidity untouched (§8.8). */
-  async collect(input: { accountId: string; chainId: number; farmId: number; asNative: boolean }): Promise<{ flowId: string; requestId: string | null }> {
-    if (!isEtn(input.chainId)) throw new EngineError('invalid_argument', 'Farms live on Electroneum.')
+  async collect(input: {
+    accountId: string
+    chainId: number
+    farmId: number
+    asNative: boolean
+  }): Promise<{ flowId: string; requestId: string | null }> {
+    this.assertEnabled()
+    if (!isEtn(input.chainId))
+      throw new EngineError('invalid_argument', 'Farms live on Electroneum.')
     const chainId = input.chainId
     const account = await this.account(input.accountId)
     const view = await this.farm(chainId, input.farmId, input.accountId)
@@ -455,7 +816,26 @@ export class FarmService {
       accountId: input.accountId,
       chainId,
       quote: null,
-      steps: [{ step: 'collect', waitReceipt: true, run: () => this.deps.provider.runInternal({ kind: 'send_transaction', origin: 'internal:farm:collect', chainId, accountId: input.accountId, tx: { from: account.address, to: this.farmAddress(chainId), value: '0x0', data: encodeCollect(BigInt(input.farmId), input.asNative) }, clientRequestId: `farm:collect:${input.farmId}:${this.deps.platform.now()}` }) }],
+      steps: [
+        {
+          step: 'collect',
+          waitReceipt: true,
+          run: () =>
+            this.deps.provider.runInternal({
+              kind: 'send_transaction',
+              origin: 'internal:farm:collect',
+              chainId,
+              accountId: input.accountId,
+              tx: {
+                from: account.address,
+                to: this.farmAddress(chainId),
+                value: '0x0',
+                data: encodeCollect(BigInt(input.farmId), input.asNative),
+              },
+              clientRequestId: `farm:collect:${input.farmId}:${this.deps.platform.now()}`,
+            }),
+        },
+      ],
     })
     return { flowId: flow.id, requestId: flow.steps[0]?.requestId ?? null }
   }
@@ -466,13 +846,106 @@ const FarmArg = AccountChain.extend({ farmId: z.number().int().nonnegative() })
 
 export function farmNamespace(farm: FarmService): NamespaceSpec {
   return {
-    list: { input: z.object({ chainId: z.number().int().positive(), accountId: AccountIdSchema.optional() }), handler: (arg) => farm.list((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId) },
-    cachedList: { input: z.object({ chainId: z.number().int().positive(), accountId: AccountIdSchema.optional() }), handler: (arg) => farm.cachedList((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId) },
-    farm: { input: z.object({ chainId: z.number().int().positive(), farmId: z.number().int().nonnegative(), accountId: AccountIdSchema.optional() }), handler: (arg) => farm.farm((arg as { chainId: number }).chainId, (arg as { farmId: number }).farmId, (arg as { accountId?: string }).accountId) },
-    quoteDeposit: { input: FarmArg.extend({ amount0: z.string().max(60).optional(), amount1: z.string().max(60).optional(), bolt: z.string().max(60).optional() }), handler: (arg) => farm.quoteDeposit(arg as { accountId: string; chainId: number; farmId: number; amount0?: string; amount1?: string; bolt?: string }) },
-    deposit: { input: FarmArg.extend({ amount0: z.string().max(60).optional(), amount1: z.string().max(60).optional(), bolt: z.string().max(60).optional() }), handler: (arg) => farm.deposit(arg as { accountId: string; chainId: number; farmId: number; amount0?: string; amount1?: string; bolt?: string }) },
-    quoteWithdraw: { input: FarmArg.extend({ percent: z.number().min(0).max(100), asNative: z.boolean() }), handler: (arg) => farm.quoteWithdraw(arg as { accountId: string; chainId: number; farmId: number; percent: number; asNative: boolean }) },
-    withdraw: { input: FarmArg.extend({ percent: z.number().min(0).max(100), asNative: z.boolean() }), handler: (arg) => farm.withdraw(arg as { accountId: string; chainId: number; farmId: number; percent: number; asNative: boolean }) },
-    collect: { input: FarmArg.extend({ asNative: z.boolean() }), handler: (arg) => farm.collect(arg as { accountId: string; chainId: number; farmId: number; asNative: boolean }) },
+    list: {
+      input: z.object({
+        chainId: z.number().int().positive(),
+        accountId: AccountIdSchema.optional(),
+      }),
+      handler: (arg) =>
+        farm.list((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId),
+    },
+    cachedList: {
+      input: z.object({
+        chainId: z.number().int().positive(),
+        accountId: AccountIdSchema.optional(),
+      }),
+      handler: (arg) =>
+        farm.cachedList(
+          (arg as { chainId: number }).chainId,
+          (arg as { accountId?: string }).accountId,
+        ),
+    },
+    farm: {
+      input: z.object({
+        chainId: z.number().int().positive(),
+        farmId: z.number().int().nonnegative(),
+        accountId: AccountIdSchema.optional(),
+      }),
+      handler: (arg) =>
+        farm.farm(
+          (arg as { chainId: number }).chainId,
+          (arg as { farmId: number }).farmId,
+          (arg as { accountId?: string }).accountId,
+        ),
+    },
+    quoteDeposit: {
+      input: FarmArg.extend({
+        amount0: z.string().max(60).optional(),
+        amount1: z.string().max(60).optional(),
+        bolt: z.string().max(60).optional(),
+      }),
+      handler: (arg) =>
+        farm.quoteDeposit(
+          arg as {
+            accountId: string
+            chainId: number
+            farmId: number
+            amount0?: string
+            amount1?: string
+            bolt?: string
+          },
+        ),
+    },
+    deposit: {
+      input: FarmArg.extend({
+        amount0: z.string().max(60).optional(),
+        amount1: z.string().max(60).optional(),
+        bolt: z.string().max(60).optional(),
+      }),
+      handler: (arg) =>
+        farm.deposit(
+          arg as {
+            accountId: string
+            chainId: number
+            farmId: number
+            amount0?: string
+            amount1?: string
+            bolt?: string
+          },
+        ),
+    },
+    quoteWithdraw: {
+      input: FarmArg.extend({ percent: z.number().min(0).max(100), asNative: z.boolean() }),
+      handler: (arg) =>
+        farm.quoteWithdraw(
+          arg as {
+            accountId: string
+            chainId: number
+            farmId: number
+            percent: number
+            asNative: boolean
+          },
+        ),
+    },
+    withdraw: {
+      input: FarmArg.extend({ percent: z.number().min(0).max(100), asNative: z.boolean() }),
+      handler: (arg) =>
+        farm.withdraw(
+          arg as {
+            accountId: string
+            chainId: number
+            farmId: number
+            percent: number
+            asNative: boolean
+          },
+        ),
+    },
+    collect: {
+      input: FarmArg.extend({ asNative: z.boolean() }),
+      handler: (arg) =>
+        farm.collect(
+          arg as { accountId: string; chainId: number; farmId: number; asNative: boolean },
+        ),
+    },
   }
 }

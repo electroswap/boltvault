@@ -381,7 +381,7 @@ function SeedRevealSheet({ open, onClose, seed, reducedMotion = false }: { open:
       ) : (
         <Column gap="$2">
           <Body tone="mute">{t({ id: 'reveal.body', message: 'Enter your password. Make sure nobody can see your screen.' })}</Body>
-          <Input value={password} onChange={setPassword} secure autoFocus onSubmit={() => void reveal()} testID="reveal-password" />
+          <Input value={password} onChange={setPassword} secure sensitive autoFocus onSubmit={() => void reveal()} testID="reveal-password" />
           {passkeyOk ? <Key label={t({ id: 'reveal.passkey', message: 'Reveal with passkey' })} kind="secondary" size="compact" disabled={busy} onPress={() => void revealWithPasskey()} testID="reveal-passkey" /> : null}
           {biometricOk ? <Key label={t({ id: 'reveal.biometric', message: 'Reveal with biometrics' })} kind="secondary" size="compact" disabled={busy} onPress={() => void revealWithBiometric()} testID="reveal-biometric" /> : null}
           {error ? <Body tone="burn">{error}</Body> : null}

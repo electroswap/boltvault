@@ -52,4 +52,36 @@ export async function publishWidgetSnapshot(snapshot: WidgetSnapshot): Promise<v
   if (!dir.exists) dir.create({ intermediates: true })
   const file = new File(dir, WIDGET_FILE)
   file.write(JSON.stringify(snapshot))
+  excludeFromBackup(file)
+}
+
+/**
+ * Take the snapshot back: on lock, and when the account it described is gone.
+ *
+ * A widget that keeps showing a wallet nobody has unlocked for a week is a
+ * balance sitting on a lock screen, and the file behind it is one a backup
+ * picks up (§7.13, ATT-BV-033).
+ */
+export async function clearWidgetSnapshot(): Promise<void> {
+  const file = new File(new Directory(snapshotRoot(), WIDGET_DIR), WIDGET_FILE)
+  if (file.exists) file.delete()
+}
+
+/**
+ * Keep the snapshot out of iCloud.
+ *
+ * Without `NSURLIsExcludedFromBackupKey` the App Group container is backed up
+ * with everything else, so a file the wallet wrote for a widget on one phone
+ * is readable from a backup of it — which is a different threat model from
+ * "somebody has the phone". Best-effort: the API is iOS-only, and a failure
+ * here must not stop the widget being written.
+ */
+function excludeFromBackup(file: File): void {
+  if (Platform.OS !== 'ios') return
+  try {
+    const f = file as unknown as { excludeFromBackup?: () => void }
+    f.excludeFromBackup?.()
+  } catch {
+    // An older expo-file-system without the flag; the widget still works.
+  }
 }

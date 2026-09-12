@@ -8,12 +8,32 @@
  * large-send rules run before the verb arms. A broadcast send hands straight
  * back to Home, where the pending row already lives.
  */
-import { BarLoader, Body, Column, Icon, Input, Key, Pill, Plate, Row, ScrollView, TokenAvatar, metrics, paint, shortAddress } from '@boltvault/ui'
+import {
+  BarLoader,
+  Body,
+  Column,
+  Icon,
+  Input,
+  Key,
+  Pill,
+  Plate,
+  Row,
+  ScrollView,
+  TokenAvatar,
+  metrics,
+  paint,
+  shortAddress,
+} from '@boltvault/ui'
 import type { ChainView, ContactView, SendQuote, Settings, TokenView } from '@boltvault/engine'
 import { useEffect, useMemo, useState } from 'react'
 import { formatUnits } from 'viem'
 import { AmountWell } from '../components/AmountWell'
-import { ChainSelectPill, ChainSheet, ManageNetworksKey, useChainBalances } from '../components/ChainSelect'
+import {
+  ChainSelectPill,
+  ChainSheet,
+  ManageNetworksKey,
+  useChainBalances,
+} from '../components/ChainSelect'
 import { PageHeader } from '../components/PageHeader'
 import { ScreenFooter } from '../components/ScreenFooter'
 import { TokenPickerSheet } from '../components/TokenPickerSheet'
@@ -31,7 +51,21 @@ import { formatAmountFiat, formatQuantity } from '../format'
 
 const ETN = 52014
 
-export function Send({ body, token: initialToken, to: initialTo, requestId: initialRequestId, reducedMotion = false, chainId: initialChainId }: { body: 'extension-popup' | 'extension-tab' | 'mobile'; token?: string; to?: string; requestId?: string; reducedMotion?: boolean; chainId?: number }) {
+export function Send({
+  body,
+  token: initialToken,
+  to: initialTo,
+  requestId: initialRequestId,
+  reducedMotion = false,
+  chainId: initialChainId,
+}: {
+  body: 'extension-popup' | 'extension-tab' | 'mobile'
+  token?: string
+  to?: string
+  requestId?: string
+  reducedMotion?: boolean
+  chainId?: number
+}) {
   const engine = useEngine()
   const host = useHost()
   const router = useRouter()
@@ -62,7 +96,11 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
     list has arrived — the amount is in base units, so its decimals decide
     what the field should read. Parked here until then.
   */
-  const [request, setRequest] = useState<{ chainId: number; token: string | null; amountBase: string | null } | null>(null)
+  const [request, setRequest] = useState<{
+    chainId: number
+    token: string | null
+    amountBase: string | null
+  } | null>(null)
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
 
   useEffect(() => {
@@ -71,7 +109,10 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
     engine.contacts.list().then(setContacts, () => undefined)
   }, [engine])
   useEffect(() => {
-    engine.tokens.universe({ chainId }).then((u) => setTokens(u.filter((x) => !x.hidden)), () => undefined)
+    engine.tokens.universe({ chainId }).then(
+      (u) => setTokens(u.filter((x) => !x.hidden)),
+      () => undefined,
+    )
   }, [engine, chainId])
 
   // Quote as the user types; the engine resolves names and checks balances.
@@ -116,14 +157,23 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
       return
     }
     if (code.kind === 'unreadable') {
-      setError(t({ id: 'send.scan.unreadable', message: 'That code is not an address or a payment request.' }))
+      setError(
+        t({
+          id: 'send.scan.unreadable',
+          message: 'That code is not an address or a payment request.',
+        }),
+      )
       return
     }
     setTo(code.to)
     if (code.amount !== null && !code.baseUnits) setAmount(code.amount)
     const target = code.chainId ?? chainId
     if (target !== chainId) setChainId(target)
-    setRequest({ chainId: target, token: code.token, amountBase: code.baseUnits ? code.amount : null })
+    setRequest({
+      chainId: target,
+      token: code.token,
+      amountBase: code.baseUnits ? code.amount : null,
+    })
   }
 
   // The parked half of a scan, applied once the target chain's list is here.
@@ -133,10 +183,20 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
     const onChain = tokens.filter((x) => x.chainId === chainId)
     if (onChain.length === 0) return
     const wanted = request.token
-    const found = wanted === null ? (onChain.find((x) => x.address === 'native') ?? null) : (onChain.find((x) => x.address.toLowerCase() === wanted.toLowerCase()) ?? null)
+    const found =
+      wanted === null
+        ? (onChain.find((x) => x.address === 'native') ?? null)
+        : (onChain.find((x) => x.address.toLowerCase() === wanted.toLowerCase()) ?? null)
     setRequest(null)
     if (!found) {
-      setError(t({ id: 'send.scan.token', message: 'That request is for a token this wallet does not list on {c}. The address is filled in; pick the token yourself.', values: { c: chains.find((c) => c.chainId === chainId)?.name ?? String(chainId) } }))
+      setError(
+        t({
+          id: 'send.scan.token',
+          message:
+            'That request is for a token this wallet does not list on {c}. The address is filled in; pick the token yourself.',
+          values: { c: chains.find((c) => c.chainId === chainId)?.name ?? String(chainId) },
+        }),
+      )
       return
     }
     setToken(found.address)
@@ -164,7 +224,14 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
     once the device has answered, one way or the other.
   */
   const awaiting = requestId !== null && pending.some((r) => r.id === requestId)
-  const deviceName = active?.kind === 'ledger' ? 'Ledger' : active?.kind === 'trezor' ? 'Trezor' : active?.kind === 'keystone' ? 'Keystone' : null
+  const deviceName =
+    active?.kind === 'ledger'
+      ? 'Ledger'
+      : active?.kind === 'trezor'
+        ? 'Trezor'
+        : active?.kind === 'keystone'
+          ? 'Keystone'
+          : null
 
   const recents = useMemo(() => {
     const seen = new Set<string>()
@@ -180,9 +247,11 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
     return out
   }, [entries, contacts])
 
-  const chainName = (id: number): string => chains.find((c) => c.chainId === id)?.name ?? (id === ETN ? 'Electroneum' : `Chain ${id}`)
+  const chainName = (id: number): string =>
+    chains.find((c) => c.chainId === id)?.name ?? (id === ETN ? 'Electroneum' : `Chain ${id}`)
   const enabled = [ETN, ...(settings?.enabledChains ?? []).filter((c) => c !== ETN)]
-  const selected = tokens.find((x) => x.address.toLowerCase() === token.toLowerCase()) ?? tokens[0] ?? null
+  const selected =
+    tokens.find((x) => x.address.toLowerCase() === token.toLowerCase()) ?? tokens[0] ?? null
   const rows = portfolio.snapshot?.rows ?? []
   const currency = portfolio.snapshot?.currency ?? 'USD'
   const row = rows.find((r) => r.address.toLowerCase() === token.toLowerCase())
@@ -210,12 +279,37 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
 
   if (awaiting) {
     return (
-      <Column flex={1} backgroundColor="$void" padding={inset} gap="$4" justifyContent="center" testID="send-awaiting">
+      <Column
+        flex={1}
+        backgroundColor="$void"
+        padding={inset}
+        gap="$4"
+        justifyContent="center"
+        testID="send-awaiting"
+      >
         <BarLoader active reducedMotion={reducedMotion} />
-        <Body size="title">{t({ id: 'send.awaiting', message: 'Waiting for your signature' })}</Body>
-        <Body tone="mute">{deviceName ? t({ id: 'send.awaiting.device', message: 'Confirm it on your {d}. Nothing leaves this wallet until you do.', values: { d: deviceName } }) : t({ id: 'send.awaiting.body', message: 'Approve it to send. Nothing leaves this wallet until you do.' })}</Body>
+        <Body size="title">
+          {t({ id: 'send.awaiting', message: 'Waiting for your signature' })}
+        </Body>
+        <Body tone="mute">
+          {deviceName
+            ? t({
+                id: 'send.awaiting.device',
+                message: 'Confirm it on your {d}. Nothing leaves this wallet until you do.',
+                values: { d: deviceName },
+              })
+            : t({
+                id: 'send.awaiting.body',
+                message: 'Approve it to send. Nothing leaves this wallet until you do.',
+              })}
+        </Body>
         {/* Leaving the sheet must not strand the request: the way back to it is here. */}
-        <Key label={t({ id: 'send.awaiting.review', message: 'Show me the request' })} kind="secondary" onPress={() => requestId !== null && router.navigate('sign', { requestId })} testID="send-awaiting-review" />
+        <Key
+          label={t({ id: 'send.awaiting.review', message: 'Show me the request' })}
+          kind="secondary"
+          onPress={() => requestId !== null && router.navigate('sign', { requestId })}
+          testID="send-awaiting-review"
+        />
       </Column>
     )
   }
@@ -245,9 +339,25 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
   return (
     <Column flex={1}>
       <ScrollView contentContainerStyle={{ padding: inset, gap: 12 }} testID="send">
-        <PageHeader title={t({ id: 'send.title', message: 'Send' })} subtitle={active ? t({ id: 'from.account', message: 'from {a}', values: { a: `${active.label} · ${accountName ?? shortAddress(active.address)}` } }) : undefined} />
+        <PageHeader
+          title={t({ id: 'send.title', message: 'Send' })}
+          subtitle={
+            active
+              ? t({
+                  id: 'from.account',
+                  message: 'from {a}',
+                  values: { a: `${active.label} · ${accountName ?? shortAddress(active.address)}` },
+                })
+              : undefined
+          }
+        />
         <Row>
-          <ChainSelectPill chainId={chainId} label={chainName(chainId)} onPress={() => setChainOpen(true)} testID="send-chain" />
+          <ChainSelectPill
+            chainId={chainId}
+            label={chainName(chainId)}
+            onPress={() => setChainOpen(true)}
+            testID="send-chain"
+          />
         </Row>
 
         {/* To */}
@@ -256,9 +366,25 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
             <Body tone="mute" size="caption">
               {t({ id: 'send.to', message: 'To' })}
             </Body>
-            {host.scanQr ? <Key label={t({ id: 'send.scan', message: 'Scan' })} kind="secondary" size="compact" icon={<Icon name="scan" size={16} color={paint.mute} />} onPress={() => void scan()} testID="send-scan" /> : null}
+            {host.scanQr ? (
+              <Key
+                label={t({ id: 'send.scan', message: 'Scan' })}
+                kind="secondary"
+                size="compact"
+                icon={<Icon name="scan" size={16} color={paint.mute} />}
+                onPress={() => void scan()}
+                testID="send-scan"
+              />
+            ) : null}
           </Row>
-          <Input value={to} onChange={setTo} placeholder={t({ id: 'send.to.ph', message: 'Address or name.etn' })} error={to.trim() ? toProblem : null} autoFocus={!initialTo} testID="send-to-input" />
+          <Input
+            value={to}
+            onChange={setTo}
+            placeholder={t({ id: 'send.to.ph', message: 'Address or name.etn' })}
+            error={to.trim() ? toProblem : null}
+            autoFocus={!initialTo}
+            testID="send-to-input"
+          />
           {latched && quote?.to ? (
             <Row gap="$2" alignItems="center">
               <Icon name="check" size={16} color={paint.arc} />
@@ -269,9 +395,27 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
           ) : null}
           {contacts.length || recents.length ? (
             <Row gap="$2" flexWrap="wrap">
-              {contacts.slice(0, 4).map((c) => (
-                <Pill key={c.id} label={c.label} size="sm" onPress={() => setTo(c.address)} testID={`send-contact-${c.id}`} />
-              ))}
+              {/*
+                Confirmed entries only. §6 quarantines an address-book entry a
+                paired device sent — `ContactsStore.referenceAddresses` keeps
+                unconfirmed ones out of the lookalike reference set — but the
+                chips rendered the whole list, so a compromised phone could
+                plant "Mum → attacker" and the desktop offered it as a one-tap
+                recipient with no provenance at all. Devices is where an
+                arrival is vouched for.
+              */}
+              {contacts
+                .filter((c) => c.confirmed !== false)
+                .slice(0, 4)
+                .map((c) => (
+                  <Pill
+                    key={c.id}
+                    label={c.label}
+                    size="sm"
+                    onPress={() => setTo(c.address)}
+                    testID={`send-contact-${c.id}`}
+                  />
+                ))}
               {recents.map((a) => (
                 <Pill key={a} label={shortAddress(a)} size="sm" onPress={() => setTo(a)} />
               ))}
@@ -284,10 +428,32 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
           label={t({ id: 'send.amount', message: 'Amount' })}
           value={amount}
           onChange={setAmount}
-          tokenPill={<Pill strong label={selected?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })} icon={selected ? <TokenAvatar chainId={chainId} address={selected.address} symbol={selected.symbol} logoUri={selected.logoUri} size={18} /> : undefined} chevron tone="ink" onPress={() => setPickerOpen(true)} testID="send-token" />}
+          tokenPill={
+            <Pill
+              strong
+              label={selected?.symbol ?? t({ id: 'swap.pick', message: 'Pick' })}
+              icon={
+                selected ? (
+                  <TokenAvatar
+                    chainId={chainId}
+                    address={selected.address}
+                    symbol={selected.symbol}
+                    logoUri={selected.logoUri}
+                    size={18}
+                  />
+                ) : undefined
+              }
+              chevron
+              tone="ink"
+              onPress={() => setPickerOpen(true)}
+              testID="send-token"
+            />
+          }
           fiat={formatAmountFiat(amount, row, currency)}
           balance={row ? `${formatQuantity(row.quantity)} ${row.symbol}` : null}
-          onMax={quote ? () => setAmount(quote.max) : row ? () => setAmount(row.quantity) : undefined}
+          onMax={
+            quote ? () => setAmount(quote.max) : row ? () => setAmount(row.quantity) : undefined
+          }
           error={amount.trim() ? amountProblem : null}
           testID="send-amount"
           inputTestID="send-amount-input"
@@ -296,7 +462,11 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
         />
         {quote ? (
           <Body tone="mute" size="caption" testID="send-fee">
-            {t({ id: 'send.fee', message: 'Network fee about {fee} {s}', values: { fee: formatWei(quote.feeWei), s: quote.feeSymbol } })}
+            {t({
+              id: 'send.fee',
+              message: 'Network fee about {fee} {s}',
+              values: { fee: formatWei(quote.feeWei), s: quote.feeSymbol },
+            })}
           </Body>
         ) : null}
         {error ? <Body tone="burn">{error}</Body> : null}
@@ -304,16 +474,32 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
 
       <ScreenFooter inset={inset} testID="send-footer">
         <Body tone="mute" size="caption" fontSize={11} lineHeight={14}>
-          {t({ id: 'send.note', message: 'You will see exactly what moves before you sign. Sending to a contract or a new address asks for a second look.' })}
+          {t({
+            id: 'send.note',
+            message:
+              'You will see exactly what moves before you sign. Sending to a contract or a new address asks for a second look.',
+          })}
         </Body>
-        <Key label={t({ id: 'send.review', message: 'Review' })} disabled={busy || !quote?.ok} onPress={review} testID="send-review" />
+        <Key
+          label={t({ id: 'send.review', message: 'Review' })}
+          disabled={busy || !quote?.ok}
+          onPress={review}
+          testID="send-review"
+        />
       </ScreenFooter>
 
       <ChainSheet
         open={chainOpen}
         onClose={() => setChainOpen(false)}
         title={t({ id: 'send.chain.title', message: 'Send on' })}
-        options={enabled.map((id) => ({ id, name: chainName(id), ...(id === ETN ? { caption: t({ id: 'home.scope.etn.caption', message: 'Your home chain' }) } : {}), value: balances.get(id) ?? null }))}
+        options={enabled.map((id) => ({
+          id,
+          name: chainName(id),
+          ...(id === ETN
+            ? { caption: t({ id: 'home.scope.etn.caption', message: 'Your home chain' }) }
+            : {}),
+          value: balances.get(id) ?? null,
+        }))}
         selected={chainId}
         onSelect={(id) => {
           if (id !== 'all' && id !== chainId) {
@@ -323,12 +509,33 @@ export function Send({ body, token: initialToken, to: initialTo, requestId: init
           }
           setChainOpen(false)
         }}
-        footer={<ManageNetworksKey onPress={() => { setChainOpen(false); router.navigate('networks') }} testID="send-networks" />}
+        footer={
+          <ManageNetworksKey
+            onPress={() => {
+              setChainOpen(false)
+              router.navigate('networks')
+            }}
+            testID="send-networks"
+          />
+        }
         reducedMotion={reducedMotion}
         testID="send-chain-sheet"
         rowTestID={(id) => `send-chain-${id}`}
       />
-      <TokenPickerSheet open={pickerOpen} onClose={() => setPickerOpen(false)} title={t({ id: 'send.pick', message: 'Token to send' })} chainId={chainId} tokens={tokens} rows={rows} currency={currency} onPick={(address) => { setToken(address); setPickerOpen(false) }} reducedMotion={reducedMotion} />
+      <TokenPickerSheet
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        title={t({ id: 'send.pick', message: 'Token to send' })}
+        chainId={chainId}
+        tokens={tokens}
+        rows={rows}
+        currency={currency}
+        onPick={(address) => {
+          setToken(address)
+          setPickerOpen(false)
+        }}
+        reducedMotion={reducedMotion}
+      />
     </Column>
   )
 }

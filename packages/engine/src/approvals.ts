@@ -30,7 +30,12 @@ import { toHex } from '@boltvault/platform'
 import { z } from 'zod'
 import { EngineError } from './errors'
 import type { EventBus } from './host'
-import { ApprovalRequestSchema, type ApprovalDecision, type ApprovalKind, type ApprovalRequest } from './schema'
+import {
+  ApprovalRequestSchema,
+  type ApprovalDecision,
+  type ApprovalKind,
+  type ApprovalRequest,
+} from './schema'
 import { readDoc, writeDoc, type DocSpec } from './storage'
 
 const PENDING_DOC: DocSpec<ApprovalRequest[]> = {
@@ -57,7 +62,11 @@ export const MAX_PENDING = 8
  * can refuse afterwards. Holding those open would strand them in `signing`
  * with no signer to settle them.
  */
-const SIGNS: ReadonlySet<ApprovalKind> = new Set<ApprovalKind>(['sign_message', 'sign_typed_data', 'send_transaction'])
+const SIGNS: ReadonlySet<ApprovalKind> = new Set<ApprovalKind>([
+  'sign_message',
+  'sign_typed_data',
+  'send_transaction',
+])
 
 export interface CreateApprovalInput {
   readonly kind: ApprovalKind
@@ -80,12 +89,19 @@ export class ApprovalStore {
 
   async hydrate(): Promise<void> {
     if (this.hydrated) return
-    const { value } = await readDoc(this.platform.storage.session, PENDING_DOC, () => this.platform.now())
+    const { value } = await readDoc(this.platform.storage.session, PENDING_DOC, () =>
+      this.platform.now(),
+    )
     for (const r of value) {
       // Nobody is holding a `signing` request's promise after a restart — the
       // signer went down with the worker — so it returns to the queue rather
       // than sitting in a state only a live signer can leave.
-      this.byId.set(r.id, r.status === 'signing' ? { ...r, status: 'pending', expiresAt: this.platform.now() + this.ttlMs } : r)
+      this.byId.set(
+        r.id,
+        r.status === 'signing'
+          ? { ...r, status: 'pending', expiresAt: this.platform.now() + this.ttlMs }
+          : r,
+      )
     }
     this.hydrated = true
     this.expireDue()
@@ -123,7 +139,9 @@ export class ApprovalStore {
     this.expireDue()
     // `signing` stays in the list: the screen has to keep showing the request
     // while the device is being asked, and a refusal puts it back to pending.
-    return [...this.byId.values()].filter((r) => r.status === 'pending' || r.status === 'signing').sort((a, b) => a.createdAt - b.createdAt)
+    return [...this.byId.values()]
+      .filter((r) => r.status === 'pending' || r.status === 'signing')
+      .sort((a, b) => a.createdAt - b.createdAt)
   }
 
   get(id: string): ApprovalRequest | undefined {
@@ -140,7 +158,10 @@ export class ApprovalStore {
       must not be able to stop someone sending their own funds.
     */
     if (!input.origin.startsWith('internal:') && this.list().length >= MAX_PENDING)
-      throw new EngineError('limit_exceeded', 'Too many requests are already waiting for you. Answer or dismiss one first.')
+      throw new EngineError(
+        'limit_exceeded',
+        'Too many requests are already waiting for you. Answer or dismiss one first.',
+      )
     const now = this.platform.now()
     const req: ApprovalRequest = {
       id: toHex(this.platform.random(16)),
@@ -162,7 +183,19 @@ export class ApprovalStore {
   async waitFor(id: string): Promise<{ approved: boolean; data?: unknown }> {
     const existing = this.get(id)
     if (!existing) throw new EngineError('not_found', `no approval request ${id}`)
-    if (existing.status !== 'pending') return { approved: existing.status === 'approved', data: existing.decisionData }
+    /*
+      `signing` counts as approved: the human has said yes and the request is
+      in a signer's hands. It matters on the retry path — a refusal returns the
+      request to `pending`, the signer loops round to wait again, and the next
+      yes can land in the gap between `settle` persisting and `waitFor`
+      registering. Reading `signing` as "not approved" turned that race into a
+      phantom rejection of a request the person had just approved.
+    */
+    if (existing.status !== 'pending')
+      return {
+        approved: existing.status === 'approved' || existing.status === 'signing',
+        data: existing.decisionData,
+      }
     const approved = await new Promise<boolean>((resolve) => {
       const ws = this.waiters.get(id) ?? []
       ws.push(resolve)
@@ -199,11 +232,17 @@ export class ApprovalStore {
     const req = this.get(decision.id)
     if (!req) throw new EngineError('not_found', `no approval request ${decision.id}`)
     if (req.status === 'expired') throw new EngineError('expired', 'this request has expired')
-    if (req.status === 'signing') throw new EngineError('invalid_argument', 'this request is already being signed')
-    if (req.status !== 'pending') throw new EngineError('already_decided', 'this request was already decided')
+    if (req.status === 'signing')
+      throw new EngineError('invalid_argument', 'this request is already being signed')
+    if (req.status !== 'pending')
+      throw new EngineError('already_decided', 'this request was already decided')
 
     if (!decision.approve) {
-      const rejected: ApprovalRequest = { ...req, status: 'rejected', ...(decision.data !== undefined ? { decisionData: decision.data } : {}) }
+      const rejected: ApprovalRequest = {
+        ...req,
+        status: 'rejected',
+        ...(decision.data !== undefined ? { decisionData: decision.data } : {}),
+      }
       this.byId.set(req.id, rejected)
       this.resolveWaiters(req.id, false)
       await this.persist()
@@ -212,14 +251,23 @@ export class ApprovalStore {
 
     // Nothing to wait for unless a signature is coming.
     if (!SIGNS.has(req.kind)) {
-      const approved: ApprovalRequest = { ...req, status: 'approved', ...(decision.data !== undefined ? { decisionData: decision.data } : {}) }
+      const approved: ApprovalRequest = {
+        ...req,
+        status: 'approved',
+        ...(decision.data !== undefined ? { decisionData: decision.data } : {}),
+      }
       this.byId.set(req.id, approved)
       this.resolveWaiters(req.id, true)
       await this.persist()
       return approved
     }
 
-    const handed: ApprovalRequest = { ...req, status: 'signing', lastError: null, ...(decision.data !== undefined ? { decisionData: decision.data } : {}) }
+    const handed: ApprovalRequest = {
+      ...req,
+      status: 'signing',
+      lastError: null,
+      ...(decision.data !== undefined ? { decisionData: decision.data } : {}),
+    }
     this.byId.set(req.id, handed)
     await this.persist()
     // Release the signer only once the request is recorded as in flight.
@@ -247,7 +295,12 @@ export class ApprovalStore {
       // Back to the queue, with the full window again and the reason attached:
       // the user is about to be asked to approve it a second time and should
       // be told why the first attempt did not take.
-      this.byId.set(id, { ...req, status: 'pending', expiresAt: this.platform.now() + this.ttlMs, lastError: message ?? 'The device refused to sign.' })
+      this.byId.set(id, {
+        ...req,
+        status: 'pending',
+        expiresAt: this.platform.now() + this.ttlMs,
+        lastError: message ?? 'The device refused to sign.',
+      })
     } else {
       this.byId.set(id, { ...req, status: 'rejected', lastError: message ?? null })
     }

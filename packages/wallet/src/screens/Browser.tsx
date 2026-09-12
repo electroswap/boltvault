@@ -40,21 +40,44 @@ function normalise(input: string): string {
   return `https://duckduckgo.com/?q=${encodeURIComponent(s)}`
 }
 
-export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | 'extension-tab' | 'mobile'; url?: string }) {
+export function Browser({
+  body,
+  url: initialUrl,
+}: {
+  body: 'extension-popup' | 'extension-tab' | 'mobile'
+  url?: string
+}) {
   const engine = useEngine()
   const host = useHost()
   const router = useRouter()
   const [typed, setTyped] = useState(initialUrl ?? HOME)
   const [url, setUrl] = useState(initialUrl ?? HOME)
-  const [nav, setNav] = useState({ url: initialUrl ?? HOME, canGoBack: false, canGoForward: false, loading: false, title: '' })
+  const [nav, setNav] = useState({
+    url: initialUrl ?? HOME,
+    canGoBack: false,
+    canGoForward: false,
+    loading: false,
+    title: '',
+  })
+  /*
+    True from the moment a navigation begins until one commits. A page may
+    start a navigation to any origin and cancel it while staying loaded, so in
+    between there is no origin the wallet may speak for: the session is closed
+    and the channel answers 4900 (§5.3).
+  */
+  const [navigating, setNavigating] = useState(true)
   const [session, setSession] = useState<DappSession | null>(null)
   const [error, setError] = useState<string | null>(null)
   const handle = useRef<WebViewHandle | null>(null)
-  const channel = useRef(Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join(''))
+  const channel = useRef(
+    Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) =>
+      b.toString(16).padStart(2, '0'),
+    ).join(''),
+  )
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
 
   // One session per committed origin; the engine refuses anything that is not http(s).
-  const origin = originOf(nav.url)
+  const origin = navigating ? null : originOf(nav.url)
   useEffect(() => {
     let alive = true
     if (!origin) {
@@ -62,13 +85,20 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
       return
     }
     // Only a page the OS actually fetched over TLS is vouched for.
-    engine.dapps.open({ url: origin, kind: 'webview', verified: origin.startsWith('https://') }).then(
-      (s) => {
-        if (alive) setSession(s)
-        else void engine.dapps.close({ sessionId: s.sessionId })
-      },
-      (err: unknown) => alive && setError(err instanceof Error ? err.message : String(err)),
-    )
+    engine.dapps
+      .open({
+        url: origin,
+        kind: 'webview',
+        verified: origin.startsWith('https://'),
+        channel: channel.current,
+      })
+      .then(
+        (s) => {
+          if (alive) setSession(s)
+          else void engine.dapps.close({ sessionId: s.sessionId })
+        },
+        (err: unknown) => alive && setError(err instanceof Error ? err.message : String(err)),
+      )
     return () => {
       alive = false
     }
@@ -85,30 +115,83 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
     () =>
       engine.events.subscribe((e) => {
         if (e.type !== 'dapp.event' || e.sessionId !== session?.sessionId) return
-        handle.current?.postMessage(JSON.stringify({ target: CONTENT_TARGET, channel: channel.current, kind: 'event', event: e.event, payload: e.payload }))
+        handle.current?.postMessage(
+          JSON.stringify({
+            target: CONTENT_TARGET,
+            channel: channel.current,
+            kind: 'event',
+            event: e.event,
+            payload: e.payload,
+          }),
+        )
       }),
     [engine, session],
   )
 
   const onMessage = useCallback(
-    (raw: string) => {
-      let data: { target?: unknown; channel?: unknown; id?: unknown; method?: unknown; params?: unknown }
+    (raw: string, frameUrl: string | null) => {
+      let data: {
+        target?: unknown
+        channel?: unknown
+        id?: unknown
+        method?: unknown
+        params?: unknown
+      }
       try {
         data = JSON.parse(raw) as typeof data
       } catch {
         return
       }
-      if (data.target !== INPAGE_TARGET || data.channel !== channel.current || typeof data.id !== 'number' || typeof data.method !== 'string') return
+      if (
+        data.target !== INPAGE_TARGET ||
+        data.channel !== channel.current ||
+        typeof data.id !== 'number' ||
+        typeof data.method !== 'string'
+      )
+        return
       const id = data.id
-      const reply = (message: Record<string, unknown>): void => handle.current?.postMessage(JSON.stringify({ target: CONTENT_TARGET, channel: channel.current, kind: 'response', id, ...message }))
+      const reply = (message: Record<string, unknown>): void =>
+        handle.current?.postMessage(
+          JSON.stringify({
+            target: CONTENT_TARGET,
+            channel: channel.current,
+            kind: 'response',
+            id,
+            ...message,
+          }),
+        )
       if (!session) {
         reply({ error: { code: 4900, message: 'Not connected.' } })
         return
       }
-      engine.dapps.request({ sessionId: session.sessionId, id, method: data.method, ...(data.params !== undefined ? { params: data.params } : {}) }).then(
-        (r) => reply(r.error ? { error: r.error } : { result: r.result ?? null }),
-        (err: unknown) => reply({ error: { code: -32603, message: err instanceof Error ? err.message : 'failed' } }),
-      )
+      /*
+        Which frame spoke, not which page is on screen. The nonce only says
+        "a script somewhere in this screen's WebView" — the provider script is
+        main-frame-only but the native bridge is not, so an advert iframe on a
+        connected dApp could post `eth_accounts` and have it answered in the
+        dApp's name. The frame's own origin is the authenticator, and it has
+        to be the origin the session was opened for.
+      */
+      const from = frameUrl === null ? null : originOf(frameUrl)
+      if (from !== session.origin) {
+        reply({ error: { code: 4900, message: 'Not connected.' } })
+        return
+      }
+      engine.dapps
+        .request({
+          sessionId: session.sessionId,
+          channel: channel.current,
+          id,
+          method: data.method,
+          ...(data.params !== undefined ? { params: data.params } : {}),
+        })
+        .then(
+          (r) => reply(r.error ? { error: r.error } : { result: r.result ?? null }),
+          (err: unknown) =>
+            reply({
+              error: { code: -32603, message: err instanceof Error ? err.message : 'failed' },
+            }),
+        )
     },
     [engine, session],
   )
@@ -116,11 +199,14 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
   const script = `window.__BV_CHANNEL=${JSON.stringify(channel.current)};${host.browser?.providerScript ?? ''}`
   // An SPA route change on iOS can drop the early injection: check on every load end and re-inject (§5.3).
   const reinject = useCallback(() => {
-    handle.current?.injectJavaScript(`(function(){ if (!(window.ethereum && window.ethereum.isBoltVault)) { ${script} } })(); true;`)
+    handle.current?.injectJavaScript(
+      `(function(){ if (!(window.ethereum && window.ethereum.isBoltVault)) { ${script} } })(); true;`,
+    )
   }, [script])
 
   const go = (): void => {
     const next = normalise(typed)
+    setNavigating(true)
     setUrl(next)
     setTyped(next)
   }
@@ -130,8 +216,19 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
       <Column flex={1} padding={inset} gap="$3" testID="browser">
         <PageHeader title={t({ id: 'browser.title', message: 'Browser' })} />
         <Plate gap="$2">
-          <Body tone="mute">{t({ id: 'browser.web', message: 'The in-app browser is a phone feature. In the browser extension, BoltVault is already in every tab — open the site and connect from there.' })}</Body>
-          <Key label={t({ id: 'browser.open', message: 'Open app.electroswap.io' })} kind="secondary" onPress={() => void host.openUrl?.(HOME)} testID="browser-open" />
+          <Body tone="mute">
+            {t({
+              id: 'browser.web',
+              message:
+                'The in-app browser is a phone feature. In the browser extension, BoltVault is already in every tab — open the site and connect from there.',
+            })}
+          </Body>
+          <Key
+            label={t({ id: 'browser.open', message: 'Open app.electroswap.io' })}
+            kind="secondary"
+            onPress={() => void host.openUrl?.(HOME)}
+            testID="browser-open"
+          />
         </Plate>
       </Column>
     )
@@ -181,13 +278,31 @@ export function Browser({ body, url: initialUrl }: { body: 'extension-popup' | '
         <IconButton icon="refresh" label={t({ id: 'browser.reload', message: 'Reload' })} onPress={() => handle.current?.reload()} testID="browser-reload" />
       </Row>
       {/* Loading was a word on the strip that is gone; it is the hairline every browser draws. */}
-      <Column height={2} backgroundColor={nav.loading ? paint.arc : 'transparent'} testID="browser-progress" />
+      <Column height={2} backgroundColor={navigating ? paint.arc : 'transparent'} testID="browser-progress" />
       {error ? (
         <Body tone="burn" size="caption" paddingHorizontal={metrics.inset} testID="browser-error">
           {error}
         </Body>
       ) : null}
-      <WebView url={url} injectedScriptBeforeLoad={script} onMessage={onMessage} onNavigate={(s) => { setNav(s); setTyped(s.url); setError(null) }} onLoadEnd={reinject} onError={(m) => setError(m)} handleRef={(h) => (handle.current = h)} testID="browser-page" />
+      <WebView
+        url={url}
+        injectedScriptBeforeLoad={script}
+        onMessage={onMessage}
+        onNavigate={(s) => {
+          setNav(s)
+          setTyped(s.url)
+          setError(null)
+          setNavigating(false)
+        }}
+        onNavigateStart={() => setNavigating(true)}
+        onLoadEnd={reinject}
+        onError={(m) => {
+          setError(m)
+          setNavigating(false)
+        }}
+        handleRef={(h) => (handle.current = h)}
+        testID="browser-page"
+      />
     </Column>
   )
 }

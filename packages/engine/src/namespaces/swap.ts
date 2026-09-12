@@ -48,12 +48,26 @@ import {
 import type { Platform } from '@boltvault/platform'
 import { formatUnits, maxUint256, parseUnits, type Hex } from 'viem'
 import { z } from 'zod'
-import type { ClientFailureInput, ClientFailures, FailureKind, FailureStage, FailureTaxProbe } from '../clientFailureApi'
+import type {
+  ClientFailureInput,
+  ClientFailures,
+  FailureKind,
+  FailureStage,
+  FailureTaxProbe,
+} from '../clientFailureApi'
 import { EngineError } from '../errors'
 import type { NamespaceSpec } from '../host'
 import { readMany } from '../multicall'
 import type { Quoter, QuoterInput } from '../quoterApi'
-import { AccountIdSchema, type ActivityEntry, type SwapFlow, type SwapHop, type SwapQuote, type SwapStep, type TokenView } from '../schema'
+import {
+  AccountIdSchema,
+  type ActivityEntry,
+  type SwapFlow,
+  type SwapHop,
+  type SwapQuote,
+  type SwapStep,
+  type TokenView,
+} from '../schema'
 import type { SettingsStore } from '../settingsStore'
 import type { ChainsService } from './chains'
 import { FlowReceiptError, type FlowStepFailure, type FlowStepRun, type FlowStore } from './flows'
@@ -184,20 +198,34 @@ const BIPS_CEILING = 10_000
 /** Hard clamp, so a path that ever skips the refusal still leaves a non-zero floor. */
 const MAX_EFFECTIVE_SLIPPAGE_BPS = 9_900
 const hex = (n: bigint): Hex => `0x${n.toString(16)}`
-const isEtn = (chainId: number): chainId is 52014 | 5201420 => chainId === 52014 || chainId === 5201420
+const isEtn = (chainId: number): chainId is 52014 | 5201420 =>
+  chainId === 52014 || chainId === 5201420
 const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
 
 /** The engine's multicall reader in the router's shape. */
-export function readerFor(chains: ChainsService, chainId: number): (calls: readonly EsReadCall[]) => Promise<EsReadResult[]> {
+export function readerFor(
+  chains: ChainsService,
+  chainId: number,
+): (calls: readonly EsReadCall[]) => Promise<EsReadResult[]> {
   return (calls) => readMany(chains, chainId, calls)
 }
 
 export function quoteAddresses(chainId: 52014 | 5201420): QuoteAddresses {
   const a = ELECTRONEUM_ADDRESSES[chainId]
-  return { quoterV2: a.quoterV2 as Hex, mixedRouteQuoter: a.mixedRouteQuoter as Hex | null, v2Router02: a.v2Router02 as Hex, bases: [a.wetn, a.usdc, a.usdt, ...(a.bolt ? [a.bolt] : [])].map((x) => x as Hex) }
+  return {
+    quoterV2: a.quoterV2 as Hex,
+    mixedRouteQuoter: a.mixedRouteQuoter as Hex | null,
+    v2Router02: a.v2Router02 as Hex,
+    bases: [a.wetn, a.usdc, a.usdt, ...(a.bolt ? [a.bolt] : [])].map((x) => x as Hex),
+  }
 }
 
-export function rateOf(amountIn: bigint, amountOut: bigint, decimalsIn: number, decimalsOut: number): number | null {
+export function rateOf(
+  amountIn: bigint,
+  amountOut: bigint,
+  decimalsIn: number,
+  decimalsOut: number,
+): number | null {
   if (amountIn === 0n) return null
   const i = Number(formatUnits(amountIn, decimalsIn))
   const o = Number(formatUnits(amountOut, decimalsOut))
@@ -216,15 +244,26 @@ export function rateOf(amountIn: bigint, amountOut: bigint, decimalsIn: number, 
  */
 function encodableHop(h: SwapHop): Hop {
   if (h.kind === 'v2') return { kind: 'v2', tokenIn: h.tokenIn as Hex, tokenOut: h.tokenOut as Hex }
-  if (h.fee === undefined) throw new EngineError('invalid_argument', 'That route came back without a fee tier. Start the swap again to re-price it.')
+  if (h.fee === undefined)
+    throw new EngineError(
+      'invalid_argument',
+      'That route came back without a fee tier. Start the swap again to re-price it.',
+    )
   return { kind: 'v3', tokenIn: h.tokenIn as Hex, tokenOut: h.tokenOut as Hex, fee: h.fee }
 }
 
 export class SwapService {
   constructor(private readonly deps: SwapDeps) {}
 
-  private async pair(chainId: number, tokenIn: string, tokenOut: string): Promise<{ inView: TokenView | null; outView: TokenView | null }> {
-    const [inView, outView] = await Promise.all([this.deps.tokens.get(chainId, tokenIn), this.deps.tokens.get(chainId, tokenOut)])
+  private async pair(
+    chainId: number,
+    tokenIn: string,
+    tokenOut: string,
+  ): Promise<{ inView: TokenView | null; outView: TokenView | null }> {
+    const [inView, outView] = await Promise.all([
+      this.deps.tokens.get(chainId, tokenIn),
+      this.deps.tokens.get(chainId, tokenOut),
+    ])
     return { inView, outView }
   }
 
@@ -238,7 +277,12 @@ export class SwapService {
     }
   }
 
-  private skeleton(input: SwapInput, inView: TokenView | null, outView: TokenView | null, problems: string[]): SwapQuoteView {
+  private skeleton(
+    input: SwapInput,
+    inView: TokenView | null,
+    outView: TokenView | null,
+    problems: string[],
+  ): SwapQuoteView {
     return {
       tradeType: input.tradeType ?? 'exactIn',
       maximumInRaw: '0',
@@ -259,7 +303,17 @@ export class SwapService {
       slippageBips: input.slippageBips ?? DEFAULT_SLIPPAGE_BIPS,
       taxBips: 0,
       taxUnknown: false,
-      fee: { bips: 0, tier: 0, name: '', amountRaw: '0', sink: null, source: 'fallback', nextTierAt: null, nextTierBips: null, onInput: false },
+      fee: {
+        bips: 0,
+        tier: 0,
+        name: '',
+        amountRaw: '0',
+        sink: null,
+        source: 'fallback',
+        nextTierAt: null,
+        nextTierBips: null,
+        onInput: false,
+      },
       route: { label: '', hops: [], source: 'onchain' },
       gasEstimate: '0',
       steps: [],
@@ -280,7 +334,17 @@ export class SwapService {
    * wallet falls back to quoting for itself. It is never the reason a swap is
    * refused.
    */
-  private async route(input: QuoterInput, addresses: QuoteAddresses, read: EsReader): Promise<{ quote: RouteQuote; source: 'api' | 'onchain'; provenance: QuoteProvenance } | null> {
+  /**
+   * How far below the wallet's own on-chain route a served quote may sit
+   * before the wallet uses its own instead (§8.6, docs/security.md).
+   */
+  private static readonly divergencePercent = 1
+
+  private async route(
+    input: QuoterInput,
+    addresses: QuoteAddresses,
+    read: EsReader,
+  ): Promise<{ quote: RouteQuote; source: 'api' | 'onchain'; provenance: QuoteProvenance } | null> {
     const quoter = this.deps.quoter
     /*
       Why the service was not used, kept even on the happy path to nothing.
@@ -292,7 +356,54 @@ export class SwapService {
     let fallbackReason: string | null = quoter ? null : 'no routing service in this build'
     if (quoter) {
       const served = await quoter.route(input)
-      if (served.kind === 'route') return { quote: served.quote, source: 'api', provenance: { id: served.id, cached: served.cached, blockNumber: served.blockNumber, fallbackReason: null } }
+      if (served.kind === 'route') {
+        /*
+          §8.6 and docs/security.md both promise that a served quote more than
+          one percent below what the chain says is not used — "on-chain wins".
+          Nothing implemented it: the served `amountOut` went straight into
+          `deliveredMinimumOut`, so a routing service that was compromised, or
+          simply stale, moved the floor of every swap down with it, bounded
+          only by the 5 %/15 % price-impact plates.
+
+          What is checked is the service's OWN route, quoted on chain at full
+          size — one `eth_call`, not the mini-router's sixteen. The comment
+          below still holds: re-running the whole candidate search to second-
+          guess a better router buys a comparison rather than a price. But a
+          service that names a route and then misstates what that route pays is
+          not a better router, it is a wrong number, and the wallet can tell
+          the difference for the cost of one call.
+
+          Over-quoting is not corrected — the service walks the whole pool
+          graph and may legitimately have found what this one call cannot.
+          Under-quoting by more than the bound takes the chain's own figure for
+          the same route, which is what "on-chain wins" was always supposed to
+          mean. A chain that cannot answer leaves the served quote alone.
+        */
+        const onTheChain = await quoteOne(
+          served.quote.candidate,
+          input.amountIn,
+          addresses,
+          read,
+        ).catch(() => null)
+        const actually = onTheChain?.amountOut ?? 0n
+        const short =
+          actually > 0n &&
+          served.quote.amountOut * BigInt(100 + SwapService.divergencePercent) < actually * 100n
+        const quote = short && onTheChain ? onTheChain : served.quote
+        const off = short
+          ? `served quote ${((Number(actually - served.quote.amountOut) / Number(actually)) * 100).toFixed(2)}% below its own route on chain`
+          : null
+        return {
+          quote,
+          source: 'api',
+          provenance: {
+            id: served.id,
+            cached: served.cached,
+            blockNumber: served.blockNumber,
+            fallbackReason: off,
+          },
+        }
+      }
       fallbackReason = served.reason
     }
     /*
@@ -306,7 +417,13 @@ export class SwapService {
       the mini-router is what stands when it is unreachable.
     */
     const onChain = await bestRoute(input.tokenIn, input.tokenOut, input.amountIn, addresses, read)
-    return onChain ? { quote: onChain.best, source: 'onchain', provenance: { id: null, cached: null, blockNumber: null, fallbackReason } } : null
+    return onChain
+      ? {
+          quote: onChain.best,
+          source: 'onchain',
+          provenance: { id: null, cached: null, blockNumber: null, fallbackReason },
+        }
+      : null
   }
 
   async quote(input: SwapInput): Promise<SwapQuoteView> {
@@ -315,8 +432,14 @@ export class SwapService {
     const { inView, outView } = await this.pair(chainId, input.tokenIn, input.tokenOut)
     const problems: string[] = []
     // The kill-switch (§3.7) comes before every other answer, even for a pair the wallet does not know.
-    if (this.deps.statics?.isDisabled('swap')) return this.skeleton(input, inView, outView, ['In-wallet swaps are switched off right now by a signed flag from ElectroSwap. Swap on app.electroswap.io meanwhile.'])
-    if (!isEtn(chainId)) return this.skeleton(input, inView, outView, ['Swaps happen on Electroneum. Bridge first, then swap.'])
+    if (this.deps.statics?.isDisabled('swap'))
+      return this.skeleton(input, inView, outView, [
+        'In-wallet swaps are switched off right now by a signed flag from ElectroSwap. Swap on app.electroswap.io meanwhile.',
+      ])
+    if (!isEtn(chainId))
+      return this.skeleton(input, inView, outView, [
+        'Swaps happen on Electroneum. Bridge first, then swap.',
+      ])
     if (!inView || !outView) return this.skeleton(input, inView, outView, ['Pick two tokens.'])
     const account = (await d.vault.accounts()).find((a) => a.id === input.accountId)
     if (!account) throw new EngineError('not_found', 'no such account')
@@ -349,9 +472,11 @@ export class SwapService {
     const typed = exactOut ? wantOut : amountIn
     if (same(wrappedIn, wrappedOut)) problems.push('Pick two different tokens.')
     if (typed <= 0n) problems.push('Enter an amount above zero.')
-    if (account.kind === 'watch') problems.push('Watch-only — import a key or pair a device to swap.')
+    if (account.kind === 'watch')
+      problems.push('Watch-only — import a key or pair a device to swap.')
     const status = await d.vault.status()
-    if (!status.backupComplete && status.seeds.length > 0 && account.kind === 'hd') problems.push('Back up your recovery phrase before you swap.')
+    if (!status.backupComplete && status.seeds.length > 0 && account.kind === 'hd')
+      problems.push('Back up your recovery phrase before you swap.')
     /*
       The safety level used to be decoration: one warning icon on one Explore
       row, and nothing in the swap path ever read it, so a token ElectroSwap had
@@ -361,29 +486,72 @@ export class SwapService {
       API must not turn every token into a refusal.
     */
     for (const side of [inView, outView]) {
-      if (await this.isBlocked(chainId, side.address)) problems.push(`${side.symbol} is marked unsafe by ElectroSwap. BoltVault will not swap it.`)
+      if (await this.isBlocked(chainId, side.address))
+        problems.push(`${side.symbol} is marked unsafe by ElectroSwap. BoltVault will not swap it.`)
     }
 
     // Balances and the network fee reserve.
     const read = readerFor(d.chains, chainId)
-    const nativeBalance = BigInt(String((await d.chains.rpc(chainId, 'eth_getBalance', [owner, 'latest']).catch(() => '0x0')) ?? '0x0'))
-    const gasPrice = BigInt(String((await d.chains.rpc(chainId, 'eth_gasPrice', []).catch(() => '0x3b9aca00')) ?? '0x3b9aca00'))
+    const nativeBalance = BigInt(
+      String(
+        (await d.chains.rpc(chainId, 'eth_getBalance', [owner, 'latest']).catch(() => '0x0')) ??
+          '0x0',
+      ),
+    )
+    const gasPrice = BigInt(
+      String(
+        (await d.chains.rpc(chainId, 'eth_gasPrice', []).catch(() => '0x3b9aca00')) ?? '0x3b9aca00',
+      ),
+    )
     const tier = await d.holder.tier(input.accountId, chainId)
     const stateCalls: EsReadCall[] = nativeIn
       ? []
       : [
           { address: wrappedIn, abi: ERC20_ABI, functionName: 'balanceOf', args: [owner] },
-          { address: wrappedIn, abi: ERC20_ABI, functionName: 'allowance', args: [owner, A.permit2 as Hex] },
-          { address: A.permit2 as Hex, abi: PERMIT2_ABI, functionName: 'allowance', args: [owner, wrappedIn, A.universalRouter as Hex] },
+          {
+            address: wrappedIn,
+            abi: ERC20_ABI,
+            functionName: 'allowance',
+            args: [owner, A.permit2 as Hex],
+          },
+          {
+            address: A.permit2 as Hex,
+            abi: PERMIT2_ABI,
+            functionName: 'allowance',
+            args: [owner, wrappedIn, A.universalRouter as Hex],
+          },
         ]
     const state = stateCalls.length ? await read(stateCalls) : []
-    const balanceIn = nativeIn ? nativeBalance : state[0]?.ok && typeof state[0].value === 'bigint' ? state[0].value : 0n
-    const erc20Allowance = !nativeIn && state[1]?.ok && typeof state[1].value === 'bigint' ? state[1].value : 0n
-    const p2 = !nativeIn && state[2]?.ok && Array.isArray(state[2].value) ? (state[2].value as [bigint, number, number]) : null
+    const balanceIn = nativeIn
+      ? nativeBalance
+      : state[0]?.ok && typeof state[0].value === 'bigint'
+        ? state[0].value
+        : 0n
+    const erc20Allowance =
+      !nativeIn && state[1]?.ok && typeof state[1].value === 'bigint' ? state[1].value : 0n
+    const p2 =
+      !nativeIn && state[2]?.ok && Array.isArray(state[2].value)
+        ? (state[2].value as [bigint, number, number])
+        : null
     const nowS = Math.floor(d.platform.now() / 1000)
 
     const base = this.skeleton(input, inView, outView, problems)
-    const withState: SwapQuoteView = { ...base, amountInRaw: amountIn.toString(), balanceInRaw: balanceIn.toString(), slippageBips, fee: { ...base.fee, bips: tier.sink ? tier.bips : 0, tier: tier.tier, name: tier.name, sink: tier.sink, source: tier.source, nextTierAt: tier.nextTierAt, nextTierBips: tier.nextTierBips } }
+    const withState: SwapQuoteView = {
+      ...base,
+      amountInRaw: amountIn.toString(),
+      balanceInRaw: balanceIn.toString(),
+      slippageBips,
+      fee: {
+        ...base.fee,
+        bips: tier.sink ? tier.bips : 0,
+        tier: tier.tier,
+        name: tier.name,
+        sink: tier.sink,
+        source: tier.source,
+        nextTierAt: tier.nextTierAt,
+        nextTierBips: tier.nextTierBips,
+      },
+    }
     if (problems.length > 0 || typed <= 0n) return withState
 
     const addresses = quoteAddresses(chainId)
@@ -401,7 +569,10 @@ export class SwapService {
       firmly as it requires a correct one otherwise.
     */
     const bips = sink ? tier.bips : 0
-    if (!sink && chainId !== ELECTRONEUM_TESTNET_CHAIN_ID) problems.push('In-wallet swaps are off on this network — no fee address is set for it in this build.')
+    if (!sink && chainId !== ELECTRONEUM_TESTNET_CHAIN_ID)
+      problems.push(
+        'In-wallet swaps are off on this network — no fee address is set for it in this build.',
+      )
     /*
       An exact-output order is grossed up before it is priced.
 
@@ -413,8 +584,12 @@ export class SwapService {
     */
     const grossWanted = exactOut ? grossOutForExactOut(wantOut, bips) : 0n
     const taxes = [
-      same(wrappedIn, wetn) ? Promise.resolve<TaxProbe>(null) : detectTax(A.feeOnTransferDetector as Hex | null, wrappedIn, wetn, read),
-      same(wrappedOut, wetn) ? Promise.resolve<TaxProbe>(null) : detectTax(A.feeOnTransferDetector as Hex | null, wrappedOut, wetn, read),
+      same(wrappedIn, wetn)
+        ? Promise.resolve<TaxProbe>(null)
+        : detectTax(A.feeOnTransferDetector as Hex | null, wrappedIn, wetn, read),
+      same(wrappedOut, wetn)
+        ? Promise.resolve<TaxProbe>(null)
+        : detectTax(A.feeOnTransferDetector as Hex | null, wrappedOut, wetn, read),
     ] as const
 
     let candidate: Candidate | null = null
@@ -430,7 +605,12 @@ export class SwapService {
       it at all — which is a fallback reason like any other, and the one a
       reader of "why did this not use the API price" needs first.
     */
-    let provenance: QuoteProvenance = { id: null, cached: null, blockNumber: null, fallbackReason: exactOut ? 'exact-out is priced on chain' : null }
+    let provenance: QuoteProvenance = {
+      id: null,
+      cached: null,
+      blockNumber: null,
+      fallbackReason: exactOut ? 'exact-out is priced on chain' : null,
+    }
 
     if (exactOut) {
       /*
@@ -440,7 +620,10 @@ export class SwapService {
         number it produces is the *input*, and the input is bounded on chain by
         `amountInMaximum`, which no router can talk the wallet past.
       */
-      const [outRoute, tIn, tOut] = await Promise.all([bestRouteExactOut(wrappedIn, wrappedOut, grossWanted, addresses, read), ...taxes])
+      const [outRoute, tIn, tOut] = await Promise.all([
+        bestRouteExactOut(wrappedIn, wrappedOut, grossWanted, addresses, read),
+        ...taxes,
+      ])
       taxIn = tIn
       taxOut = tOut
       if (outRoute) {
@@ -453,7 +636,11 @@ export class SwapService {
       probeIn = amountIn / 1000n
     } else {
       const [routed, tIn, tOut] = await Promise.all([
-        this.route({ chainId, tokenIn: wrappedIn, tokenOut: wrappedOut, amountIn, recipient: owner }, addresses, read),
+        this.route(
+          { chainId, tokenIn: wrappedIn, tokenOut: wrappedOut, amountIn, recipient: owner },
+          addresses,
+          read,
+        ),
         ...taxes,
       ])
       probeIn = amountIn / 1000n
@@ -511,8 +698,14 @@ export class SwapService {
       sell and echoed `buyFeeBps`, so a honeypot came back looking like an
       ordinary 3% token and was quoted like one.
     */
-    if (sellsAreRefused(taxOut)) problems.push(`${outView.symbol} cannot be sold back — the check that buys it succeeds and then nothing can get you out. BoltVault will not buy it for you.`)
-    if (sellsAreRefused(taxIn)) problems.push(`${inView.symbol} refuses to be sold, so this swap would fail on chain. Nothing BoltVault can sign will move it.`)
+    if (sellsAreRefused(taxOut))
+      problems.push(
+        `${outView.symbol} cannot be sold back — the check that buys it succeeds and then nothing can get you out. BoltVault will not buy it for you.`,
+      )
+    if (sellsAreRefused(taxIn))
+      problems.push(
+        `${inView.symbol} refuses to be sold, so this swap would fail on chain. Nothing BoltVault can sign will move it.`,
+      )
     /*
       A token that charges a fee on transfer cannot honour an exact output, so
       the wallet refuses rather than promising one.
@@ -527,7 +720,9 @@ export class SwapService {
     */
     if (exactOut && taxBips > 0) {
       const taxed = (taxOf(taxOut)?.buyFeeBps ?? 0) > 0 ? outView.symbol : inView.symbol
-      problems.push(`${taxed} charges a fee every time it moves, so BoltVault cannot promise you an exact amount of it. Set the amount you pay instead.`)
+      problems.push(
+        `${taxed} charges a fee every time it moves, so BoltVault cannot promise you an exact amount of it. Set the amount you pay instead.`,
+      )
     }
     /*
       Slippage and the token's transfer tax were summed with no ceiling. At
@@ -555,7 +750,9 @@ export class SwapService {
     const feeOnInput = custodyIsUnsafe(taxOut) && bips > 0 && sink !== null
     const effectiveSlippage = Math.min(slippageBips + taxBips, MAX_EFFECTIVE_SLIPPAGE_BPS)
     if (slippageBips + taxBips >= BIPS_CEILING)
-      problems.push('This token’s transfer tax plus your slippage would leave no minimum received. BoltVault will not sign a swap with no floor.')
+      problems.push(
+        'This token’s transfer tax plus your slippage would leave no minimum received. BoltVault will not sign a swap with no floor.',
+      )
     /*
       The two guarantees, and which direction each one guards.
 
@@ -578,7 +775,11 @@ export class SwapService {
       and subtracting the fee again here would under-report what they get by the
       fee twice over.
     */
-    const receive = exactOut ? wantOut : ((feeOnInput ? amountOut : netAfterFee(amountOut, bips)) * BigInt(10_000 - Math.min(taxBips, 9_999))) / 10_000n
+    const receive = exactOut
+      ? wantOut
+      : ((feeOnInput ? amountOut : netAfterFee(amountOut, bips)) *
+          BigInt(10_000 - Math.min(taxBips, 9_999))) /
+        10_000n
     /*
       The same number the encoder writes, whichever side the fee came from.
 
@@ -589,7 +790,11 @@ export class SwapService {
       promise the user less than the bytes actually guarantee.
     */
     const scaledOut = feeOnInput ? amountOut - feeAmount(amountOut, bips) : amountOut
-    const minOut = exactOut ? wantOut : feeOnInput ? routerMinimumOut(scaledOut, effectiveSlippage) : deliveredMinimumOut(amountOut, bips, effectiveSlippage)
+    const minOut = exactOut
+      ? wantOut
+      : feeOnInput
+        ? routerMinimumOut(scaledOut, effectiveSlippage)
+        : deliveredMinimumOut(amountOut, bips, effectiveSlippage)
     const maxIn = exactOut ? maximumInFor(amountIn, effectiveSlippage) : 0n
     const spot = probe ? rateOf(probeIn, probe.amountOut, inView.decimals, outView.decimals) : null
     const impact = priceImpactPct(amountIn, amountOut, spot, inView.decimals, outView.decimals)
@@ -606,7 +811,15 @@ export class SwapService {
     const steps: SwapStep[] = []
     if (!nativeIn) {
       if (erc20Allowance < spendCeiling) steps.push('approve')
-      if (!p2 || !permitCovers({ amount: p2[0], expiration: Number(p2[1]), nonce: Number(p2[2]) }, spendCeiling, nowS)) steps.push('permit')
+      if (
+        !p2 ||
+        !permitCovers(
+          { amount: p2[0], expiration: Number(p2[1]), nonce: Number(p2[2]) },
+          spendCeiling,
+          nowS,
+        )
+      )
+        steps.push('permit')
     }
     steps.push('swap')
     /*
@@ -620,10 +833,16 @@ export class SwapService {
       for the network fee" check passing a swap that then cannot pay for itself.
     */
     const boundaries = BigInt(protocolRuns(candidate.route.hops).length - 1)
-    const gas = gasEstimate + 90_000n + boundaries * 40_000n + (steps.includes('approve') ? 55_000n : 0n) + (steps.includes('permit') ? 35_000n : 0n)
+    const gas =
+      gasEstimate +
+      90_000n +
+      boundaries * 40_000n +
+      (steps.includes('approve') ? 55_000n : 0n) +
+      (steps.includes('permit') ? 35_000n : 0n)
     const feeWei = gas * gasPrice
     if (spendCeiling > balanceIn) problems.push(`Not enough ${inView.symbol}.`)
-    if ((nativeIn ? spendCeiling : 0n) + feeWei > nativeBalance) problems.push('Not enough ETN for the network fee.')
+    if ((nativeIn ? spendCeiling : 0n) + feeWei > nativeBalance)
+      problems.push('Not enough ETN for the network fee.')
 
     return {
       ...withState,
@@ -637,8 +856,20 @@ export class SwapService {
       taxBips,
       taxUnknown,
       // Denominated in whichever token it is actually taken from.
-      fee: { ...withState.fee, onInput: feeOnInput, amountRaw: (feeOnInput ? feeAmount(amountIn, bips) : feeAmount(amountOut, bips)).toString() },
-      route: { label: candidate.label, source, hops: candidate.route.hops.map((h) => (h.kind === 'v3' ? { kind: 'v3' as const, tokenIn: h.tokenIn, tokenOut: h.tokenOut, fee: h.fee } : { kind: 'v2' as const, tokenIn: h.tokenIn, tokenOut: h.tokenOut })) },
+      fee: {
+        ...withState.fee,
+        onInput: feeOnInput,
+        amountRaw: (feeOnInput ? feeAmount(amountIn, bips) : feeAmount(amountOut, bips)).toString(),
+      },
+      route: {
+        label: candidate.label,
+        source,
+        hops: candidate.route.hops.map((h) =>
+          h.kind === 'v3'
+            ? { kind: 'v3' as const, tokenIn: h.tokenIn, tokenOut: h.tokenOut, fee: h.fee }
+            : { kind: 'v2' as const, tokenIn: h.tokenIn, tokenOut: h.tokenOut },
+        ),
+      },
       gasEstimate: gas.toString(),
       steps,
       quotedAt: d.platform.now(),
@@ -662,7 +893,8 @@ export class SwapService {
   /** Start the flow: approve → permit → swap, one sheet each. Resolves once the first sheet exists. */
   async execute(input: SwapInput): Promise<{ flowId: string; requestId: string | null }> {
     const d = this.deps
-    if (d.statics?.isDisabled('swap')) throw new EngineError('invalid_argument', 'In-wallet swaps are switched off right now.')
+    if (d.statics?.isDisabled('swap'))
+      throw new EngineError('invalid_argument', 'In-wallet swaps are switched off right now.')
     const { chainId } = input
     if (!isEtn(chainId)) throw new EngineError('invalid_argument', 'Swaps happen on Electroneum.')
     const first = await this.quote(input)
@@ -717,7 +949,15 @@ export class SwapService {
             origin: 'internal:swap:approve',
             chainId,
             accountId: input.accountId,
-            tx: { from: owner, to: tokenIn, value: '0x0', data: encodeApprovePermit2(permit2, settings.exactApprovals ? spendCeiling : maxUint256).data },
+            tx: {
+              from: owner,
+              to: tokenIn,
+              value: '0x0',
+              data: encodeApprovePermit2(
+                permit2,
+                settings.exactApprovals ? spendCeiling : maxUint256,
+              ).data,
+            },
             clientRequestId: `swap:${tag}:approve`,
           }),
       })
@@ -726,13 +966,46 @@ export class SwapService {
       steps.push({
         step: 'permit',
         run: async () => {
-          const [r] = await readMany(d.chains, chainId, [{ address: permit2, abi: PERMIT2_ABI, functionName: 'allowance', args: [owner, tokenIn, ur] }])
-          const nonce = r?.ok && Array.isArray(r.value) ? Number((r.value as [bigint, number, number])[2]) : 0
+          const [r] = await readMany(d.chains, chainId, [
+            {
+              address: permit2,
+              abi: PERMIT2_ABI,
+              functionName: 'allowance',
+              args: [owner, tokenIn, ur],
+            },
+          ])
+          const nonce =
+            r?.ok && Array.isArray(r.value) ? Number((r.value as [bigint, number, number])[2]) : 0
           const nowS = Math.floor(d.platform.now() / 1000)
-          const typed = permitSingleTypedData({ chainId, permit2, token: tokenIn, amount: spendCeiling, nonce, spender: ur, nowSeconds: nowS })
-          const { requestId, result } = await d.provider.runInternal({ kind: 'sign_typed_data', origin: 'internal:swap:permit', chainId, accountId: input.accountId, from: owner, typedData: typed, version: 'v4', clientRequestId: `swap:${tag}:permit` })
+          const typed = permitSingleTypedData({
+            chainId,
+            permit2,
+            token: tokenIn,
+            amount: spendCeiling,
+            nonce,
+            spender: ur,
+            nowSeconds: nowS,
+          })
+          const { requestId, result } = await d.provider.runInternal({
+            kind: 'sign_typed_data',
+            origin: 'internal:swap:permit',
+            chainId,
+            accountId: input.accountId,
+            from: owner,
+            typedData: typed,
+            version: 'v4',
+            clientRequestId: `swap:${tag}:permit`,
+          })
           const settled = result.then((sig) => {
-            permit = { token: tokenIn, amount: spendCeiling, expiration: nowS + PERMIT_EXPIRY_S, nonce, spender: ur, sigDeadline: BigInt(nowS + PERMIT_EXPIRY_S), signature: sig as Hex }
+            permit = {
+              token: tokenIn,
+              amount: spendCeiling,
+              expiration: nowS + PERMIT_EXPIRY_S,
+              nonce,
+              spender: ur,
+              sigDeadline: BigInt(nowS + PERMIT_EXPIRY_S),
+              signature: sig as Hex,
+            }
             return sig
           })
           settled.catch(() => undefined)
@@ -750,7 +1023,8 @@ export class SwapService {
         let quote = first
         if (tier.bips !== first.fee.bips || d.platform.now() - first.quotedAt > 8_000) {
           quote = await this.quote({ ...input, slippageBips: first.slippageBips })
-          if (!quote.ok) throw new EngineError('invalid_argument', quote.problems[0] ?? 'the quote changed')
+          if (!quote.ok)
+            throw new EngineError('invalid_argument', quote.problems[0] ?? 'the quote changed')
           /*
             Stop if the price has moved further than the slippage the user
             accepted.
@@ -777,9 +1051,12 @@ export class SwapService {
           const now = exactOut ? BigInt(quote.amountInRaw) : BigInt(quote.amountOutRaw)
           const worse = exactOut ? now > before : now < before
           if (before > 0n && worse) {
-            const movedBips = (((exactOut ? now - before : before - now) * 10_000n) / before)
+            const movedBips = ((exactOut ? now - before : before - now) * 10_000n) / before
             if (movedBips > BigInt(first.slippageBips))
-              throw new EngineError('invalid_argument', `The price moved by ${(Number(movedBips) / 100).toFixed(2)}% while this swap was being set up, which is more than your slippage allows. Start it again to see the new price.`)
+              throw new EngineError(
+                'invalid_argument',
+                `The price moved by ${(Number(movedBips) / 100).toFixed(2)}% while this swap was being set up, which is more than your slippage allows. Start it again to see the new price.`,
+              )
           }
           d.flows.setQuote(flowId, quote)
         }
@@ -790,7 +1067,11 @@ export class SwapService {
         swapStage = 'sign'
         const bips = quote.fee.bips
         const sink = (quote.fee.sink ?? null) as Hex | null
-        if (bips > 0 && !sink) throw new EngineError('invalid_argument', 'In-wallet swaps are off on this network — no fee address is set for it in this build.')
+        if (bips > 0 && !sink)
+          throw new EngineError(
+            'invalid_argument',
+            'In-wallet swaps are off on this network — no fee address is set for it in this build.',
+          )
         const nowS = Math.floor(d.platform.now() / 1000)
         const shared = {
           route: { hops: quote.route.hops.map((h) => encodableHop(h)) },
@@ -817,8 +1098,17 @@ export class SwapService {
         */
         const ceiling = BigInt(quote.maximumInRaw)
         const enc = exactOut
-          ? encodeSwapExactOut({ ...shared, amountOut: BigInt(quote.receiveRaw), maximumIn: ceiling < spendCeiling ? ceiling : spendCeiling })
-          : encodeSwap({ ...shared, amountIn, quotedOut: BigInt(quote.amountOutRaw), slippageBips: quote.slippageBips + quote.taxBips })
+          ? encodeSwapExactOut({
+              ...shared,
+              amountOut: BigInt(quote.receiveRaw),
+              maximumIn: ceiling < spendCeiling ? ceiling : spendCeiling,
+            })
+          : encodeSwap({
+              ...shared,
+              amountIn,
+              quotedOut: BigInt(quote.amountOutRaw),
+              slippageBips: quote.slippageBips + quote.taxBips,
+            })
         /*
           The bytes as handed over, kept so a failure can be replayed on a fork.
           Decimal, not the `0x` form below: the report's `value` is a raw amount
@@ -844,7 +1134,14 @@ export class SwapService {
           expectedFee: {
             sink: sink ?? ZERO,
             bips,
-            ...(quote.fee.onInput && sink ? { onInput: { token: (nativeIn ? wetn : tokenIn) as Hex, amount: feeAmount(amountIn, bips) } } : {}),
+            ...(quote.fee.onInput && sink
+              ? {
+                  onInput: {
+                    token: (nativeIn ? wetn : tokenIn) as Hex,
+                    amount: feeAmount(amountIn, bips),
+                  },
+                }
+              : {}),
           },
         })
       },
@@ -863,7 +1160,22 @@ export class SwapService {
         "the wallet never reports a user saying no" should be visible at the
         place the decision is made, not only in the thing it is handed to.
       */
-      ...(failures ? { onFailed: (f: FlowStepFailure) => (f.rejected ? undefined : failures.report(swapFailureReport({ failure: f, quote: encoded, chainId, stage: swapStage, call: swapCall }))) } : {}),
+      ...(failures
+        ? {
+            onFailed: (f: FlowStepFailure) =>
+              f.rejected
+                ? undefined
+                : failures.report(
+                    swapFailureReport({
+                      failure: f,
+                      quote: encoded,
+                      chainId,
+                      stage: swapStage,
+                      call: swapCall,
+                    }),
+                  ),
+          }
+        : {}),
     })
     return { flowId: flow.id, requestId: flow.steps[0]?.requestId ?? null }
   }
@@ -954,7 +1266,13 @@ function revertOf(message: string): { revertReason: string | null; revertSelecto
  * wrapped native and cannot tax itself.
  */
 function probeOf(probe: TaxProbe, detector: boolean): FailureTaxProbe | null {
-  const blank = { buyFeeBps: null, sellFeeBps: null, sellReverted: null, externalTransferFailed: null, feeTakenOnTransfer: null }
+  const blank = {
+    buyFeeBps: null,
+    sellFeeBps: null,
+    sellReverted: null,
+    externalTransferFailed: null,
+    feeTakenOnTransfer: null,
+  }
   if (isTaxUnknown(probe)) return { status: probe.reason, ...blank }
   if (probe === null) return detector ? null : { status: 'no-detector', ...blank }
   return {
@@ -997,7 +1315,10 @@ export function swapFailureReport(input: {
       message,
       ...revertOf(message),
       txHash: failure.hash ?? entry?.hash ?? null,
-      blockNumber: entry?.blockNumber === undefined || entry?.blockNumber === null ? null : String(entry.blockNumber),
+      blockNumber:
+        entry?.blockNumber === undefined || entry?.blockNumber === null
+          ? null
+          : String(entry.blockNumber),
       /*
         The receipt watcher reads `status` and `blockNumber` and nothing else,
         so the wallet does not know what the transaction actually spent. Null is
@@ -1032,13 +1353,26 @@ export function swapFailureReport(input: {
         slippageBips: quote.slippageBips,
         taxBips: quote.taxBips,
       },
-      quoted: { amountOut: quote.amountOutRaw, minimumOut: quote.minimumOutRaw, gasEstimate: quote.gasEstimate, priceImpactPct: quote.priceImpactPct },
-      route: quote.route.hops.map((h) => ({ protocol: h.kind, tokenIn: h.tokenIn, tokenOut: h.tokenOut, feeTier: h.fee ?? null })),
+      quoted: {
+        amountOut: quote.amountOutRaw,
+        minimumOut: quote.minimumOutRaw,
+        gasEstimate: quote.gasEstimate,
+        priceImpactPct: quote.priceImpactPct,
+      },
+      route: quote.route.hops.map((h) => ({
+        protocol: h.kind,
+        tokenIn: h.tokenIn,
+        tokenOut: h.tokenOut,
+        feeTier: h.fee ?? null,
+      })),
       // `parseQuote` refuses a split route outright and the mini-router never
       // produces one, so this is always one — stated rather than left null,
       // because null would read as "the client did not know".
       splits: 1,
-      tax: { in: probeOf(diagnostics?.tax.in ?? null, diagnostics?.tax.detector ?? false), out: probeOf(diagnostics?.tax.out ?? null, diagnostics?.tax.detector ?? false) },
+      tax: {
+        in: probeOf(diagnostics?.tax.in ?? null, diagnostics?.tax.detector ?? false),
+        out: probeOf(diagnostics?.tax.out ?? null, diagnostics?.tax.detector ?? false),
+      },
       fee: { bips: quote.fee.bips, sink: quote.fee.sink, onInput: quote.fee.onInput },
     },
   }
@@ -1061,15 +1395,25 @@ const InputSchema = z
     tradeType: z.enum(['exactIn', 'exactOut']).optional(),
     slippageBips: z.number().int().min(1).max(5_000).optional(),
   })
-  .refine((v) => (v.tradeType === 'exactOut' ? v.amountOut !== undefined : v.amountIn !== undefined), {
-    message: 'Say which amount you fixed: amountIn for an exact-in swap, amountOut for an exact-out one.',
-  })
+  .refine(
+    (v) => (v.tradeType === 'exactOut' ? v.amountOut !== undefined : v.amountIn !== undefined),
+    {
+      message:
+        'Say which amount you fixed: amountIn for an exact-in swap, amountOut for an exact-out one.',
+    },
+  )
 
 export function swapNamespace(swap: SwapService): NamespaceSpec {
   return {
     quote: { input: InputSchema, handler: (arg) => swap.quote(arg as SwapInput) },
     execute: { input: InputSchema, handler: (arg) => swap.execute(arg as SwapInput) },
-    flow: { input: z.object({ flowId: z.string() }), handler: async (arg) => swap.flow((arg as { flowId: string }).flowId) },
-    flows: { input: z.object({ accountId: AccountIdSchema.optional() }).optional(), handler: async (arg) => swap.flows((arg as { accountId?: string } | undefined)?.accountId) },
+    flow: {
+      input: z.object({ flowId: z.string() }),
+      handler: async (arg) => swap.flow((arg as { flowId: string }).flowId),
+    },
+    flows: {
+      input: z.object({ accountId: AccountIdSchema.optional() }).optional(),
+      handler: async (arg) => swap.flows((arg as { accountId?: string } | undefined)?.accountId),
+    },
   }
 }

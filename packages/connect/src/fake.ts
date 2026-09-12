@@ -3,13 +3,29 @@
  * proposal for the peer you configured, `simulateRequest()` plays a dApp
  * request and returns the response the wallet gave, sessions live in memory.
  */
-import { SessionProposalSchema, type ActiveSession, type ApprovedNamespaces, type JsonRpcResponse, type PeerMetadata, type SessionProposal, type SessionRequest, type VerifyValidation, type WalletKitLike } from './walletkit'
+import {
+  SessionProposalSchema,
+  type ActiveSession,
+  type ApprovedNamespaces,
+  type JsonRpcResponse,
+  type PeerMetadata,
+  type SessionProposal,
+  type SessionRequest,
+  type VerifyValidation,
+  type WalletKitLike,
+} from './walletkit'
 
-type Listeners = { session_proposal: Set<(p: SessionProposal) => void>; session_request: Set<(r: SessionRequest) => void>; session_delete: Set<(i: { topic: string }) => void> }
+type Listeners = {
+  session_proposal: Set<(p: SessionProposal) => void>
+  session_request: Set<(r: SessionRequest) => void>
+  session_delete: Set<(i: { topic: string }) => void>
+}
 
 export interface FakeWalletKitOptions {
   readonly peer?: PeerMetadata
   readonly verified?: VerifyValidation
+  /** Verify's scam verdict, separate from validation (ATT-BV-023). */
+  readonly isScam?: boolean | null
   readonly required?: string[]
   readonly optional?: string[]
 }
@@ -18,18 +34,34 @@ export class FakeWalletKit implements WalletKitLike {
   readonly log: string[] = []
   readonly sessions = new Map<string, ActiveSession>()
   readonly responses = new Map<number, JsonRpcResponse>()
-  readonly emitted: Array<{ topic: string; chainId: string; event: { name: string; data: unknown } }> = []
-  private listeners: Listeners = { session_proposal: new Set(), session_request: new Set(), session_delete: new Set() }
+  readonly emitted: Array<{
+    topic: string
+    chainId: string
+    event: { name: string; data: unknown }
+  }> = []
+  private listeners: Listeners = {
+    session_proposal: new Set(),
+    session_request: new Set(),
+    session_delete: new Set(),
+  }
   private nextId = 1
   private waiting = new Map<number, (r: JsonRpcResponse) => void>()
   peer: PeerMetadata
   verified: VerifyValidation
   required: string[]
   optional: string[]
+  /** Verify's scam verdict, which is a different question from validation. */
+  isScam: boolean | null
 
   constructor(opts: FakeWalletKitOptions = {}) {
-    this.peer = opts.peer ?? { name: 'ElectroSwap', description: 'The Electroneum DEX', url: 'https://app.electroswap.io', icons: [] }
+    this.peer = opts.peer ?? {
+      name: 'ElectroSwap',
+      description: 'The Electroneum DEX',
+      url: 'https://app.electroswap.io',
+      icons: [],
+    }
     this.verified = opts.verified ?? 'VALID'
+    this.isScam = opts.isScam ?? null
     this.required = opts.required ?? ['eip155:52014']
     this.optional = opts.optional ?? ['eip155:1', 'eip155:8453']
   }
@@ -37,21 +69,48 @@ export class FakeWalletKit implements WalletKitLike {
   async pair(input: { uri: string }): Promise<void> {
     this.log.push(`pair:${input.uri.slice(0, 12)}`)
     const id = this.nextId++
-    const proposal = SessionProposalSchema.parse({ id, pairingTopic: `pairing-${id}`, proposer: this.peer, requiredNamespaces: { eip155: { chains: this.required, methods: ['eth_sendTransaction', 'personal_sign'], events: ['chainChanged', 'accountsChanged'] } }, optionalNamespaces: { eip155: { chains: this.optional, methods: [], events: [] } }, verified: this.verified, verifiedOrigin: this.verified === 'VALID' ? new URL(this.peer.url).origin : null })
+    const proposal = SessionProposalSchema.parse({
+      id,
+      pairingTopic: `pairing-${id}`,
+      proposer: this.peer,
+      requiredNamespaces: {
+        eip155: {
+          chains: this.required,
+          methods: ['eth_sendTransaction', 'personal_sign'],
+          events: ['chainChanged', 'accountsChanged'],
+        },
+      },
+      optionalNamespaces: { eip155: { chains: this.optional, methods: [], events: [] } },
+      verified: this.verified,
+      verifiedOrigin: this.verified === 'VALID' ? new URL(this.peer.url).origin : null,
+      isScam: this.isScam,
+    })
     queueMicrotask(() => {
       for (const l of this.listeners.session_proposal) l(proposal)
     })
   }
 
-  async approveSession(input: { id: number; namespaces: ApprovedNamespaces }): Promise<ActiveSession> {
+  async approveSession(input: {
+    id: number
+    namespaces: ApprovedNamespaces
+  }): Promise<ActiveSession> {
     this.log.push(`approve:${input.id}`)
     const topic = `topic-${input.id}`
-    const session: ActiveSession = { topic, peer: this.peer, chains: input.namespaces.eip155.chains, accounts: input.namespaces.eip155.accounts, expiry: Math.floor(Date.now() / 1000) + 7 * 86_400 }
+    const session: ActiveSession = {
+      topic,
+      peer: this.peer,
+      chains: input.namespaces.eip155.chains,
+      accounts: input.namespaces.eip155.accounts,
+      expiry: Math.floor(Date.now() / 1000) + 7 * 86_400,
+    }
     this.sessions.set(topic, session)
     return session
   }
 
-  async rejectSession(input: { id: number; reason: { code: number; message: string } }): Promise<void> {
+  async rejectSession(input: {
+    id: number
+    reason: { code: number; message: string }
+  }): Promise<void> {
     this.log.push(`reject:${input.id}:${input.reason.code}`)
   }
 
@@ -62,12 +121,19 @@ export class FakeWalletKit implements WalletKitLike {
     this.waiting.delete(input.response.id)
   }
 
-  async disconnectSession(input: { topic: string; reason: { code: number; message: string } }): Promise<void> {
+  async disconnectSession(input: {
+    topic: string
+    reason: { code: number; message: string }
+  }): Promise<void> {
     this.log.push(`disconnect:${input.topic}`)
     this.sessions.delete(input.topic)
   }
 
-  async emitSessionEvent(input: { topic: string; chainId: string; event: { name: string; data: unknown } }): Promise<void> {
+  async emitSessionEvent(input: {
+    topic: string
+    chainId: string
+    event: { name: string; data: unknown }
+  }): Promise<void> {
     this.emitted.push(input)
   }
 
@@ -87,9 +153,22 @@ export class FakeWalletKit implements WalletKitLike {
   }
 
   /** A dApp request over the session; resolves with the wallet's JSON-RPC response. */
-  simulateRequest(input: { topic: string; method: string; params?: unknown; chainId?: string; verified?: VerifyValidation }): Promise<JsonRpcResponse> {
+  simulateRequest(input: {
+    topic: string
+    method: string
+    params?: unknown
+    chainId?: string
+    verified?: VerifyValidation
+  }): Promise<JsonRpcResponse> {
     const id = this.nextId++
-    const req: SessionRequest = { id, topic: input.topic, chainId: input.chainId ?? 'eip155:52014', method: input.method, params: input.params ?? [], verified: input.verified ?? this.verified }
+    const req: SessionRequest = {
+      id,
+      topic: input.topic,
+      chainId: input.chainId ?? 'eip155:52014',
+      method: input.method,
+      params: input.params ?? [],
+      verified: input.verified ?? this.verified,
+    }
     return new Promise((resolve) => {
       this.waiting.set(id, resolve)
       for (const l of this.listeners.session_request) l(req)

@@ -10,9 +10,17 @@
 import type { SyncRecord } from '@boltvault/core'
 import type { Platform } from '@boltvault/platform'
 import type { ApprovalIntent } from '@boltvault/protocol'
-import type { Hex, TransactionSerializable, TypedDataDefinition } from 'viem'
+import {
+  parseTransaction,
+  verifyMessage,
+  verifyTypedData,
+  type Hex,
+  type TransactionSerializable,
+  type TypedDataDefinition,
+} from 'viem'
 import { toAccount, type LocalAccount } from 'viem/accounts'
 import { z } from 'zod'
+import { GAS_CEILING_PERCENT, GAS_FLOOR_PERCENT } from '../approvalPayloads'
 import { EngineError } from '../errors'
 import type { EventBus, NamespaceSpec } from '../host'
 import { RemoteRequestSchema, type AccountView, type RemoteRequest } from '../schema'
@@ -43,21 +51,126 @@ const RequestValue = z.object({
 })
 type RequestValue = z.infer<typeof RequestValue>
 
-const ResponseValue = z.object({ id: z.string(), signature: z.string().nullable(), error: z.string().nullable() })
+const ResponseValue = z.object({
+  id: z.string(),
+  signature: z.string().nullable(),
+  error: z.string().nullable(),
+})
 
-const TxPayload = z.object({ to: z.string().nullable(), value: z.string(), data: z.string(), nonce: z.string(), gas: z.string(), type: z.enum(['legacy', 'eip1559']), gasPrice: z.string().optional(), maxFeePerGas: z.string().optional(), maxPriorityFeePerGas: z.string().optional() })
+const TxPayload = z.object({
+  to: z.string().nullable(),
+  value: z.string(),
+  data: z.string(),
+  nonce: z.string(),
+  gas: z.string(),
+  type: z.enum(['legacy', 'eip1559']),
+  gasPrice: z.string().optional(),
+  maxFeePerGas: z.string().optional(),
+  maxPriorityFeePerGas: z.string().optional(),
+})
 
 const hex = (n: bigint | number | undefined): string => `0x${BigInt(n ?? 0).toString(16)}`
 
+/**
+ * What a paired device is allowed to change about what it was asked to sign:
+ * the price of gas, within the same band the local fee editor uses (§6).
+ *
+ * The requester used to resolve its promise with whatever string came back and
+ * then only recover the signer's address — so a compromised laptop could answer
+ * a phone's request with a signature over different calldata to the same
+ * contract, and the phone would broadcast it and record the statements of the
+ * transaction it had asked for. Recovering the address proves who signed, never
+ * what.
+ */
+export function assertSignedTheTransaction(asked: TransactionSerializable, raw: Hex): void {
+  let got: ReturnType<typeof parseTransaction>
+  try {
+    got = parseTransaction(raw)
+  } catch {
+    throw new EngineError(
+      'invalid_argument',
+      'The paired device answered with something that is not a signed transaction.',
+    )
+  }
+  const same =
+    (got.chainId ?? 0) === (asked.chainId ?? 0) &&
+    (got.nonce ?? 0) === (asked.nonce ?? 0) &&
+    (got.to ?? null)?.toLowerCase() === (asked.to ?? null)?.toLowerCase() &&
+    (got.value ?? 0n) === (asked.value ?? 0n) &&
+    (got.data ?? '0x').toLowerCase() === (asked.data ?? '0x').toLowerCase() &&
+    (got.gas ?? 0n) === (asked.gas ?? 0n)
+  if (!same)
+    throw new EngineError(
+      'invalid_argument',
+      'The paired device signed a different transaction from the one it was asked to sign.',
+    )
+  /*
+    The fee may move — a device with a fresher view of the chain is allowed to
+    price it — but only inside the same 50–400 % band the local editor works
+    in, measured against what was asked for.
+  */
+  const wanted =
+    asked.type === 'eip1559' || (asked as { maxFeePerGas?: bigint }).maxFeePerGas !== undefined
+      ? ((asked as { maxFeePerGas?: bigint }).maxFeePerGas ?? 0n)
+      : ((asked as { gasPrice?: bigint }).gasPrice ?? 0n)
+  const paid = got.maxFeePerGas ?? got.gasPrice ?? 0n
+  if (
+    wanted > 0n &&
+    (paid * 100n < wanted * BigInt(GAS_FLOOR_PERCENT) ||
+      paid * 100n > wanted * BigInt(GAS_CEILING_PERCENT))
+  )
+    throw new EngineError(
+      'invalid_argument',
+      'The paired device priced the transaction well outside what it was asked to pay.',
+    )
+}
+
+export async function assertSignedTheMessage(
+  address: Hex,
+  raw: Hex,
+  signature: Hex,
+): Promise<void> {
+  const ok = await verifyMessage({ address, message: { raw }, signature }).catch(() => false)
+  if (!ok)
+    throw new EngineError(
+      'invalid_argument',
+      'The paired device signed a different message from the one it was asked to sign.',
+    )
+}
+
+export async function assertSignedTheTypedData(
+  address: Hex,
+  typedData: TypedDataDefinition,
+  signature: Hex,
+): Promise<void> {
+  const ok = await verifyTypedData({
+    ...(typedData as Record<string, unknown>),
+    address,
+    signature,
+  } as never).catch(() => false)
+  if (!ok)
+    throw new EngineError(
+      'invalid_argument',
+      'The paired device signed different typed data from what it was asked to sign.',
+    )
+}
+
 export class RemoteSignService {
-  private outgoing = new Map<string, RemoteRequest & { resolve: (sig: string) => void; reject: (err: Error) => void }>()
+  private outgoing = new Map<
+    string,
+    RemoteRequest & { resolve: (sig: string) => void; reject: (err: Error) => void }
+  >()
   private incoming = new Map<string, RemoteRequest>()
   private timer: ReturnType<typeof setInterval> | null = null
 
   constructor(private readonly deps: RemoteDeps) {}
 
   private emit(): void {
-    this.deps.bus.emit({ type: 'remote.changed', outgoing: [...this.outgoing.values()].map(strip), incoming: [...this.incoming.values()] })
+    this.deps.bus.emit({
+      type: 'remote.changed',
+      outgoing: [...this.outgoing.values()].map(strip),
+      incoming: [...this.incoming.values()],
+    })
   }
 
   /** While anything is outstanding, pull the channel on a short cadence. */
@@ -85,32 +198,89 @@ export class RemoteSignService {
   async signerFor(account: AccountView): Promise<LocalAccount | null> {
     if ((await this.deps.sync.status()).devices.length === 0) return null
     const address = account.address as Hex
-    const ask = (kind: RequestValue['kind'], payload: unknown, chainId: number): Promise<Hex> => this.request({ address, kind, payload, chainId })
+    const ask = (kind: RequestValue['kind'], payload: unknown, chainId: number): Promise<Hex> =>
+      this.request({ address, kind, payload, chainId })
     return toAccount({
       address,
       signMessage: async ({ message }) => {
-        const raw = typeof message === 'string' ? `0x${Array.from(new TextEncoder().encode(message), (b) => b.toString(16).padStart(2, '0')).join('')}` : typeof message.raw === 'string' ? message.raw : `0x${Array.from(message.raw, (b) => b.toString(16).padStart(2, '0')).join('')}`
-        return ask('message', raw, 0)
+        const raw =
+          typeof message === 'string'
+            ? `0x${Array.from(new TextEncoder().encode(message), (b) => b.toString(16).padStart(2, '0')).join('')}`
+            : typeof message.raw === 'string'
+              ? message.raw
+              : `0x${Array.from(message.raw, (b) => b.toString(16).padStart(2, '0')).join('')}`
+        const signature = await ask('message', raw, 0)
+        await assertSignedTheMessage(address, raw as Hex, signature)
+        return signature
       },
       signTransaction: async (transaction) => {
         const tx = transaction as TransactionSerializable
         const legacy = !tx.type || tx.type === 'legacy'
-        const payload = { to: tx.to ?? null, value: hex(tx.value), data: tx.data ?? '0x', nonce: hex(tx.nonce), gas: hex(tx.gas), type: legacy ? 'legacy' : 'eip1559', ...(legacy ? { gasPrice: hex((tx as { gasPrice?: bigint }).gasPrice) } : { maxFeePerGas: hex((tx as { maxFeePerGas?: bigint }).maxFeePerGas), maxPriorityFeePerGas: hex((tx as { maxPriorityFeePerGas?: bigint }).maxPriorityFeePerGas) }) }
-        return ask('transaction', payload, tx.chainId ?? 0)
+        const payload = {
+          to: tx.to ?? null,
+          value: hex(tx.value),
+          data: tx.data ?? '0x',
+          nonce: hex(tx.nonce),
+          gas: hex(tx.gas),
+          type: legacy ? 'legacy' : 'eip1559',
+          ...(legacy
+            ? { gasPrice: hex((tx as { gasPrice?: bigint }).gasPrice) }
+            : {
+                maxFeePerGas: hex((tx as { maxFeePerGas?: bigint }).maxFeePerGas),
+                maxPriorityFeePerGas: hex(
+                  (tx as { maxPriorityFeePerGas?: bigint }).maxPriorityFeePerGas,
+                ),
+              }),
+        }
+        const raw = await ask('transaction', payload, tx.chainId ?? 0)
+        assertSignedTheTransaction(tx, raw)
+        return raw
       },
-      signTypedData: async (typedData) => ask('typed_data', JSON.stringify(typedData, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)), Number((typedData as TypedDataDefinition).domain?.chainId ?? 0)),
+      signTypedData: async (typedData) => {
+        const signature = await ask(
+          'typed_data',
+          JSON.stringify(typedData, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)),
+          Number((typedData as TypedDataDefinition).domain?.chainId ?? 0),
+        )
+        await assertSignedTheTypedData(address, typedData as TypedDataDefinition, signature)
+        return signature
+      },
       sign: async () => {
         throw new EngineError('not_implemented', 'Raw hashes are never signed on another device.')
       },
     })
   }
 
-  private async request(input: { address: Hex; kind: RequestValue['kind']; payload: unknown; chainId: number }): Promise<Hex> {
-    const id = Array.from(this.deps.platform.random(16), (b) => b.toString(16).padStart(2, '0')).join('')
+  private async request(input: {
+    address: Hex
+    kind: RequestValue['kind']
+    payload: unknown
+    chainId: number
+  }): Promise<Hex> {
+    const id = Array.from(this.deps.platform.random(16), (b) =>
+      b.toString(16).padStart(2, '0'),
+    ).join('')
     const at = this.deps.platform.now()
-    const value: RequestValue = { id, address: input.address, chainId: input.chainId, kind: input.kind, payload: input.payload, at }
+    const value: RequestValue = {
+      id,
+      address: input.address,
+      chainId: input.chainId,
+      kind: input.kind,
+      payload: input.payload,
+      at,
+    }
     const p = new Promise<Hex>((resolve, reject) => {
-      this.outgoing.set(id, { id, address: input.address, chainId: input.chainId, kind: input.kind, from: null, at, state: 'waiting', resolve: (s) => resolve(s as Hex), reject })
+      this.outgoing.set(id, {
+        id,
+        address: input.address,
+        chainId: input.chainId,
+        kind: input.kind,
+        from: null,
+        at,
+        state: 'waiting',
+        resolve: (s) => resolve(s as Hex),
+        reject,
+      })
     })
     await this.deps.sync.pushOne({ collection: 'signRequest', key: id, value })
     this.emit()
@@ -141,39 +311,103 @@ export class RemoteSignService {
   }
 
   /** The signing device: the request becomes an approval with origin `device:<label>`, through the full firewall. */
-  private async handle(req: RequestValue, from: { deviceId: string; label: string }): Promise<void> {
+  private async handle(
+    req: RequestValue,
+    from: { deviceId: string; label: string },
+  ): Promise<void> {
     if (this.incoming.has(req.id)) return
-    const account = (await this.deps.vault.accounts()).find((a) => a.address.toLowerCase() === req.address.toLowerCase())
+    const account = (await this.deps.vault.accounts()).find(
+      (a) => a.address.toLowerCase() === req.address.toLowerCase(),
+    )
     if (!account || !(await this.deps.canSignHere(account))) return // another paired device may be the one
-    const view: RemoteRequest = { id: req.id, address: req.address, chainId: req.chainId, kind: req.kind, from: from.label, at: req.at, state: 'waiting' }
+    const view: RemoteRequest = {
+      id: req.id,
+      address: req.address,
+      chainId: req.chainId,
+      kind: req.kind,
+      from: from.label,
+      at: req.at,
+      state: 'waiting',
+    }
     this.incoming.set(req.id, view)
     this.emit()
     const origin = `device:${from.label}`
     const answer = async (signature: string | null, error: string | null): Promise<void> => {
       this.incoming.delete(req.id)
       this.emit()
-      await this.deps.sync.pushOne({ collection: 'signResponse', key: req.id, value: { id: req.id, signature, error } })
+      await this.deps.sync.pushOne({
+        collection: 'signResponse',
+        key: req.id,
+        value: { id: req.id, signature, error },
+      })
     }
     try {
-      let intent: Extract<ApprovalIntent, { kind: 'send_transaction' | 'sign_typed_data' | 'sign_message' }>
+      let intent: Extract<
+        ApprovalIntent,
+        { kind: 'send_transaction' | 'sign_typed_data' | 'sign_message' }
+      >
       if (req.kind === 'transaction') {
         const tx = TxPayload.parse(req.payload)
-        intent = { kind: 'send_transaction', origin, chainId: req.chainId, accountId: account.id, tx: { from: account.address as Hex, to: (tx.to as Hex | null) ?? undefined, value: tx.value as Hex, data: tx.data as Hex, nonce: tx.nonce as Hex, gas: tx.gas as Hex, ...(tx.type === 'legacy' ? { gasPrice: tx.gasPrice as Hex } : { maxFeePerGas: tx.maxFeePerGas as Hex, maxPriorityFeePerGas: tx.maxPriorityFeePerGas as Hex }) }, clientRequestId: `remote:${req.id}`, signOnly: true }
+        intent = {
+          kind: 'send_transaction',
+          origin,
+          chainId: req.chainId,
+          accountId: account.id,
+          tx: {
+            from: account.address as Hex,
+            to: (tx.to as Hex | null) ?? undefined,
+            value: tx.value as Hex,
+            data: tx.data as Hex,
+            nonce: tx.nonce as Hex,
+            gas: tx.gas as Hex,
+            ...(tx.type === 'legacy'
+              ? { gasPrice: tx.gasPrice as Hex }
+              : {
+                  maxFeePerGas: tx.maxFeePerGas as Hex,
+                  maxPriorityFeePerGas: tx.maxPriorityFeePerGas as Hex,
+                }),
+          },
+          clientRequestId: `remote:${req.id}`,
+          signOnly: true,
+        }
       } else if (req.kind === 'typed_data') {
-        intent = { kind: 'sign_typed_data', origin, chainId: req.chainId, accountId: account.id, from: account.address as Hex, typedData: typeof req.payload === 'string' ? req.payload : JSON.stringify(req.payload), version: 'v4', clientRequestId: `remote:${req.id}` }
+        intent = {
+          kind: 'sign_typed_data',
+          origin,
+          chainId: req.chainId,
+          accountId: account.id,
+          from: account.address as Hex,
+          typedData: typeof req.payload === 'string' ? req.payload : JSON.stringify(req.payload),
+          version: 'v4',
+          clientRequestId: `remote:${req.id}`,
+        }
       } else {
-        intent = { kind: 'sign_message', origin, chainId: req.chainId || 52014, accountId: account.id, from: account.address as Hex, message: String(req.payload) as Hex, clientRequestId: `remote:${req.id}` }
+        intent = {
+          kind: 'sign_message',
+          origin,
+          chainId: req.chainId || 52014,
+          accountId: account.id,
+          from: account.address as Hex,
+          message: String(req.payload) as Hex,
+          clientRequestId: `remote:${req.id}`,
+        }
       }
       const r = await this.deps.provider.runInternal(intent)
       const result = await r.result
-      await answer(typeof result === 'string' ? result : null, typeof result === 'string' ? null : 'The device produced no signature.')
+      await answer(
+        typeof result === 'string' ? result : null,
+        typeof result === 'string' ? null : 'The device produced no signature.',
+      )
     } catch (err) {
       await answer(null, err instanceof Error ? err.message : 'declined')
     }
   }
 
   list(): { outgoing: RemoteRequest[]; incoming: RemoteRequest[] } {
-    return { outgoing: [...this.outgoing.values()].map(strip), incoming: [...this.incoming.values()] }
+    return {
+      outgoing: [...this.outgoing.values()].map(strip),
+      incoming: [...this.incoming.values()],
+    }
   }
 
   cancel(id: string): void {
@@ -191,12 +425,23 @@ export class RemoteSignService {
 }
 
 function strip(o: RemoteRequest & { resolve?: unknown; reject?: unknown }): RemoteRequest {
-  return RemoteRequestSchema.parse({ id: o.id, address: o.address, chainId: o.chainId, kind: o.kind, from: o.from, at: o.at, state: o.state })
+  return RemoteRequestSchema.parse({
+    id: o.id,
+    address: o.address,
+    chainId: o.chainId,
+    kind: o.kind,
+    from: o.from,
+    at: o.at,
+    state: o.state,
+  })
 }
 
 export function remoteNamespace(remote: RemoteSignService): NamespaceSpec {
   return {
     list: { handler: async () => remote.list() },
-    cancel: { input: z.object({ id: z.string() }), handler: async (arg) => remote.cancel((arg as { id: string }).id) },
+    cancel: {
+      input: z.object({ id: z.string() }),
+      handler: async (arg) => remote.cancel((arg as { id: string }).id),
+    },
   }
 }

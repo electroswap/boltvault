@@ -171,6 +171,27 @@ describe('the Hyperlane bridge on two mock chains', () => {
     expect(none.problems[0]).toMatch(/No Hyperlane corridor/)
   })
 
+  /*
+    ATT-BV-030. The destination read is `.catch(() => null)`, and `null` — the
+    destination RPC did not answer — took the same silent path as "the
+    recipient has code there". So the one control between a contract recipient
+    and tokens stranded on the far chain failed open exactly when the far chain
+    was unreachable, which is when it is least safe to guess.
+  */
+  it('says so when it could not reach the destination to check the recipient', async () => {
+    // The destination chain stops answering, which is the state the old code
+    // read as "the recipient is fine".
+    dest.fail({ times: 20, status: 500 })
+    const q = await engine.engine.bridge.quote({ accountId, fromChainId: ETN, toChainId: BASE, token: USDC, amount: '1', recipient: CONTRACT })
+    expect(q.recipientCode).toEqual({ origin: true, destination: null })
+    expect(q.ok).toBe(false)
+    expect(q.problems.join(' ')).toMatch(/Could not reach the destination chain/)
+    // A recipient with no code here has nothing to strand, and is not nagged.
+    dest.fail({ times: 20, status: 500 })
+    const plain = await engine.engine.bridge.quote({ accountId, fromChainId: ETN, toChainId: BASE, token: USDC, amount: '1' })
+    expect(plain.problems.join(' ')).not.toMatch(/Could not reach/)
+  })
+
   it('bridges through one sheet: transferRemote with the gas quote as value, then DispatchId → ProcessId → delivered, recorded as BRIDGE', async () => {
     const r = await engine.engine.bridge.execute({ accountId, fromChainId: ETN, toChainId: BASE, token: USDC, amount: '100' })
     expect(r.requestId).toBeTruthy()

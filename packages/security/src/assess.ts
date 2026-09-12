@@ -44,10 +44,20 @@ export function presentationFor(severity: Severity, origin: string): Presentatio
   }
 }
 
+/**
+ * The word a `danger` sheet asks to be typed out.
+ *
+ * A site's own hostname, because typing it is a second reading of who is
+ * asking. `device:<label>` has no hostname — `new URL('device:Pixel 8')`
+ * parses and answers an empty string — so a remote-sign sheet came back with
+ * `''`, which the Approval screen read as "no word required" and the whole
+ * `danger` tier degraded to a second and a half of waiting. Empty is never an
+ * answer here: anything without a host asks for "confirm".
+ */
 function confirmationWord(origin: string): string {
-  if (origin.startsWith('internal:')) return 'confirm'
+  if (origin.startsWith('internal:') || origin.startsWith('device:')) return 'confirm'
   try {
-    return new URL(origin).hostname.replace(/^www\./, '')
+    return new URL(origin).hostname.replace(/^www\./, '') || 'confirm'
   } catch {
     return 'confirm'
   }

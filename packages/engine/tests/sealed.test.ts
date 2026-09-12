@@ -46,6 +46,48 @@ describe('SealedMap', () => {
     expect(await platform.storage.local.keys()).toEqual(['portfolio.blob'])
   })
 
+  /*
+    ATT-BV-038. The comment in `load` said "never overwrite silently" and the
+    code did exactly that: a blob that would not decrypt became `items = []`,
+    and the next `set()` persisted the empty list over the ciphertext. One
+    transient wrong key — an interrupted v1→v2 migration, a vault restored from
+    an export beside an older `activity.blob` — and the write-ahead history the
+    design leans on was gone, with the address book and the sync state, and
+    nothing said.
+  */
+  it('will not write over a blob it could not read, and keeps the ciphertext', async () => {
+    const { platform, map } = boot()
+    await map.set('a', { total: 1, symbol: 'X' })
+    const sealedUnderTheOldKey = await platform.storage.local.get('portfolio.blob')
+    expect(sealedUnderTheOldKey).toBeTruthy()
+
+    // The same storage, a different DEK: exactly the migration-gone-wrong shape.
+    const wrongKey = new SealedMap<Row>(platform, async () => new Uint8Array(32).fill(9), {
+      key: 'portfolio.blob',
+      info: 'bv/portfolio',
+      aad: 'boltvault.portfolio.v1',
+      schema: SCHEMA,
+    })
+    // It reads as empty — there is nothing else it could say…
+    expect(await wrongKey.get('a')).toBeNull()
+    // …but it refuses to write, and the original bytes are still there.
+    await expect(wrongKey.set('b', { total: 2, symbol: 'Y' })).rejects.toThrow(/set aside|will not be overwritten/)
+    expect(await platform.storage.local.get('portfolio.blob')).toBe(sealedUnderTheOldKey)
+
+    // A copy is kept under its own key, so the bytes survive even a later reset.
+    const keys = await platform.storage.local.keys()
+    expect(keys.some((k) => k.startsWith('portfolio.blob.sealed-quarantine.'))).toBe(true)
+
+    // And the right key still opens it, unharmed.
+    const right = new SealedMap<Row>(platform, async () => new Uint8Array(32).fill(7), {
+      key: 'portfolio.blob',
+      info: 'bv/portfolio',
+      aad: 'boltvault.portfolio.v1',
+      schema: SCHEMA,
+    })
+    expect(await right.get('a')).toEqual({ total: 1, symbol: 'X' })
+  })
+
   it('survives a restart — a second instance over the same storage reads it back', async () => {
     const { platform, map } = boot()
     await map.set('a', { total: 1, symbol: 'X' })
