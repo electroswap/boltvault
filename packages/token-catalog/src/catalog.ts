@@ -33,7 +33,16 @@ export interface CustomToken {
   readonly symbol: string
   readonly decimals: number
   readonly logoURI?: string
-  readonly source: 'user' | 'dapp'
+  /**
+   * How this entry came to exist.
+   *
+   * `learned` is not a token anybody added: it is the answer `decimals()` gave
+   * for a contract no list carries, kept so the same call is not repeated on
+   * every request that touches it (ES-BV-086). It is filtered out of
+   * `universe()` and out of what syncs, so it is metadata and never a token in
+   * the wallet's UI.
+   */
+  readonly source: 'user' | 'dapp' | 'learned'
   readonly origin?: string
 }
 
@@ -140,6 +149,9 @@ export function tokenUniverse(
 
   for (const t of publicList) byAddr.set(t.address.toLowerCase(), { ...t })
   for (const t of custom) {
+    // A `learned` entry is a decimals memo, not a token anybody added; it is
+    // kept out of every universe for the same reason (ES-BV-086).
+    if (t.source === 'learned') continue
     const addr = getAddress(t.address)
     byAddr.set(addr.toLowerCase(), {
       chainId,
