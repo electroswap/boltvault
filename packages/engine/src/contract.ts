@@ -559,6 +559,11 @@ export interface ExploreNamespace {
     address: string
     accountId?: AccountId
   }): Promise<CollectionView | null>
+  cachedCollection(input: {
+    chainId: number
+    address: string
+    accountId?: AccountId
+  }): Promise<Cached<CollectionView> | null>
   search(input: {
     chainId: number
     query: string
@@ -589,6 +594,12 @@ export interface NftNamespace {
     tokenId: string
     accountId?: AccountId
   }): Promise<AssetView | null>
+  cachedAsset(input: {
+    chainId: number
+    address: string
+    tokenId: string
+    accountId?: AccountId
+  }): Promise<Cached<AssetView> | null>
   activity(input: {
     chainId: number
     address: string
@@ -770,6 +781,11 @@ export interface LaunchpadNamespace {
     pool: string
     accountId?: AccountId
   }): Promise<CampaignView | null>
+  cachedDetail(input: {
+    chainId: number
+    pool: string
+    accountId?: AccountId
+  }): Promise<Cached<CampaignView> | null>
   contribute(input: {
     accountId: AccountId
     chainId: number

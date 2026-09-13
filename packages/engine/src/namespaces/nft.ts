@@ -49,6 +49,7 @@ import type { NotificationsService } from './notifications'
 import type { CustomCollectionsService } from './nftCustom'
 import { readMany } from '../multicall'
 import {
+  AssetViewSchema,
   InventorySchema,
   AccountIdSchema,
   type AssetView,
@@ -98,6 +99,20 @@ const INVENTORY_TTL_MS = 20_000
 const inventorySpec = (chainId: number, accountId: string) => ({
   key: cacheKey('nft', 'inventory', chainId, accountId),
   schema: InventorySchema,
+})
+
+/*
+  One piece is good for twenty seconds.
+
+  The Piece screen awaited `asset()` outright, and that is an index fetch, an
+  `ownerOf` read and — on a Legend — a dividends read behind it. Cached, the
+  piece paints at once and those happen behind it. Short, because a listing is
+  the kind of thing that goes away while you are looking at it.
+*/
+const ASSET_TTL_MS = 20_000
+const assetSpec = (chainId: number, address: string, tokenId: string, accountId: string | undefined) => ({
+  key: cacheKey('nft', 'asset', chainId, address.toLowerCase(), tokenId, accountId ?? '-'),
+  schema: AssetViewSchema,
 })
 
 /**
@@ -467,6 +482,72 @@ export class NftService {
     tokenId: string,
     accountId?: string,
   ): Promise<AssetView | null> {
+    if (!this.deps.cache) return this.readAsset(chainId, address, tokenId, accountId)
+    const hit = await this.deps.cache
+      .through(assetSpec(chainId, address, tokenId, accountId), ASSET_TTL_MS, async () => {
+        const v = await this.readAsset(chainId, address, tokenId, accountId)
+        if (!v) throw new EngineError('not_found', 'no such piece')
+        return v
+      })
+      .catch(() => null)
+    return hit?.value ?? null
+  }
+
+  /**
+   * A write invalidates the read it contradicts.
+   *
+   * `asset()` is cached for twenty seconds, and listing, cancelling, buying,
+   * accepting or transferring a piece changes exactly what the Piece screen is
+   * drawn from — the listing, the offers, the owner. Without this the screen
+   * keeps its pre-transaction shape until the TTL lapses, which is precisely
+   * the stale-after-your-own-action that caching invites. `invalidate` emits
+   * `cache.changed`, so the screen re-reads rather than waiting to be asked.
+   *
+   * Only the acting account's document is dropped. Another account's copy of
+   * the same piece is stale too, but nobody is looking at it, and its own
+   * twenty seconds will see to it.
+   */
+  private invalidatingAsset<T>(
+    r: { requestId: string | null; result: Promise<T> },
+    chainId: number,
+    address: string,
+    tokenId: string,
+    accountId: string,
+  ): { requestId: string | null; result: Promise<T> } {
+    const settled = r.result.then(async (v) => {
+      await this.deps.cache?.invalidate(assetSpec(chainId, address, tokenId, accountId).key)
+      // The Rack is drawn from the inventory, and a transfer or a purchase moves a piece in or out of it.
+      await this.deps.cache?.invalidate(inventorySpec(chainId, accountId).key)
+      return v
+    })
+    settled.catch(() => undefined)
+    return { requestId: r.requestId, result: settled }
+  }
+
+  /** The last piece this screen showed, for painting before the reads return. */
+  async cachedAsset(
+    chainId: number,
+    address: string,
+    tokenId: string,
+    accountId?: string,
+  ): Promise<Cached<AssetView> | null> {
+    return (await this.deps.cache?.read(assetSpec(chainId, address, tokenId, accountId))) ?? null
+  }
+
+  /**
+   * The piece as the index and the chain say it is right now, uncached.
+   *
+   * Buy, accept and cancel read through this: they decide against a listing,
+   * and a twenty-second-old listing is exactly the one that has just been
+   * taken. The owner check below is the same rule — the chain's owner beats
+   * the index's — and a write path must run it on a fresh answer.
+   */
+  private async readAsset(
+    chainId: number,
+    address: string,
+    tokenId: string,
+    accountId?: string,
+  ): Promise<AssetView | null> {
     const { client, chainId: cid } = this.client(chainId)
     const a = await fetchAsset(client, cid, address, tokenId)
     if (!a) return null
@@ -600,7 +681,7 @@ export class NftService {
     if (price <= 0n) throw new EngineError('invalid_argument', 'Enter a price above zero.')
     if (!Number.isFinite(input.days) || input.days < 1 || input.days > 180)
       throw new EngineError('invalid_argument', 'Choose between 1 and 180 days.')
-    const asset = await this.asset(input.chainId, input.address, input.tokenId, input.accountId)
+    const asset = await this.readAsset(input.chainId, input.address, input.tokenId, input.accountId)
     if (!asset)
       throw new EngineError('not_found', 'That piece is not in the marketplace index yet.')
     if (!asset.mine) throw new EngineError('invalid_argument', 'You do not own this piece.')
@@ -681,7 +762,13 @@ export class NftService {
         )
         if (!res.ok)
           throw new EngineError('internal', res.message ?? 'The marketplace refused the listing.')
-        return { requestId: null, result: Promise.resolve(orderHash(order)) }
+        return this.invalidatingAsset(
+          { requestId: null, result: Promise.resolve(orderHash(order)) },
+          chainId,
+          input.address,
+          input.tokenId,
+          input.accountId,
+        )
       },
     })
     const flow = await this.deps.flows.start({
@@ -715,7 +802,7 @@ export class NftService {
     if (price <= 0n) throw new EngineError('invalid_argument', 'Enter an offer above zero.')
     if (!Number.isFinite(input.days) || input.days < 1 || input.days > 180)
       throw new EngineError('invalid_argument', 'Choose between 1 and 180 days.')
-    const asset = await this.asset(input.chainId, input.address, input.tokenId, input.accountId)
+    const asset = await this.readAsset(input.chainId, input.address, input.tokenId, input.accountId)
     if (!asset || !asset.owner)
       throw new EngineError('not_found', 'That piece is not in the marketplace index yet.')
     if (asset.mine) throw new EngineError('invalid_argument', 'You already own this piece.')
@@ -927,15 +1014,21 @@ export class NftService {
         {
           step: 'buy',
           waitReceipt: true,
-          run: () =>
-            this.deps.provider.runInternal({
-              kind: 'send_transaction',
-              origin: 'internal:nft:buy',
+          run: async () =>
+            this.invalidatingAsset(
+              await this.deps.provider.runInternal({
+                kind: 'send_transaction',
+                origin: 'internal:nft:buy',
+                chainId,
+                accountId: input.accountId,
+                tx: { from: account.address, to: config.seaport, value: hex(value), data },
+                clientRequestId: `nft:buy:${input.address}:${input.tokenId}:${this.deps.platform.now()}`,
+              }),
               chainId,
-              accountId: input.accountId,
-              tx: { from: account.address, to: config.seaport, value: hex(value), data },
-              clientRequestId: `nft:buy:${input.address}:${input.tokenId}:${this.deps.platform.now()}`,
-            }),
+              input.address,
+              input.tokenId,
+              input.accountId,
+            ),
         },
       ],
     })
@@ -1006,15 +1099,21 @@ export class NftService {
     steps.push({
       step: 'accept',
       waitReceipt: true,
-      run: () =>
-        this.deps.provider.runInternal({
-          kind: 'send_transaction',
-          origin: 'internal:nft:accept',
+      run: async () =>
+        this.invalidatingAsset(
+          await this.deps.provider.runInternal({
+            kind: 'send_transaction',
+            origin: 'internal:nft:accept',
+            chainId,
+            accountId: input.accountId,
+            tx: { from: account.address, to: config.seaport, value: '0x0', data },
+            clientRequestId: `nft:accept:${input.orderHash}:${this.deps.platform.now()}`,
+          }),
           chainId,
-          accountId: input.accountId,
-          tx: { from: account.address, to: config.seaport, value: '0x0', data },
-          clientRequestId: `nft:accept:${input.orderHash}:${this.deps.platform.now()}`,
-        }),
+          input.address,
+          input.tokenId,
+          input.accountId,
+        ),
     })
     const flow = await this.deps.flows.start({
       kind: 'nft',
@@ -1060,20 +1159,26 @@ export class NftService {
         {
           step: 'cancel_order',
           waitReceipt: true,
-          run: () =>
-            this.deps.provider.runInternal({
-              kind: 'send_transaction',
-              origin: 'internal:nft:cancel',
+          run: async () =>
+            this.invalidatingAsset(
+              await this.deps.provider.runInternal({
+                kind: 'send_transaction',
+                origin: 'internal:nft:cancel',
+                chainId,
+                accountId: input.accountId,
+                tx: {
+                  from: account.address,
+                  to: config.seaport,
+                  value: '0x0',
+                  data: encodeCancel([target.components]),
+                },
+                clientRequestId: `nft:cancel:${input.orderHash}:${this.deps.platform.now()}`,
+              }),
               chainId,
-              accountId: input.accountId,
-              tx: {
-                from: account.address,
-                to: config.seaport,
-                value: '0x0',
-                data: encodeCancel([target.components]),
-              },
-              clientRequestId: `nft:cancel:${input.orderHash}:${this.deps.platform.now()}`,
-            }),
+              input.address,
+              input.tokenId,
+              input.accountId,
+            ),
         },
       ],
     })
@@ -1101,24 +1206,30 @@ export class NftService {
         {
           step: 'transfer',
           waitReceipt: true,
-          run: () =>
-            this.deps.provider.runInternal({
-              kind: 'send_transaction',
-              origin: 'internal:nft:transfer',
+          run: async () =>
+            this.invalidatingAsset(
+              await this.deps.provider.runInternal({
+                kind: 'send_transaction',
+                origin: 'internal:nft:transfer',
+                chainId,
+                accountId: input.accountId,
+                tx: {
+                  from: account.address,
+                  to: input.address as Hex,
+                  value: '0x0',
+                  data: encodeFunctionData({
+                    abi: ERC721,
+                    functionName: 'safeTransferFrom',
+                    args: [account.address, input.to as Hex, BigInt(input.tokenId)],
+                  }),
+                },
+                clientRequestId: `nft:transfer:${input.address}:${input.tokenId}:${this.deps.platform.now()}`,
+              }),
               chainId,
-              accountId: input.accountId,
-              tx: {
-                from: account.address,
-                to: input.address as Hex,
-                value: '0x0',
-                data: encodeFunctionData({
-                  abi: ERC721,
-                  functionName: 'safeTransferFrom',
-                  args: [account.address, input.to as Hex, BigInt(input.tokenId)],
-                }),
-              },
-              clientRequestId: `nft:transfer:${input.address}:${input.tokenId}:${this.deps.platform.now()}`,
-            }),
+              input.address,
+              input.tokenId,
+              input.accountId,
+            ),
         },
       ],
     })
@@ -1224,6 +1335,16 @@ export function nftNamespace(nft: NftService): NamespaceSpec {
       input: Piece.extend({ accountId: AccountIdSchema.optional() }),
       handler: (arg) =>
         nft.asset(
+          (arg as { chainId: number }).chainId,
+          (arg as { address: string }).address,
+          (arg as { tokenId: string }).tokenId,
+          (arg as { accountId?: string }).accountId,
+        ),
+    },
+    cachedAsset: {
+      input: Piece.extend({ accountId: AccountIdSchema.optional() }),
+      handler: (arg) =>
+        nft.cachedAsset(
           (arg as { chainId: number }).chainId,
           (arg as { address: string }).address,
           (arg as { tokenId: string }).tokenId,

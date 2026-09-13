@@ -401,13 +401,44 @@ describe('the uber-app on the mainnet mock', () => {
     await expect(engine.engine.nft.accept({ accountId, chainId: CHAIN, address: LEGENDS, tokenId: '12', orderHash: '0xbid' })).rejects.toThrow(/previous owner/)
     expect(rpc.state.transactions.size).toBe(before)
 
-    // The same bid made against the current owner is accepted as before.
+    /*
+      The same bid made against the current owner is accepted as before.
+
+      The piece's document is cached for twenty seconds, so the read below
+      would otherwise hand back the stale bid this test just built. Dropping
+      it is what a real hand-over does — every write that moves a piece
+      invalidates it — and it is the only way to put two different index
+      answers in front of the view builder inside one tick.
+    */
+    await engine.cache.invalidate(cacheKey('nft', 'asset', CHAIN, LEGENDS.toLowerCase(), '12', accountId))
     bidParams = json(bid(address as Hex))
     const live = await engine.engine.nft.asset({ chainId: CHAIN, address: LEGENDS, tokenId: '12', accountId })
     expect(live?.bids[0]?.paysPreviousOwner).toBe(false)
     expect(live?.bestBid?.orderHash).toBe('0xbid')
     await expect(engine.engine.nft.accept({ accountId, chainId: CHAIN, address: LEGENDS, tokenId: '12', orderHash: '0xbid' })).resolves.toMatchObject({ flowId: expect.any(String) })
     bidParams = null
+  })
+
+  /*
+    The collection page is served from a cached document so it paints at once,
+    and `mint` is deliberately not in that document: it is what this wallet may
+    still mint, and minting is the one action on the page that changes it. A
+    remembered copy would tell somebody who had just minted that they could
+    still mint the one they took, for the rest of its half minute.
+  */
+  it('marketplace: the collection page caches its shelf and reads its mint capability live', async () => {
+    const first = await engine.engine.explore.collection({ chainId: CHAIN, address: LEGENDS, accountId })
+    expect(first?.name).toBe('Electric Legends')
+    expect(first?.mint).not.toBeNull()
+
+    const doc = await engine.engine.explore.cachedCollection({ chainId: CHAIN, address: LEGENDS, accountId })
+    expect(doc?.value.name).toBe('Electric Legends')
+    // The regression this guards: putting `mint` back into the document.
+    expect(doc?.value.mint ?? null).toBeNull()
+
+    // Inside the TTL the shelf is the same document, with a live mint beside it.
+    const again = await engine.engine.explore.collection({ chainId: CHAIN, address: LEGENDS, accountId })
+    expect(again?.mint).toEqual(first?.mint)
   })
 
   it('marketplace: Buy checks the chain owner and fulfils the listing with the ETN', async () => {

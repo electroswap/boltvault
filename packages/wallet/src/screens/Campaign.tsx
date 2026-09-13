@@ -9,13 +9,13 @@
  * only before launch, or while live and already followed.
  */
 import { Artwork, Body, Column, CurrentFill, Icon, Input, Key, Pill, Plate, Pressable, RollingReadout, Row, ScrollView, SharedElement, Sheet, StatStrip, TokenAvatar, metrics, paint, shortAddress, type IconName } from '@boltvault/ui'
-import type { CampaignView } from '@boltvault/engine'
+import { cacheKey, type CampaignView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { alertable, PhasePill, RaiseBar } from '../components/cards/CampaignCard'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
 import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
-import { useLastGood } from '../hooks/useLastGood'
+import { useCached } from '../hooks/useCached'
 import { useSafeOpen } from '../hooks/useSafeOpen'
 import { formatRaw } from '../format'
 import { useHost } from '../host'
@@ -43,28 +43,66 @@ export function Campaign({ body, chainId, pool, reducedMotion = false }: { body:
   const { flow, dismiss } = useActiveFlow(['launchpad'])
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const wide = body === 'extension-tab'
-  const [loadedCampaign, setC] = useState<CampaignView | null>(null)
-  const c = useLastGood(`campaign:${chainId}:${pool}`, loadedCampaign)
+  /*
+    Serve what this screen last showed, refresh behind it (plan A2).
+
+    It awaited `launchpad.detail()` on mount — an index fetch with the
+    enrichment behind it — and held `useLastGood` over the gap, so the first
+    paint of a campaign nobody had opened waited on the whole chain of reads.
+    The thirty-second poll below is now a revalidation behind what is already
+    on screen rather than the only thing that puts anything on it.
+  */
+  const campaign = useCached<CampaignView>({
+    key: cacheKey('launchpad', 'detail', chainId, pool.toLowerCase(), active?.id ?? '-'),
+    cached: (e) => e.launchpad.cachedDetail({ chainId, pool, ...(active ? { accountId: active.id } : {}) }),
+    // `fresh` may not resolve null; a campaign that is gone is an error here,
+    // and useCached keeps the last good value beside it rather than blanking.
+    fresh: async (e) => {
+      const v = await e.launchpad.detail({ chainId, pool, ...(active ? { accountId: active.id } : {}) })
+      if (!v) throw new Error('no such campaign')
+      return v
+    },
+    maxAgeMs: 30_000,
+  })
+  /*
+    Starring writes to the watchlist, not to the campaign document, and the
+    document behind this screen is good for half a minute — so the pill would
+    sit on the old answer until the TTL ran out and the tap would read as
+    ignored. This is what the user just did, keyed to the document it was done
+    against, so a newer campaign silently supersedes it.
+  */
+  const [star, setStar] = useState<{ observedAt: number | null; starred: boolean } | null>(null)
+  const c =
+    campaign.value === null
+      ? null
+      : star !== null && star.observedAt === campaign.observedAt
+        ? { ...campaign.value, starred: star.starred }
+        : campaign.value
   const [sheet, setSheet] = useState(false)
   const [amount, setAmount] = useState('')
   const [expanded, setExpanded] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [flowError, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  /* A failed contribution and a campaign that would not load read the same on screen. */
+  const error = flowError ?? (c === null ? campaign.error : null)
 
+  /*
+    Only the very first visit has nothing to draw; after that the cached
+    campaign is on screen while the reads happen behind it.
+  */
+  useScreenBusy('campaign', c === null && error === null && campaign.freshness === 'loading')
 
-  // The shell draws one loader over the whole screen while this is true.
-  useScreenBusy('campaign', c === null && error === null)
-
+  // A phase change is the thing people sit on this screen waiting for.
+  const { refresh: revalidate } = campaign
   useEffect(() => {
-    let alive = true
-    engine.launchpad.detail({ chainId, pool, ...(active ? { accountId: active.id } : {}) }).then((v) => alive && setC(v), (err: unknown) => alive && setError(err instanceof Error ? err.message : String(err)))
-    const timer = setInterval(() => engine.launchpad.detail({ chainId, pool, ...(active ? { accountId: active.id } : {}) }).then((v) => alive && setC(v), () => undefined), 30_000)
-    return () => {
-      alive = false
-      clearInterval(timer)
-    }
-  }, [engine, chainId, pool, active, flow?.status])
+    const timer = setInterval(() => revalidate(), 30_000)
+    return () => clearInterval(timer)
+  }, [revalidate])
+  // A settled flow changes the campaign — the contribution is on it now.
+  useEffect(() => {
+    if (flow?.status) revalidate()
+  }, [flow?.status, revalidate])
 
   const run = async (fn: () => Promise<{ flowId: string }>): Promise<void> => {
     setBusy(true)
@@ -101,7 +139,7 @@ export function Campaign({ body, chainId, pool, reducedMotion = false }: { body:
         return t({ id: 'campaign.cancelled', message: 'Cancelled by the team — contributions are refundable' })
     }
   }
-  const alertPill = c && alertable(c) ? <Pill label={c.starred ? t({ id: 'campaign.starred', message: 'Alerts on' }) : t({ id: 'campaign.alert', message: 'Alert me' })} icon={<Icon name="star" size={14} color={c.starred ? paint.ember : paint.mute} />} selected={c.starred} size="sm" onPress={() => void engine.watchlist[c.starred ? 'unstar' : 'star']({ kind: 'campaign', chainId, address: pool, label: c.token.symbol }).then(() => setC({ ...c, starred: !c.starred }))} testID="campaign-star" /> : null
+  const alertPill = c && alertable(c) ? <Pill label={c.starred ? t({ id: 'campaign.starred', message: 'Alerts on' }) : t({ id: 'campaign.alert', message: 'Alert me' })} icon={<Icon name="star" size={14} color={c.starred ? paint.ember : paint.mute} />} selected={c.starred} size="sm" onPress={() => void engine.watchlist[c.starred ? 'unstar' : 'star']({ kind: 'campaign', chainId, address: pool, label: c.token.symbol }).then(() => setStar({ observedAt: campaign.observedAt, starred: !c.starred }))} testID="campaign-star" /> : null
   const links = c ? LINKS.filter((l) => !!c.links[l.key]) : []
 
   return (
