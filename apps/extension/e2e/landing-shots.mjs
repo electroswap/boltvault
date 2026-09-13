@@ -1,10 +1,18 @@
 #!/usr/bin/env node
 /**
- * Render wallet screens for the landing page's phone.
+ * Render wallet screens for somebody else's picture of the wallet.
  *
- * The landing page frames each shot between a status bar and Android's
- * navigation bar, so the picture is NOT a whole phone screen — it is the app
- * area only. The screen divides 36 + 760 + 48 = 844, so a shot is
+ * Two consumers, one set of screens, and that is the point. The landing page's
+ * phone needs the app area at phone size; the Chrome Web Store tiles need the
+ * popup and the full tab. Rendering them from one table means the swap on the
+ * store tile and the swap on the marketing site are the same swap, prepared the
+ * same way — and a screen that has to be driven before it is worth
+ * photographing is driven once, here, rather than twice, differently.
+ *
+ * `--body phone` (the default) is the landing page's. That page frames each
+ * shot between a status bar and Android's navigation bar, so the picture is NOT
+ * a whole phone screen — it is the app area only. The screen divides
+ * 36 + 760 + 48 = 844, so a shot is
  *
  *     390 x 760 logical, rendered at 3x  ->  1170 x 2280
  *
@@ -12,6 +20,8 @@
  * lays out for the height it will actually be seen at, instead of being
  * squeezed and cut. Anything at another aspect gets cropped by `object-fit:
  * cover` on the page — 390 x 844 loses about a ninth, top and bottom.
+ *
+ * `--body popup` and `--body tab` are the extension's own two shapes, at 2x.
  *
  * Read-only: it loads the already-built extension and writes only to --out.
  * It never touches e2e/baselines.
@@ -21,10 +31,16 @@
  *   pnpm build:harness                             # once, if .output is stale
  *   cd apps/extension && node e2e/landing-shots.mjs --out /tmp/shots
  *   cd apps/extension && node e2e/landing-shots.mjs --out /tmp/shots --only home,legends
+ *   cd apps/extension && node e2e/landing-shots.mjs --out /tmp/store --body popup
  *
- * Then convert to WebP and drop them in
+ * The landing page: convert to WebP and drop them in
  * `apps/docs/static/img/boltvault/screen-<id>.webp`, and register the id in
  * `VAULT.screens` (apps/docs/src/landing/facts.ts).
+ *
+ * The store tiles: copy the PNGs into
+ * `apps/docs/static/img/boltvault/store/` and re-run `yarn store:shots` there
+ * (apps/docs/tools/gen-store-shots.mjs). Both live in the docs repository
+ * because that is where the brand furniture is.
  */
 import { chromium } from '@playwright/test'
 import { existsSync } from 'node:fs'
@@ -50,10 +66,24 @@ if (!EXTENSION_DIR) {
   process.exit(2)
 }
 
+/**
+ * The three shapes, and what the harness must be told to lay out for.
+ *
+ * `phone` is the app area only (see above). `popup` is the panel that drops
+ * from the toolbar, and `tab` the full-page view — the two sizes the extension
+ * actually renders at, so a store tile shows the product at its own dimensions
+ * rather than a phone screen stretched sideways.
+ */
+const BODIES = {
+  phone: { width: 390, height: 760, scale: 3, body: 'mobile' },
+  popup: { width: 400, height: 600, scale: 2, body: 'extension-popup' },
+  tab: { width: 1100, height: 760, scale: 2, body: 'extension-tab' },
+}
+
 /** The app area, in the phone's own logical pixels, and the scale to render it at. */
-export const SHOT_WIDTH = 390
-export const SHOT_HEIGHT = 760
-export const SHOT_SCALE = 3
+export const SHOT_WIDTH = BODIES.phone.width
+export const SHOT_HEIGHT = BODIES.phone.height
+export const SHOT_SCALE = BODIES.phone.scale
 
 /**
  * id -> the harness screen it comes from.
@@ -113,6 +143,15 @@ const SCREENS = {
     },
   },
   sign: { screen: 'sign', scenario: 'sign' },
+  /*
+    Store-tile screens. `devices` is the custody argument made in pictures —
+    Ledger, Trezor and Keystone in a list beats a paragraph saying the wallet
+    supports them — and `explore` is the breadth of markets in one frame.
+  */
+  devices: { screen: 'devices', scenario: 'funded' },
+  explore: { screen: 'explore', scenario: 'funded' },
+  accounts: { screen: 'accounts', scenario: 'funded' },
+  backup: { screen: 'backup', scenario: 'funded' },
 }
 
 /**
@@ -139,7 +178,13 @@ const arg = (name) => {
 
 const out = arg('out')
 if (!out) {
-  process.stderr.write('usage: node tools/landing-shots.mjs --out <dir> [--only id,id]\n')
+  process.stderr.write('usage: node e2e/landing-shots.mjs --out <dir> [--only id,id] [--body phone|popup|tab]\n')
+  process.exit(2)
+}
+const bodyName = arg('body') ?? 'phone'
+const shape = BODIES[bodyName]
+if (!shape) {
+  process.stderr.write(`unknown --body ${bodyName} (want ${Object.keys(BODIES).join(', ')})\n`)
   process.exit(2)
 }
 const only = arg('only')
@@ -152,8 +197,8 @@ const userDataDir = await mkdtemp(join(tmpdir(), 'bv-landing-'))
 const context = await chromium.launchPersistentContext(userDataDir, {
   channel: 'chromium',
   headless: true,
-  deviceScaleFactor: SHOT_SCALE,
-  viewport: { width: SHOT_WIDTH, height: SHOT_HEIGHT },
+  deviceScaleFactor: shape.scale,
+  viewport: { width: shape.width, height: shape.height },
   args: [`--disable-extensions-except=${EXTENSION_DIR}`, `--load-extension=${EXTENSION_DIR}`],
 })
 let [worker] = context.serviceWorkers()
@@ -163,8 +208,8 @@ const id = new URL(worker.url()).host
 let failed = 0
 for (const [name, c] of wanted) {
   const page = await context.newPage()
-  await page.setViewportSize({ width: SHOT_WIDTH, height: SHOT_HEIGHT })
-  const params = `scenario=${c.scenario}&screen=${c.screen}&body=mobile&motion=reduced${c.art ? '&art=on' : ''}${c.dapp ? `&dapp=${c.dapp}` : ''}`
+  await page.setViewportSize({ width: shape.width, height: shape.height })
+  const params = `scenario=${c.scenario}&screen=${c.screen}&body=${shape.body}&motion=reduced${c.art ? '&art=on' : ''}${c.dapp ? `&dapp=${c.dapp}` : ''}`
   await page.goto(`chrome-extension://${id}/harness.html?${params}`)
   try {
     await page.waitForFunction(() => document.documentElement.dataset['ready'] === '1', undefined, {
@@ -199,10 +244,14 @@ for (const [name, c] of wanted) {
       })
       .catch(() => undefined)
   }
-  await page.screenshot({ path: join(out, `screen-${name}.png`) })
-  process.stdout.write(
-    `screen-${name}.png  ${SHOT_WIDTH * SHOT_SCALE}x${SHOT_HEIGHT * SHOT_SCALE}\n`,
-  )
+  /*
+    The landing page's files keep the name its markup already asks for; the
+    other bodies say which shape they are, because a directory holding both
+    would otherwise have two different pictures called the same thing.
+  */
+  const file = bodyName === 'phone' ? `screen-${name}.png` : `${name}--${bodyName}.png`
+  await page.screenshot({ path: join(out, file) })
+  process.stdout.write(`${file}  ${shape.width * shape.scale}x${shape.height * shape.scale}\n`)
   await page.close()
 }
 await context.close()
