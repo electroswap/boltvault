@@ -90,7 +90,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
   const engine = useEngine()
   const host = useHost()
   const reducedMotion = useReducedMotion(reducedMotionOverride)
-  const { vault, active, loading } = useWalletState()
+  const { vault, active, loading, refresh: refreshWallet } = useWalletState()
   const head = useChainHead(ETN)
   const tier = useHolderTier(active?.id ?? null)
   /*
@@ -138,6 +138,19 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
    * CTA now needs the vault to have actually said it does not exist.
    */
   const firstRun = !loading && vault !== null && !vault.exists
+  /**
+   * And the other side of that coin, which had no branch at all.
+   *
+   * Home's three bodies are `firstRun`, locked, and unlocked, and every one of
+   * them needs a vault status to be true. Tightening `firstRun` was right, but
+   * it left `!loading && vault === null` rendering a header and then nothing —
+   * a blank page over the circuit background, which is exactly what the owner
+   * photographed on the signed APK before `useWalletState` started sharing its
+   * answer (ES-BV-088). The shared store is the fix for the cause; this is the
+   * floor under it, because "the engine did not answer" is a real state and a
+   * wallet that draws nothing is indistinguishable from a wallet that crashed.
+   */
+  const statusUnknown = !loading && vault === null
   /*
     A phone has room; the popup does not. Ten pixels between plates is right in
     a 400x600 window and reads as cramped on a 6.7-inch screen, which is half of
@@ -833,6 +846,31 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
             <Column alignItems="center" paddingTop="$2" testID="first-run-brand">
               <EsWordmark />
             </Column>
+          </Ignition>
+        ) : null}
+
+        {statusUnknown ? (
+          <Ignition active={ignite} reducedMotion={reducedMotion} order={1}>
+            <Plate role="raised" gap="$3" testID="status-unknown-plate">
+              <Row gap="$2">
+                <Icon name="warn" color={paint.mute} size={18} />
+                <Body size="title">
+                  {t({ id: 'home.unknown.title', message: 'Cannot reach the wallet' })}
+                </Body>
+              </Row>
+              <Body tone="mute">
+                {t({
+                  id: 'home.unknown.body',
+                  message:
+                    'The wallet service did not answer. Nothing has changed — your keys and balances are untouched.',
+                })}
+              </Body>
+              <Key
+                label={t({ id: 'home.unknown.key', message: 'Try again' })}
+                onPress={() => refreshWallet()}
+                testID="status-unknown-retry"
+              />
+            </Plate>
           </Ignition>
         ) : null}
 
