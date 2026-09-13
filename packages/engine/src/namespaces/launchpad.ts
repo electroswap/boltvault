@@ -65,6 +65,21 @@ const listSpec = (chainId: number, accountId: string | undefined) => ({
   schema: z.array(CampaignViewSchema),
 })
 
+/*
+  One campaign is good for half a minute.
+
+  The detail screen polled `detail()` on a thirty-second interval and awaited it
+  outright on mount, so opening a campaign waited on the index and then on the
+  enrichment behind it. Cached, the screen paints the last good campaign at once
+  and that poll becomes a revalidation behind it. Shorter than the list's minute
+  because this is the screen someone watches a phase change on.
+*/
+const DETAIL_TTL_MS = 30_000
+const detailSpec = (chainId: number, pool: string, accountId: string | undefined) => ({
+  key: cacheKey('launchpad', 'detail', chainId, pool.toLowerCase(), accountId ?? '-'),
+  schema: CampaignViewSchema,
+})
+
 const REFERRAL_TTL_MS = 24 * 3_600_000
 const isEtn = (chainId: number): chainId is 52014 | 5201420 =>
   chainId === 52014 || chainId === 5201420
@@ -274,6 +289,30 @@ export class LaunchpadService {
   }
 
   async detail(chainId: number, pool: string, accountId?: string): Promise<CampaignView | null> {
+    if (!this.deps.cache) return this.readDetail(chainId, pool, accountId)
+    const hit = await this.deps.cache
+      .through(detailSpec(chainId, pool, accountId), DETAIL_TTL_MS, async () => {
+        const v = await this.readDetail(chainId, pool, accountId)
+        if (!v) throw new EngineError('not_found', 'no such campaign')
+        return v
+      })
+      .catch(() => null)
+    return hit?.value ?? null
+  }
+
+  /** The last campaign this screen showed, for painting before the reads return. */
+  async cachedDetail(chainId: number, pool: string, accountId?: string): Promise<Cached<CampaignView> | null> {
+    return (await this.deps.cache?.read(detailSpec(chainId, pool, accountId))) ?? null
+  }
+
+  /**
+   * The campaign as the index says it is right now, with no cache in the way.
+   *
+   * Every write path reads through this rather than `detail()` — contributing
+   * and claiming decide from the phase and the caps, and a half-minute-old
+   * answer is not what a transaction should be built on.
+   */
+  private async readDetail(chainId: number, pool: string, accountId?: string): Promise<CampaignView | null> {
     const d = this.deps
     if (!d.electroswap || !isEtn(chainId)) return null
     const owner = accountId ? (await this.account(accountId)).address : null
@@ -367,7 +406,9 @@ export class LaunchpadService {
         'invalid_argument',
         'Watch-only — import a key or pair a device to contribute.',
       )
-    const c = await this.detail(chainId, input.pool, input.accountId)
+    // Uncached: this decides from the phase and the caps, and a transaction is
+    // not built on a half-minute-old answer. Same split as farm and legends.
+    const c = await this.readDetail(chainId, input.pool, input.accountId)
     if (!c) throw new EngineError('not_found', 'No such campaign.')
     if (c.phase !== 'live')
       throw new EngineError(
@@ -432,20 +473,25 @@ export class LaunchpadService {
         {
           step: 'contribute',
           waitReceipt: true,
-          run: () =>
-            this.deps.provider.runInternal({
-              kind: 'send_transaction',
-              origin: 'internal:launchpad:contribute',
+          run: async () =>
+            this.invalidatingDetail(
+              await this.deps.provider.runInternal({
+                kind: 'send_transaction',
+                origin: 'internal:launchpad:contribute',
+                chainId,
+                accountId: input.accountId,
+                tx: {
+                  from: account.address,
+                  to: input.pool as Hex,
+                  value: hex(amount),
+                  data: encodeContribute(referrer),
+                },
+                clientRequestId: `launchpad:contribute:${input.pool}:${this.deps.platform.now()}`,
+              }),
               chainId,
-              accountId: input.accountId,
-              tx: {
-                from: account.address,
-                to: input.pool as Hex,
-                value: hex(amount),
-                data: encodeContribute(referrer),
-              },
-              clientRequestId: `launchpad:contribute:${input.pool}:${this.deps.platform.now()}`,
-            }),
+              input.pool,
+              input.accountId,
+            ),
         },
       ],
     })
@@ -464,7 +510,9 @@ export class LaunchpadService {
     if (!isEtn(chainId))
       throw new EngineError('invalid_argument', 'The launchpad lives on Electroneum.')
     const account = await this.account(input.accountId)
-    const c = await this.detail(chainId, input.pool, input.accountId)
+    // Uncached: this decides from the phase and the caps, and a transaction is
+    // not built on a half-minute-old answer. Same split as farm and legends.
+    const c = await this.readDetail(chainId, input.pool, input.accountId)
     if (!c) throw new EngineError('not_found', 'No such campaign.')
     const key =
       input.kind === 'tokens'
@@ -498,19 +546,50 @@ export class LaunchpadService {
         {
           step: 'claim',
           waitReceipt: true,
-          run: () =>
-            this.deps.provider.runInternal({
-              kind: 'send_transaction',
-              origin: `internal:launchpad:${input.kind}`,
+          run: async () =>
+            this.invalidatingDetail(
+              await this.deps.provider.runInternal({
+                kind: 'send_transaction',
+                origin: `internal:launchpad:${input.kind}`,
+                chainId,
+                accountId: input.accountId,
+                tx: { from: account.address, to, value: '0x0', data },
+                clientRequestId: `launchpad:${input.kind}:${input.pool}:${this.deps.platform.now()}`,
+              }),
               chainId,
-              accountId: input.accountId,
-              tx: { from: account.address, to, value: '0x0', data },
-              clientRequestId: `launchpad:${input.kind}:${input.pool}:${this.deps.platform.now()}`,
-            }),
+              input.pool,
+              input.accountId,
+            ),
         },
       ],
     })
     return { flowId: flow.id, requestId: flow.steps[0]?.requestId ?? null }
+  }
+
+  /**
+   * A write invalidates the read it contradicts.
+   *
+   * `detail()` is cached for half a minute, and a contribution or a claim that
+   * just landed changes the two figures the screen is drawn from — the raise
+   * and what this wallet has put in or taken out. Without this the campaign
+   * keeps its pre-transaction numbers until the TTL lapses, which is exactly
+   * the stale-after-your-own-action that caching invites. `invalidate` emits
+   * `cache.changed`, so the screen re-reads rather than waiting to be asked.
+   */
+  private invalidatingDetail<T>(
+    r: { requestId: string | null; result: Promise<T> },
+    chainId: number,
+    pool: string,
+    accountId: string,
+  ): { requestId: string | null; result: Promise<T> } {
+    const settled = r.result.then(async (v) => {
+      await this.deps.cache?.invalidate(detailSpec(chainId, pool, accountId).key)
+      // The list carries the same raise, and Sky is where people go next.
+      await this.deps.cache?.invalidate(listSpec(chainId, accountId).key)
+      return v
+    })
+    settled.catch(() => undefined)
+    return { requestId: r.requestId, result: settled }
   }
 }
 
@@ -547,6 +626,15 @@ export function launchpadNamespace(launchpad: LaunchpadService): NamespaceSpec {
       input: Chain.extend({ pool: z.string(), accountId: AccountIdSchema.optional() }),
       handler: (arg) =>
         launchpad.detail(
+          (arg as { chainId: number }).chainId,
+          (arg as { pool: string }).pool,
+          (arg as { accountId?: string }).accountId,
+        ),
+    },
+    cachedDetail: {
+      input: Chain.extend({ pool: z.string(), accountId: AccountIdSchema.optional() }),
+      handler: (arg) =>
+        launchpad.cachedDetail(
           (arg as { chainId: number }).chainId,
           (arg as { pool: string }).pool,
           (arg as { accountId?: string }).accountId,

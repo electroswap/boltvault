@@ -24,12 +24,13 @@ import {
   metrics,
   useWindowDimensions,
 } from '@boltvault/ui'
-import type { AssetView, CollectionView, LegendsStatus, NftActivityView } from '@boltvault/engine'
+import { cacheKey, type AssetView, type CollectionView, type LegendsStatus, type NftActivityView } from '@boltvault/engine'
 import { useEffect, useRef, useState } from 'react'
 import { DividendsCard } from '../components/DividendsCard'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
 import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
+import { useCached } from '../hooks/useCached'
 import { useLastGood } from '../hooks/useLastGood'
 import { formatCompact, formatRaw } from '../format'
 import { t } from '../i18n'
@@ -60,21 +61,72 @@ export function Collection({
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const wide = body === 'extension-tab'
   const contentWidth = Math.min(width, wide ? 680 : width) - inset * 2
-  const [loaded, setCollection] = useState<CollectionView | null>(null)
   const [loadedAssets, setAssets] = useState<AssetView[]>([])
+  /*
+    Serve what this screen last showed, refresh behind it (plan A2).
+
+    It awaited `explore.collection()` — an index fetch with a balances fetch
+    behind it — and held `useLastGood` over the gap, and everything on the page
+    hangs off that answer: the banner and the logo are keyed to it, so the hero
+    could not even start loading until the network had spoken twice. The cached
+    collection paints at once and the reads happen behind it.
+
+    `mint` is not in the cached document (see `ExploreService.collection`), so
+    the mint block arrives with the first live read rather than telling somebody
+    who has just minted that they can still mint the one they took.
+  */
+  const shelf = useCached<CollectionView>({
+    key: cacheKey('explore', 'collection', chainId, address.toLowerCase(), active?.id ?? '-'),
+    cached: (e) => e.explore.cachedCollection({ chainId, address, ...(active ? { accountId: active.id } : {}) }),
+    // `fresh` may not resolve null; a collection the index does not know is an
+    // error here, and useCached keeps the last good value beside it.
+    fresh: async (e) => {
+      const v = await e.explore.collection({ chainId, address, ...(active ? { accountId: active.id } : {}) })
+      if (!v) throw new Error('no such collection')
+      return v
+    },
+    maxAgeMs: 30_000,
+  })
+  /*
+    Starring writes to the watchlist, not to the collection document, and the
+    document is good for half a minute — so the pill would sit on the old
+    answer until the TTL ran out and the tap would read as ignored. This is
+    what the user just did, keyed to the document it was done against, so a
+    newer collection silently supersedes it.
+  */
+  const [starTap, setStarTap] = useState<{ observedAt: number | null; starred: boolean } | null>(null)
+  const collection =
+    shelf.value === null
+      ? null
+      : starTap !== null && starTap.observedAt === shelf.observedAt
+        ? { ...shelf.value, starred: starTap.starred }
+        : shelf.value
   // Navigating away unmounts this screen and the reload is a round trip, so
-  // coming back used to blank the hero and the grid before repainting them.
+  // coming back used to blank the grid before repainting it.
   // Keyed on the collection, so a *different* one still starts empty.
-  const collection = useLastGood(`collection:${chainId}:${address}`, loaded)
   const assets = useLastGood(`collection-assets:${chainId}:${address}`, loadedAssets) ?? []
   const [next, setNext] = useState<string | null>(null)
   const [orderBy, setOrderBy] = useState<'PRICE' | 'RARITY'>('PRICE')
   const [listedOnly, setListedOnly] = useState(false)
-  const [loadedLegends, setLegends] = useState<LegendsStatus | null>(null)
-  // The dividends card is the slowest thing on this screen — legends.status is
-  // several dependent multicalls — so on a revisit it keeps the last answer
-  // rather than vanishing and sliding the page as it comes back.
-  const legends = useLastGood(`legends:${chainId}:${address}:${active?.id ?? '-'}`, loadedLegends)
+  /*
+    The dividends card is the slowest thing on this screen — `legends.status`
+    is several dependent multicalls — so it reads through the same door: the
+    last good vessel is on screen at once and the chain confirms it behind.
+    Null key while there is no account, or while this is not a collection that
+    pays, so nothing is asked for that nobody will look at.
+  */
+  const paying = collection?.paysDividends === true && active !== null
+  const vessel = useCached<LegendsStatus>({
+    key: paying && active ? cacheKey('legends', 'status', chainId, active.id) : null,
+    cached: (e) => (active ? e.legends.cachedStatus({ accountId: active.id, chainId }) : Promise.resolve(null)),
+    fresh: async (e) => {
+      if (!active) throw new Error('no account')
+      const v = await e.legends.status({ accountId: active.id, chainId })
+      if (!v) throw new Error('no legends status')
+      return v
+    },
+  })
+  const legends = vessel.value
   const [activity, setActivity] = useState<NftActivityView[]>([])
   const [showActivity, setShowActivity] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -111,25 +163,27 @@ export function Collection({
     return () => clearTimeout(give)
   }, [chainId, address, collection?.bannerUrl, collection?.imageUrl])
 
+  /*
+    Only a collection nobody has opened has nothing to draw; after that the
+    cached shelf and vessel are on screen while the reads happen behind them,
+    and holding the loader over that is the "there -> gone -> there" this
+    caching exists to stop.
+  */
   useScreenBusy(
     'collection',
-    collection === null ||
-      (collection.paysDividends && active !== null && legends === null) ||
+    (collection === null && shelf.freshness === 'loading') ||
+      (paying && legends === null && vessel.freshness === 'loading') ||
       ((wantsBanner || wantsLogo) && !artReady),
   )
 
+  // A settled flow changes the shelf — a mint moves the supply and what is left to mint.
+  const { refresh: revalidateShelf } = shelf
+  const { refresh: revalidateVessel } = vessel
   useEffect(() => {
-    let alive = true
-    engine.explore
-      .collection({ chainId, address, ...(active ? { accountId: active.id } : {}) })
-      .then(
-        (c) => alive && setCollection(c),
-        () => undefined,
-      )
-    return () => {
-      alive = false
-    }
-  }, [engine, chainId, address, active, flow?.status])
+    if (!flow?.status) return
+    revalidateShelf()
+    revalidateVessel()
+  }, [flow?.status, revalidateShelf, revalidateVessel])
 
   // `collection` is null on mount, so `collection?.custom` is undefined and the
   // guard below does not fire — then the collection resolves, `custom` becomes
@@ -178,17 +232,6 @@ export function Collection({
     }
   }, [engine, chainId, address, active, collection?.custom])
 
-  useEffect(() => {
-    if (!collection?.paysDividends || !active) return
-    let alive = true
-    engine.legends.status({ accountId: active.id, chainId }).then(
-      (s) => alive && setLegends(s),
-      () => undefined,
-    )
-    return () => {
-      alive = false
-    }
-  }, [engine, collection?.paysDividends, active, chainId, flow?.status])
 
   useEffect(() => {
     if (!showActivity) return
@@ -261,7 +304,7 @@ export function Collection({
             chainId,
             address,
             label: collection.name,
-          }).then(() => setCollection({ ...collection, starred: !collection.starred }))
+          }).then(() => setStarTap({ observedAt: shelf.observedAt, starred: !collection.starred }))
         }
         testID="collection-star"
       />

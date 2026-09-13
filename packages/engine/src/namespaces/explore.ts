@@ -38,6 +38,27 @@ const DETAIL_SPEC = (chainId: number, address: string) => ({ key: cacheKey('expl
 const HISTORY_TTL_MS = 5 * 60_000
 const HISTORY_SPEC = (chainId: number, address: string, duration: ChartDuration) => ({ key: cacheKey('explore', 'history', chainId, address, duration), schema: PriceHistoryViewSchema })
 const API_DURATION: Record<ChartDuration, HistoryDuration> = { '1D': 'DAY', '1W': 'WEEK', '1M': 'MONTH', '1Y': 'YEAR' }
+/*
+  One collection page is good for half a minute.
+
+  Shorter than the index above it (a minute) because this is the page someone
+  sits on while a mint runs, and longer than a piece (twenty seconds) because
+  a floor moves slower than a listing disappears.
+*/
+const COLLECTION_TTL_MS = 30_000
+/**
+ * Where one collection's document lives.
+ *
+ * Exported because minting is the one write that contradicts it and minting
+ * lives in `legends`, not here — the alternative was for that namespace to
+ * spell the key out itself, which is the same coupling with nothing to grep.
+ */
+export const collectionCacheKey = (chainId: number, address: string, accountId: string | undefined): string =>
+  cacheKey('explore', 'collection', chainId, address.toLowerCase(), accountId ?? '-')
+const COLLECTION_SPEC = (chainId: number, address: string, accountId: string | undefined) => ({
+  key: collectionCacheKey(chainId, address, accountId),
+  schema: CollectionViewSchema,
+})
 const LIQUIDITY_TTL_MS = 10 * 60_000
 const LIQUIDITY_SPEC = (chainId: number, address: string) => ({ key: cacheKey('explore', 'liquidity', chainId, address), schema: LiquidityViewSchema })
 const isEtn = (chainId: number): chainId is 52014 | 5201420 => chainId === 52014 || chainId === 5201420
@@ -260,7 +281,54 @@ export class ExploreService {
     return out
   }
 
+  /**
+   * The collection page, served from the last good document while it refreshes.
+   *
+   * `readCollection` is an index fetch and a balances fetch, sequentially, and
+   * the screen awaited both before it drew anything — including the banner and
+   * the logo, which are keyed off the view. Cached, the page paints at once and
+   * those happen behind it.
+   *
+   * `mint` is deliberately *not* in the document. It is a chain read of what
+   * this wallet may still mint, and minting is the one action on this page that
+   * changes it — so a cached copy would show "you can mint 3 more" for the rest
+   * of its half minute after you had just minted one. Reading it beside the
+   * cached row costs the screen nothing, because the row is already painted by
+   * the time this resolves, and it means the number is never a memory of one.
+   *
+   * A miss returns null rather than throwing: a collection nobody has opened is
+   * a real answer, and `through` treats a thrown loader as a failure to be
+   * swallowed, so the null leaves by the same door as an error.
+   */
   async collection(chainId: number, address: string, accountId?: string): Promise<CollectionView | null> {
+    const hit = await this.deps.cache
+      .through(COLLECTION_SPEC(chainId, address, accountId), COLLECTION_TTL_MS, async () => {
+        const v = await this.readCollection(chainId, address, accountId)
+        if (!v) throw new Error('no such collection')
+        return v
+      })
+      .catch(() => null)
+    if (!hit) return null
+    return { ...hit.value, mint: await this.mintInfo(chainId, address, accountId) }
+  }
+
+  /**
+   * The last collection this screen showed, for painting before the reads
+   * return. No `mint` on it — see `collection` — so the page's mint block
+   * arrives with the first live read rather than as a remembered number.
+   */
+  async cachedCollection(chainId: number, address: string, accountId?: string): Promise<Cached<CollectionView> | null> {
+    return this.deps.cache.read(COLLECTION_SPEC(chainId, address, accountId))
+  }
+
+  /** What this wallet may still mint from the collection; null when it has no minter. */
+  private async mintInfo(chainId: number, address: string, accountId?: string): Promise<CollectionView['mint']> {
+    if (!this.deps.legends) return null
+    const account = accountId ? ((await this.deps.vault.accounts()).find((a) => a.id === accountId) ?? null) : null
+    return this.deps.legends.mintInfo(chainId, address, account?.address ?? null).catch(() => null)
+  }
+
+  private async readCollection(chainId: number, address: string, accountId?: string): Promise<CollectionView | null> {
     const d = this.deps
     if (!d.electroswap || !isEtn(chainId)) return null
     const cached = this.collectionRows.get(chainId)?.find((r) => r.address.toLowerCase() === address.toLowerCase())
@@ -286,11 +354,9 @@ export class ExploreService {
         // 0
       }
     }
-    const view = this.toViews(chainId, [row], owned)[0] ?? null
-    if (!view) return null
-    // The mint capability is read on the page only (plan C1, owner item N5).
-    const mint = this.deps.legends ? await this.deps.legends.mintInfo(chainId, address, account?.address ?? null).catch(() => null) : null
-    return { ...view, mint }
+    // No `mint` here: the mint capability is read live beside this document,
+    // not stored in it, because it is what minting changes (see `collection`).
+    return this.toViews(chainId, [row], owned)[0] ?? null
   }
 
   /** One search field across tokens, collections and campaigns (§8.11). */
@@ -327,6 +393,7 @@ export function exploreNamespace(explore: ExploreService): NamespaceSpec {
     collections: { input: Chain.extend({ accountId: AccountIdSchema.optional(), window: CollectionWindowSchema.optional() }), handler: (arg) => explore.collections((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId, (arg as { window?: CollectionWindow }).window ?? 'DAY') },
     cachedCollections: { input: Chain.extend({ accountId: AccountIdSchema.optional(), window: CollectionWindowSchema.optional() }), handler: (arg) => explore.cachedCollections((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId, (arg as { window?: CollectionWindow }).window ?? 'DAY') },
     collection: { input: Chain.extend({ address: z.string(), accountId: AccountIdSchema.optional() }), handler: (arg) => explore.collection((arg as { chainId: number }).chainId, (arg as { address: string }).address, (arg as { accountId?: string }).accountId) },
+    cachedCollection: { input: Chain.extend({ address: z.string(), accountId: AccountIdSchema.optional() }), handler: (arg) => explore.cachedCollection((arg as { chainId: number }).chainId, (arg as { address: string }).address, (arg as { accountId?: string }).accountId) },
     search: { input: Chain.extend({ query: z.string().max(120) }), handler: (arg) => explore.search((arg as { chainId: number }).chainId, (arg as { query: string }).query) },
   }
 }

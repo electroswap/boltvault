@@ -7,11 +7,11 @@
  */
 import { Artwork, Body, Chip, Column, Icon, Input, Key, Pill, Plate, Row, ScrollView, SharedElement, Sheet, metrics, paint, shortAddress, useWindowDimensions } from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
-import type { AssetView } from '@boltvault/engine'
+import { cacheKey, type AssetView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
 import { useEngine } from '../engine/EngineProvider'
-import { useLastGood } from '../hooks/useLastGood'
+import { useCached } from '../hooks/useCached'
 import { useSafeOpen } from '../hooks/useSafeOpen'
 import { formatRaw } from '../format'
 import { t } from '../i18n'
@@ -34,26 +34,42 @@ export function Piece({ body, chainId, address, tokenId, reducedMotion = false }
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const { width: windowWidth } = useWindowDimensions()
   const width = Math.min(windowWidth, body === 'extension-tab' ? 640 : windowWidth) - inset * 2
-  const [loadedAsset, setAsset] = useState<AssetView | null>(null)
-  const asset = useLastGood(`piece:${chainId}:${address}:${tokenId}`, loadedAsset)
+  /*
+    Serve what this screen last showed, refresh behind it (plan A2).
+
+    It awaited `nft.asset()` — an index fetch, an `ownerOf` chain read and, on
+    a Legend, a dividends read behind that — and held `useLastGood` over the
+    gap, so opening a piece from the Rack showed the artwork's frame and
+    nothing in it until all three had returned. The cached piece paints at
+    once and the reads happen behind it; the engine drops the document on any
+    write that contradicts it, so a listing or a sale is never a memory.
+  */
+  const piece = useCached<AssetView>({
+    key: cacheKey('nft', 'asset', chainId, address.toLowerCase(), tokenId, active?.id ?? '-'),
+    cached: (e) => e.nft.cachedAsset({ chainId, address, tokenId, ...(active ? { accountId: active.id } : {}) }),
+    // `fresh` may not resolve null; a piece the index does not know is an error
+    // here, and useCached keeps the last good value beside it rather than blanking.
+    fresh: async (e) => {
+      const v = await e.nft.asset({ chainId, address, tokenId, ...(active ? { accountId: active.id } : {}) })
+      if (!v) throw new Error('no such piece')
+      return v
+    },
+    maxAgeMs: 20_000,
+  })
+  const asset = piece.value
   const [sheet, setSheet] = useState<SheetKind>(null)
   const [price, setPrice] = useState('')
   const [days, setDays] = useState('7')
   const [to, setTo] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const loadError = asset === null ? piece.error : null
 
+  // A settled flow changes the piece — it is listed, cancelled, sold or gone.
+  const { refresh: revalidate } = piece
   useEffect(() => {
-    let alive = true
-    engine.nft.asset({ chainId, address, tokenId, ...(active ? { accountId: active.id } : {}) }).then(
-      (a) => alive && setAsset(a),
-      (err: unknown) => alive && setLoadError(err instanceof Error ? err.message : String(err)),
-    )
-    return () => {
-      alive = false
-    }
-  }, [engine, chainId, address, tokenId, active, flow?.status])
+    if (flow?.status) revalidate()
+  }, [flow?.status, revalidate])
 
   const run = async (fn: () => Promise<{ flowId: string }>): Promise<void> => {
     if (!active) return
