@@ -91,6 +91,14 @@ interface FarmTuple {
   readonly fee: number
   readonly active: boolean
   readonly farmerCount: bigint
+  /**
+   * The farm's share of the native emission. Zero means it mints no DYNO.
+   *
+   * The struct has always carried it; this parser dropped it, which is why the
+   * wallet had no way to know a farm was third-party-only and showed BOLT
+   * boosts on one that cannot pay them (ES-BV-088).
+   */
+  readonly allocPoint: bigint
 }
 
 interface FarmerTuple {
@@ -104,6 +112,24 @@ interface FarmerTuple {
   readonly fees0: bigint
   readonly fees1: bigint
 }
+
+/**
+ * Whether BOLT and duration multipliers can pay anything on this farm.
+ *
+ * `YieldFarm._collectRewardsAndFees` applies both multipliers to `rewardsEarned`
+ * and to nothing else, and that figure comes from `accRewardsPerShare`, fed by
+ *
+ *     rewards = blocks * (rewardPerBlock * farm.allocPoint) / totalAllocPoint
+ *
+ * Third-party rewards are transferred straight through, unmultiplied. So a farm
+ * with no allocation mints nothing and every boost on it multiplies zero:
+ * depositing BOLT changes nothing, and waiting changes nothing.
+ *
+ * A function rather than a comparison inline, because the judgement is the
+ * substance — and because the list it feeds is memoised, which makes this the
+ * only place the zero case can be pinned by a test (ES-BV-088).
+ */
+export const farmBoosted = (allocPoint: bigint): boolean => allocPoint > 0n
 
 const BLOCK_MS = 5_000
 const isEtn = (chainId: number): chainId is 52014 | 5201420 =>
@@ -130,6 +156,7 @@ function farmTuple(v: unknown): FarmTuple | null {
     fee: Number(f['fee'] ?? 0),
     active: f['active'] === true,
     farmerCount: BigInt(String(f['farmerCount'] ?? 0)),
+    allocPoint: BigInt(String(f['allocPoint'] ?? 0)),
   }
 }
 
@@ -355,6 +382,26 @@ export class FarmService {
         ? { token: index.thirdParty.token, symbol: index.thirdParty.symbol }
         : null,
       farmerCount: index?.farmerCount ?? Number(tuple.farmerCount),
+      /*
+        Whether BOLT and duration multipliers do anything here (ES-BV-088).
+
+        In `YieldFarm._collectRewardsAndFees` the two multipliers are applied to
+        `rewardsEarned` and nothing else, and that figure comes from
+        `accRewardsPerShare`, fed by
+
+            rewards = blocks * (rewardPerBlock * farm.allocPoint) / totalAllocPoint
+
+        Third-party rewards are transferred straight through, unmultiplied. So
+        on a farm with no allocation the whole boost apparatus multiplies zero:
+        depositing BOLT changes nothing, and waiting changes nothing.
+
+        CLUB/DYNO is exactly that farm — all of its yield is CLUB — and a
+        tester was shown a 1.02× dial, a "50,000 more BOLT for 1.05×" stair and
+        two dated milestones on it, then asked for BOLT on the deposit screen.
+        Read from the chain rather than the API's `allocation` so the answer
+        does not depend on the index being reachable.
+      */
+      boosted: farmBoosted(tuple.allocPoint),
       position,
     }
   }

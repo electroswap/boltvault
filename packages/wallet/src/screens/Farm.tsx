@@ -74,7 +74,7 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
     }
     let alive = true
     const id = setTimeout(() => {
-      engine.farm.quoteDeposit({ accountId: active.id, chainId, farmId, ...(lastEdited === 0 ? { amount0 } : { amount1 }), ...(bolt.trim() ? { bolt } : {}) }).then(
+      engine.farm.quoteDeposit({ accountId: active.id, chainId, farmId, ...(lastEdited === 0 ? { amount0 } : { amount1 }), ...(boosted && bolt.trim() ? { bolt } : {}) }).then(
         (q) => {
           if (!alive) return
           setQuote(q)
@@ -121,10 +121,24 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
   }
 
   const p = farm?.position ?? null
+  /*
+    Whether this farm can pay a boost at all (ES-BV-088).
+
+    `YieldFarm._collectRewardsAndFees` applies the BOLT and duration
+    multipliers to the minted native reward and to nothing else; third-party
+    rewards are transferred straight through. A farm with no allocation mints
+    nothing, so every multiplier on it multiplies zero — depositing BOLT
+    changes nothing and waiting changes nothing.
+
+    CLUB/DYNO is such a farm, and a tester was shown a 1.02x dial, a
+    "50,000 more BOLT for 1.05x" stair, two dated milestones and a BOLT field
+    on the deposit sheet. None of it could ever have paid.
+  */
+  const boosted = farm?.boosted ?? false
   // What this farm pays you: base times your combined multiplier (duration x
-  // BOLT, both stored scaled by 10,000).
-  const combined = p ? (p.durationMultiplier / 10_000) * (p.boltMultiplier / 10_000) : null
-  const yourApy = farm?.baseApy != null && combined !== null ? farm.baseApy * combined : null
+  // BOLT, both stored scaled by 10,000) — where a multiplier applies at all.
+  const combined = p && boosted ? (p.durationMultiplier / 10_000) * (p.boltMultiplier / 10_000) : null
+  const yourApy = farm?.baseApy != null ? farm.baseApy * (combined ?? 1) : null
   const hasNative = farm ? [farm.symbol0, farm.symbol1].includes('ETN') || [farm.symbol0, farm.symbol1].includes('WETN') : false
   const glow = p ? Math.min(1, Number(BigInt(p.pendingRewards) / 10n ** 18n) / 100) : 0
 
@@ -144,7 +158,9 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
                 a glance. They stay in the caption too: the ring says when, the
                 caption says what it is.
               */}
-              <Coil durationMultiplier={p?.durationMultiplier ?? 10_000} boltMultiplier={p?.boltMultiplier ?? 10_000} glow={glow} size={body === 'extension-popup' ? 190 : 240} at2x={dateLabel(p?.at2x ?? null)} at25x={dateLabel(p?.at25x ?? null)} reducedMotion={reducedMotion} testID="coil" />
+              {boosted ? (
+                <Coil durationMultiplier={p?.durationMultiplier ?? 10_000} boltMultiplier={p?.boltMultiplier ?? 10_000} glow={glow} size={body === 'extension-popup' ? 190 : 240} at2x={dateLabel(p?.at2x ?? null)} at25x={dateLabel(p?.at25x ?? null)} reducedMotion={reducedMotion} testID="coil" />
+              ) : null}
             </Row>
             {!farm.active ? (
               <Plate gap={2} testID="farm-closed">
@@ -176,19 +192,35 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
                   testID="farm-position-stats"
                 />
                 <Column gap={2}>
-                  <Body tone="mute" size="caption">
-                    {BigInt(p.boltDeposited) > 0n ? t({ id: 'farm.boost', message: '{b} BOLT boosting at {m}×', values: { b: formatAmount(p.boltDeposited, 18), m: (p.boltMultiplier / 10_000).toFixed(2) } }) : t({ id: 'farm.boost.none', message: 'No BOLT boost yet' })}
-                    {p.nextStair ? ` · ${t({ id: 'farm.nextStair', message: '{b} more BOLT for {m}×', values: { b: formatAmount(p.nextStair.more, 18), m: (p.nextStair.multiplier / 10_000).toFixed(2) } })}` : ''}
-                  </Body>
-                  {p.at25x !== null || p.at2x !== null ? (
-                    <Body tone="mute" size="caption">
-                      {p.at2x !== null ? t({ id: 'farm.to2', message: '2.0× on {d}', values: { d: dateLabel(p.at2x) ?? '' } }) : ''}
-                      {p.at2x !== null && p.at25x !== null ? ' · ' : ''}
-                      {p.at25x !== null ? t({ id: 'farm.to25', message: '2.5× on {d}', values: { d: dateLabel(p.at25x) ?? '' } }) : ''}
-                    </Body>
+                  {boosted ? (
+                    <>
+                      <Body tone="mute" size="caption">
+                        {BigInt(p.boltDeposited) > 0n ? t({ id: 'farm.boost', message: '{b} BOLT boosting at {m}×', values: { b: formatAmount(p.boltDeposited, 18), m: (p.boltMultiplier / 10_000).toFixed(2) } }) : t({ id: 'farm.boost.none', message: 'No BOLT boost yet' })}
+                        {p.nextStair ? ` · ${t({ id: 'farm.nextStair', message: '{b} more BOLT for {m}×', values: { b: formatAmount(p.nextStair.more, 18), m: (p.nextStair.multiplier / 10_000).toFixed(2) } })}` : ''}
+                      </Body>
+                      {p.at25x !== null || p.at2x !== null ? (
+                        <Body tone="mute" size="caption">
+                          {p.at2x !== null ? t({ id: 'farm.to2', message: '2.0× on {d}', values: { d: dateLabel(p.at2x) ?? '' } }) : ''}
+                          {p.at2x !== null && p.at25x !== null ? ' · ' : ''}
+                          {p.at25x !== null ? t({ id: 'farm.to25', message: '2.5× on {d}', values: { d: dateLabel(p.at25x) ?? '' } }) : ''}
+                        </Body>
+                      ) : (
+                        <Body tone="arc" size="caption">
+                          {t({ id: 'farm.max', message: 'Full 2.5× duration bonus' })}
+                        </Body>
+                      )}
+                    </>
                   ) : (
-                    <Body tone="arc" size="caption">
-                      {t({ id: 'farm.max', message: 'Full 2.5× duration bonus' })}
+                    /*
+                      Say what this farm actually is, rather than nothing. A
+                      silent gap invites the next reader to wonder whether the
+                      boost simply failed to load — which is how the beta
+                      report started.
+                    */
+                    <Body tone="mute" size="caption">
+                      {farm.thirdParty
+                        ? t({ id: 'farm.tp.only', message: 'This farm pays {s} only. BOLT boosts and the duration bonus do not apply to it.', values: { s: farm.thirdParty.symbol } })
+                        : t({ id: 'farm.noboost', message: 'This farm has no DYNO allocation, so BOLT boosts and the duration bonus do not apply to it.' })}
                     </Body>
                   )}
                 </Column>
@@ -196,7 +228,11 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
             ) : farm.active ? (
               <Plate gap="$1" testID="farm-none">
                 <Body tone="mute" size="caption">
-                  {t({ id: 'farm.none', message: 'Deposit both sides of the pair to start earning DYNO. Your multiplier grows with time and with BOLT deposited as a boost.' })}
+                  {boosted
+                    ? t({ id: 'farm.none', message: 'Deposit both sides of the pair to start earning DYNO. Your multiplier grows with time and with BOLT deposited as a boost.' })
+                    : farm.thirdParty
+                      ? t({ id: 'farm.none.tp', message: 'Deposit both sides of the pair to start earning {s}. This farm has no DYNO allocation, so BOLT boosts and the duration bonus do not apply.', values: { s: farm.thirdParty.symbol } })
+                      : t({ id: 'farm.none.noboost', message: 'Deposit both sides of the pair to start earning. This farm has no DYNO allocation, so BOLT boosts and the duration bonus do not apply.' })}
                 </Body>
               </Plate>
             ) : null}
@@ -237,7 +273,7 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
               ]}
               testID="farm-stats"
             />
-            {p && BigInt(p.pendingRewards) > 0n && p.nextStair && farm.active ? (
+            {boosted && p && BigInt(p.pendingRewards) > 0n && p.nextStair && farm.active ? (
               <Plate role="card" gap="$1" testID="farm-boost-plate">
                 <Body fontWeight="600">{t({ id: 'farm.cb.title', message: 'Collect & boost' })}</Body>
                 <Body tone="mute" size="caption">
@@ -250,7 +286,7 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
         ) : null}
       </ScrollView>
 
-      <Sheet open={sheet === 'deposit'} onClose={() => setSheet(null)} title={t({ id: 'farm.deposit.title', message: 'Deposit' })} reducedMotion={reducedMotion} footer={<Key label={t({ id: 'farm.deposit', message: 'Deposit' })} disabled={busy || !quote?.ok} onPress={() => void run(() => engine.farm.deposit({ accountId: active?.id ?? '', chainId, farmId, ...(lastEdited === 0 ? { amount0 } : { amount1 }), ...(bolt.trim() ? { bolt } : {}) }))} testID="farm-deposit-go" />} testID="farm-deposit-sheet">
+      <Sheet open={sheet === 'deposit'} onClose={() => setSheet(null)} title={t({ id: 'farm.deposit.title', message: 'Deposit' })} reducedMotion={reducedMotion} footer={<Key label={t({ id: 'farm.deposit', message: 'Deposit' })} disabled={busy || !quote?.ok} onPress={() => void run(() => engine.farm.deposit({ accountId: active?.id ?? '', chainId, farmId, ...(lastEdited === 0 ? { amount0 } : { amount1 }), ...(boosted && bolt.trim() ? { bolt } : {}) }))} testID="farm-deposit-go" />} testID="farm-deposit-sheet">
         {farm ? (
           <Column gap="$3">
             <Input value={amount0} onChange={(v) => { setLastEdited(0); setAmount0(v) }} placeholder="0" label={farm.symbol0} testID="farm-amount0" />
@@ -258,23 +294,33 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
             <Body tone="mute" size="caption">
               {t({ id: 'farm.ratio', message: 'The pool sets the ratio; unused amounts come back to you.' })}
             </Body>
-            <Input value={bolt} onChange={setBolt} placeholder="0" label={t({ id: 'farm.boltBoost', message: 'BOLT boost (optional)' })} testID="farm-bolt" />
-            <Row gap="$2" flexWrap="wrap">
-              {['50000', '100000'].map((s) => {
-                const existing = p ? BigInt(p.boltDeposited) / 10n ** 18n : 0n
-                const more = BigInt(s) - existing
-                if (more <= 0n) return null
-                return <Pill key={s} label={t({ id: 'farm.stair', message: '{b} → {m}×', values: { b: more.toString(), m: s === '50000' ? '1.05' : '1.15' } })} size="sm" onPress={() => setBolt(more.toString())} testID={`farm-stair-${s}`} />
-              })}
-            </Row>
-            {quote && p && quote.multiplierAfter !== quote.multiplierBefore ? (
+            {/*
+              No BOLT field on a farm that cannot pay for it (ES-BV-088). The
+              contract would take the deposit — `deposit` accepts `_amountBolt`
+              on any farm and locks it until full withdrawal — and multiply a
+              reward of zero by it. Asking is worse than useless here.
+            */}
+            {boosted ? (
+              <>
+                <Input value={bolt} onChange={setBolt} placeholder="0" label={t({ id: 'farm.boltBoost', message: 'BOLT boost (optional)' })} testID="farm-bolt" />
+                <Row gap="$2" flexWrap="wrap">
+                  {['50000', '100000'].map((s) => {
+                    const existing = p ? BigInt(p.boltDeposited) / 10n ** 18n : 0n
+                    const more = BigInt(s) - existing
+                    if (more <= 0n) return null
+                    return <Pill key={s} label={t({ id: 'farm.stair', message: '{b} → {m}×', values: { b: more.toString(), m: s === '50000' ? '1.05' : '1.15' } })} size="sm" onPress={() => setBolt(more.toString())} testID={`farm-stair-${s}`} />
+                  })}
+                </Row>
+              </>
+            ) : null}
+            {boosted && quote && p && quote.multiplierAfter !== quote.multiplierBefore ? (
               <Plate gap={2} testID="farm-dilution">
                 <Body tone="ember" size="caption">
                   {t({ id: 'farm.dilution', message: 'A second deposit re-weights your duration bonus: {a}× today → {b}× after this deposit. It climbs again from there.', values: { a: (quote.multiplierBefore / 10_000).toFixed(2), b: (quote.multiplierAfter / 10_000).toFixed(2) } })}
                 </Body>
               </Plate>
             ) : null}
-            {quote?.boltStair && BigInt(quote.boltRaw) > 0n ? (
+            {boosted && quote?.boltStair && BigInt(quote.boltRaw) > 0n ? (
               <Body tone="arc" size="caption">
                 {t({ id: 'farm.stair.land', message: 'Lands on the {b} BOLT stair · {m}×', values: { b: formatRaw(quote.boltStair.total, 18), m: (quote.boltStair.multiplier / 10_000).toFixed(2) } })}
               </Body>
