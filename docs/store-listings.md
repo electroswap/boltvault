@@ -72,6 +72,36 @@ yarn store:shots            # -> static/img/store/boltvault-<n>-<id>.png
 page and the popup in the store are the same screens, prepared the same way, so
 the swap in the shop window is the swap on the site.
 
+## The icon and the promo tiles
+
+The console takes three more images, each at one exact size, and they come out
+of the same route and the same command:
+
+| Asset | Size | What it is |
+|---|---|---|
+| Store icon | 128×128 | the bolt over the brand plate with the **wordmark** under it — not `apps/extension/public/icon/128.png`, which is the browser's toolbar icon and carries no name |
+| Small promo tile | 440×280 | mark, name, five words. It is seen at roughly half this in a category row, so nothing else fits |
+| Marquee promo tile | 1400×560 | the featured banner: the headline, the popup and the phone |
+
+The mark on all three is `BoltGlyph` in the docs repository — the wallet's own
+polygon, and the one place it is allowed a real `feGaussianBlur`. The app cannot
+use one (`packages/ui/src/BoltMark.tsx` records that filters silently do nothing
+under react-native-svg on Android, so the glow is fifty-six radial discs along
+the outline, and `tools/make-icons.mjs` recomputes the same falloff from a
+distance field). These are rasterised once in headless Chrome, so they can have
+the thing the other two are imitating.
+
+**The bloom is framed, not cropped.** Sizing a frame to the bolt is what put "a
+cropped plate of light" on the splash and cost it its glow — see the comment on
+`splash-mark.png` in `tools/make-icons.mjs`. `BoltGlyph` sizes the frame to the
+*light*: 0.55 bolt-units of padding on every side, because the widest fall has a
+0.16 standard deviation and a Gaussian needs about three of those to finish, and
+a radial mask takes the aura to zero before the edge regardless.
+
+Only the store icon carries the wordmark. Nine characters across a hundred
+pixels is the constraint, so the bolt takes the upper two thirds and the name
+gets the bottom band to itself.
+
 ## Support
 
 support@electroswap.io · https://wallet.electroswap.io/security · https://github.com/ElectroSwap/boltvault
