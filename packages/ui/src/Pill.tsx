@@ -105,7 +105,22 @@ export function Pill({ label, icon, chevron = false, selected = false, tone, siz
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ selected, disabled }}
       testID={testID}
-      style={{ minHeight: metrics.hit, justifyContent: 'center', alignSelf: 'flex-start' }}
+      /*
+        44 in BOTH directions, not just height.
+
+        The pressable has always guaranteed the height and let the width follow
+        the chip, which is fine for a pill carrying a label and is not fine for
+        one carrying only a mark: the X link on the token dossier measured
+        42×44 and failed the hit-target law the screenshot suite asserts. It
+        went unseen because that suite photographed the Unlock screen for every
+        scenario (see the harness entrypoint's clock note), so the token screen
+        was never actually measured.
+
+        `alignItems: 'center'` keeps the chip its own size inside the larger
+        box — the docstring's "44 px pressable around a 28/36 px chip" — rather
+        than stretching a 36 px chip out to 44.
+      */
+      style={{ minHeight: metrics.hit, minWidth: metrics.hit, justifyContent: 'center', alignItems: 'center', alignSelf: 'flex-start' }}
     >
       {chip}
     </Pressable>

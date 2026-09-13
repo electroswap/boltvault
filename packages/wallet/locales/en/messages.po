@@ -3744,6 +3744,11 @@ msgid "Farms: the ring hums brighter as DYNO accrues, dates are engraved on the 
 msgstr "Farms: the ring hums brighter as DYNO accrues, dates are engraved on the ring, and Collect discharges the coil into the readout while the DYNO bar rolls. Acceptance: the multiplier and the date to 2.5× are readable at a glance; nothing twitches per block except the pending-reward digits."
 
 #: packages/wallet/src/screens/Moments.tsx
+msgctxt "moments.criterion.discharge"
+msgid "Swap: on sign, an arc leaves the Swap key, crosses the Field, and lands as the new row in the Activity tab (the tab icon flickers once); ≤ 600 ms; the user's eye is led to where the result lives."
+msgstr "Swap: on sign, an arc leaves the Swap key, crosses the Field, and lands as the new row in the Activity tab (the tab icon flickers once); ≤ 600 ms; the user's eye is led to where the result lives."
+
+#: packages/wallet/src/screens/Moments.tsx
 msgctxt "moments.criterion.ignition"
 msgid "Unlock: the Field fades in from black around the seat avatar, the filament draws left→right, the readout digits settle from blurred to sharp; 400 ms total; must feel like a device powering on, not a page loading."
 msgstr "Unlock: the Field fades in from black around the seat avatar, the filament draws left→right, the readout digits settle from blurred to sharp; 400 ms total; must feel like a device powering on, not a page loading."
@@ -6382,6 +6387,11 @@ msgstr "this year"
 msgctxt "token.yours"
 msgid "Yours"
 msgstr "Yours"
+
+#: packages/wallet/src/components/HardwarePickers.tsx
+msgctxt "trezor.body"
+msgid "Plug in your Trezor. Trezor's own window opens at connect.trezor.io to talk to the device — the only thing BoltVault ever loads from outside itself."
+msgstr "Plug in your Trezor. Trezor's own window opens at connect.trezor.io to talk to the device — the only thing BoltVault ever loads from outside itself."
 
 #: packages/wallet/src/components/HardwarePickers.tsx
 msgctxt "trezor.connect"

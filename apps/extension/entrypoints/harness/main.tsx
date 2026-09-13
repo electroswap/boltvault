@@ -13,9 +13,30 @@
 import { App, isTabId, type ScreenId } from '@boltvault/wallet'
 // The harness is the only thing that builds a scripted engine, so it is the
 // only thing that imports one (ES-BV-044).
-import { createFixtureEngine, type FixtureScenario } from '@boltvault/wallet/fixtures'
+import { createFixtureEngine, FIXTURE_NOW, type FixtureScenario } from '@boltvault/wallet/fixtures'
 import '../../src/chrome.css'
 import { createRoot } from 'react-dom/client'
+
+/*
+  One clock for the page and the engine it renders.
+
+  `createFixtureEngine` pins the engine's clock to `FIXTURE_NOW` so every screen
+  is reproducible, but the page kept the browser's real one — and the shell asks
+  `vaultRequiresUnlock(vault, Date.now())`, which compares an engine-issued
+  `lockAt` against the page's clock. Those were a year apart, so every scenario
+  read as already auto-locked and all eighty baselines photographed the Unlock
+  screen instead of the screen they name.
+
+  Only `Date.now` is redirected, and it still ADVANCES from that instant rather
+  than freezing: timers, transitions and debounces behave exactly as they would
+  otherwise. Nothing in `packages/wallet` or `packages/ui` constructs a bare
+  `new Date()`, so this is the whole of the page's clock.
+
+  Harness-only. The page is stripped from a release build (wxt.config.ts
+  `filterEntrypoints`), so no product code is touched by it.
+*/
+const startedAt = performance.now()
+Date.now = () => FIXTURE_NOW + Math.round(performance.now() - startedAt)
 
 const q = new URLSearchParams(location.search)
 const scenario = (q.get('scenario') ?? 'funded') as FixtureScenario
