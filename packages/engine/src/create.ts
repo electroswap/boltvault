@@ -391,6 +391,14 @@ export function createEngine(deps: EngineDeps): Engine {
       return { sink: tier.sink as Hex, bips: tier.bips, tier: tier.name }
     },
     tokenMetadata: (chainId, address) => tokens.metadata(chainId, address),
+    /*
+      Decimals learned from a contract once, rather than on every request that
+      touches the token (ES-BV-086). Kept apart from `tokenInfo` on purpose:
+      that map confers "known token" identity on a contract, and a number read
+      off an unknown one confers nothing.
+    */
+    learnedDecimals: (chainId) => tokens.learnedDecimals(chainId),
+    rememberDecimals: (chainId, address, decimals) => tokens.rememberDecimals(chainId, address, decimals),
     watchAsset: (i) =>
       tokens.addCustom({
         chainId: i.chainId,
@@ -430,6 +438,7 @@ export function createEngine(deps: EngineDeps): Engine {
     fetchImpl,
     sealed.tokensCustom,
     sealed.tokenPrefs,
+    sealed.tokenDecimals,
   )
   /*
     Sync reads six of the nine §6 families out of these stores, so it is built

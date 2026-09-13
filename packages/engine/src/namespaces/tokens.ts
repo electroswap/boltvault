@@ -89,7 +89,46 @@ export class TokensService {
     /** User-added tokens and pin/hide preferences, sealed under the DEK. */
     private readonly customTokens: SealedMap<CustomToken[]>,
     private readonly tokenPrefs: SealedMap<{ pinned: string[]; hidden: string[] }>,
+    /** Decimals learned from a contract, for tokens no list carries. */
+    private readonly tokenDecimals: SealedMap<Record<string, number>>,
   ) {}
+
+  /*
+    Decimals for tokens the catalog has never heard of (ES-BV-086).
+
+    `learnTokenDecimals` in provider.ts reads `decimals()` off a contract when a
+    transfer is about to be signed and no list can name the token — otherwise
+    the firewall's statement, which is written onto the activity row and shown
+    for ever, prints the raw integer. That read was kept for the length of one
+    assessment and thrown away, so the same token cost the same `eth_call` on
+    every request involving it, for ever.
+
+    It is remembered here instead: asked once, kept, and never asked again.
+    Deliberately NOT folded into `universe()` — that map is what tells the
+    firewall a contract *is* USDC, and a number read off an unknown contract is
+    not an identity. This is a formatting aid and nothing more.
+  */
+  private static readonly DECIMALS_ID = 'all'
+
+  /** Everything learned for a chain, as `address -> decimals`, lowercased. */
+  async learnedDecimals(chainId: number): Promise<Record<string, number>> {
+    const all = (await this.tokenDecimals.get(TokensService.DECIMALS_ID)) ?? {}
+    const prefix = `${chainId}:`
+    const out: Record<string, number> = {}
+    for (const [k, v] of Object.entries(all)) if (k.startsWith(prefix)) out[k.slice(prefix.length)] = v
+    return out
+  }
+
+  /** Remember what a contract said about itself. */
+  async rememberDecimals(chainId: number, address: string, decimals: number): Promise<void> {
+    if (!isAddress(address)) return
+    // The same ceiling `toRawUnits` enforces; anything else is not an answer.
+    if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) return
+    const all = (await this.tokenDecimals.get(TokensService.DECIMALS_ID)) ?? {}
+    const k = key(chainId, address)
+    if (all[k] === decimals) return
+    await this.tokenDecimals.set(TokensService.DECIMALS_ID, { ...all, [k]: decimals })
+  }
 
   /** The pinned public list for a chain, refreshed at most every 6 h; last-good on failure. */
   async list(chainId: number): Promise<TokenEntry[]> {
