@@ -7,11 +7,14 @@
 import { forwardRef, useLayoutEffect, useRef, useState } from 'react'
 import {
   Platform,
+  Pressable,
   TextInput,
   type NativeSyntheticEvent,
   type TextInputProps,
   type TextInputSelectionChangeEventData,
 } from 'react-native'
+import { Icon } from './Icon'
+import { sensitiveKeyboardType } from './inputRules'
 import { Body, Column } from './primitives'
 import { edge, fonts, metrics, paint, radius } from './tokens'
 
@@ -102,6 +105,19 @@ function pinCaretToStart(node: TextInput | null): void {
 
 export const Input = forwardRef<TextInput, InputProps>(function Input({ value, onChange, label, placeholder, secure, multiline, bare, big, louder, numeric, error, hint, autoFocus, onSubmit, testID, autoCapitalize = 'none', disabled, sensitive, maxDecimals, pinStart }, ref) {
   const [focused, setFocused] = useState(false)
+  /*
+    A password you can check before you commit it.
+
+    Asked for by a beta tester — "Possibility to hide the password, when you
+    type it in?" — which turned out to be the polite half of a worse problem
+    (see `sensitive` below; the field was not hidden at all on Android). The
+    masking is the fix; this is the control the question was actually about.
+    Default masked, per field, and it resets with the component — a revealed
+    password never survives leaving the screen.
+  */
+  const [revealed, setRevealed] = useState(false)
+  const canReveal = secure === true && !disabled
+  const kbd = sensitiveKeyboardType({ sensitive, secure, multiline })
   const inner = useRef<TextInput>(null)
   const prevPin = useRef(pinStart)
   const [selection, setSelection] = useState<{ start: number; end: number } | undefined>(undefined)
@@ -159,80 +175,99 @@ export const Input = forwardRef<TextInput, InputProps>(function Input({ value, o
           {label}
         </Body>
       ) : null}
-      <TextInput
-        ref={(node) => {
-          inner.current = node
-          if (typeof ref === 'function') ref(node)
-          else if (ref) ref.current = node
-        }}
-        value={value}
-        onChangeText={handleChange}
-        selection={selection}
-        onSelectionChange={(e: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {
-          const sel = e.nativeEvent.selection
-          if (sel.start === 0 && sel.end === 0) return
-          setSelection(undefined)
-        }}
-        placeholder={placeholder}
-        placeholderTextColor={paint.mute}
-        secureTextEntry={secure}
-        multiline={multiline}
-        autoFocus={autoFocus}
-        autoCapitalize={autoCapitalize}
-        {...(numeric
-          ? { inputMode: 'decimal' as const, keyboardType: 'decimal-pad' as const }
-          : {})}
-        autoCorrect={false}
-        spellCheck={false}
-        {...(sensitive
-          ? ({
-              autoComplete: 'off',
-              // iOS: `none` for a phrase word, `oneTimeCode` for the codes —
-              // the one type it will neither store nor offer back.
-              textContentType: sensitive === 'code' ? 'oneTimeCode' : 'none',
-              // Android: keep the field out of every autofill service.
-              importantForAutofill: 'no',
-              autoCorrect: false,
-              /*
-                A keyboard that does not learn. `visible-password` is Android's
-                own "this is a secret, do not predict it" type; on a multiline
-                phrase field it would also fight the return key, so it is only
-                asked for on the single-line ones.
-              */
-              ...(multiline ? {} : { keyboardType: 'visible-password' as const }),
-            } as Partial<TextInputProps>)
-          : {})}
-        editable={!disabled}
-        onSubmitEditing={onSubmit}
-        onFocus={() => {
-          setFocused(true)
-          // Let the tap place the caret; a controlled {0,0} from the unfocused
-          // pin would otherwise insert at the start of a quoted amount.
-          setSelection(undefined)
-        }}
-        onBlur={() => setFocused(false)}
-        testID={testID}
-        accessibilityLabel={label ?? placeholder}
-        style={{
-          minHeight: multiline ? 96 : big ? (louder ? 44 : 40) : metrics.hit + 4,
-          paddingHorizontal: bare ? 0 : 14,
-          paddingVertical: multiline ? 12 : 0,
-          borderRadius: radius.well,
-          borderWidth: bare ? 0 : 1,
-          borderColor: error ? paint.burn : focused ? paint.arcEdge : edge,
-          backgroundColor: bare ? 'transparent' : paint.well,
-          color: paint.ink,
-          fontFamily: big ? fonts.readout : fonts.text,
-          fontWeight: big ? '600' : '400',
-          fontSize: big ? (louder ? 32 : 28) : 15,
-          letterSpacing: big ? (louder ? -1.0 : -0.85) : 0,
-          lineHeight: multiline ? 22 : undefined,
-          textAlign: 'left',
-          textAlignVertical: multiline ? 'top' : 'center',
-          ...(big ? { overflow: 'hidden' as const } : {}),
-          ...OUTLINE_OFF,
-        }}
-      />
+      <Column>
+        <TextInput
+          ref={(node) => {
+            inner.current = node
+            if (typeof ref === 'function') ref(node)
+            else if (ref) ref.current = node
+          }}
+          value={value}
+          onChangeText={handleChange}
+          selection={selection}
+          onSelectionChange={(e: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {
+            const sel = e.nativeEvent.selection
+            if (sel.start === 0 && sel.end === 0) return
+            setSelection(undefined)
+          }}
+          placeholder={placeholder}
+          placeholderTextColor={paint.mute}
+          secureTextEntry={secure === true && !revealed}
+          multiline={multiline}
+          autoFocus={autoFocus}
+          autoCapitalize={autoCapitalize}
+          {...(numeric
+            ? { inputMode: 'decimal' as const, keyboardType: 'decimal-pad' as const }
+            : {})}
+          autoCorrect={false}
+          spellCheck={false}
+          {...(sensitive
+            ? ({
+                autoComplete: 'off',
+                // iOS: `none` for a phrase word, `oneTimeCode` for the codes —
+                // the one type it will neither store nor offer back.
+                textContentType: sensitive === 'code' ? 'oneTimeCode' : 'none',
+                // Android: keep the field out of every autofill service.
+                importantForAutofill: 'no',
+                autoCorrect: false,
+                // Never `visible-password` on a masked field — see sensitiveKeyboardType.
+                ...(kbd ? { keyboardType: kbd } : {}),
+              } as Partial<TextInputProps>)
+            : {})}
+          editable={!disabled}
+          onSubmitEditing={onSubmit}
+          onFocus={() => {
+            setFocused(true)
+            // Let the tap place the caret; a controlled {0,0} from the unfocused
+            // pin would otherwise insert at the start of a quoted amount.
+            setSelection(undefined)
+          }}
+          onBlur={() => setFocused(false)}
+          testID={testID}
+          accessibilityLabel={label ?? placeholder}
+          style={{
+            minHeight: multiline ? 96 : big ? (louder ? 44 : 40) : metrics.hit + 4,
+            paddingHorizontal: bare ? 0 : 14,
+            // The eye sits inside the well, so the value stops before it.
+            ...(canReveal ? { paddingRight: metrics.hit } : {}),
+            paddingVertical: multiline ? 12 : 0,
+            borderRadius: radius.well,
+            borderWidth: bare ? 0 : 1,
+            borderColor: error ? paint.burn : focused ? paint.arcEdge : edge,
+            backgroundColor: bare ? 'transparent' : paint.well,
+            color: paint.ink,
+            fontFamily: big ? fonts.readout : fonts.text,
+            fontWeight: big ? '600' : '400',
+            fontSize: big ? (louder ? 32 : 28) : 15,
+            letterSpacing: big ? (louder ? -1.0 : -0.85) : 0,
+            lineHeight: multiline ? 22 : undefined,
+            textAlign: 'left',
+            textAlignVertical: multiline ? 'top' : 'center',
+            ...(big ? { overflow: 'hidden' as const } : {}),
+            ...OUTLINE_OFF,
+          }}
+        />
+        {canReveal ? (
+          <Pressable
+            onPress={() => setRevealed((on) => !on)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: revealed }}
+            accessibilityLabel={revealed ? 'Hide password' : 'Show password'}
+            testID={testID ? `${testID}-reveal` : undefined}
+            style={{
+              position: 'absolute',
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: metrics.hit,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Icon name={revealed ? 'eyeOff' : 'eye'} size={18} color={paint.mute} />
+          </Pressable>
+        ) : null}
+      </Column>
       {error ? (
         <Body tone="burn" size="caption" testID={testID ? `${testID}-error` : undefined}>
           {error}
