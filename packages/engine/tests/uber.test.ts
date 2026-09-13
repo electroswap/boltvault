@@ -261,6 +261,10 @@ describe('the uber-app on the mainnet mock', () => {
     expect(farms[0]).toMatchObject({ id: 0, version: 2, symbol0: 'WETN', symbol1: 'USDC', tvlUsd: 12_000, baseApy: 41.2 })
     expect(farms[0]?.position).toMatchObject({ durationMultiplier: 17_500, pendingRewards: (12n * 10n ** 18n).toString(), shareOfFarm: 0.1 })
     expect(BigInt(farms[0]?.position?.amount1 ?? '0')).toBe(29_600_000n)
+    // This farm has an allocation, so the multipliers can actually pay.
+    expect(farms[0]?.boosted).toBe(true)
+    // The zero-allocation case is `farmBoosted` in farm-boost.test.ts: this
+    // list is memoised, so a second call here would not re-read the mock.
     const q = await engine.engine.farm.quoteDeposit({ accountId, chainId: CHAIN, farmId: 0, amount0: '10', bolt: '50000' })
     expect(q.ok, q.problems.join(' ')).toBe(true)
     expect(q.amount1Raw).toBe('29600')

@@ -1095,6 +1095,15 @@ export const FarmViewSchema = z.object({
   thirdPartyApy: Fiat,
   thirdParty: z.object({ token: z.string(), symbol: z.string() }).nullable(),
   farmerCount: z.number().int().nonnegative(),
+  /**
+   * Whether BOLT and duration multipliers do anything on this farm.
+   *
+   * False when the farm has no share of the native emission: the contract
+   * applies both multipliers to the minted reward only, and pays third-party
+   * rewards straight through, so on such a farm every boost multiplies zero.
+   * The UI must not offer what cannot pay (ES-BV-088).
+   */
+  boosted: z.boolean(),
   /** The active account's position (chain read), or null. */
   position: z
     .object({
