@@ -1,5 +1,5 @@
 {
   "$comment": "The one version BoltVault ships under. Read directly by apps/extension/wxt.config.ts (the Chrome/Firefox manifest), apps/mobile/app.config.ts (the Android versionName and iOS short version) and apps/mobile/App.tsx (Settings > About, and the clientVersion the API sees). Change it with `node tools/version.mjs <x.y.z>`, which also rewrites the two package.json files that carry a copy for npm's benefit; `node tools/version.mjs` with no argument is the check, and pnpm check runs it. androidVersionCode is the integer Android compares on update, and only a local gradle build reads it -- EAS keeps its own count remotely (eas.json appVersionSource). It must never go down, and Play refuses an upload that reuses one.",
-  "version": "0.1.0",
-  "androidVersionCode": 1
+  "version": "0.1.2",
+  "androidVersionCode": 2
 }
