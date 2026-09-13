@@ -23,8 +23,8 @@
         "NSSupportsLiveActivities": true
       },
       "associatedDomains": [
-        "applinks:wallet.electroswap.io",
-        "webcredentials:wallet.electroswap.io"
+        "applinks:app.electroswap.io",
+        "webcredentials:app.electroswap.io"
       ],
       "entitlements": {
         "com.apple.security.application-groups": [
@@ -68,57 +68,57 @@
           "data": [
             {
               "scheme": "https",
-              "host": "wallet.electroswap.io",
+              "host": "app.electroswap.io",
               "pathPrefix": "/wc"
             },
             {
               "scheme": "https",
-              "host": "wallet.electroswap.io",
+              "host": "app.electroswap.io",
               "pathPrefix": "/launchpad"
             },
             {
               "scheme": "https",
-              "host": "wallet.electroswap.io",
+              "host": "app.electroswap.io",
               "pathPrefix": "/pay"
             },
             {
               "scheme": "https",
-              "host": "wallet.electroswap.io",
+              "host": "app.electroswap.io",
               "pathPrefix": "/swap"
             },
             {
               "scheme": "https",
-              "host": "wallet.electroswap.io",
+              "host": "app.electroswap.io",
               "pathPrefix": "/explore"
             },
             {
               "scheme": "https",
-              "host": "wallet.electroswap.io",
+              "host": "app.electroswap.io",
               "pathPrefix": "/activity"
             },
             {
               "scheme": "https",
-              "host": "wallet.electroswap.io",
+              "host": "app.electroswap.io",
               "pathPrefix": "/bridge"
             },
             {
               "scheme": "https",
-              "host": "wallet.electroswap.io",
+              "host": "app.electroswap.io",
               "pathPrefix": "/receive"
             },
             {
               "scheme": "https",
-              "host": "wallet.electroswap.io",
+              "host": "app.electroswap.io",
               "pathPrefix": "/browser"
             },
             {
               "scheme": "https",
-              "host": "wallet.electroswap.io",
+              "host": "app.electroswap.io",
               "pathPrefix": "/open"
             },
             {
               "scheme": "https",
-              "host": "wallet.electroswap.io",
+              "host": "app.electroswap.io",
               "pathPrefix": "/home"
             }
           ],

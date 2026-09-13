@@ -23,7 +23,7 @@ The ElectroSwap API and indexer (separate engagement), the Hyperlane and Seaport
 
 ## Deliverables
 
-Findings with severity and a reproduction; a re-test after fixes; a public summary for `https://wallet.electroswap.io/security`.
+Findings with severity and a reproduction; a re-test after fixes; a public summary for `https://electroswap.io/docs/boltvault/security`.
 
 ## Test fixtures the auditor gets
 

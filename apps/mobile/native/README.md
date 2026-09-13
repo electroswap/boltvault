@@ -38,7 +38,7 @@ What the widget ever sees: the account's Field seed (its address), a label, the 
 
 ## Universal links
 
-`well-known/apple-app-site-association` and `well-known/assetlinks.json` go to `https://wallet.electroswap.io/.well-known/` (ops, §9.8) with the Team ID and the upload-key fingerprint filled in.
+`well-known/apple-app-site-association` and `well-known/assetlinks.json` go to `https://app.electroswap.io/.well-known/` (ops, §9.8) with the Team ID and the upload-key fingerprint filled in.
 
 ## Store checklist
 

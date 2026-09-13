@@ -21,11 +21,21 @@ import { z } from 'zod'
 export const WALLETCONNECT_PROJECT_ID =
   process.env['EXPO_PUBLIC_WALLETCONNECT_PROJECT_ID'] ?? 'f1eaee6b74bd39f43339dfff17927630'
 
+/*
+  What a dApp shows as BoltVault's identity in its connect sheet.
+
+  Both values used to name `wallet.electroswap.io`, a host that has never
+  existed — so the sheet quoted a site nobody could open and the icon slot fell
+  back to a placeholder. `app.electroswap.io` is where the wallet lives as far
+  as the outside world is concerned: it is the origin the universal links are
+  associated with, and the one Reown's Verify API checks this metadata against.
+  The icon is a file that is actually committed and served.
+*/
 const METADATA = {
   name: 'BoltVault',
   description: 'The Electroneum wallet and ElectroSwap uber-app.',
-  url: 'https://wallet.electroswap.io',
-  icons: ['https://wallet.electroswap.io/icon.png'],
+  url: 'https://app.electroswap.io',
+  icons: ['https://electroswap.io/img/store/boltvault-logo-128.png'],
 }
 
 /*

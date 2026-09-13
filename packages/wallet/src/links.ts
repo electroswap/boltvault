@@ -1,12 +1,23 @@
 /**
  * Deep and universal links (master plan §5.3): `boltvault://…`,
- * `https://wallet.electroswap.io/…`, `wc:` pairing URIs and EIP-681
+ * `https://app.electroswap.io/…`, `wc:` pairing URIs and EIP-681
  * `ethereum:` payment links, parsed with zod into navigation actions. A link
  * never executes anything beyond navigation and a pairing.
  */
 import { z } from 'zod'
 
-const UNIVERSAL_HOST = 'wallet.electroswap.io'
+/*
+  The host whose links this wallet answers.
+
+  It was `wallet.electroswap.io`, which has never existed, so every universal
+  link fell back to the browser and landed on nothing. `app.electroswap.io` is
+  where the wallet belongs: it is the origin serving the association files, and
+  the one the interface serves too — the wallet is what that address means on a
+  phone that has it installed. The paths it claims are listed in
+  `apps/mobile/app.json`, and three of them (`/swap`, `/explore`, `/launchpad`)
+  are live routes on the web app, deliberately: an installed wallet takes them.
+*/
+const UNIVERSAL_HOST = 'app.electroswap.io'
 const Address = z.string().regex(/^0x[0-9a-fA-F]{40}$/)
 
 export type LinkAction =
@@ -59,7 +70,7 @@ export function parseLink(raw: string): LinkAction | null {
   const isApp = u.protocol === 'boltvault:'
   const isUniversal = u.protocol === 'https:' && u.host === UNIVERSAL_HOST
   if (!isApp && !isUniversal) return null
-  // boltvault://wc?uri=…  →  host "wc"; https://wallet.electroswap.io/wc?uri=…  →  path "/wc"
+  // boltvault://wc?uri=…  →  host "wc"; https://app.electroswap.io/wc?uri=…  →  path "/wc"
   const segments = (isApp ? [u.host, ...u.pathname.split('/')] : u.pathname.split('/')).filter(Boolean)
   const [head, second] = segments
   const q = query(u)

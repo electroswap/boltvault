@@ -170,7 +170,7 @@ jobs:
       - run: pnpm --filter @boltvault/mobile bundle
       # App Links and Universal Links only verify against a real signing
       # fingerprint and a real Team ID. With the placeholders still in place the
-      # association files verify for nobody, every `https://wallet.electroswap.io`
+      # association files verify for nobody, every `https://app.electroswap.io`
       # link falls back to the browser or a disambiguation dialog, and another
       # app that claims the same host is indistinguishable to the user. These
       # must not be able to reach a release branch.

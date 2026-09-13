@@ -8,12 +8,12 @@ import { Body, Column, Key, Plate, ScrollView, Toggle, metrics, paint, shortAddr
 import { PageHeader } from '../components/PageHeader'
 import type { AboutView, FlagsView, Settings } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
+import { docsLinks, ISSUES_URL } from '../docsLinks'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
 
 const ETN = 52014
-const SECURITY_URL = 'https://wallet.electroswap.io/security'
 
 export function About({ body }: { body: 'extension-popup' | 'extension-tab' | 'mobile' }) {
   const engine = useEngine()
@@ -101,9 +101,9 @@ export function About({ body }: { body: 'extension-popup' | 'extension-tab' | 'm
 
       <Plate gap="$2" testID="about-links">
         <Column gap="$2">
-          <Key label={t({ id: 'about.security', message: 'Security policy & audits' })} kind="secondary" onPress={() => void host.openUrl?.(SECURITY_URL)} testID="about-security" />
-          <Key label={t({ id: 'about.sbom', message: 'Software bill of materials' })} kind="secondary" onPress={() => void host.openUrl?.(`${SECURITY_URL}#sbom`)} testID="about-sbom" />
-          <Key label={t({ id: 'about.report', message: 'Report a problem' })} kind="secondary" onPress={() => void host.openUrl?.('https://github.com/ElectroSwap/boltvault/issues')} testID="about-report" />
+          <Key label={t({ id: 'about.security', message: 'Security policy & audits' })} kind="secondary" onPress={() => void host.openUrl?.(docsLinks.security)} testID="about-security" />
+          <Key label={t({ id: 'about.sbom', message: 'Software bill of materials' })} kind="secondary" onPress={() => void host.openUrl?.(docsLinks.sbom)} testID="about-sbom" />
+          <Key label={t({ id: 'about.report', message: 'Report a problem' })} kind="secondary" onPress={() => void host.openUrl?.(ISSUES_URL)} testID="about-report" />
         </Column>
         <Body tone="mute" size="caption">
           {t({ id: 'about.privacy', message: 'No analytics. Only ElectroSwap’s API and the chain RPCs ever see an address.' })}

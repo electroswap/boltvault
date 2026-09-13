@@ -67,7 +67,7 @@ export interface TrezorStatusView {
  * email is a contact address Trezor shows to users, not a credential. Named
  * here because a store reviewer reading the bundle will ask (audit F6).
  */
-const TREZOR_MANIFEST = { email: 'wallet@electroswap.io', appUrl: 'https://wallet.electroswap.io' }
+const TREZOR_MANIFEST = { email: 'wallet@electroswap.io', appUrl: 'https://app.electroswap.io' }
 
 /** The QR codec is a worker-only chunk (CBOR registry + Buffer); loaded on the first Keystone call. */
 
