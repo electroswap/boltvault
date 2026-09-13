@@ -14,7 +14,7 @@
  * whole contract of a badge: it counts what you have not seen, and you have now
  * seen it.
  */
-import { Body, Chip, Column, Icon, Input, Key, Plate, Pressable, Row, ScrollView, Toggle, metrics, paint, shortAddress } from '@boltvault/ui'
+import { Body, Column, Icon, IconButton, Input, Key, Plate, Pressable, Row, ScrollView, Toggle, metrics, paint, shortAddress } from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
 import type { NotificationView, WatchItem } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
@@ -153,19 +153,33 @@ export function Alerts({ body }: { body: BodyKind }) {
       ) : null}
       {items.map((i) => (
         <Plate key={key(i)} gap="$2" testID={`alert-${i.kind}-${i.address}`}>
-          <Row justifyContent="space-between" alignItems="center">
-            <Column>
-              <Body>{i.label}</Body>
+          {/*
+            The same row shape the address book uses (ES-BV-080).
+
+            This had no `gap`, a text column that could not shrink, and a raw
+            `Chip` pressed into service as a button — a decorative frame with no
+            `accessibilityRole`, no accessible name, four pixels of visible
+            height, and a `minHeight={44}` bolted on to rescue the tap target.
+            That 44 px reached well above and below the chip itself and overlapped
+            the rest of the row, which is what "the remove buttons are placed
+            badly" describes. A long collection name then pushed the whole thing
+            to the edge with nothing between them.
+          */}
+          <Row justifyContent="space-between" alignItems="center" gap="$2">
+            <Column flex={1} minWidth={0} alignItems="flex-start">
+              <Body numberOfLines={1}>{i.label}</Body>
               <Body tone="mute" size="caption">
                 {`${i.kind === 'token' ? t({ id: 'alerts.token', message: 'Token' }) : i.kind === 'collection' ? t({ id: 'alerts.collection', message: 'Collection' }) : t({ id: 'alerts.campaign', message: 'Campaign' })} · ${shortAddress(i.address)}`}
                 {i.lastValue !== null && i.kind !== 'campaign' ? ` · ${i.kind === 'token' ? '$' : ''}${i.lastValue}${i.kind === 'collection' ? ' ETN' : ''}` : ''}
               </Body>
             </Column>
-            <Chip onPress={() => void engine.watchlist.unstar({ kind: i.kind, chainId: i.chainId, address: i.address })} cursor="pointer" minHeight={44} justifyContent="center" testID={`alert-remove-${i.address}`}>
-              <Body tone="burn" size="caption">
-                {t({ id: 'alerts.remove', message: 'Remove' })}
-              </Body>
-            </Chip>
+            <IconButton
+              icon="trash"
+              tone="burn"
+              label={t({ id: 'alerts.remove.one', message: 'Stop watching {n}', values: { n: i.label } })}
+              onPress={() => void engine.watchlist.unstar({ kind: i.kind, chainId: i.chainId, address: i.address })}
+              testID={`alert-remove-${i.address}`}
+            />
           </Row>
           {i.kind === 'campaign' ? (
             <Toggle value={i.onLive} onChange={(v) => void engine.watchlist.setAlert({ kind: i.kind, chainId: i.chainId, address: i.address, above: i.above, below: i.below, onLive: v })} label={t({ id: 'alerts.onLive', message: 'Tell me when it goes live' })} testID={`alert-live-${i.address}`} />

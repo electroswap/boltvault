@@ -316,7 +316,7 @@ export function Token({
           : 'ink',
     },
   ]
-  const links: Array<{ label: string; url: string; icon: IconName }> = [
+  const links: Array<{ label: string; url: string; icon: IconName; a11y?: string }> = [
     ...(d?.homepageUrl
       ? [
           {
@@ -326,7 +326,12 @@ export function Token({
           },
         ]
       : []),
-    ...(d?.twitterUrl ? [{ label: 'X', url: d.twitterUrl, icon: 'x' as const }] : []),
+    /*
+      The mark is the name here, so the pill does not say it twice.
+      "Website" and "Telegram" pair a generic glyph with a word; X's glyph
+      *is* the word, and printing both read as "X X" on a phone.
+    */
+    ...(d?.twitterUrl ? [{ label: '', url: d.twitterUrl, icon: 'x' as const, a11y: 'X' }] : []),
     ...(d?.telegramUrl
       ? [{ label: 'Telegram', url: d.telegramUrl, icon: 'telegram' as const }]
       : []),
@@ -649,6 +654,8 @@ export function Token({
                   <Pill
                     key={l.url}
                     label={l.label}
+                    // The X pill shows only its mark, so it still needs a name.
+                    {...(l.a11y ? { accessibilityLabel: l.a11y } : {})}
                     icon={<IconGlyph name={l.icon} tone="mute" />}
                     size="sm"
                     onPress={() => openSafely(l.url)}

@@ -313,7 +313,24 @@ export function Activity({ body }: { body: 'extension-popup' | 'extension-tab' |
               </Column>
               {/* A status is a state, not a control: small, and never the
                   reason a line of text is cut. */}
-              <Chip flexShrink={0} height={20} paddingHorizontal={7} borderColor={e.status === 'pending' ? paint.arc : e.status === 'failed' ? paint.burn : e.status === 'unknown' || e.status === 'dropped' ? paint.arc : undefined}>
+              {/*
+                A 20 px box has to hold a 14 px line (ES-BV-077).
+
+                `Chip` carries `paddingVertical: '$1'` (4) and a 1 px border, and
+                React Native measures border-box — so `20 − 2 − 8` left ten
+                pixels of content for a fourteen-pixel line, and `overflow:
+                'hidden'` cropped the difference. It came off the bottom because
+                `Chip` is a column that starts its content at the top, which is
+                exactly how it was reported: "the 'confirmed' text on the right
+                side, is a bit cut off at the bottom for me."
+
+                Dropping the vertical padding leaves 18 px for the line, and
+                centring it puts the slack where it belongs. `Pill size="xs"` is
+                the same badge done right and was the obvious swap, but it draws
+                every border in `edge` — and the tint here is doing work: a
+                pending row is rimmed in `arc`, a failed one in `burn`.
+              */}
+              <Chip flexShrink={0} height={20} paddingVertical={0} justifyContent="center" paddingHorizontal={7} borderColor={e.status === 'pending' ? paint.arc : e.status === 'failed' ? paint.burn : e.status === 'unknown' || e.status === 'dropped' ? paint.arc : undefined}>
                 <Body tone={e.status === 'pending' ? 'arc' : e.status === 'failed' ? 'burn' : e.status === 'confirmed' ? 'surge' : e.status === 'unknown' || e.status === 'dropped' ? 'arc' : 'mute'} size="caption" fontSize={11} lineHeight={14} testID={`activity-status-${e.id}`}>
                   {/* `unknown` and `dropped` are honest answers, not failures: the
                       wallet broadcast something and cannot say what became of it. */}

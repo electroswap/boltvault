@@ -24,7 +24,7 @@ export interface ScreenParams {
   bridge: { chainId?: number; token?: string } | undefined
   networks: undefined
   addressBook: undefined
-  browser: { url?: string } | undefined
+  browser: { url?: string; focus?: boolean } | undefined
   feel: undefined
   about: undefined
   activity: undefined

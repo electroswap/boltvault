@@ -124,6 +124,8 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     unlocked && (host.body === 'extension-popup' || host.body === 'harness'),
   )
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
+  // The status strip's other half; only the extension ever has one.
+  const hasDappStrip = dapp !== null || host.body === 'extension-popup' || host.body === 'harness'
   /**
    * No vault yet: Home is a title screen, not a list with one card on it.
    *
@@ -985,7 +987,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
             {host.browser ? (
               <Ignition active={ignite} reducedMotion={reducedMotion} order={4}>
                 <Pressable
-                  onPress={() => router.navigate('browser')}
+                  onPress={() => router.navigate('browser', { focus: true })}
                   accessibilityRole="button"
                   accessibilityLabel={t({
                     id: 'home.browser.a11y',
@@ -1018,7 +1020,7 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
             <Ignition active={ignite} reducedMotion={reducedMotion} order={4}>
               <Plate role="card" padding={0} overflow="hidden" testID="home-strip">
                 <Row minHeight={44} alignItems="stretch">
-                  {dapp !== null || host.body === 'extension-popup' || host.body === 'harness' ? (
+                  {hasDappStrip ? (
                     <>
                       <DappStrip state={dapp} onPress={() => setDappOpen(true)} />
                       <Column width={1} backgroundColor="$edge" marginVertical={8} />
@@ -1038,7 +1040,22 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
                     accessibilityRole="button"
                     accessibilityLabel={t({ id: 'home.price.a11y', message: 'ETN price' })}
                     testID="home-price"
-                    style={{ flexShrink: 0, justifyContent: 'center', paddingHorizontal: 12 }}
+                    /*
+            The right-hand side of the bar was dead (ES-BV-078).
+
+            This box is content-width, and on a phone it is the strip's only
+            child — DappStrip renders solely in the extension popup. So it
+            sat at the left of a full-width plate and every pixel past the
+            price text pressed nothing: the tester's "bottom ETN price
+            doesn't trigger on the right side of the bar".
+
+            It grows only when it is alone. DappStrip already claims flex 1,
+            so growing unconditionally would split the popup's bar down the
+            middle instead of leaving the price at the end. The inner Row's
+            justifyContent was a no-op in a box sized to its content; now it
+            is what keeps the price to the right.
+          */
+          style={{ flexShrink: 0, flexGrow: hasDappStrip ? 0 : 1, justifyContent: 'center', paddingHorizontal: 12 }}
                   >
                     <Row gap={6} alignItems="center" justifyContent="flex-end">
                       <ChainMark chainId={ETN} size={14} />

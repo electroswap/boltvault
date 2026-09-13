@@ -66,7 +66,20 @@ const PATHS = {
   share: 'M12 3v12m0-12L8 7m4-4 4 4M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6',
   key: 'M15 4a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM10.5 12.5 3 20l2 2 2-2-1-1 2-2-1-1 2.5-2.5',
   globe: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18',
-  x: 'M5 4l14 16M19 4 5 20',
+  /*
+    The X wordmark, not a second close button (ES-BV-079).
+
+    This was 'M5 4l14 16M19 4 5 20' — all but identical to `close` two dozen
+    lines up, and used in exactly one place: the social link on a token page,
+    beside the literal label "X". So the row drew a dismiss glyph next to the
+    letter X and read, as the tester put it, as "X X".
+
+    The real mark is the two strokes cut to a slab rather than crossing as an
+    even multiply sign: the descending stroke runs corner to corner, the
+    ascending one is split around it. Still a stroke path, so it sits in the
+    same language as the rest of the set.
+  */
+  x: 'M4 3.5 20 20.5M20 3.5 13.4 11M10.2 14.6 4 20.5',
   telegram: 'M21 4 3 11l6 2 2 6 3-4 5 3z',
   discord: 'M8 5c1.3-.5 2.6-.8 4-.8s2.7.3 4 .8l3 8-3 5-2-2H10l-2 2-3-5zM9.5 12h.01M14.5 12h.01',
 } as const

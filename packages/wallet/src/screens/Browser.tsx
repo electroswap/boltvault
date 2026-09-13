@@ -45,14 +45,30 @@ function normalise(input: string): string {
 export function Browser({
   body,
   url: initialUrl,
+  focus = false,
 }: {
   body: 'extension-popup' | 'extension-tab' | 'mobile'
   url?: string
+  /**
+   * Open with the address field focused and empty, ready for a URL.
+   *
+   * Home's foot carries a bar drawn to look like this field, and tapping it
+   * used to land on ElectroSwap's home page with nothing focused: "I'd
+   * expect the address bar be focused so I can search/goto a dapp." The bar
+   * itself deliberately takes no text — this field is where a URL belongs —
+   * so what was missing was only the hand-off.
+   */
+  focus?: boolean
 }) {
   const engine = useEngine()
   const host = useHost()
   const router = useRouter()
-  const [typed, setTyped] = useState(initialUrl ?? HOME)
+  /*
+    Empty when the field is about to take focus: an autofocused box already
+    holding the home URL makes the user clear it before they can type, which
+    is worse than not focusing at all. The page still loads HOME.
+  */
+  const [typed, setTyped] = useState(focus ? '' : (initialUrl ?? HOME))
   const [url, setUrl] = useState(initialUrl ?? HOME)
   const [nav, setNav] = useState({
     url: initialUrl ?? HOME,
@@ -318,7 +334,7 @@ export function Browser({
         >
           <Icon name={session?.verified ? 'lock' : 'globe'} size={14} color={session?.verified ? paint.arc : paint.mute} />
           <Column flex={1} minWidth={0}>
-            <Input value={typed} onChange={setTyped} placeholder="https://" bare onSubmit={go} testID="browser-url" />
+            <Input value={typed} onChange={setTyped} placeholder="https://" bare autoFocus={focus} onSubmit={go} testID="browser-url" />
           </Column>
         </Row>
         <RoundKey label={t({ id: 'browser.go', message: 'Go' })} onPress={go} testID="browser-go" />

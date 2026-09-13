@@ -305,8 +305,8 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
       screen = <AddressBook body={body} />
       break
     case 'browser': {
-      const p = current.params as { url?: string } | undefined
-      screen = <Browser body={body} {...(p?.url ? { url: p.url } : {})} />
+      const p = current.params as { url?: string; focus?: boolean } | undefined
+      screen = <Browser body={body} {...(p?.url ? { url: p.url } : {})} {...(p?.focus ? { focus: true } : {})} />
       break
     }
     case 'feel':
