@@ -5,11 +5,12 @@
  */
 import { Body, IconButton, Key, Plate, Row, ScrollView, metrics } from '@boltvault/ui'
 import { PageHeader } from '../components/PageHeader'
-import type { LegendsStatus } from '@boltvault/engine'
+import { cacheKey, type LegendsStatus } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
 import { DividendsCard } from '../components/DividendsCard'
 import { useEngine } from '../engine/EngineProvider'
+import { useCached } from '../hooks/useCached'
 import { formatRaw } from '../format'
 import { t } from '../i18n'
 import { useRouter } from '../navigation/router'
@@ -27,23 +28,38 @@ export function Legends({ body, reducedMotion = false }: { body: BodyKind; reduc
   const { setActive } = useSwapFlow()
   const { flow, dismiss } = useActiveFlow(['legends'])
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
-  const [status, setStatus] = useState<LegendsStatus | null>(null)
+  /*
+    The vessel this account last saw, refreshed behind it (plan A2).
+
+    Legends has no indexer to prefer — the status is four multicalls deep and
+    the chain is the only source — so the win here is not a faster source but
+    not waiting for one: the cached vessel paints at once and the reads happen
+    behind it. The engine caches for a block, which is what keeps this from
+    being four multicalls every five seconds.
+  */
+  const statusRead = useCached<LegendsStatus>({
+    key: active ? cacheKey('legends', 'status', ETN, active.id) : null,
+    cached: (e) => e.legends.cachedStatus({ accountId: active?.id ?? '', chainId: ETN }),
+    fresh: async (e) => {
+      const v = await e.legends.status({ accountId: active?.id ?? '', chainId: ETN })
+      if (!v) throw new Error('no legends status')
+      return v
+    },
+  })
+  const status = statusRead.value
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [count, setCount] = useState(1)
   // Owner: "Clicking 'Dividends to claim' is not showing the ES wordmark loader"
   // — this screen simply never declared itself busy, so the shell had nothing
   // to draw one for.
-  useScreenBusy('legends', status === null && error === null)
+  useScreenBusy('legends', status === null && error === null && statusRead.freshness === 'loading')
 
+  // A finished flow (activate, claim, mint) changes the vessel; ask again.
+  const refresh = statusRead.refresh
   useEffect(() => {
-    if (!active) return
-    let alive = true
-    engine.legends.status({ accountId: active.id, chainId: ETN }).then((s) => alive && setStatus(s), (err: unknown) => alive && setError(err instanceof Error ? err.message : String(err)))
-    return () => {
-      alive = false
-    }
-  }, [engine, active, flow?.status])
+    refresh()
+  }, [refresh, flow?.status])
 
   const run = async (fn: () => Promise<{ flowId: string }>): Promise<void> => {
     setBusy(true)

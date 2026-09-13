@@ -140,14 +140,28 @@ export class BridgeService {
   /** Corridors from a chain (and token), each with its verification. Disabled chains are left out. */
   async routes(fromChainId: number, token?: string): Promise<BridgeRoute[]> {
     const settings = await this.deps.settings.get()
+    /*
+      Across corridors, not one after another.
+
+      `verify` is an `eth_call` batch per corridor, and this awaited each one
+      inside the loop — so the Bridge screen's first paint waited on as many
+      sequential round trips as there are corridors from the chain. Fanned out,
+      every corridor's verification is in flight at once and the multicall
+      coalescer folds them into a single aggregate. The per-session memo inside
+      `verify` still does the rest: this only bites on the first load.
+
+      Bridge has no indexer to prefer — there is no bridge query on the API, so
+      unlike farms there is no faster source, only a slower way to ask the
+      chain. This is that fixed.
+    */
+    const eligible = corridorsFrom(fromChainId, token).filter(
+      (c) =>
+        settings.enabledChains.includes(c.destination.chainId) || c.destination.chainId === 52014,
+    )
+    const verifications = await Promise.all(eligible.map((c) => this.verify(c)))
     const out: BridgeRoute[] = []
-    for (const c of corridorsFrom(fromChainId, token)) {
-      if (
-        !settings.enabledChains.includes(c.destination.chainId) &&
-        c.destination.chainId !== 52014
-      )
-        continue
-      const v = await this.verify(c)
+    eligible.forEach((c, i) => {
+      const v = verifications[i] ?? { ok: false, reason: 'verification failed' }
       const off =
         this.deps.statics?.corridorDisabled(c.origin.chainId, c.destination.chainId, c.symbol) ===
         true
@@ -162,7 +176,7 @@ export class BridgeService {
         verified: v.ok && !off,
         reason: off ? 'switched off by ElectroSwap (signed flag)' : v.reason,
       })
-    }
+    })
     return out
   }
 

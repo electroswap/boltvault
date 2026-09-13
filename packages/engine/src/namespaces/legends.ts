@@ -21,6 +21,8 @@ import type { Platform } from '@boltvault/platform'
 import type { Hex } from 'viem'
 import { z } from 'zod'
 import type { SealedMap } from '../sealed'
+import { cacheKey, type Cached, type DocCache } from '../cache'
+import { LegendsStatusSchema } from '../schema'
 import { EngineError } from '../errors'
 import type { NamespaceSpec } from '../host'
 import { readMany, type ReadCall } from '../multicall'
@@ -40,7 +42,24 @@ export interface LegendsDeps {
   readonly flows: FlowStore
   /** Best-seen claim per `<chainId>.<address>`, sealed under the DEK. */
   readonly legendsBest: SealedMap<{ wei: string }>
+  readonly cache?: DocCache
 }
+
+/*
+  One vessel is good for a block.
+
+  Legends has no indexer — there is no `legends` query on the API — so there is
+  no faster source to prefer, only a document to paint from. The status is four
+  multicalls deep, and the screen used to await all of them before its first
+  frame; cached, the last good vessel is on screen at once and the reads happen
+  behind it. A block, not a minute, because dividends accrue and the claim
+  figure is the point of the screen.
+*/
+const STATUS_TTL_MS = 5_000
+const statusSpec = (chainId: number, accountId: string) => ({
+  key: cacheKey('legends', 'status', chainId, accountId),
+  schema: LegendsStatusSchema,
+})
 
 const isEtn = (chainId: number): chainId is 52014 | 5201420 =>
   chainId === 52014 || chainId === 5201420
@@ -86,8 +105,34 @@ export class LegendsService {
     return { id: a.id, address: a.address as Hex, kind: a.kind }
   }
 
-  /** Everything the vessel and the collection page show, from the chain. */
+  /**
+   * Everything the vessel and the collection page show, from the chain.
+   *
+   * Legends has no indexer behind it — there is no `legends` query on the API,
+   * so unlike farms there is no faster source to prefer. What there is instead
+   * is a document to paint from: the read is cached for a block, so the screen
+   * shows the last good vessel immediately and the four multicalls happen
+   * behind it rather than in front of the first frame.
+   */
   async status(accountId: string, chainId: number): Promise<LegendsStatus | null> {
+    if (!isEtn(chainId)) return null
+    if (!this.deps.cache) return this.readStatus(accountId, chainId)
+    const hit = await this.deps.cache
+      .through(statusSpec(chainId, accountId), STATUS_TTL_MS, async () => {
+        const v = await this.readStatus(accountId, chainId)
+        if (!v) throw new EngineError('not_found', 'no legends status')
+        return v
+      })
+      .catch(() => null)
+    return hit?.value ?? null
+  }
+
+  /** The last vessel this account saw, for painting before the reads return. */
+  async cachedStatus(accountId: string, chainId: number): Promise<Cached<LegendsStatus> | null> {
+    return (await this.deps.cache?.read(statusSpec(chainId, accountId))) ?? null
+  }
+
+  private async readStatus(accountId: string, chainId: number): Promise<LegendsStatus | null> {
     const d = this.deps
     if (!isEtn(chainId)) return null
     const A = ELECTRONEUM_ADDRESSES[chainId]
@@ -243,7 +288,16 @@ export class LegendsService {
     chainId: number,
   ): Promise<{ flowId: string; requestId: string | null }> {
     this.assertEnabled()
-    const st = await this.status(accountId, chainId)
+    /*
+      The uncached read, deliberately.
+
+      `status()` is cached for a block so the screen can paint from it, and that
+      is right for a screen. It is wrong here: this decides which token ids to
+      put in a transaction, and a block-old answer can name a piece that has
+      just been registered — the test caught exactly that, activating against a
+      stale `unregisteredTokenIds`. What a signature is built from is read now.
+    */
+    const st = await this.readStatus(accountId, chainId)
     if (!st) throw new EngineError('invalid_argument', 'Electric Legends live on Electroneum.')
     if (st.unregisteredTokenIds.length === 0)
       throw new EngineError('invalid_argument', 'Every piece you hold already earns dividends.')
@@ -284,7 +338,16 @@ export class LegendsService {
     chainId: number,
   ): Promise<{ flowId: string; requestId: string | null }> {
     this.assertEnabled()
-    const st = await this.status(accountId, chainId)
+    /*
+      The uncached read, deliberately.
+
+      `status()` is cached for a block so the screen can paint from it, and that
+      is right for a screen. It is wrong here: this decides which token ids to
+      put in a transaction, and a block-old answer can name a piece that has
+      just been registered — the test caught exactly that, activating against a
+      stale `unregisteredTokenIds`. What a signature is built from is read now.
+    */
+    const st = await this.readStatus(accountId, chainId)
     if (!st) throw new EngineError('invalid_argument', 'Electric Legends live on Electroneum.')
     if (st.registeredTokenIds.length === 0)
       throw new EngineError('invalid_argument', 'Activate dividends first.')
@@ -323,6 +386,18 @@ export class LegendsService {
                 await this.deps.legendsBest.set(this.key(chainId, account.address), {
                   wei: claimable.toString(),
                 })
+              /*
+                A write invalidates the read it contradicts.
+
+                `status()` is cached for a block, and a claim that just landed
+                changes the two things the vessel is drawn from — the ceiling
+                above and the claimable below. Without this the screen keeps
+                the pre-claim figures until the TTL lapses, which is precisely
+                the stale-after-your-own-action that caching invites.
+                `invalidate` emits `cache.changed`, so the screen re-reads
+                rather than waiting to be asked.
+              */
+              await this.deps.cache?.invalidate(statusSpec(chainId, accountId).key)
               return v
             })
             settled.catch(() => undefined)
@@ -410,6 +485,14 @@ export function legendsNamespace(legends: LegendsService): NamespaceSpec {
       input: AccountChain,
       handler: (arg) =>
         legends.status(
+          (arg as { accountId: string }).accountId,
+          (arg as { chainId: number }).chainId,
+        ),
+    },
+    cachedStatus: {
+      input: AccountChain,
+      handler: (arg) =>
+        legends.cachedStatus(
           (arg as { accountId: string }).accountId,
           (arg as { chainId: number }).chainId,
         ),

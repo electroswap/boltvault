@@ -673,6 +673,7 @@ export function createEngine(deps: EngineDeps): Engine {
     provider,
     flows,
     legendsBest: sealed.legends,
+    cache,
   })
   const customCollections = new CustomCollectionsService({
     platform: deps.platform,

@@ -9,13 +9,13 @@
  * a slider with a live preview; Collect discharges the coil.
  */
 import { Body, Coil, Column, Input, Key, Pill, Plate, Row, ScrollView, Sheet, Slider, StatStrip, Toggle, metrics } from '@boltvault/ui'
-import type { FarmDepositQuote, FarmView, FarmWithdrawQuote } from '@boltvault/engine'
+import { cacheKey, type FarmDepositQuote, type FarmView, type FarmWithdrawQuote } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
 import { PairAvatars } from '../components/cards/FarmCard'
 import { FlowPlate, useActiveFlow } from '../components/FlowPlate'
 import { PageHeader } from '../components/PageHeader'
 import { useEngine } from '../engine/EngineProvider'
-import { useLastGood } from '../hooks/useLastGood'
+import { useCached } from '../hooks/useCached'
 import { useChainHead } from '../hooks/useChainHead'
 import { formatAmount, formatFiat, formatRaw } from '../format'
 import { t } from '../i18n'
@@ -40,8 +40,29 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
   const { setActive } = useSwapFlow()
   const { flow, dismiss } = useActiveFlow(['farm'])
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
-  const [loadedFarm, setFarm] = useState<FarmView | null>(null)
-  const farm = useLastGood(`farm:${chainId}:${farmId}`, loadedFarm)
+  /*
+    Serve what this screen last showed, refresh behind it (plan A2).
+
+    It used to await `farm.farm()` — which itself read the chain, waited, then
+    asked the API — and hold `useLastGood` over the gap. So the first paint of a
+    farm nobody had opened before waited on two sequential round trips, and the
+    effect re-ran the pair on every new block. `useCached` paints the cached
+    document at once and revalidates behind it, and the engine's cache write
+    emits `cache.changed`, which is what brings the settled value back here.
+  */
+  const cachedKey = cacheKey('farm', 'one', chainId, farmId, active?.id ?? '-')
+  const farmRead = useCached<FarmView>({
+    key: cachedKey,
+    cached: (e) => e.farm.cachedFarm({ chainId, farmId, ...(active ? { accountId: active.id } : {}) }),
+    // `fresh` may not resolve null; a farm that is gone is an error here, and
+    // useCached keeps the last good value beside it rather than blanking.
+    fresh: async (e) => {
+      const v = await e.farm.farm({ chainId, farmId, ...(active ? { accountId: active.id } : {}) })
+      if (!v) throw new Error('no such farm')
+      return v
+    },
+  })
+  const farm = farmRead.value
   // The shell draws one loader over the whole screen while this is true.
   const [sheet, setSheet] = useState<SheetKind>(null)
   const [amount0, setAmount0] = useState('')
@@ -54,16 +75,17 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
   const [wq, setWq] = useState<FarmWithdrawQuote | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  useScreenBusy('farm', loadedFarm === null && error === null)
+  // Only the very first visit has nothing to draw; after that the cached farm
+  // is on screen while the reads happen behind it.
+  useScreenBusy('farm', farm === null && error === null && farmRead.freshness === 'loading')
 
-  // The position ticks with the head: rewards really do accrue per block (§8.8).
+  // The position ticks with the head: rewards really do accrue per block
+  // (§8.8). The engine's five-second TTL is what stops this being a multicall
+  // per block on a chain that mines one every five seconds.
+  const refresh = farmRead.refresh
   useEffect(() => {
-    let alive = true
-    engine.farm.farm({ chainId, farmId, ...(active ? { accountId: active.id } : {}) }).then((f) => alive && setFarm(f), (err: unknown) => alive && setError(err instanceof Error ? err.message : String(err)))
-    return () => {
-      alive = false
-    }
-  }, [engine, chainId, farmId, active, head?.blockNumber, flow?.status])
+    refresh()
+  }, [refresh, head?.blockNumber, flow?.status])
 
   useEffect(() => {
     if (sheet !== 'deposit' || !active) return
@@ -241,17 +263,17 @@ export function Farm({ body, chainId, farmId, reducedMotion = false }: { body: B
               <Row gap="$2" testID="farm-keys">
                 {farm.active ? (
                   <Column flex={1}>
-                    <Key label={t({ id: 'farm.deposit', message: 'Deposit' })} disabled={busy} onPress={() => setSheet('deposit')} testID="farm-deposit" />
+                    <Key label={t({ id: 'farm.deposit', message: 'Deposit' })} size="compact" disabled={busy} onPress={() => setSheet('deposit')} testID="farm-deposit" />
                   </Column>
                 ) : null}
                 {p ? (
                   <Column flex={1}>
-                    <Key label={t({ id: 'farm.withdraw', message: 'Withdraw' })} kind="secondary" disabled={busy} onPress={() => setSheet('withdraw')} testID="farm-withdraw" />
+                    <Key label={t({ id: 'farm.withdraw', message: 'Withdraw' })} kind="secondary" size="compact" disabled={busy} onPress={() => setSheet('withdraw')} testID="farm-withdraw" />
                   </Column>
                 ) : null}
                 {p ? (
                   <Column flex={1}>
-                    <Key label={t({ id: 'farm.collect', message: 'Collect' })} kind="secondary" disabled={busy || BigInt(p.pendingRewards) === 0n} onPress={() => void run(() => engine.farm.collect({ accountId: active.id, chainId, farmId, asNative: hasNative }))} testID="farm-collect" />
+                    <Key label={t({ id: 'farm.collect', message: 'Collect' })} kind="secondary" size="compact" disabled={busy || BigInt(p.pendingRewards) === 0n} onPress={() => void run(() => engine.farm.collect({ accountId: active.id, chainId, farmId, asNative: hasNative }))} testID="farm-collect" />
                   </Column>
                 ) : null}
               </Row>
