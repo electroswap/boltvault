@@ -1,5 +1,5 @@
-import type { AccountView, VaultStatus } from '@boltvault/engine'
-import { useCallback, useEffect, useState } from 'react'
+import type { AccountView, VaultStatus, WalletEngine } from '@boltvault/engine'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import { useEngine } from '../engine/EngineProvider'
 
 export interface WalletState {
@@ -9,6 +9,15 @@ export interface WalletState {
   readonly loading: boolean
   refresh(): void
 }
+
+interface Snapshot {
+  readonly vault: VaultStatus | null
+  readonly accounts: readonly AccountView[]
+  readonly activeId: string | null
+  readonly loaded: boolean
+}
+
+const NOTHING_KNOWN: Snapshot = { vault: null, accounts: [], activeId: null, loaded: false }
 
 /**
  * The last answer, shared by every instance for the life of this page.
@@ -23,12 +32,45 @@ export interface WalletState {
  *
  * The data is identical for every caller, so one snapshot is the honest shape
  * for it. The refresh still runs; it just happens behind what is on screen.
+ *
+ * It is a *store*, not a variable, and that is the whole point (ES-BV-088).
+ * It used to be a plain module-level object that each instance copied into its
+ * own `useState` at mount and then wrote back to. Nothing told the other
+ * instances it had changed, and the guard below discards every ask but the
+ * newest — so the only instance that ever saw a reply was whichever one issued
+ * the last `refresh()`. Mount three of these and two of them hold
+ * `vault: null, accounts: []` for the life of the page.
+ *
+ * That is a blank screen, not a slow one. Home draws its header from `active`
+ * and its body from `vault`, and it has no branch for "the status is still
+ * unknown" — so an instance stuck at null renders a header with no seat over
+ * an empty page. Owner, on the signed APK: "I saw the splash screen, and then
+ * empty screen with the circuit background ... no onboarding." It reproduces
+ * in `custody.spec.ts` the moment a second popup is opened over a vault that
+ * plainly exists.
+ *
+ * So the snapshot publishes, every instance reads it through
+ * `useSyncExternalStore`, and no instance holds a private copy of it at all.
  */
-let snapshot: { vault: VaultStatus | null; accounts: readonly AccountView[]; activeId: string | null; loaded: boolean } = {
-  vault: null,
-  accounts: [],
-  activeId: null,
-  loaded: false,
+let snapshot: Snapshot = NOTHING_KNOWN
+const listeners = new Set<() => void>()
+
+function publish(patch: Partial<Snapshot>): void {
+  snapshot = { ...snapshot, ...patch }
+  // Over a copy, because a listener may unsubscribe while this is running.
+  for (const listener of [...listeners]) listener()
+}
+
+/** The store, for the hook and for the suite: every reader gets the one answer. */
+export function subscribeToWalletSnapshot(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
+export function readWalletSnapshot(): Snapshot {
+  return snapshot
 }
 
 /**
@@ -46,16 +88,26 @@ let snapshot: { vault: VaultStatus | null; accounts: readonly AccountView[]; act
  * The engine was locked the whole time and would have refused to sign, but the
  * wallet showed an unlocked wallet, which is exactly what a lock screen exists
  * to prevent. Events are the newer truth; a reply older than the last event is
- * discarded rather than trusted. A newer `refresh()` also invalidates an older
- * one (`begin` advances the token), so two overlapping asks cannot both apply.
+ * discarded rather than trusted.
+ *
+ * `current()` reads the clock without advancing it. `begin()` still advances
+ * it, and the difference is which one `refreshWalletState` uses: an *event* has
+ * standing to invalidate a reply in flight, another mount asking the same
+ * question at the same moment does not.
  */
-export function createGeneration(): { begin(): number; bump(): void; stillCurrent(token: number): boolean } {
+export function createGeneration(): {
+  begin(): number
+  current(): number
+  bump(): void
+  stillCurrent(token: number): boolean
+} {
   let n = 0
   return {
     begin: () => {
       n += 1
       return n
     },
+    current: () => n,
     bump: () => {
       n += 1
     },
@@ -93,13 +145,6 @@ export function vaultRequiresUnlock(vault: VaultStatus | null, now: number): boo
  */
 const vaultGen = createGeneration()
 const accountsGen = createGeneration()
-
-/** Tests and the harness: forget the shared snapshot. */
-export function clearWalletSnapshot(): void {
-  snapshot = { vault: null, accounts: [], activeId: null, loaded: false }
-  vaultGen.bump()
-  accountsGen.bump()
-}
 
 /** What a `refresh()` reply is allowed to write, given what overtook it. */
 export interface ReplyDecision {
@@ -143,21 +188,38 @@ export function decideReply(
   }
 }
 
-/** Vault status + accounts, kept current by engine events. */
-export function useWalletState(): WalletState {
-  const engine = useEngine()
-  const [vault, setVault] = useState<VaultStatus | null>(snapshot.vault)
-  const [accounts, setAccounts] = useState<readonly AccountView[]>(snapshot.accounts)
-  const [activeId, setActiveId] = useState<string | null>(snapshot.activeId)
-  const [loading, setLoading] = useState(!snapshot.loaded)
+/**
+ * The round trip in flight, and the clocks it was issued against.
+ *
+ * Every mount calls `refresh()`, so opening the popup fired three Port calls
+ * per instance and then threw all but the last set of replies away, because
+ * the guard read *a newer ask* as grounds to discard an older one. That rule
+ * bought nothing — concurrent asks carry the same answer — and it cost the
+ * page its only writer whenever the newest ask was the one that failed.
+ *
+ * One ask is now shared by everyone who asks while it is open, and an ask that
+ * an event has overtaken is not shared: the next caller opens a fresh one
+ * against the current clocks.
+ */
+let asking: { vault: number; accounts: number; done: Promise<void> } | null = null
 
-  const refresh = useCallback(() => {
-    const askedVault = vaultGen.begin()
-    const askedAccounts = accountsGen.begin()
-    Promise.all([engine.vault.status(), engine.accounts.list(), engine.accounts.active()]).then(
+/** Tests and the harness: forget the shared snapshot. */
+export function clearWalletSnapshot(): void {
+  vaultGen.bump()
+  accountsGen.bump()
+  asking = null
+  publish(NOTHING_KNOWN)
+}
+
+export function refreshWalletState(engine: WalletEngine): Promise<void> {
+  const askedVault = vaultGen.current()
+  const askedAccounts = accountsGen.current()
+  if (asking !== null && asking.vault === askedVault && asking.accounts === askedAccounts) {
+    return asking.done
+  }
+  const done = Promise.all([engine.vault.status(), engine.accounts.list(), engine.accounts.active()])
+    .then(
       ([v, list, active]) => {
-        // The answer arrived, whatever it is allowed to say.
-        setLoading(false)
         const decision = decideReply(
           { vault: v, accounts: list, activeId: active?.id ?? null },
           {
@@ -166,46 +228,97 @@ export function useWalletState(): WalletState {
             now: Date.now(),
           },
         )
-        if (decision.vault !== null) {
-          snapshot = { ...snapshot, vault: decision.vault, loaded: true }
-          setVault(decision.vault)
-        }
-        if (decision.accounts !== null) {
-          snapshot = { ...snapshot, accounts: decision.accounts, activeId: decision.activeId, loaded: true }
-          setAccounts(decision.accounts)
-          setActiveId(decision.activeId)
-        }
+        // One publish, so one render pass however many halves landed.
+        publish({
+          loaded: true,
+          ...(decision.vault !== null ? { vault: decision.vault } : {}),
+          ...(decision.accounts !== null
+            ? { accounts: decision.accounts, activeId: decision.activeId }
+            : {}),
+        })
         if (decision.lock) void engine.vault.lock()
       },
-      () => setLoading(false),
+      // The answer never came. Stop waiting on it — "asked, and the engine
+      // could not say" is a state Home can draw, and the next event or mount
+      // asks again.
+      () => publish({ loaded: true }),
     )
-  }, [engine])
+    .finally(() => {
+      if (asking?.done === done) asking = null
+    })
+  asking = { vault: askedVault, accounts: askedAccounts, done }
+  return done
+}
 
-  useEffect(() => {
-    refresh()
-    return engine.events.subscribe((e) => {
+/**
+ * One engine subscription for the whole page, ref-counted.
+ *
+ * Each instance used to subscribe and write its own state, which was fine
+ * while that state was private. It is not fine now that a write publishes:
+ * twenty-eight subscribers handling one `accounts.changed` would be
+ * twenty-eight publishes, and each publish wakes all twenty-eight.
+ */
+let attached: { engine: WalletEngine; count: number; off: () => void } | null = null
+
+export function attachWalletStateToEngine(engine: WalletEngine): () => void {
+  if (attached !== null && attached.engine !== engine) {
+    attached.off()
+    attached = null
+  }
+  if (attached === null) {
+    const held: { engine: WalletEngine; count: number; off: () => void } = {
+      engine,
+      count: 0,
+      off: () => {},
+    }
+    held.off = engine.events.subscribe((e) => {
       // Each event bumps only the clock it actually speaks for.
       if (e.type === 'vault.status') vaultGen.bump()
       if (e.type === 'accounts.changed') accountsGen.bump()
       if (e.type === 'vault.status') {
         if (e.status.unlocked && e.status.lockAt != null && e.status.lockAt <= Date.now()) {
           const lockedStatus = { ...e.status, unlocked: false, unlockedAt: null, lockAt: null, seeds: [] }
-          snapshot = { ...snapshot, vault: lockedStatus, loaded: true }
-          setVault(lockedStatus)
+          publish({ vault: lockedStatus, loaded: true })
           void engine.vault.lock()
           return
         }
-        snapshot = { ...snapshot, vault: e.status, loaded: true }
-        setVault(e.status)
+        publish({ vault: e.status, loaded: true })
       }
       if (e.type === 'accounts.changed') {
-        snapshot = { ...snapshot, accounts: e.accounts, activeId: e.activeId, loaded: true }
-        setAccounts(e.accounts)
-        setActiveId(e.activeId)
+        publish({ accounts: e.accounts, activeId: e.activeId, loaded: true })
       }
     })
+    attached = held
+  }
+  const held = attached
+  held.count += 1
+  return () => {
+    held.count -= 1
+    if (held.count === 0 && attached === held) {
+      held.off()
+      attached = null
+    }
+  }
+}
+
+/** Vault status + accounts, kept current by engine events. */
+export function useWalletState(): WalletState {
+  const engine = useEngine()
+  const { vault, accounts, activeId, loaded } = useSyncExternalStore(
+    subscribeToWalletSnapshot,
+    readWalletSnapshot,
+    readWalletSnapshot,
+  )
+
+  const refresh = useCallback(() => {
+    void refreshWalletState(engine)
+  }, [engine])
+
+  useEffect(() => {
+    refresh()
+    return attachWalletStateToEngine(engine)
   }, [engine, refresh])
 
   const active = accounts.find((a) => a.id === activeId) ?? accounts[0] ?? null
-  return { vault, accounts, active, loading, refresh }
+  return { vault, accounts, active, loading: !loaded, refresh }
 }
