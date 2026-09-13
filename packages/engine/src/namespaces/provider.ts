@@ -426,7 +426,38 @@ function nodeWords(err: unknown): string {
   return parts.join(' \n ')
 }
 
+/**
+ * Our own governor refused to make the call (`RateLimited` in governor.ts).
+ *
+ * This is not the chain saying anything. The host is in a local cooldown, so
+ * the bytes did not leave on THIS attempt — but an earlier attempt is very
+ * often what put the host into cooldown in the first place, and that one may
+ * well have been accepted before the response was lost.
+ */
+function locallyRefused(err: unknown): boolean {
+  for (const e of causes(err)) {
+    if ((e as { name?: unknown }).name === 'RateLimited') return true
+  }
+  return false
+}
+
 export function possiblySent(err: unknown): boolean {
+  /*
+    A refusal by our own rate governor is the strongest "we do not know" there
+    is (ES-BV-085).
+
+    A beta tester revoked a Permit2 allowance, was shown a failure, and found
+    the revoke had succeeded on chain. The send threw
+    `rpc.electroneum.com: backing off for another 850s` — our governor, not the
+    node — which matched nothing here, so the row was written `failed`. The
+    guard that exists to stop exactly that, `nodeKnows`, then asked the chain
+    over the SAME governor and was refused three more times, so "could not ask"
+    came back as "the node has never heard of it".
+
+    A local cooldown is evidence about us, not about the transaction. It takes
+    the pending path and the watcher decides from the chain.
+  */
+  if (locallyRefused(err)) return true
   for (const e of causes(err)) {
     const name = (e as { name?: unknown }).name
     if (typeof name === 'string' && TRANSPORT_FAILURES.has(name)) return true
@@ -441,6 +472,29 @@ export function possiblySent(err: unknown): boolean {
     ) ||
     /nonce\s*too\s*low|replacement\s*transaction\s*underpriced|transaction\s*underpriced/i.test(said)
   )
+}
+
+/**
+ * What to show a person when a send does not go through.
+ *
+ * The sheet used to render `err.message`, and the pinned library composes that
+ * out of the endpoint URL, the ENTIRE signed transaction as hex, a details line
+ * and its own version string. A tester was shown all four. None of it is
+ * actionable, the hex is the thing they just signed, and the one sentence that
+ * mattered — whether the transaction might still land — was not there at all.
+ *
+ * So: the node's own words when the node refused, and a plain statement of
+ * uncertainty when the refusal was a transport or our own governor.
+ */
+export function sendFailureText(err: unknown): string {
+  if (possiblySent(err)) {
+    return 'Could not confirm this reached the network. It may still go through — check Activity before sending it again.'
+  }
+  const said = broadcastReason(err)
+  // `broadcastReason` falls back to the composed message, which is the thing
+  // this function exists to keep off the screen.
+  if (/request body|^https?:\/\/|viem@|Version:/i.test(said)) return 'The network refused this transaction.'
+  return said
 }
 
 /** What to write on the row: the node's words, not the composed message with the endpoint in it. */
@@ -865,7 +919,10 @@ export class ProviderService {
           await d.approvals.settle(
             request.id,
             false,
-            err instanceof Error ? err.message : String(err),
+            // `lastError` is rendered verbatim on the approval sheet, so it is
+            // a sentence for a person — never the library's composed message,
+            // which carries the endpoint and the whole signed transaction.
+            sendFailureText(err),
             !blockedHere,
           )
           if (retryable && d.approvals.get(request.id)?.status === 'pending') continue
@@ -1160,7 +1217,8 @@ export class ProviderService {
         await d.approvals.settle(
           request.id,
           false,
-          err instanceof Error ? err.message : String(err),
+          // A sentence, not the library's composed message. See the dApp path.
+          sendFailureText(err),
           !blockedHere,
         )
         if (retryable && d.approvals.get(request.id)?.status === 'pending') continue
@@ -2735,7 +2793,9 @@ export class ProviderService {
         this.watch(chainId, request.id, localHash, { from: tx.from as Hex, nonce: tx.nonce })
         return localHash
       }
-      if (await this.nodeKnows(chainId, localHash)) {
+      // 'unknown' keeps the row pending for the same reason 'yes' does: nothing
+      // has been learned that says the transaction did not happen.
+      if ((await this.nodeKnows(chainId, localHash)) !== 'no') {
         await d.activity
           .update(request.id, { status: 'pending', statements: [...entry.statements, reason] })
           .catch(() => undefined)
@@ -2759,15 +2819,32 @@ export class ProviderService {
       await this.deps.activity.update(old.id, { status: 'replaced' }).catch(() => undefined)
   }
 
-  /** Does the node have this transaction, whatever it said about the send? */
-  private async nodeKnows(chainId: number, hash: Hex): Promise<boolean> {
+  /**
+   * Does the node have this transaction, whatever it said about the send?
+   *
+   * Three answers, because two was how a live transaction got written off. The
+   * loop used to `.catch(() => null)` every query and return `false` at the
+   * end, so an endpoint that could not be reached — most sharply when our own
+   * governor was in cooldown, which is the very failure that brings us here —
+   * was indistinguishable from a node answering "no such transaction". The
+   * first is ignorance and the second is evidence, and only the second may
+   * write a row off.
+   */
+  private async nodeKnows(chainId: number, hash: Hex): Promise<'yes' | 'no' | 'unknown'> {
+    let answered = false
     for (let i = 0; i < 3; i += 1) {
       const known = await this.deps.chains
         .rpc(chainId, 'eth_getTransactionByHash', [hash])
-        .catch(() => null)
-      if (known) return true
+        .then(
+          (v) => {
+            answered = true
+            return v
+          },
+          () => null,
+        )
+      if (known) return 'yes'
     }
-    return false
+    return answered ? 'no' : 'unknown'
   }
 
   /**
