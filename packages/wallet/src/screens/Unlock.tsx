@@ -15,6 +15,7 @@ import {
   paint,
 } from '@boltvault/ui'
 import { useEffect, useRef, useState } from 'react'
+import { ConfirmSheet } from '../components/accounts/AccountSheets'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
@@ -29,6 +30,25 @@ export function Unlock({ body }: { body: 'extension-popup' | 'extension-tab' | '
   const { vault } = useWalletState()
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
+  /*
+    The biometric attempt gets its own flag, and this is the whole point of it.
+
+    It used to share `busy` with the password path, and the auto-prompt below
+    raises that flag before awaiting a native sheet. If that sheet never
+    settles — Android dismissing a `BiometricPrompt` across a configuration
+    change is enough — `finally` never runs, `busy` latches true, and the
+    Unlock key is `disabled={busy || !password}`. The password stops being a
+    way in. A beta tester: "The app got locked because i tabbed out.. all good.
+    But i cant re enter again. unlock button doenst work. My password should be
+    correct. Atleast it should be possible to press the button and if the pw is
+    wrong.. you get a 'wrong password' thingy."
+
+    They are right, and the rule that follows is simple: nothing the biometric
+    path does may ever disable the password path. It is the recovery route for
+    the biometric path failing.
+  */
+  const [bioBusy, setBioBusy] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [passkeyOk, setPasskeyOk] = useState(false)
   const passkeyIds = (vault?.wraps ?? []).filter((w) => w.by === 'prf').map((w) => w.id)
@@ -101,6 +121,31 @@ export function Unlock({ body }: { body: 'extension-popup' | 'extension-tab' | '
     }
   }
 
+  /*
+    The way out, for someone who cannot get in.
+
+    The device key goes first and separately: it lives in the OS keychain, not
+    in the wallet's own storage, so `vault.wipe()` cannot reach it and a
+    survivor would be an orphan wrap pointing at a vault that no longer exists.
+    It is allowed to fail — on a phone with no keystore entry there is nothing
+    to remove — and the wipe proceeds regardless.
+  */
+  const resetWallet = async (): Promise<void> => {
+    setResetting(false)
+    setBusy(true)
+    setError(null)
+    try {
+      await host.deviceKey?.remove().catch(() => undefined)
+      await engine.vault.wipe()
+      setPassword('')
+      router.reset()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const unlockWithPasskey = async (): Promise<void> => {
     if (!host.passkeys) return
     setBusy(true)
@@ -126,16 +171,35 @@ export function Unlock({ body }: { body: 'extension-popup' | 'extension-tab' | '
 
   const unlockWithBiometric = async (): Promise<void> => {
     if (!host.deviceKey) return
-    setBusy(true)
+    setBioBusy(true)
     setError(null)
     try {
-      const keyHex = await host.deviceKey.read(
+      const r = await host.deviceKey.read(
         t({ id: 'unlock.biometric.reason', message: 'Unlock BoltVault' }),
       )
-      // A cancelled prompt is not a failure worth shouting about; the password
-      // field is right there.
-      if (keyHex === null) return
-      await engine.vault.unlockWithDevice({ keyId: host.deviceKey.id, keyHex })
+      if (!r.ok) {
+        /*
+          Only a dismissal is silent. The other two used to be silent as well —
+          they all arrived as the same `null` — which is how a phone whose
+          sensor is not strong enough ended up with a button that did nothing
+          and said nothing (ES-BV-072).
+        */
+        if (r.reason === 'cancelled') return
+        setError(
+          r.reason === 'unavailable'
+            ? t({
+                id: 'unlock.biometric.unavailable',
+                message:
+                  'This device can no longer open the vault with biometrics — enrolling a new fingerprint or face replaces the key. Use your password, then set it up again in Settings › Security.',
+              })
+            : t({
+                id: 'unlock.biometric.fail',
+                message: 'That did not unlock the vault. Use your password.',
+              }),
+        )
+        return
+      }
+      await engine.vault.unlockWithDevice({ keyId: host.deviceKey.id, keyHex: r.keyHex })
       router.reset()
     } catch {
       setError(
@@ -145,7 +209,7 @@ export function Unlock({ body }: { body: 'extension-popup' | 'extension-tab' | '
         }),
       )
     } finally {
-      setBusy(false)
+      setBioBusy(false)
     }
   }
 
@@ -194,38 +258,59 @@ export function Unlock({ body }: { body: 'extension-popup' | 'extension-tab' | '
           />
         ) : null}
         {/*
-          Named for what it actually is on each platform (ES-BV-005).
+          It is biometrics on both platforms now, so it says so (ES-BV-072).
 
-          On Android the keystore wrap is bound to
-          `AUTH_BIOMETRIC_STRONG or AUTH_DEVICE_CREDENTIAL` with no
-          invalidation on enrolment, so the screen-lock PIN releases it and a
-          newly enrolled fingerprint opens it. Unlocking the wallet with the
-          strength of the phone's own lock is a reasonable thing to offer;
-          calling it "biometrics" when a PIN will do is not. Reveal and export
-          are password-only there, and the large-send step-up does not take
-          this factor at all.
+          The Android label used to read "Unlock with your screen lock", on the
+          premise that the keystore wrap took `AUTH_BIOMETRIC_STRONG or
+          AUTH_DEVICE_CREDENTIAL` and the PIN would therefore release it. That
+          has not been true since `readDeviceKey` started gating on
+          `authenticateAsync({ disableDeviceFallback: true,
+          biometricsSecurityLevel: 'strong' })` — the PIN is refused, and only a
+          Class 3 biometric opens it. The old name promised a way in that the
+          code declines, which is a poor thing to write on the one screen
+          somebody reads when they cannot get into their wallet.
+
+          `disabled` is `bioBusy`, never `busy`: whatever this key is doing, the
+          password below it stays usable.
         */}
         {biometricOk ? (
           <Key
-            label={
-              host.isAndroid
-                ? t({ id: 'unlock.screenlock', message: 'Unlock with your screen lock' })
-                : t({ id: 'unlock.biometric', message: 'Unlock with biometrics' })
-            }
+            label={t({ id: 'unlock.biometric', message: 'Unlock with biometrics' })}
             kind="secondary"
             onPress={unlockWithBiometric}
-            disabled={busy}
+            disabled={bioBusy}
             testID="unlock-biometric"
           />
         ) : null}
-        <Plate gap="$1">
+        {/*
+          A door, not a notice (ES-BV-073).
+
+          This plate used to be the end of the road: "There is no reset.
+          Restore from your recovery phrase on a fresh install instead" — true,
+          but static text, on a screen with no other navigation, telling the
+          user to do something the app gave them no way to do. On Android that
+          means finding Clear data in system settings, and a beta tester did
+          not: "im stuck here, it seems."
+
+          The copy now says the same thing and offers the action, which is the
+          only honest version of that sentence.
+        */}
+        <Plate gap="$2">
           <Body tone="mute" size="caption">
             {t({
-              id: 'unlock.help',
+              id: 'unlock.help.v2',
               message:
-                'Forgot the password? There is no reset. Restore from your recovery phrase on a fresh install instead.',
+                'Forgot your password? There is no way to recover it — the password is what encrypts this wallet. You can erase it from this device and restore from your recovery phrase.',
             })}
           </Body>
+          <Key
+            label={t({ id: 'unlock.reset', message: 'Erase and start again' })}
+            kind="secondary"
+            size="compact"
+            disabled={busy}
+            onPress={() => setResetting(true)}
+            testID="unlock-reset"
+          />
         </Plate>
       </Column>
       {/*
@@ -236,6 +321,19 @@ export function Unlock({ body }: { body: 'extension-popup' | 'extension-tab' | '
         idle and looked at, so the full lock-up belongs here and nowhere it
         would compete with a number.
       */}
+      <ConfirmSheet
+        open={resetting}
+        onClose={() => setResetting(false)}
+        title={t({ id: 'unlock.reset.title', message: 'Erase this wallet?' })}
+        body={t({
+          id: 'unlock.reset.body',
+          message:
+            'This deletes the wallet, its accounts and its history from this device. Nothing else can undo it, and support cannot restore it. You will be able to get your funds back only if you have your recovery phrase — if you do not, they are gone for good.',
+        })}
+        confirmLabel={t({ id: 'unlock.reset.confirm', message: 'Erase wallet' })}
+        onConfirm={() => void resetWallet()}
+        testID="unlock-reset-confirm"
+      />
       <Column alignItems="center" paddingBottom="$6" zIndex={1} testID="unlock-brand">
         <EsWordmark />
       </Column>

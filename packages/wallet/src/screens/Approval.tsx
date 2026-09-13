@@ -486,9 +486,9 @@ export function Approval({ requestId, body, reducedMotion = false }: ApprovalPro
   })
   const stepUpWithDevice = (): Promise<void> => stepUp(async () => {
     if (!host.deviceKey) throw new Error('no keystore here')
-    const keyHex = await host.deviceKey.read(t({ id: 'approval.stepup.reason', message: 'Confirm this send' }))
-    if (keyHex === null) throw new Error('cancelled')
-    await engine.vault.unlockWithDevice({ keyId: host.deviceKey.id, keyHex })
+    const read = await host.deviceKey.read(t({ id: 'approval.stepup.reason', message: 'Confirm this send' }))
+    if (!read.ok) throw new Error(read.reason === 'cancelled' ? 'cancelled' : 'device key unavailable')
+    await engine.vault.unlockWithDevice({ keyId: host.deviceKey.id, keyHex: read.keyHex })
   })
 
   /*

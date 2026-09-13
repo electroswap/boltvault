@@ -650,6 +650,50 @@ export class VaultManager {
     }
   }
 
+  /**
+   * Forget this wallet entirely, so the device can start again (ES-BV-073).
+   *
+   * There was no way out of the lock screen. It said "Forgot the password?
+   * There is no reset. Restore from your recovery phrase on a fresh install
+   * instead" — static text, no control attached — and nothing else on the
+   * screen navigated anywhere. On the extension "a fresh install" is a trip to
+   * chrome://extensions; on a sideloaded Android build it is Settings › Apps ›
+   * Storage › Clear data, which a beta tester did not find: "im stuck here, it
+   * seems. No way to go back to 'import phrases' or whatever."
+   *
+   * So the door exists now, and it is the same door every other wallet has.
+   * What it destroys is everything sealed under the DEK — the vault file, the
+   * address book, activity, the watchlist, sync state — plus the unsealed
+   * documents beside them, because half a wallet is worse than none. Anyone
+   * holding the phone can press it; that is the accepted trade, and it is safe
+   * only in the sense that matters: a wipe hands out nothing. Taking funds
+   * still needs the recovery phrase, and so does getting them back, which is
+   * why the confirmation in front of this says so in as many words.
+   *
+   * Deliberately takes no password. A door you can only open with the thing
+   * you have lost is not a door.
+   */
+  async wipe(): Promise<void> {
+    const { secret, local } = this.platform.storage
+    /*
+      Ciphertext first. If this is interrupted — the process dies mid-wipe —
+      what is left behind must be unopenable rather than a wallet missing its
+      settings, so the sealed material goes before anything else.
+    */
+    for (const key of await secret.keys()) await secret.remove(key)
+    for (const key of await local.keys()) await local.remove(key)
+    /*
+      Then the session, which also cancels the auto-lock alarm and announces a
+      vault that is locked and absent. That announcement is what drops every
+      in-memory cache: `create.ts` subscribes to `vault.status` and calls
+      `forget()` on activity, contacts, notifications, bridge, watchlist,
+      sealed, sync and the cache shards whenever it reports not-unlocked. So
+      the caches are cleared by the same event that repaints the UI, and there
+      is no window where a screen can read a store the disk no longer backs.
+    */
+    await this.lockSession()
+  }
+
   private async lockSession(): Promise<void> {
     const session = this.platform.storage.session
     /*
@@ -1286,6 +1330,8 @@ export function vaultNamespace(vault: VaultManager, settings: SettingsStore): Na
       handler: (arg) => vault.unlockWithDevice(arg as { keyId: string; keyHex: string }),
     },
     lock: { handler: () => vault.lock() },
+    // No input, and no password: this is the way back for someone who has lost it.
+    wipe: { handler: () => vault.wipe() },
     touch: { handler: () => vault.touch() },
     reveal: {
       input: z.intersection(z.object({ seedId: z.string() }), RevealFactorSchema),

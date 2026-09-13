@@ -34,9 +34,25 @@ describe('the settings normaliser', () => {
     expect(normalizeSettings({ autoLock: 'whenever' }).autoLock).toBe('15min')
   })
 
-  it('defaults a phone to "on leaving" and a browser to the idle timer', () => {
-    expect(normalizeSettings(null, { reducedMotion: false, body: 'mobile' }).autoLock).toBe('background')
+  /*
+    The phone's default moved to the idle timer (ES-BV-074).
+
+    It was "on leaving", on the reasoning that a wallet left on a table should
+    not wait out fifteen minutes. Sound — but Android reports `background` for
+    the QR scanner, the share sheet, `openURL` and every WalletConnect
+    round trip, so the default locked the wallet in the middle of the flows that
+    need it open. It is still one tap away in Settings › Security, and it is
+    only now a fair default to leave behind: until the shell started calling
+    `vault.touch()`, "15 minutes" on a phone meant fifteen minutes after
+    unlocking rather than fifteen idle ones.
+  */
+  it('defaults both bodies to the idle timer', () => {
+    expect(normalizeSettings(null, { reducedMotion: false, body: 'mobile' }).autoLock).toBe('15min')
     expect(normalizeSettings(null, { reducedMotion: false, body: 'extension' }).autoLock).toBe('15min')
+  })
+
+  it('still lets a phone choose "on leaving" explicitly', () => {
+    expect(normalizeSettings({ autoLock: 'background' }, { reducedMotion: false, body: 'mobile' }).autoLock).toBe('background')
   })
 
   it('keeps an explicit choice on a phone', () => {
@@ -75,9 +91,12 @@ describe('a phone told to lock on leaving', () => {
     expect((await engine.settings.get()).autoLock).toBe('background')
   })
 
-  it('starts on "on leaving" with nothing stored', async () => {
+  it('starts on the idle timer with nothing stored, and takes "on leaving" when asked', async () => {
     const { engine, ready } = boot('mobile')
     await ready
+    expect((await engine.settings.get()).autoLock).toBe('15min')
+    // The choice still survives the round trip — only the default moved.
+    await engine.vault.setAutoLock({ autoLock: 'background' })
     expect((await engine.settings.get()).autoLock).toBe('background')
   })
 })

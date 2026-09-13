@@ -354,9 +354,14 @@ function SeedRevealSheet({ open, onClose, seed, reducedMotion = false }: { open:
     show(async () => {
       const deviceKey = host.deviceKey
       if (!deviceKey) return null
-      const keyHex = await deviceKey.read(t({ id: 'reveal.biometric.reason', message: 'Show your recovery phrase' }))
-      if (keyHex === null) return null
-      return engine.vault.reveal({ seedId: seed.id, keyId: deviceKey.id, keyHex })
+      const read = await deviceKey.read(t({ id: 'reveal.biometric.reason', message: 'Show your recovery phrase' }))
+      // `show()` treats null as a cancellation and stays quiet; a refusal or a
+      // dead key is a real failure, so it is thrown into its error branch.
+      if (!read.ok) {
+        if (read.reason === 'cancelled') return null
+        throw new Error('device key unavailable')
+      }
+      return engine.vault.reveal({ seedId: seed.id, keyId: deviceKey.id, keyHex: read.keyHex })
     }, t({ id: 'reveal.biometric.fail', message: 'That did not open the vault. Use your password.' }))
 
   return (

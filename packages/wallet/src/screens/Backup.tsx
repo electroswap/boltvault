@@ -151,12 +151,17 @@ export function Backup() {
     setBusy(true)
     setError(null)
     try {
-      const keyHex = await deviceKey.read(
+      const read = await deviceKey.read(
         t({ id: 'reveal.biometric.reason', message: 'Show your recovery phrase' }),
       )
-      // A cancelled prompt is a choice, not a failure; the password field is right there.
-      if (keyHex === null) return
-      const r = await engine.vault.reveal({ seedId: id, keyId: deviceKey.id, keyHex })
+      if (!read.ok) {
+        // A cancelled prompt is a choice, not a failure; the password field is
+        // right there. A refusal or a dead key is neither, and says so.
+        if (read.reason !== 'cancelled')
+          setError(t({ id: 'reveal.biometric.fail', message: 'That did not open the vault. Use your password.' }))
+        return
+      }
+      const r = await engine.vault.reveal({ seedId: id, keyId: deviceKey.id, keyHex: read.keyHex })
       setWords(r.mnemonic.split(' '))
       setPassword('')
     } catch (err: unknown) {

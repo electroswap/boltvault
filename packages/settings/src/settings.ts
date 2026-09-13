@@ -44,14 +44,24 @@ export function normalizeSettings(
 
   const autoLockRaw = obj['autoLock']
   /*
-    A phone's default is "on leaving" (ES-BV-041).
+    A phone's default is the idle timer, same as everywhere else.
 
-    An idle timer is the extension's control, where a closing popup is not the
-    user walking away. On a phone the moment that matters is the app leaving
-    the foreground, and a wallet left open on a table should not be waiting out
-    fifteen minutes.
+    It used to be "on leaving" (ES-BV-041), reasoning that an idle timer is the
+    extension's control and that a wallet left open on a table should not be
+    waiting out fifteen minutes. That reasoning is sound and the setting is
+    still there — one tap in Settings › Security — but as a *default* it cost
+    more than it bought. Android reports `background` for a great deal that is
+    not the user walking away: the QR scanner, the share sheet, `openURL`, and
+    every WalletConnect deep-link round trip. So the wallet locked itself in the
+    middle of the flows that need it most, and the tester who hit it was the one
+    who had already moved off the default.
+
+    The idle timer is only now worth defaulting to: until this release nothing
+    on the phone called `vault.touch()`, so "15 minutes" meant fifteen minutes
+    after unlocking rather than fifteen idle ones. With the shell's touch
+    handler feeding it, the timer measures what its name claims.
   */
-  const fallbackAutoLock: AutoLock = os.body === 'mobile' ? 'background' : DEFAULT_SETTINGS.autoLock
+  const fallbackAutoLock: AutoLock = DEFAULT_SETTINGS.autoLock
   const autoLock: AutoLock =
     typeof autoLockRaw === 'string' && (AUTO_LOCKS as readonly string[]).includes(autoLockRaw)
       ? (autoLockRaw as AutoLock)

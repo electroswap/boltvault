@@ -135,6 +135,13 @@ export interface VaultNamespace {
     /** The caller supplied a phrase the user already keeps: no backup gate. Onboarding's restore path sets it; its create path does not. */
     backedUp?: boolean
   }): Promise<{ accounts: AccountView[]; seedId: string }>
+  /**
+   * Destroy this wallet and everything sealed beside it, leaving the device as
+   * if the app had just been installed. Irreversible, and takes no password —
+   * it is the way out for someone who has lost theirs. The recovery phrase is
+   * the only route back in.
+   */
+  wipe(): Promise<void>
   unlock(input: { password: string }): Promise<{ accounts: AccountView[] }>
   unlockWithPasskey(input: {
     credentialId: string

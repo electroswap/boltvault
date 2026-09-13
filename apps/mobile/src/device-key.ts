@@ -6,6 +6,7 @@
  */
 import { Platform } from 'react-native'
 import * as Keychain from 'react-native-keychain'
+import type { DeviceKeyRead } from '@boltvault/wallet'
 
 const SERVICE = 'io.electroswap.boltvault.device-key'
 export const DEVICE_KEY_ID = 'device'
@@ -23,15 +24,46 @@ function hex(bytes: Uint8Array): string {
  * every read; Android needs an in-app BiometricPrompt first, after which
  * the keychain read falls inside the same 5-second window and stays silent.
  */
-async function confirmBiometric(reason: string): Promise<boolean> {
-  if (Platform.OS !== 'android') return true
+async function confirmBiometric(reason: string): Promise<'ok' | 'cancelled' | 'failed'> {
+  if (Platform.OS !== 'android') return 'ok'
   const LocalAuthentication = await import('expo-local-authentication')
   const result = await LocalAuthentication.authenticateAsync({
     promptMessage: reason,
     disableDeviceFallback: true,
     biometricsSecurityLevel: 'strong',
   })
-  return result.success
+  if (result.success) return 'ok'
+  /*
+    Dismissing the sheet is a choice; everything else is a fault.
+
+    This used to answer a bare boolean, so the caller could not tell "I changed
+    my mind" from "the OS refused" — and reported neither. `user_cancel`,
+    `app_cancel` and `system_cancel` are the dismissals; the rest (lockout,
+    not_enrolled, a refusal because the enrolled sensor is not Class 3) are
+    things the user needs told, because no amount of re-tapping will fix them.
+  */
+  const error = 'error' in result ? result.error : ''
+  return error === 'user_cancel' || error === 'app_cancel' || error === 'system_cancel'
+    ? 'cancelled'
+    : 'failed'
+}
+
+/**
+ * Is there a biometric enrolled that `confirmBiometric` would actually accept?
+ *
+ * `hasHardwareAsync() && isEnrolledAsync()` is not that question. It answers
+ * true for a Class 2 (weak) sensor, which is common on mid-range Android — and
+ * the read above demands `biometricsSecurityLevel: 'strong'`, i.e. Class 3. So
+ * enrolment succeeded and unlocking could never succeed, and the button that
+ * offered it did nothing at all when pressed (ES-BV-072). The level is the
+ * question, and `expo-local-authentication` answers it directly.
+ */
+export async function strongBiometricAvailable(): Promise<boolean> {
+  const LocalAuthentication = await import('expo-local-authentication')
+  if (!(await LocalAuthentication.hasHardwareAsync())) return false
+  if (!(await LocalAuthentication.isEnrolledAsync())) return false
+  if (Platform.OS !== 'android') return true
+  return (await LocalAuthentication.getEnrolledLevelAsync()) === LocalAuthentication.SecurityLevel.BIOMETRIC_STRONG
 }
 
 /** Mint (or return) the key. Requires biometry to be enrolled. */
@@ -51,14 +83,24 @@ export async function ensureDeviceKey(): Promise<string> {
   return keyHex
 }
 
-/** Read the key behind a biometric prompt; null if the user cancels or none exists. */
-export async function readDeviceKey(reason: string): Promise<string | null> {
-  if (!(await confirmBiometric(reason))) return null
+/**
+ * Read the key behind a biometric prompt, saying which way it went.
+ *
+ * The three outcomes were one `null` before this, and every caller read that
+ * `null` as "cancelled" and stayed silent — which is how a phone with a weak
+ * sensor ended up with an unlock button that did nothing, reported twice by
+ * the same beta tester, the second time as being locked out of the wallet.
+ */
+export async function readDeviceKey(reason: string): Promise<DeviceKeyRead> {
+  const confirmed = await confirmBiometric(reason)
+  if (confirmed !== 'ok') return { ok: false, reason: confirmed }
   try {
     const r = await Keychain.getGenericPassword({ service: SERVICE, authenticationPrompt: { title: reason } })
-    return r && r.password ? r.password : null
+    // No entry is not a failed read: the wrap outlived its key (a new
+    // fingerprint enrolled invalidates `BIOMETRY_CURRENT_SET`).
+    return r && r.password ? { ok: true, keyHex: r.password } : { ok: false, reason: 'unavailable' }
   } catch {
-    return null
+    return { ok: false, reason: 'failed' }
   }
 }
 

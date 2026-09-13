@@ -19,7 +19,7 @@ export { setupI18n, t, i18n, SOURCE_LOCALE } from './i18n'
   harness and the tests import.
 */
 export * from './format'
-export { HostProvider, useHost, DEFAULT_RELAY, type UiHost, type PasskeyProvider, type PasskeyResult, type WidgetSnapshot } from './host'
+export { HostProvider, useHost, DEFAULT_RELAY, type UiHost, type DeviceKeyRead, type PasskeyProvider, type PasskeyResult, type WidgetSnapshot } from './host'
 export { parseLink, type LinkAction } from './links'
 export { useFeel, useFeelEvents } from './feel'
 export { createWebAuthnPasskeys } from './auth/webauthn'

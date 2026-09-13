@@ -21,7 +21,7 @@ import { haptic, sound } from './src/feel'
 import { mobileLedgerProvider } from './src/ledger'
 import { links } from './src/links'
 import { PAGE_PROVIDER_SCRIPT } from './src/page-provider.generated'
-import { DEVICE_KEY_ID, ensureDeviceKey, readDeviceKey, removeDeviceKey } from './src/device-key'
+import { DEVICE_KEY_ID, ensureDeviceKey, readDeviceKey, removeDeviceKey, strongBiometricAvailable } from './src/device-key'
 import { createMobilePlatform, isAndroid } from './src/platform'
 import { pushStatus, registerPush, unregisterPush } from './src/push'
 import { ScanHost, scanQr } from './src/scan'
@@ -46,10 +46,15 @@ const host: Partial<UiHost> = {
   */
   deviceKey: {
     id: DEVICE_KEY_ID,
-    available: async () => {
-      const LocalAuthentication = await import('expo-local-authentication')
-      return (await LocalAuthentication.hasHardwareAsync()) && (await LocalAuthentication.isEnrolledAsync())
-    },
+    /*
+      The question the read can actually answer yes to (ES-BV-072).
+
+      This asked `hasHardwareAsync() && isEnrolledAsync()`, which is true for a
+      Class 2 sensor — while `readDeviceKey` demands Class 3. So on a great many
+      mid-range phones enrolment worked, the unlock button appeared, and
+      pressing it did nothing at all, for ever.
+    */
+    available: strongBiometricAvailable,
     ensure: ensureDeviceKey,
     read: readDeviceKey,
     remove: removeDeviceKey,
@@ -81,10 +86,36 @@ const host: Partial<UiHost> = {
 
 registerTokenLogos()
 
-/** Inside SafeAreaProvider, so the insets are real by the time the shell lays out. */
+/**
+ * A touch anywhere is activity, and the idle timer restarts.
+ *
+ * The extension has had this since plan A1 (`src/activity-touch.ts`, on
+ * `pointerdown`/`keydown`/`wheel`/`touchstart`). The phone never did, so
+ * `vault.touch()` had no mobile caller at all and the auto-lock deadline was
+ * written once — at unlock — and never moved again. Choosing "15 minutes"
+ * therefore meant "fifteen minutes after you unlocked", however hard you were
+ * using the wallet in between. A beta tester, mid-session: "I used the app, and
+ * suddenly the account got locked and had to relog again. It just kicked me
+ * out. I was nonstop in the app and it didn't seem like a full 15 mins."
+ *
+ * `onTouchStart` on a wrapper View sees touches that begin anywhere beneath it
+ * without claiming the responder, so nothing below it loses a gesture. The
+ * engine already debounces at 30 s (`TOUCH_DEBOUNCE_MS`), which is why this can
+ * fire on every touch and cost nothing. Polling and background refreshes are
+ * deliberately not activity: a phone on a table must still lock.
+ */
 function Shell({ engine }: { engine: Engine['engine'] }) {
   const insets = useSafeAreaInsets()
-  return <WalletApp engine={engine} body="mobile" host={host} insets={insets} />
+  return (
+    <View
+      style={styles.fill}
+      onTouchStart={() => {
+        void engine.vault.touch().catch(() => undefined)
+      }}
+    >
+      <WalletApp engine={engine} body="mobile" host={host} insets={insets} />
+    </View>
+  )
 }
 
 /**
@@ -290,4 +321,6 @@ export default function App() {
 const styles = StyleSheet.create({
   // `paint.void`; this was the superseded #060913.
   root: { flex: 1, backgroundColor: '#070A1F' },
+  // The activity-touch wrapper: layout only, no ground of its own.
+  fill: { flex: 1 },
 })

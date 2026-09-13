@@ -18,6 +18,24 @@ export interface PasskeyProvider {
   get(credentialIds: readonly string[]): Promise<PasskeyResult>
 }
 
+/**
+ * What a device-key read produced.
+ *
+ * It used to be `string | null`, and `null` meant three unrelated things: the
+ * user dismissed the prompt, the OS refused because the enrolled biometric is
+ * not strong enough, and the keystore threw. Every caller treated all three as
+ * "the user changed their mind" and said nothing — so on a phone whose sensor
+ * is Class 2, the unlock button simply did nothing, for ever, with no
+ * explanation. A beta tester reported exactly that, then reported being locked
+ * out of their wallet by it.
+ *
+ * `cancelled` is the only one that is a choice, and the only one that stays
+ * quiet.
+ */
+export type DeviceKeyRead =
+  | { readonly ok: true; readonly keyHex: string }
+  | { readonly ok: false; readonly reason: 'cancelled' | 'unavailable' | 'failed' }
+
 export interface UiHost {
   readonly body: 'extension-popup' | 'extension-tab' | 'extension-sign' | 'mobile' | 'harness'
   /** The system's reduce-motion preference (the default for Settings › Appearance › Reduce motion). */
@@ -63,12 +81,17 @@ export interface UiHost {
    * way in and removes nothing. Only a body with a keystore offers this.
    */
   readonly deviceKey?: {
-    /** Hardware present and a biometric actually enrolled. */
+    /**
+     * Hardware present, and a biometric enrolled that is strong enough for the
+     * read below to accept. Both halves matter: the read demands Android
+     * Class 3, so a probe that answers true for a Class 2 sensor offers the
+     * user a button that can never work (ES-BV-072).
+     */
     available(): Promise<boolean>
     /** Mint or return the key, prompting the user to confirm. */
     ensure(): Promise<string>
-    /** Read it behind a biometric prompt; null when cancelled or absent. */
-    read(reason: string): Promise<string | null>
+    /** Read it behind a biometric prompt. */
+    read(reason: string): Promise<DeviceKeyRead>
     remove(): Promise<void>
     /** The wrap's keyId, so the engine can find and drop it. */
     readonly id: string
