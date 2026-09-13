@@ -124,8 +124,18 @@ export function Home({ body, reducedMotionOverride }: HomeProps) {
     unlocked && (host.body === 'extension-popup' || host.body === 'harness'),
   )
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
-  /** No vault yet: Home is a title screen, not a list with one card on it. */
-  const firstRun = !loading && !vault?.exists
+  /**
+   * No vault yet: Home is a title screen, not a list with one card on it.
+   *
+   * `vault !== null` matters. A null status is "not answered yet", not "no
+   * vault" — and it used to read as the latter, so any path that left the
+   * status unset while loading finished drew "Your vault is not created yet"
+   * over a header showing a real account. The race that did it is fixed in
+   * `useWalletState` (the reply's two halves are judged separately now), but a
+   * refused `vault.status()` reaches the same place by a different road. The
+   * CTA now needs the vault to have actually said it does not exist.
+   */
+  const firstRun = !loading && vault !== null && !vault.exists
   /*
     A phone has room; the popup does not. Ten pixels between plates is right in
     a 400x600 window and reads as cramped on a 6.7-inch screen, which is half of

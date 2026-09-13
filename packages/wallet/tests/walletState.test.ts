@@ -10,7 +10,7 @@
  * one thing a lock screen exists to prevent.
  */
 import { describe, expect, it } from 'vitest'
-import { createGeneration, vaultRequiresUnlock } from '../src/state/useWalletState'
+import { createGeneration, decideReply, vaultRequiresUnlock } from '../src/state/useWalletState'
 import type { VaultStatus } from '@boltvault/engine'
 
 describe('the wallet-state generation guard', () => {
@@ -83,5 +83,80 @@ describe('vaultRequiresUnlock', () => {
     expect(vaultRequiresUnlock({ ...base, unlocked: true, lockAt: 2_000 }, 1_000)).toBe(false)
     expect(vaultRequiresUnlock(null, 1_000)).toBe(false)
     expect(vaultRequiresUnlock({ ...base, exists: false, unlocked: false, lockAt: null }, 1_000)).toBe(false)
+  })
+})
+
+/*
+  The other half of the same guard: a reply carries a vault status AND the
+  accounts, and only one clock used to decide whether any of it was allowed to
+  land. So an `accounts.changed` — which says nothing whatsoever about whether
+  a vault exists — discarded the vault status travelling beside it, and nothing
+  re-asked. `loaded` had already been set by the accounts handler, so `loading`
+  went false with `vault` still null, and Home's
+  `firstRun = !loading && !vault?.exists` drew "Your vault is not created yet"
+  directly above the header for the account it had just loaded.
+
+  `setActive` emits `accounts.changed` alone, as does `announce` (its two emits
+  are separated by two awaits), so there was no later `vault.status` to undo it.
+*/
+const UNLOCKED: VaultStatus = {
+  exists: true,
+  unlocked: true,
+  unlockedAt: 1_000,
+  lockAt: null,
+  seeds: [],
+  wraps: [],
+  backupComplete: true,
+} as unknown as VaultStatus
+
+const ACCOUNTS = [{ id: 'acct_1', label: 'Main' }] as unknown as readonly { id: string }[]
+const reply = { vault: UNLOCKED, accounts: ACCOUNTS as never, activeId: 'acct_1' }
+
+describe('which half of a refresh reply is allowed to land', () => {
+  it('keeps the vault status when only the accounts were overtaken', () => {
+    const d = decideReply(reply, { vaultCurrent: true, accountsCurrent: false, now: 2_000 })
+    // The regression: this used to be null, and Home read null as "no vault".
+    expect(d.vault).toEqual(UNLOCKED)
+    expect(d.accounts).toBeNull()
+    expect(d.lock).toBe(false)
+  })
+
+  it('keeps the accounts when only the vault status was overtaken', () => {
+    const d = decideReply(reply, { vaultCurrent: false, accountsCurrent: true, now: 2_000 })
+    expect(d.vault).toBeNull()
+    expect(d.accounts).toEqual(ACCOUNTS)
+    expect(d.activeId).toBe('acct_1')
+  })
+
+  it('takes both when nothing overtook it', () => {
+    const d = decideReply(reply, { vaultCurrent: true, accountsCurrent: true, now: 2_000 })
+    expect(d.vault).toEqual(UNLOCKED)
+    expect(d.accounts).toEqual(ACCOUNTS)
+  })
+
+  it('writes nothing when both were overtaken', () => {
+    const d = decideReply(reply, { vaultCurrent: false, accountsCurrent: false, now: 2_000 })
+    expect(d.vault).toBeNull()
+    expect(d.accounts).toBeNull()
+    expect(d.lock).toBe(false)
+  })
+
+  /* The lock-screen property the single clock existed for, still held. */
+  it('locks a reply taken after the idle deadline had already passed', () => {
+    const overdue = { ...UNLOCKED, lockAt: 1_500 } as VaultStatus
+    const d = decideReply({ ...reply, vault: overdue }, { vaultCurrent: true, accountsCurrent: true, now: 2_000 })
+    expect(d.lock).toBe(true)
+    expect(d.vault?.unlocked).toBe(false)
+    // Locking clears the accounts with it, whatever the reply carried.
+    expect(d.accounts).toEqual([])
+    expect(d.activeId).toBeNull()
+  })
+
+  it('will not lock on a vault status a newer event has already overtaken', () => {
+    const overdue = { ...UNLOCKED, lockAt: 1_500 } as VaultStatus
+    const d = decideReply({ ...reply, vault: overdue }, { vaultCurrent: false, accountsCurrent: true, now: 2_000 })
+    // No standing to lock, and no standing to paint an unlocked vault either.
+    expect(d.lock).toBe(false)
+    expect(d.vault).toBeNull()
   })
 })
