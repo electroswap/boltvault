@@ -124,6 +124,41 @@ describe('a quoted swap amount in the field', () => {
   })
 })
 
+/**
+ * Below one, four significant figures is what fits when every zero has to be
+ * printed. Once the run is long enough for the text faces to compress it
+ * (`@boltvault/ui/zeroRun`), a dozen characters come back and the number
+ * spends them on figures instead. The two sides count the same zeros in the
+ * same string, so the precision and the notation cannot disagree.
+ */
+describe('a long run of zeros buys six significant figures', () => {
+  it('keeps four while the zeros are still printed in full', () => {
+    expect(formatQuantity('0.001234567')).toBe('0.001234')
+    expect(formatQuantity('0.0001234567')).toBe('0.0001234')
+    expect(formatAmount('1234567000000000', 18)).toBe('0.001234')
+  })
+
+  it('keeps six once the run is long enough to be compressed', () => {
+    expect(formatQuantity('0.000012345678')).toBe('0.0000123456')
+    expect(formatAmount('12345678901234', 18)).toBe('0.0000123456')
+    expect(formatRaw('1', 18)).toBe('0.000000000000000001')
+  })
+
+  it('still never rounds up, at the longer precision', () => {
+    expect(formatQuantity('0.0000199999999')).toBe('0.0000199999')
+    expect(formatAmount('19999999999999', 18)).toBe('0.0000199999')
+  })
+
+  it('lets a floor below a millionth state itself instead of reading "0"', () => {
+    // One wei of an 18-decimal token: "at least 0" is true and useless.
+    expect(formatFloor('1', 18)).toBe('0.000000000000000001')
+    expect(formatFloor('1234567890123', 18)).toBe('0.00000123456')
+    // Down to a millionth the floor is unchanged — six places, as before.
+    expect(formatFloor('999999999999999999', 18)).toBe('0.999999')
+    expect(formatFloor('1234500000000', 6)).toBe('1,234,500')
+  })
+})
+
 describe('hidden portfolio figures', () => {
   it('uses a fixed mask so the length cannot leak the size', () => {
     expect(maskedFiat('USD')).toBe('$****.**')

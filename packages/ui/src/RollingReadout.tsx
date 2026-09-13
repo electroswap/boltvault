@@ -7,8 +7,28 @@
  */
 import { useEffect, useRef } from 'react'
 import Animated from 'react-native-reanimated'
-import { Readout, Row } from './primitives'
+import { Readout, Row, subRun } from './primitives'
 import { motion } from './tokens'
+import { amountRuns } from './zeroRun'
+
+/**
+ * The value as the cells that roll: one per character, except a compressed run
+ * of zeros, which is one cell holding its own count.
+ *
+ * The readout animates per character, so without this a dust total would roll
+ * "0.000000000000000001" as twenty independent cells — the wall this notation
+ * exists to remove, rebuilt one digit at a time.
+ */
+function cellsOf(value: string): readonly (string | number)[] {
+  const runs = amountRuns(value)
+  if (!runs) return Array.from(value)
+  const cells: (string | number)[] = []
+  for (const run of runs) {
+    if (typeof run === 'number') cells.push(run)
+    else cells.push(...run)
+  }
+  return cells
+}
 
 export interface RollingReadoutProps {
   readonly value: string
@@ -21,10 +41,11 @@ export interface RollingReadoutProps {
 
 export function RollingReadout({ value, hero = false, reducedMotion = false, accessibilityLabel, testID }: RollingReadoutProps) {
   const prev = useRef<string>(value)
+  const cells = cellsOf(value)
   const changed = new Set<number>()
   if (prev.current !== value) {
-    const a = prev.current
-    for (let i = 0; i < value.length; i++) if (a[i] !== value[i]) changed.add(i)
+    const a = cellsOf(prev.current)
+    for (let i = 0; i < cells.length; i++) if (a[i] !== cells[i]) changed.add(i)
   }
   useEffect(() => {
     prev.current = value
@@ -32,7 +53,7 @@ export function RollingReadout({ value, hero = false, reducedMotion = false, acc
 
   return (
     <Row accessibilityLiveRegion="polite" accessibilityLabel={accessibilityLabel ?? value} testID={testID}>
-      {Array.from(value).map((ch, i) => {
+      {cells.map((ch, i) => {
         const roll = changed.has(i) && !reducedMotion
         return (
           <Animated.View
@@ -48,7 +69,7 @@ export function RollingReadout({ value, hero = false, reducedMotion = false, acc
                 : undefined
             }
           >
-            <Readout hero={hero}>{ch}</Readout>
+            {typeof ch === 'number' ? <Readout hero={hero} {...subRun(hero ? 40 : 28)}>{ch}</Readout> : <Readout hero={hero}>{ch}</Readout>}
           </Animated.View>
         )
       })}

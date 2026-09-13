@@ -1,4 +1,23 @@
 /** Display formatting — numbers only; copy lives with the screens. */
+import { ZERO_RUN_DIGITS, ZERO_RUN_MIN } from '@boltvault/ui/zeroRun'
+
+/**
+ * Significant digits below one, given how many zeros stand between the point
+ * and the first of them.
+ *
+ * Four is what fits when every zero has to be printed. Past `ZERO_RUN_MIN` the
+ * text faces print the run's *count* instead (see `@boltvault/ui/zeroRun`),
+ * which gives a dozen characters back — so the number spends them on digits
+ * that mean something. One wei of BOLT stops being a row-long wall and becomes
+ * 0.0₁₇1; a dust balance of 0.0000123456789 stops at six figures rather than
+ * four, because there is now room for them.
+ *
+ * Both sides read the same string and count the same zeros, so the precision
+ * and the notation can never disagree.
+ */
+function significantBelowOne(zeros: number, floor: number): number {
+  return zeros >= ZERO_RUN_MIN ? Math.max(floor, ZERO_RUN_DIGITS) : floor
+}
 
 export function formatFiat(value: number, currency: 'USD' | 'ETN'): string {
   if (currency === 'ETN') return `${formatQuantity(String(value))} ETN`
@@ -115,11 +134,12 @@ export function formatQuantity(q: string): string {
   // Truncate first, then group: `toLocaleString`'s own rounding would round up.
   if (abs >= 1_000_000) return Number(cut(q, 0)).toLocaleString('en-US', { maximumFractionDigits: 0 })
   if (abs >= 1) return Number(cut(q, 2)).toLocaleString('en-US', { maximumFractionDigits: 2 })
-  // Below one, "4 significant digits" starts at the first non-zero decimal.
+  // Below one, "significant digits" starts at the first non-zero decimal.
   const f = q.split('.')[1] ?? ''
   const firstDigit = f.search(/[1-9]/)
-  const places = firstDigit === -1 ? 4 : firstDigit + 4
-  return Number(cut(q, places)).toLocaleString('en-US', { maximumSignificantDigits: 4 })
+  if (firstDigit === -1) return Number(cut(q, 4)).toLocaleString('en-US', { maximumSignificantDigits: 4 })
+  const sig = significantBelowOne(firstDigit, 4)
+  return Number(cut(q, firstDigit + sig)).toLocaleString('en-US', { maximumSignificantDigits: sig })
 }
 
 /**
@@ -303,7 +323,7 @@ export function formatAmount(raw: string, decimals: number, significant = 4): st
   const frac = (n % base).toString().padStart(decimals, '0')
   const firstDigit = frac.search(/[1-9]/)
   if (firstDigit === -1) return '0'
-  const places = firstDigit + significant
+  const places = firstDigit + significantBelowOne(firstDigit, significant)
   if (places > decimals) return `${sign}0.${frac.slice(0, decimals).replace(/0+$/, '')}`
   // Truncated, not `toFixed`: 0.0999999 must not read as 0.1.
   return `${sign}${cut(`0.${frac.slice(0, places)}`, places)}`
@@ -328,7 +348,17 @@ export function formatFloor(raw: string, decimals: number, places = 6): string {
   if (neg) n = -n
   const base = 10n ** BigInt(decimals)
   const whole = (n / base).toString()
-  const frac = decimals > 0 ? (n % base).toString().padStart(decimals, '0').slice(0, places).replace(/0+$/, '') : ''
+  const exact = decimals > 0 ? (n % base).toString().padStart(decimals, '0') : ''
+  /*
+    Six decimal places is the right length for a floor a person reads, and the
+    wrong one for a floor below a millionth: one wei of an 18-decimal token
+    truncated to "0", which is a true statement and a useless one. Where the
+    zero run is long enough that the faces will compress it, the places are
+    spent on significant figures instead — still cut, never rounded, so what is
+    shown is still a floor the calldata can honour.
+  */
+  const zeros = n / base === 0n ? exact.search(/[1-9]/) : -1
+  const frac = exact.slice(0, zeros >= ZERO_RUN_MIN ? zeros + ZERO_RUN_DIGITS : places).replace(/0+$/, '')
   const grouped = Number(whole) >= 1000 ? Number(whole).toLocaleString('en-US') : whole
   return `${neg ? '−' : ''}${frac ? `${grouped}.${frac}` : grouped}`
 }
