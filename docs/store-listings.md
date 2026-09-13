@@ -34,7 +34,43 @@ No analytics. No remote code. Open source.
 
 ## Screenshots
 
-From the screenshot harness (`apps/extension/e2e/baselines`): Home (funded), Swap with the fee stack, the signing sheet with a blocked drainer, Explore, the Rack, the Coil, the Bridge, Settings › Networks. Phone shots at 390×844 from the same baselines.
+**The baselines cannot be uploaded as they stand.** The Chrome Web Store takes
+at most five screenshots and each must be exactly 1280×800 or 640×400; the
+harness renders 400×600 (popup), 1100×760 (tab) and 390×844 (phone), so the
+console rejects every one of them. Firefox AMO has no fixed size and will take
+the baselines directly.
+
+So the baselines are the *subject* of a tile rather than the tile. Five of them,
+composed on the brand's ground with the hero's own phone, in
+`apps/docs/static/img/store/` (the docs repository, where the brand furniture
+lives) — and the order is the argument:
+
+| # | Tile | Shows |
+|---|---|---|
+| 1 | The whole app, in a wallet. | the tab, portfolio — so the first thumbnail is the product |
+| 2 | Every signature, explained. | the signing popup with an unlimited-approval warning and an unknown spender |
+| 3 | Every ElectroSwap market, built in. | swap (priced), explore and Legends, fanned |
+| 4 | Your keys, your device. | accounts: a backed-up seed, a Ledger, a watch-only |
+| 5 | One wallet, phone and browser. | the popup beside the landing page's 3D phone |
+
+To rebuild them, in two steps and two repositories:
+
+```
+# 1. this repo — the screens, driven before the shutter (a priced swap, not an empty one)
+pnpm build:harness
+cd apps/extension
+node e2e/landing-shots.mjs --out /tmp/store --body popup --only swap,sign,explore,legends,accounts,home
+node e2e/landing-shots.mjs --out /tmp/store --body tab --only home
+cp /tmp/store/*.png ../../../docs/static/img/boltvault/store/
+
+# 2. the docs repo — the tiles
+STORE_ROUTE=1 yarn docusaurus start --no-open --port 3100
+yarn store:shots            # -> static/img/store/boltvault-<n>-<id>.png
+```
+
+`--body` is why this is one script rather than two: the phone on the landing
+page and the popup in the store are the same screens, prepared the same way, so
+the swap in the shop window is the swap on the site.
 
 ## Support
 
