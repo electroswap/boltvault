@@ -9,8 +9,9 @@ import {
   Icon,
   Input,
   Key,
-  Plate,
+  Pressable,
   Row,
+  Sheet,
   metrics,
   paint,
 } from '@boltvault/ui'
@@ -48,7 +49,11 @@ export function Unlock({ body }: { body: 'extension-popup' | 'extension-tab' | '
     the biometric path failing.
   */
   const [bioBusy, setBioBusy] = useState(false)
-  const [resetting, setResetting] = useState(false)
+  /*
+    One sheet at a time (ES-BV-073 follow-up): `forgot` explains why there is
+    no reset, `confirm` is the last gate before the wipe.
+  */
+  const [sheet, setSheet] = useState<'forgot' | 'confirm' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [passkeyOk, setPasskeyOk] = useState(false)
   const passkeyIds = (vault?.wraps ?? []).filter((w) => w.by === 'prf').map((w) => w.id)
@@ -131,7 +136,7 @@ export function Unlock({ body }: { body: 'extension-popup' | 'extension-tab' | '
     to remove — and the wipe proceeds regardless.
   */
   const resetWallet = async (): Promise<void> => {
-    setResetting(false)
+    setSheet(null)
     setBusy(true)
     setError(null)
     try {
@@ -283,47 +288,86 @@ export function Unlock({ body }: { body: 'extension-popup' | 'extension-tab' | '
           />
         ) : null}
         {/*
-          A door, not a notice (ES-BV-073).
+          A door, not a notice — and the door is not on this screen (ES-BV-073).
 
-          This plate used to be the end of the road: "There is no reset.
-          Restore from your recovery phrase on a fresh install instead" — true,
-          but static text, on a screen with no other navigation, telling the
-          user to do something the app gave them no way to do. On Android that
-          means finding Clear data in system settings, and a beta tester did
-          not: "im stuck here, it seems."
+          This used to be a plate: three lines of "there is no way to recover
+          it" with an Erase and start again key under them, sitting directly
+          below the Unlock key. It earned its place — the copy before it was a
+          dead end that told people to do something the app gave them no way to
+          do, and a beta tester answered it with "im stuck here, it seems."
 
-          The copy now says the same thing and offers the action, which is the
-          only honest version of that sentence.
+          But it left the one irreversible action in the product on the one
+          screen every user sees every day, one press from a confirm. Owner:
+          "its a dangerous thing to display directly on the unlock page even if
+          it does have a confirmation." So the screen now carries a link and
+          nothing else; the explanation and the erase both live in the sheet
+          behind it, where somebody arrives only by asking.
         */}
-        <Plate gap="$2">
-          <Body tone="mute" size="caption">
-            {t({
-              id: 'unlock.help.v2',
-              message:
-                'Forgot your password? There is no way to recover it — the password is what encrypts this wallet. You can erase it from this device and restore from your recovery phrase.',
-            })}
+        <Pressable
+          onPress={() => setSheet('forgot')}
+          accessibilityRole="link"
+          accessibilityLabel={t({ id: 'unlock.forgot', message: 'Forgot your password?' })}
+          style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+          testID="unlock-forgot"
+        >
+          <Body tone="arc" size="caption">
+            {t({ id: 'unlock.forgot', message: 'Forgot your password?' })}
           </Body>
-          <Key
-            label={t({ id: 'unlock.reset', message: 'Erase and start again' })}
-            kind="secondary"
-            size="compact"
-            disabled={busy}
-            onPress={() => setResetting(true)}
-            testID="unlock-reset"
-          />
-        </Plate>
+        </Pressable>
       </Column>
       {/*
-        Whose wallet this is. Owner: "this is the flagship wallet from
-        ElectroSwap, and there's very little ElectroSwap branding anywhere. I
-        want you to feature the full ElectroSwap logo on the bottom center of
-        the unlock screen." The lock screen is the one place the product is
-        idle and looked at, so the full lock-up belongs here and nowhere it
-        would compete with a number.
+        Why there is no reset, in the place somebody goes looking for one.
+
+        Every sentence here is a promise the code keeps: the password is never
+        stored, so it cannot be looked up; the seed is sealed under it, so it
+        cannot be shown; and the only way forward is the phrase they wrote down
+        on day one. The erase sits at the bottom of that explanation rather
+        than beside it, because it should be read before it is reachable.
       */}
+      <Sheet
+        open={sheet === 'forgot'}
+        onClose={() => setSheet(null)}
+        title={t({ id: 'unlock.forgot', message: 'Forgot your password?' })}
+        footer={
+          <Key
+            label={t({ id: 'unlock.reset', message: 'Erase and start again' })}
+            kind="danger"
+            size="compact"
+            disabled={busy}
+            onPress={() => setSheet('confirm')}
+            testID="unlock-reset"
+          />
+        }
+        testID="unlock-forgot-sheet"
+      >
+        <Column gap="$3">
+          <Body>{t({ id: 'unlock.forgot.lead', message: 'There is no way to reset it.' })}</Body>
+          <Body tone="mute">
+            {t({
+              id: 'unlock.forgot.why',
+              message:
+                'Your password is never stored — not on this device, not by ElectroSwap. It is the key that encrypts this wallet, so there is nothing for anyone to look up, reset or send you.',
+            })}
+          </Body>
+          <Body tone="mute">
+            {t({
+              id: 'unlock.forgot.seed',
+              message:
+                'Your recovery phrase is sealed under that same password, which is why we cannot show it to you without it. Nobody at ElectroSwap can read it, and support cannot recover it for you.',
+            })}
+          </Body>
+          <Body tone="mute">
+            {t({
+              id: 'unlock.forgot.way',
+              message:
+                'If you wrote your recovery phrase down, you can erase this wallet from this device and restore it from the phrase. If you did not, erasing loses these accounts for good.',
+            })}
+          </Body>
+        </Column>
+      </Sheet>
       <ConfirmSheet
-        open={resetting}
-        onClose={() => setResetting(false)}
+        open={sheet === 'confirm'}
+        onClose={() => setSheet('forgot')}
         title={t({ id: 'unlock.reset.title', message: 'Erase this wallet?' })}
         body={t({
           id: 'unlock.reset.body',
@@ -334,6 +378,14 @@ export function Unlock({ body }: { body: 'extension-popup' | 'extension-tab' | '
         onConfirm={() => void resetWallet()}
         testID="unlock-reset-confirm"
       />
+      {/*
+        Whose wallet this is. Owner: "this is the flagship wallet from
+        ElectroSwap, and there's very little ElectroSwap branding anywhere. I
+        want you to feature the full ElectroSwap logo on the bottom center of
+        the unlock screen." The lock screen is the one place the product is
+        idle and looked at, so the full lock-up belongs here and nowhere it
+        would compete with a number.
+      */}
       <Column alignItems="center" paddingBottom="$6" zIndex={1} testID="unlock-brand">
         <EsWordmark />
       </Column>
