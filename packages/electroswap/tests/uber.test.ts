@@ -220,7 +220,7 @@ describe('launchpad and Legends helpers', () => {
   })
   it('referral links parse and unknown refs are dropped', () => {
     expect(referrerFromLink('boltvault://launchpad/0x9999999999999999999999999999999999999999?ref=0x1111111111111111111111111111111111111111')).toEqual({ pool: '0x9999999999999999999999999999999999999999', referrer: SELLER })
-    expect(referrerFromLink('https://wallet.electroswap.io/launchpad/0x9999999999999999999999999999999999999999?refId=nope')?.referrer).toBeNull()
+    expect(referrerFromLink('https://app.electroswap.io/launchpad/0x9999999999999999999999999999999999999999?refId=nope')?.referrer).toBeNull()
     expect(referrerFromLink('https://example.com/')).toBeNull()
   })
   it('claimable ids dedupe below the 1000-slot array; the vessel level clamps', () => {

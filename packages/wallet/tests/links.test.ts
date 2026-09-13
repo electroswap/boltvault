@@ -15,7 +15,7 @@ describe('parseLink', () => {
     const uri = `wc:${topic}@2?relay-protocol=irn&symKey=${key}`
     expect(parseLink(uri)).toEqual({ kind: 'wc', uri })
     expect(parseLink(`boltvault://wc?uri=${encodeURIComponent(uri)}`)).toEqual({ kind: 'wc', uri })
-    expect(parseLink(`https://wallet.electroswap.io/wc?uri=${encodeURIComponent(uri)}`)).toEqual({ kind: 'wc', uri })
+    expect(parseLink(`https://app.electroswap.io/wc?uri=${encodeURIComponent(uri)}`)).toEqual({ kind: 'wc', uri })
   })
 
   /*
@@ -36,8 +36,8 @@ describe('parseLink', () => {
 
   it('opens a campaign with its referrer, in both link shapes', () => {
     expect(parseLink(`boltvault://launchpad/${POOL}?ref=${REF}`)).toEqual({ kind: 'launchpad', pool: POOL, referrer: REF, url: `boltvault://launchpad/${POOL}?ref=${REF}` })
-    expect(parseLink(`https://wallet.electroswap.io/launchpad/${POOL}?refId=${REF}`)).toMatchObject({ kind: 'launchpad', pool: POOL, referrer: REF })
-    expect(parseLink(`https://wallet.electroswap.io/launchpad/${POOL}`)).toMatchObject({ kind: 'launchpad', referrer: null })
+    expect(parseLink(`https://app.electroswap.io/launchpad/${POOL}?refId=${REF}`)).toMatchObject({ kind: 'launchpad', pool: POOL, referrer: REF })
+    expect(parseLink(`https://app.electroswap.io/launchpad/${POOL}`)).toMatchObject({ kind: 'launchpad', referrer: null })
     expect(parseLink('boltvault://launchpad/nope')).toBeNull()
   })
 
@@ -51,7 +51,7 @@ describe('parseLink', () => {
 
   it('navigates to screens and the browser, and ignores anything else', () => {
     expect(parseLink('boltvault://swap')).toEqual({ kind: 'screen', screen: 'swap' })
-    expect(parseLink('https://wallet.electroswap.io/bridge')).toEqual({ kind: 'screen', screen: 'bridge' })
+    expect(parseLink('https://app.electroswap.io/bridge')).toEqual({ kind: 'screen', screen: 'bridge' })
     expect(parseLink('boltvault://open?url=https%3A%2F%2Fapp.electroswap.io')).toEqual({ kind: 'screen', screen: 'browser', url: 'https://app.electroswap.io' })
     expect(parseLink('boltvault://open?url=javascript%3Aalert(1)')).toBeNull()
     expect(parseLink('boltvault://')).toEqual({ kind: 'screen', screen: 'home' })

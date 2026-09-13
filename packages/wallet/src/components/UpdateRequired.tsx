@@ -20,6 +20,7 @@
 import { Body, Column, Key, Plate, Row } from '@boltvault/ui'
 import type { FlagsView } from '@boltvault/engine'
 import { useEffect, useState } from 'react'
+import { docsLinks } from '../docsLinks'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { t } from '../i18n'
@@ -53,10 +54,7 @@ export function UpdateRequired() {
     })
   }, [engine])
   if (!flags?.updateRequired) return null
-  const store =
-    host.body === 'mobile'
-      ? 'https://wallet.electroswap.io/get'
-      : 'https://wallet.electroswap.io/get#extension'
+  const store = host.body === 'mobile' ? docsLinks.install : docsLinks.installExtension
   return (
     <Column flex={1} justifyContent="center" padding="$5" testID="update-required">
       <Plate role="raised" gap="$3">

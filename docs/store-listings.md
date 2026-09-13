@@ -104,4 +104,4 @@ gets the bottom band to itself.
 
 ## Support
 
-support@electroswap.io · https://wallet.electroswap.io/security · https://github.com/ElectroSwap/boltvault
+support@electroswap.io · https://electroswap.io/docs/boltvault/security · https://github.com/ElectroSwap/boltvault

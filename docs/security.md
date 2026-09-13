@@ -4,7 +4,7 @@ BoltVault is ElectroSwap's self-custodial wallet for Electroneum and the major E
 
 ## Reporting a vulnerability
 
-Email **security@electroswap.io** (PGP key published at `https://wallet.electroswap.io/security/pgp.txt`). Please include a proof of concept and the version (Settings › About). We acknowledge within 2 business days, triage within 7, and publish a fix and a credit with your consent. Do not test against other people's accounts or the production API beyond what a proof of concept needs.
+Email **security@electroswap.io** (ask for the key in your first message; it is not published yet). Please include a proof of concept and the version (Settings › About). We acknowledge within 2 business days, triage within 7, and publish a fix and a credit with your consent. Do not test against other people's accounts or the production API beyond what a proof of concept needs.
 
 **Bug bounty.** In scope: key or seed extraction, signing without the user's decision, bypassing the transaction firewall's `block` class, origin spoofing between sites, sync-channel plaintext exposure, the injected provider reaching the extension's privileged context, and remote code execution in any body. Out of scope: social engineering, issues in third-party services (Trezor Connect's hosted page, WalletConnect's relay), denial of service, and findings that need a compromised device or browser. Rewards scale with impact; critical findings on custody start at 5,000 USDC.
 
@@ -74,4 +74,4 @@ secp256k1 (`@noble/curves`), SHA-256/Keccak/HKDF (`@noble/hashes`), XChaCha20-Po
 
 ## Audits
 
-The external audit (extension + engine + mobile secret module) is scheduled from M8 (master plan §11); reports are published at `https://wallet.electroswap.io/security` with the SBOM and the build hash of each release.
+The external audit (extension + engine + mobile secret module) is scheduled from M8 (master plan §11); reports are published at `https://electroswap.io/docs/boltvault/security` with the SBOM and the build hash of each release.
