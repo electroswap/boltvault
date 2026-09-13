@@ -2,7 +2,12 @@ export { TamaguiProvider, Theme } from '@tamagui/core'
 export { tamaguiConfig, tokens, type TamaguiAppConfig } from './config'
 export * from './tokens'
 export { fnv1a32, seededRandom, fieldSeed } from './hash'
-export { Screen, Column, Row, Plate, Body, Readout, Address, KeyFrame, KeyLabel, Chip, Filament, type PlateProps, type PlateRole } from './primitives'
+export { Screen, Column, Row, Plate, Body, Readout, Address, KeyFrame, KeyLabel, Chip, Filament, type BodyProps, type KeyLabelProps, type PlateProps, type PlateRole, type ReadoutProps } from './primitives'
+/*
+  The zero-run notation: the wallet's formatters spend the digits (six
+  significant figures once a run qualifies), the text faces draw the count.
+*/
+export { amountRuns, ZERO_RUN_DIGITS, ZERO_RUN_MIN, type AmountRun } from './zeroRun'
 export { Rim, CurrentFill, type RimProps, type CurrentFillProps } from './Rim'
 export { Scrim, type ScrimProps } from './Scrim'
 export { IconButton, type IconButtonProps } from './IconButton'

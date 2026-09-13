@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./config": "./src/config.ts",
-    "./tokens": "./src/tokens.ts"
+    "./tokens": "./src/tokens.ts",
+    "./zeroRun": "./src/zeroRun.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

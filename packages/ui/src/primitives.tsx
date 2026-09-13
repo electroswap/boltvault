@@ -6,10 +6,12 @@
  * extension's Vite resolver.
  */
 import { styled, Text as TText, View as TView } from '@tamagui/core'
-import type { ComponentProps, ReactNode } from 'react'
+import { Children, Fragment, type ComponentProps, type ReactNode } from 'react'
+import { Platform } from 'react-native'
 import { PlateFill } from './PlateFill'
 import { Rim } from './Rim'
 import { current, glow, radius } from './tokens'
+import { amountRuns, ZERO_RUN_MIN } from './zeroRun'
 
 /** Full-bleed screen background. The Grid renders behind it. */
 export const Screen = styled(TView, {
@@ -128,8 +130,64 @@ export function Plate({ role = 'recessed', rim, children, ...rest }: PlateProps)
   )
 }
 
+/**
+ * The zero-run notation (./zeroRun), painted.
+ *
+ * It lands in the text faces rather than at the call sites because almost
+ * every amount in the app reaches its row through an interpolated sentence —
+ * `'{a} {s} → at least {b} {u}'` — where there is no element to wrap. A face
+ * is the last point that still holds the whole string *and* knows how big it
+ * is drawing it, which is exactly what the small run needs.
+ *
+ * Two thirds of the parent's size and a sixth of it below the line: small
+ * enough that nobody reads "0.0171" as a number, low enough to say "these are
+ * the zeros I am standing in for".
+ */
+const RUN_TRIGGER = `0.${'0'.repeat(ZERO_RUN_MIN)}`
+const SUB_SCALE = 0.66
+const SUB_DROP = 0.16
+
+function carriesRun(children: ReactNode): boolean {
+  if (typeof children === 'string') return children.includes(RUN_TRIGGER)
+  if (Array.isArray(children)) return children.some(carriesRun)
+  return false
+}
+
+/**
+ * `children` with every compressible zero run replaced by `sub`'s rendering of
+ * its count. Returns `children` untouched — no walk, no allocation — for the
+ * overwhelming majority of strings, which hold no such run.
+ */
+function notate(children: ReactNode, sub: (count: number, key: number) => ReactNode): ReactNode {
+  if (!carriesRun(children)) return children
+  return Children.map(children, (child) => {
+    if (typeof child !== 'string') return child
+    const runs = amountRuns(child)
+    if (!runs) return child
+    return <>{runs.map((run, i) => (typeof run === 'string' ? run : <Fragment key={i}>{sub(run, i)}</Fragment>))}</>
+  })
+}
+
+/**
+ * Where the small run sits.
+ *
+ * On the web a nested text node is an inline box, so `top` drops it under the
+ * baseline and the notation is a true subscript. React Native has no inline
+ * baseline shift at all — a nested `Text` carries text attributes and nothing
+ * else, and the only way round it, an inline `View` with a transform, misbehaves
+ * under the `numberOfLines` that most of these rows set. So the offset is
+ * declared only where it does something: on a phone the run is two thirds the
+ * size, sitting on the line, which still reads as a count and never as a digit
+ * of the number. If a phone ever needs the true drop, this function is the
+ * whole of what changes.
+ */
+export function subRun(base: number): { readonly fontSize: number; readonly position?: 'relative'; readonly top?: number } {
+  const fontSize = Math.max(8, Math.round(base * SUB_SCALE))
+  return Platform.OS === 'web' ? { fontSize, position: 'relative', top: Math.round(base * SUB_DROP) } : { fontSize }
+}
+
 /** Body text — Sora, sentence case. */
-export const Body = styled(TText, {
+const BodyText = styled(TText, {
   name: 'Body',
   fontFamily: '$body',
   fontSize: '$3',
@@ -154,12 +212,32 @@ export const Body = styled(TText, {
   defaultVariants: { tone: 'ink', size: 'body' },
 })
 
+export type BodyProps = ComponentProps<typeof BodyText>
+
+/** The Sora sizes behind the `size` variant, for the small run to scale from. */
+const BODY_PX = { caption: 13, body: 15, title: 17 } as const
+
+export function Body({ children, ...rest }: BodyProps) {
+  const base = typeof rest.fontSize === 'number' ? rest.fontSize : BODY_PX[rest.size ?? 'body']
+  // The run borrows the face's colour, so a muted line stays muted.
+  const inherit = { ...(rest.tone === undefined ? {} : { tone: rest.tone }), ...(rest.color === undefined ? {} : { color: rest.color }) }
+  return (
+    <BodyText {...rest}>
+      {notate(children, (count, key) => (
+        <BodyText key={key} {...inherit} {...subRun(base)}>
+          {count}
+        </BodyText>
+      ))}
+    </BodyText>
+  )
+}
+
 /**
  * A readout — Oxanium ≥ 24 px, tabular numerals. The hero carries a faint
  * glow; `stat` (20 px) is the one readout size below 24 px, used only inside
  * a stat strip.
  */
-export const Readout = styled(TText, {
+const ReadoutText = styled(TText, {
   name: 'Readout',
   fontFamily: '$readout',
   fontSize: '$2',
@@ -176,6 +254,22 @@ export const Readout = styled(TText, {
     },
   } as const,
 })
+
+export type ReadoutProps = ComponentProps<typeof ReadoutText>
+
+export function Readout({ children, ...rest }: ReadoutProps) {
+  const base = typeof rest.fontSize === 'number' ? rest.fontSize : rest.hero ? 40 : rest.stat ? 20 : 28
+  const inherit = rest.color === undefined ? {} : { color: rest.color }
+  return (
+    <ReadoutText {...rest}>
+      {notate(children, (count, key) => (
+        <ReadoutText key={key} {...inherit} {...subRun(base)} letterSpacing={0}>
+          {count}
+        </ReadoutText>
+      ))}
+    </ReadoutText>
+  )
+}
 
 /** An address — the body face with tabular numerals, never Oxanium, never a monospace. */
 export const Address = styled(TText, {
@@ -236,7 +330,7 @@ export const KeyFrame = styled(TView, {
   pressStyle: { opacity: 0.88, scale: 0.985 },
 })
 
-export const KeyLabel = styled(TText, {
+const KeyLabelText = styled(TText, {
   name: 'KeyLabel',
   fontFamily: '$body',
   fontSize: '$3',
@@ -246,6 +340,23 @@ export const KeyLabel = styled(TText, {
     onDark: { true: { color: '$ink' } },
   } as const,
 })
+
+export type KeyLabelProps = ComponentProps<typeof KeyLabelText>
+
+/** A verb, occasionally a verb with an amount in it — so it notates too. */
+export function KeyLabel({ children, ...rest }: KeyLabelProps) {
+  const base = typeof rest.fontSize === 'number' ? rest.fontSize : BODY_PX.body
+  const inherit = rest.color === undefined ? {} : { color: rest.color }
+  return (
+    <KeyLabelText {...rest}>
+      {notate(children, (count, key) => (
+        <KeyLabelText key={key} {...inherit} {...subRun(base)}>
+          {count}
+        </KeyLabelText>
+      ))}
+    </KeyLabelText>
+  )
+}
 
 /** A pill frame: a token, a duration, a scope, a small stamped mark (Custom, Verified, Hyperlane…). `Pill` wraps it as a control. */
 export const Chip = styled(TView, {
