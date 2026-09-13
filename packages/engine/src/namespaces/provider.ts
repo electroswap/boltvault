@@ -579,6 +579,29 @@ function stableJson(v: unknown): string {
     .join(',')}}`
 }
 
+/** The ERC-20 `decimals()` selector — the one call that rescues an unlisted token's statement. */
+export const DECIMALS_SELECTOR = '0x313ce567'
+
+/**
+ * Read a `decimals()` return, or null if it is not one this wallet will trust.
+ *
+ * Separate from the call that fetches it so the judgement can be tested without
+ * standing up a provider: what counts as an answer here is the whole point. A
+ * token claiming more than 36 places is refused rather than believed —
+ * `toRawUnits` in the activity parser draws the same line, and a number past it
+ * makes `formatUnits` produce a figure nobody can act on.
+ */
+export function decimalsFromCall(raw: string | null): number | null {
+  if (typeof raw !== 'string' || raw.length <= 2) return null
+  try {
+    const n = Number(BigInt(raw))
+    return Number.isInteger(n) && n >= 0 && n <= 36 ? n : null
+  } catch {
+    // Not a number: a contract that answers something else tells us nothing.
+    return null
+  }
+}
+
 export class ProviderService {
   private remote: RemoteSigner | null = null
   /** Origins whose transport could not vouch for them (WalletConnect without Verify). */
@@ -1529,8 +1552,25 @@ export class ProviderService {
           .tokenInfo(chainId)
           .catch(() => ({}) as Record<string, { symbol: string; decimals: number; name?: string }>)
       : {}
+    /*
+      A token the catalog has never heard of still has decimals (ES-BV-083).
+
+      `tokenInfo` is built from `tokens.universe`, which is the signed list plus
+      whatever the user added by hand. Anything outside that — a token received
+      from a contract, one too new for the list, or *every* token on a device
+      where the list fetch failed — arrived at `amountText` in rules.ts with no
+      entry, and its fallback prints `${amount} units`: the raw integer. That
+      string is then stored on the activity row and shown for ever, which is how
+      a beta tester came to be reading wei in "Your activity" on a token's own
+      page.
+
+      The contract knows. `decimals()` is one `eth_call` on the same token this
+      block has already called `balanceOf` on, so the answer costs one more
+      round trip on the one request that needs it.
+    */
     const labels: Record<string, string> = {}
     for (const [addr, info] of Object.entries(tokens)) labels[addr] = info.symbol
+    await this.learnTokenDecimals(chainId, request, tokens)
     await this.nameCounterparties(chainId, request, contracts, labels)
     const context: AssessmentContext = emptyContext({
       sentTo,
@@ -1651,6 +1691,47 @@ export class ProviderService {
    * never wait on somebody else's resolver, so a slow answer is simply no
    * answer and the short address stands.
    */
+  /**
+   * Ask a token contract what its decimals are, when nothing else can say.
+   *
+   * Only for the token a transfer is actually about, and only when the catalog
+   * has no entry for it — so this is one `eth_call` on the one request that
+   * would otherwise print a raw integer, and none at all on every other
+   * request. A refusal (a non-standard token, an RPC that will not answer)
+   * leaves the map untouched and the old wording stands, which is the same
+   * outcome as before this existed.
+   *
+   * `symbol()` is deliberately not read: a string return needs ABI decoding, has
+   * a bytes32 variant in the wild, and a wrong ticker on a money statement is
+   * worse than none. The contract names itself by its address instead, which is
+   * what `label()` already does for any contract nothing can name.
+   */
+  private async learnTokenDecimals(
+    chainId: number,
+    request: SignRequest,
+    tokens: Record<string, { symbol: string; decimals: number; name?: string }>,
+  ): Promise<void> {
+    if (request.kind !== 'transaction') return
+    const to = request.tx.to
+    // The ERC-20 `transfer(address,uint256)` selector: the one shape whose
+    // amount the statements render as a token quantity.
+    if (!to || !request.tx.data.startsWith('0xa9059cbb')) return
+    const key = to.toLowerCase()
+    if (tokens[key]) return
+    const raw = (await this.deps.chains
+      .rpc(chainId, 'eth_call', [{ to, data: DECIMALS_SELECTOR }, 'latest'])
+      .catch(() => null)) as string | null
+    const decimals = decimalsFromCall(raw)
+    if (decimals === null) return
+    /*
+      No ticker is invented. `symbol()` returns a string that needs ABI decoding
+      and has a bytes32 variant in the wild, and a *wrong* ticker on a money
+      statement is worse than none — so the token names itself the way `label()`
+      names any unknown contract, six and six.
+    */
+    tokens[key] = { symbol: `${to.slice(0, 6)}…${to.slice(-4)}`, decimals }
+  }
+
   private async nameCounterparties(
     chainId: number,
     request: SignRequest,

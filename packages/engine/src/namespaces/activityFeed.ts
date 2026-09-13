@@ -91,17 +91,27 @@ function categoryOf(row: FeedRow): ActivityCategory {
  * own money, so it goes through the same sanitiser the firewall's statements
  * use: a symbol carrying U+202E can otherwise reorder the sentence around it.
  */
-function amountText(raw: string, symbol: string | null, decimals: number | null): string {
-  let text = raw
-  if (decimals !== null && decimals >= 0) {
-    try {
-      text = trimZeros(formatUnits(BigInt(raw), decimals))
-    } catch {
-      text = raw
-    }
-  }
+function amountText(raw: string, symbol: string | null, decimals: number | null): string | null {
   const clean = symbol ? untrusted(symbol, 12) : ''
-  return clean ? `${text} ${clean}` : text
+  /*
+    No scale, no number (ES-BV-083).
+
+    This used to fall back to printing `raw` — so a change whose decimals the
+    API did not give read "Received 5000000000000000000 ETN", which is not an
+    approximation of five ETN, it is a different quantity by eighteen orders of
+    magnitude. A row that states an amount is read as stating that amount.
+
+    Saying "Received ETN" instead loses the figure, which is a real loss; the
+    alternative is a figure that is wrong, which is worse. The transaction is
+    one tap away on the explorer either way.
+  */
+  if (decimals === null || decimals < 0) return clean || null
+  try {
+    const text = trimZeros(formatUnits(BigInt(raw), decimals))
+    return clean ? `${text} ${clean}` : text
+  } catch {
+    return clean || null
+  }
 }
 
 /** "1.500" is 1.5; "5.0" is 5. A display convention, never applied to a value. */
@@ -116,11 +126,9 @@ function trimZeros(s: string): string {
 function statementOf(row: FeedRow): string {
   const moved = row.changes.find((c) => c.amountRaw && c.amountRaw !== '0') ?? row.changes[0]
   if (!moved) return 'Transaction'
-  const amount = moved.amountRaw
-    ? amountText(moved.amountRaw, moved.symbol, moved.decimals)
-    : moved.symbol
-      ? untrusted(moved.symbol, 12)
-      : 'an asset'
+  const amount =
+    (moved.amountRaw ? amountText(moved.amountRaw, moved.symbol, moved.decimals) : null) ??
+    (moved.symbol ? untrusted(moved.symbol, 12) : 'an asset')
   // Counterparties come from the API too, and an address is 42 characters.
   const from = moved.sender ? untrusted(moved.sender, 42) : ''
   const to = moved.recipient ? untrusted(moved.recipient, 42) : ''

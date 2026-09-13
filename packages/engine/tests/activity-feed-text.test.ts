@@ -52,8 +52,35 @@ describe('a feed row in words', () => {
     expect(entryOf(row({ amountRaw: '1', decimals: 6, symbol: 'USDC' }), 52014, 'acct').statements[0]).toContain('0.000001 USDC')
   })
 
-  it('falls back to the raw figure only when the API did not say how many places', () => {
-    expect(entryOf(row({ decimals: null }), 52014, 'acct').statements[0]).toContain('5000000000000000000 ETN')
+  /*
+    This used to assert the opposite — that a change with no decimals printed
+    the raw figure — and that assertion was the bug, held in place. A beta
+    tester found it from the other end: "Transactions are showing in the 'Your
+    activity' section of the token details formatted in wei."
+
+    "5000000000000000000 ETN" is not a rough version of five ETN. It is a
+    different number, and a row that states an amount is read as stating that
+    amount. Dropping the figure loses information; printing that one asserts
+    something false.
+  */
+  it('says no amount at all when the API did not say how many places', () => {
+    const line = entryOf(row({ decimals: null }), 52014, 'acct').statements[0]
+    // The counterparty address is forty hex characters, so the raw figure is
+    // what to look for rather than "a long run of digits".
+    expect(line).not.toContain('5000000000000000000')
+    expect(line).toBe('Received ETN from 0x1111111111111111111111111111111111111111')
+  })
+
+  it('says nothing false when there is neither a scale nor a symbol', () => {
+    const line = entryOf(row({ decimals: null, symbol: null }), 52014, 'acct').statements[0]
+    expect(line).not.toContain('5000000000000000000')
+    expect(line).toContain('an asset')
+  })
+
+  it('still prints the figure whenever the scale is known, including zero places', () => {
+    // `decimals: 0` is a real answer, not a missing one — the guard must test
+    // for null rather than for falsiness.
+    expect(entryOf(row({ amountRaw: '42', decimals: 0, symbol: 'TICK' }), 52014, 'acct').statements[0]).toContain('42 TICK')
   })
 
   it('strips characters that would reorder the sentence around them', () => {
