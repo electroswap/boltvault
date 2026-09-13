@@ -22,6 +22,23 @@ import type { AccountId, VaultAccountMeta } from './types.js'
 
 const BIP44_ETHEREUM = "m/44'/60'/0'/0"
 
+/**
+ * The two trees wallets actually use for Ethereum accounts.
+ *
+ * `bip44` walks the address index — `m/44'/60'/0'/0/i` — and is what BoltVault,
+ * MetaMask and most software wallets mean by "account 2". Ledger Live walks the
+ * *account* index instead — `m/44'/60'/i'/0/0` — so the same phrase produces a
+ * different set of addresses after the first, which both trees agree on.
+ *
+ * Absent means `bip44`: every account minted before this existed was on that
+ * tree, and an optional field keeps those vaults readable without a migration.
+ */
+export type DerivationTree = 'bip44' | 'ledgerLive'
+
+export function derivationPath(tree: DerivationTree, index: number): string {
+  return tree === 'ledgerLive' ? `m/44'/60'/${index}'/0/0` : `${BIP44_ETHEREUM}/${index}`
+}
+
 export interface MnemonicEntropy {
   /** Bits of entropy: 128 (12 words) or 256 (24 words). */
   readonly bits: number
@@ -74,10 +91,17 @@ function rootFromSeedHex(seedHex: string): HDKey {
   return HDKey.fromMasterSeed(fromHexBytes(seedHex))
 }
 
-/** Derive the Nth BIP-44 Ethereum account (0-indexed). */
-export function deriveAccount(seedHex: string, index: number): DerivedAccount {
+/**
+ * Derive the Nth Ethereum account (0-indexed) on either tree.
+ *
+ * `tree` defaults to `bip44`, so every existing caller keeps the addresses it
+ * already produced — which matters more than usual here: this function decides
+ * what a stored account's private key is, so a changed default would silently
+ * re-point live accounts at addresses holding nothing.
+ */
+export function deriveAccount(seedHex: string, index: number, tree: DerivationTree = 'bip44'): DerivedAccount {
   const root = rootFromSeedHex(seedHex)
-  const path = `${BIP44_ETHEREUM}/${index}`
+  const path = derivationPath(tree, index)
   const node = root.derive(path)
   if (!node.privateKey) throw new Error(`no private key at ${path}`)
   const privateKey = `0x${toHex(node.privateKey)}` as `0x${string}`

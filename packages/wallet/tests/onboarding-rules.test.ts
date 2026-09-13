@@ -82,7 +82,16 @@ describe('progressFor', () => {
   it('counts each path by its own length', () => {
     expect(progressFor('create', 'words')).toEqual({ now: 1, max: 3 })
     expect(progressFor('create', 'password')).toEqual({ now: 3, max: 3 })
-    expect(progressFor('import', 'import')).toEqual({ now: 1, max: 3 })
+    /*
+      Two steps now, not three. The address-preview step between the phrase and
+      the password is gone: it showed six addresses from two derivation trees
+      under "Which addresses do you recognise?", offered no way to answer, and
+      nothing consumed an answer anyway — import has always taken BIP-44 index
+      0. The tree choice moved to the accounts sheet, where picking one adds
+      the account it names.
+    */
+    expect(progressFor('import', 'import')).toEqual({ now: 1, max: 2 })
+    expect(progressFor('import', 'password')).toEqual({ now: 2, max: 2 })
     expect(progressFor('watch', 'watch')).toEqual({ now: 1, max: 2 })
     // The path ends on `password`: the "this is Electroneum" page that used to
     // close every one of them is gone, and a bar that filled on a screen whose

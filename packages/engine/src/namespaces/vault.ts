@@ -20,6 +20,7 @@ import {
   chunkForQr,
   createVaultV2,
   deriveAccount,
+  type DerivationTree,
   exportVaultV2,
   EXPORT_CODE_WORDS,
   mintExportCode,
@@ -429,9 +430,11 @@ export class VaultManager {
     return passphrase ? { ...seed, passphrase } : seed
   }
 
-  private hdAccount(seed: VaultSeed, index: number, label: string, order: number): VaultAccountV2 {
-    const d = deriveAccount(seed.seedHex, index)
-    return { id: newAccountId(), kind: 'hd', label, address: d.address, seedId: seed.id, index, hidden: false, order, createdAt: this.platform.now() }
+  private hdAccount(seed: VaultSeed, index: number, label: string, order: number, tree: DerivationTree = 'bip44'): VaultAccountV2 {
+    const d = deriveAccount(seed.seedHex, index, tree)
+    // Only recorded when it is not the default, so an old vault's accounts and
+    // a new vault's BIP-44 accounts serialise identically.
+    return { id: newAccountId(), kind: 'hd', label, address: d.address, seedId: seed.id, index, ...(tree === 'bip44' ? {} : { tree }), hidden: false, order, createdAt: this.platform.now() }
   }
 
   private async createFromSeed(seed: VaultSeed, password: string): Promise<AccountView[]> {
@@ -1152,13 +1155,43 @@ export class VaultManager {
     return toView(created)
   }
 
-  derive(seedId: string, label?: string): Promise<AccountView> {
+  /**
+   * The next account along a seed's tree.
+   *
+   * `tree` is what onboarding's address preview used to be for. That screen
+   * showed six addresses from two trees and asked "Which addresses do you
+   * recognise?" without offering any way to answer — nothing consumed the
+   * answer, because import always took BIP-44 index 0 regardless. A tester who
+   * had made their wallet in BoltVault: "I don't recognize any of these
+   * addresses, it's super confusing! I'd rather you just import the first one,
+   * and then let me choose to add more accounts from either derivation in
+   * account management." So the question moved here, where it is a real choice
+   * with a real effect.
+   *
+   * The index is counted per tree. The two trees agree on their first address
+   * and diverge after it, so sharing a counter would skip addresses on
+   * whichever tree was added second.
+   */
+  derive(seedId: string, label?: string, tree: DerivationTree = 'bip44'): Promise<AccountView> {
     return this.addAccount((p, order) => {
       const seed = p.seeds.find((s) => s.id === seedId)
       if (!seed) throw new EngineError('not_found', 'no such seed')
-      const used = p.accounts.filter((a) => a.seedId === seedId).map((a) => a.index ?? 0)
-      const index = used.length ? Math.max(...used) + 1 : 0
-      return { account: this.hdAccount(seed, index, label ?? `Account ${index + 1}`, order) }
+      const used = p.accounts.filter((a) => a.seedId === seedId && (a.tree ?? 'bip44') === tree).map((a) => a.index ?? 0)
+      let index = used.length ? Math.max(...used) + 1 : 0
+      /*
+        Skip an index whose address the vault already holds.
+
+        The two trees agree on index 0 and diverge after it, so the first
+        account added on the *second* tree would otherwise re-derive the one the
+        import already created — and `addAccount` rightly refuses a duplicate
+        with "that address is already in this vault". Walking forward is the
+        general form of that rule and costs nothing: the loop runs once, on the
+        first Ledger Live account, and never again.
+      */
+      const held = new Set(p.accounts.map((a) => a.address.toLowerCase()))
+      while (held.has(deriveAccount(seed.seedHex, index, tree).address.toLowerCase())) index++
+      const fallback = tree === 'ledgerLive' ? `Ledger Live ${index + 1}` : `Account ${index + 1}`
+      return { account: this.hdAccount(seed, index, label ?? fallback, order, tree) }
     })
   }
 
@@ -1261,7 +1294,9 @@ export class VaultManager {
     if (a.kind === 'imported') return pt.importedKeys[accountId] ?? null
     if (a.kind === 'hd' && a.seedId && a.index !== undefined) {
       const seed = pt.seeds.find((s) => s.id === a.seedId)
-      return seed ? deriveAccount(seed.seedHex, a.index).privateKey : null
+      // The stored tree decides, not the default: getting this wrong signs with
+      // a key for an address that holds nothing.
+      return seed ? deriveAccount(seed.seedHex, a.index, a.tree ?? 'bip44').privateKey : null
     }
     return null
   }
@@ -1416,10 +1451,10 @@ export function accountsNamespace(vault: VaultManager): NamespaceSpec {
       },
     },
     derive: {
-      input: z.object({ seedId: z.string(), label: z.string().max(64).optional() }),
+      input: z.object({ seedId: z.string(), label: z.string().max(64).optional(), tree: z.enum(['bip44', 'ledgerLive']).optional() }),
       handler: (arg) => {
-        const { seedId, label } = arg as { seedId: string; label?: string }
-        return vault.derive(seedId, label)
+        const { seedId, label, tree } = arg as { seedId: string; label?: string; tree?: DerivationTree }
+        return vault.derive(seedId, label, tree ?? 'bip44')
       },
     },
     addSeed: {

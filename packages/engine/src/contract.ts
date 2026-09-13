@@ -196,8 +196,15 @@ export interface AccountsNamespace {
   reorder(input: { ids: AccountId[] }): Promise<AccountView[]>
   /** Rename a recovery phrase (plan C2). */
   renameSeed(input: { seedId: string; label: string }): Promise<SeedView>
-  /** Next BIP-44 index of a seed. */
-  derive(input: { seedId: string; label?: string }): Promise<AccountView>
+  /**
+   * The next account along one of a seed's two derivation trees.
+   *
+   * `bip44` (the default) walks the address index and is what every other
+   * software wallet calls "account 2"; `ledgerLive` walks the account index, so
+   * the same phrase gives a different set after the first address. Indices are
+   * counted per tree.
+   */
+  derive(input: { seedId: string; label?: string; tree?: 'bip44' | 'ledgerLive' }): Promise<AccountView>
   addSeed(input: {
     mnemonic: string
     label?: string

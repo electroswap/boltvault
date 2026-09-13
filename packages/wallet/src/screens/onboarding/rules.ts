@@ -11,7 +11,7 @@ import { MIN_PASSWORD_LENGTH, passwordProblem } from '@boltvault/core'
 import { t } from '../../i18n'
 
 export type OnboardingPath = 'create' | 'import' | 'watch'
-export type Step = 'intro' | 'blocked' | 'welcome' | 'words' | 'quiz' | 'password' | 'import' | 'preview' | 'watch' | 'passkey'
+export type Step = 'intro' | 'blocked' | 'welcome' | 'words' | 'quiz' | 'password' | 'import' | 'watch' | 'passkey'
 
 /*
   The refusals themselves now live in `@boltvault/core` so the engine enforces
@@ -109,7 +109,7 @@ export function clampEntryStep(step: string | undefined): Step | null {
  */
 const PATH_STEPS: Record<OnboardingPath, Step[]> = {
   create: ['words', 'quiz', 'password'],
-  import: ['import', 'preview', 'password'],
+  import: ['import', 'password'],
   watch: ['watch', 'password'],
 }
 

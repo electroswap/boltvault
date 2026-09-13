@@ -33,7 +33,9 @@ import {
   metrics,
   paint,
 } from '@boltvault/ui'
+import { registerOverlay } from '@boltvault/ui'
 import { useEffect, useState } from 'react'
+import { ConfirmSheet } from '../components/accounts/AccountSheets'
 import { useEngine } from '../engine/EngineProvider'
 import { useHost } from '../host'
 import { usePrefs } from '../hooks/usePrefs'
@@ -46,7 +48,6 @@ import {
   engineErrorCopy,
   mnemonicHint,
   mnemonicLengthOk,
-  mnemonicWords,
   passwordStrength,
   progressFor,
   type OnboardingPath as Path,
@@ -79,6 +80,34 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
 
   const [path, setPath] = useState<Path>('create')
   const [step, setStep] = useState<Step>('intro')
+  /*
+    Android's back must not silently destroy a vault setup (ES-BV-076).
+
+    Onboarding is a `push` route and `step` is component state, so the hardware
+    back — and on a phone that is an edge swipe, which is easy to do by accident
+    — popped the route, unmounted the screen and took the minted phrase, the
+    quiz answers and the password with it. Coming back in started at the
+    beginning and called `vault.propose({})` again, which mints a *different*
+    phrase: the twelve words just written down were now wrong. A tester: "its
+    possible to simply go back to the start with a simple return command ... you
+    have to write new phrases again ... A pop up window would be good."
+
+    `registerOverlay` is what makes this work rather than a sheet alone:
+    `useAndroidBack` consults `closeTopOverlay()` *before* it pops the stack, so
+    a guard registered here intercepts the press. The confirm sheet registers
+    itself the same way and is newer, so a second back press dismisses the
+    sheet rather than the flow — which is the right order.
+
+    Only the steps that hold something irreplaceable. Intro, the fork and the
+    passkey offer have nothing to lose, and guarding them would just be a
+    dialog in the way.
+  */
+  const [leaving, setLeaving] = useState(false)
+  const atRisk = step === 'words' || step === 'quiz' || step === 'password' || step === 'import'
+  useEffect(() => {
+    if (!atRisk) return
+    return registerOverlay(() => setLeaving(true))
+  }, [atRisk])
   const [resolvedStart, setResolvedStart] = useState(false)
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -89,7 +118,6 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [phrase, setPhrase] = useState('')
   const [passphrase, setPassphrase] = useState('')
-  const [preview, setPreview] = useState<{ bip44: string[]; ledgerLive: string[] } | null>(null)
   const [watchAddress, setWatchAddress] = useState('')
   const [watchResolved, setWatchResolved] = useState<string | null>(null)
   const [passkeysSupported, setPasskeysSupported] = useState(false)
@@ -593,67 +621,33 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
                 {error}
               </Body>
             ) : null}
-            <Key
-              label={t({ id: 'ob.import.preview', message: 'Preview addresses' })}
-              disabled={!mnemonicLengthOk(phrase) || busy}
-              onPress={() =>
-                run(async () => {
-                  setPreview(
-                    await engine.accounts.previewDerivations({
-                      mnemonic: mnemonicWords(phrase).join(' '),
-                      ...(passphrase ? { passphrase } : {}),
-                      count: 3,
-                    }),
-                  )
-                  go('preview')
-                })
-              }
-              testID="ob-import-preview"
-            />
-            {back('welcome')}
-          </Column>
-        ) : null}
+            {/*
+              Straight to the password (ES-BV-075).
 
-        {step === 'preview' && preview ? (
-          <Column gap="$4" testID="ob-preview">
-            <Body size="title">
-              {t({ id: 'ob.preview.title', message: 'Which addresses do you recognise?' })}
-            </Body>
-            <Body tone="mute">
-              {t({
-                id: 'ob.preview.body',
-                message:
-                  'Wallets derive accounts along two common trees. BoltVault uses the standard (BIP-44) tree; Ledger Live uses another. Both agree on the first address.',
-              })}
-            </Body>
-            <Plate gap="$2">
-              <Body size="title">BIP-44</Body>
-              {preview.bip44.map((a) => (
-                <Body key={a} tone="mute" size="caption">
-                  {a}
-                </Body>
-              ))}
-            </Plate>
-            <Plate gap="$2">
-              <Body size="title">Ledger Live</Body>
-              {preview.ledgerLive.map((a) => (
-                <Body key={a} tone="mute" size="caption">
-                  {a}
-                </Body>
-              ))}
-            </Plate>
-            {error ? (
-              <Body tone="burn" testID="ob-error">
-                {error}
-              </Body>
-            ) : null}
+              This used to say "Preview addresses" and open a step headed
+              "Which addresses do you recognise?", showing three BIP-44
+              addresses and three Ledger Live ones. It had no way to answer:
+              no selection control, just Continue — and nothing consumed an
+              answer anyway, because import always took BIP-44 index 0. So it
+              asked six-address-wide question and ignored the reply. A tester
+              who had created their wallet in BoltVault an hour earlier: "I
+              don't recognize any of these addresses, it's super confusing!
+              I'd rather you just import the first one, and then let me choose
+              to add more accounts from either derivation in account
+              management."
+
+              That is what happens now. The first address is the one both trees
+              agree on, so it is right for everybody, and the tree choice lives
+              on the accounts sheet where it is a real decision with a real
+              effect.
+            */}
             <Key
               label={t({ id: 'continue', message: 'Continue' })}
+              disabled={!mnemonicLengthOk(phrase) || busy}
               onPress={() => go('password')}
-              disabled={busy}
-              testID="ob-import-confirm"
+              testID="ob-import-continue"
             />
-            {back('import')}
+            {back('welcome')}
           </Column>
         ) : null}
 
@@ -689,7 +683,6 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
             {back('welcome')}
           </Column>
         ) : null}
-
         {step === 'password' ? (
           <Column gap="$4" testID="ob-password-step">
             <Body size="title">{t({ id: 'ob.password.title', message: 'Choose a password' })}</Body>
@@ -753,7 +746,7 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
               }
               testID="ob-password-continue"
             />
-            {back(path === 'create' ? 'quiz' : path === 'import' ? 'preview' : 'watch')}
+            {back(path === 'create' ? 'quiz' : path === 'import' ? 'import' : 'watch')}
           </Column>
         ) : null}
 
@@ -812,6 +805,34 @@ export function Onboarding({ reducedMotion = false }: { reducedMotion?: boolean 
           <EsWordmark />
         </Column>
       )}
+      {/*
+        Confirming actually leaves: `router.back()` is the press we intercepted,
+        replayed once the user has said they meant it.
+      */}
+      <ConfirmSheet
+        open={leaving}
+        onClose={() => setLeaving(false)}
+        title={t({ id: 'ob.leave.title', message: 'Cancel setting up this wallet?' })}
+        body={
+          step === 'words' || step === 'quiz'
+            ? t({
+                id: 'ob.leave.words',
+                message:
+                  'Your recovery phrase has not been saved yet. Leaving discards it, and starting again generates a different one — the words you have written down will not work.',
+              })
+            : t({
+                id: 'ob.leave.body',
+                message: 'Nothing has been saved yet. Leaving discards what you have entered and starts again from the beginning.',
+              })
+        }
+        confirmLabel={t({ id: 'ob.leave.confirm', message: 'Discard and leave' })}
+        onConfirm={() => {
+          setLeaving(false)
+          router.back()
+        }}
+        reducedMotion={reducedMotion}
+        testID="ob-leave-confirm"
+      />
     </Column>
   )
 }

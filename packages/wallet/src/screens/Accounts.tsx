@@ -147,8 +147,25 @@ export function Accounts({ body }: { body: 'extension-popup' | 'extension-tab' |
     },
     ...(canRemove(a, isActive) ? [{ id: 'remove', icon: 'trash' as const, label: t({ id: 'acct.remove', message: 'Remove' }), tone: 'burn' as const, onPress: () => setSheet({ kind: 'confirm', account: a }), testID: 'menu-remove' }] : []),
   ] as MenuItem[]).filter((item) => !(isActive && item.id === 'hide'))
+  /*
+    Both trees, offered where the choice can be acted on (ES-BV-075).
+
+    Onboarding used to put this question in front of every import — six
+    addresses under "Which addresses do you recognise?", with no way to answer
+    and nothing consuming the answer, since import always took BIP-44 index 0.
+    Owner, after a tester hit it: "I'd rather you just import the first one, and
+    then let me choose to add more accounts from either derivation in account
+    management."
+
+    So this is account management. BIP-44 walks the address index and is what
+    every other software wallet means by "the next account"; Ledger Live walks
+    the account index, and the two agree only on the first address — which is
+    why the second entry is worth having at all, and why it is named after the
+    wallet whose users will come looking for it.
+  */
   const seedMenu = (s: SeedView): MenuItem[] => [
     { id: 'next', icon: 'plus', label: t({ id: 'acct.derive', message: 'Add the next address' }), onPress: () => { void run(() => engine.accounts.derive({ seedId: s.id })); setSheet(null) }, testID: 'seed-derive' },
+    { id: 'next-ll', icon: 'plus', label: t({ id: 'acct.derive.ll', message: 'Add the next Ledger Live address' }), onPress: () => { void run(() => engine.accounts.derive({ seedId: s.id, tree: 'ledgerLive' })); setSheet(null) }, testID: 'seed-derive-ledgerlive' },
     { id: 'rename', icon: 'edit', label: t({ id: 'acct.renameSeed', message: 'Rename this wallet' }), onPress: () => setSheet({ kind: 'renameSeed', seed: s }), testID: 'seed-rename' },
     ...(!s.backedUp ? [{ id: 'backup', icon: 'shield' as const, label: t({ id: 'acct.backup', message: 'Back up now' }), onPress: () => { setSheet(null); router.navigate('backup') }, testID: 'seed-backup' }] : []),
     ...(host.secretsAllowed ? [{ id: 'reveal', icon: 'eye' as const, label: t({ id: 'acct.reveal', message: 'Reveal recovery phrase' }), onPress: () => setSheet({ kind: 'reveal', seed: s }), testID: 'seed-reveal' }] : []),

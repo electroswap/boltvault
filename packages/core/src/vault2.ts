@@ -25,6 +25,7 @@ import { hkdf } from '@noble/hashes/hkdf'
 import { sha256 } from '@noble/hashes/sha256'
 import type { AccountId, AccountKind, VaultFileV1 } from './types.js'
 import { fromHex, kdfArgon2id, openVault, randomBytes, toHex, type Argon2idParams } from './vault.js'
+import type { DerivationTree } from './hd.js'
 
 export const VAULT2_VERSION = 2 as const
 
@@ -69,9 +70,15 @@ export interface VaultAccountV2 {
   readonly kind: AccountKind | 'keystone'
   readonly label: string
   readonly address: string
-  /** HD accounts: which seed and which BIP-44 index. */
+  /** HD accounts: which seed and which index along the tree below. */
   readonly seedId?: string
   readonly index?: number
+  /**
+   * Which derivation tree the index walks. Absent means `bip44`, which is what
+   * every account minted before this field existed was on — so an old vault
+   * keeps deriving exactly the addresses it always did, with no migration.
+   */
+  readonly tree?: DerivationTree
   readonly hardware?: { readonly path: string; readonly deviceId?: string }
   readonly hidden: boolean
   readonly order: number
