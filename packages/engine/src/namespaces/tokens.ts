@@ -35,7 +35,15 @@ export const CustomTokenSchema = z.object({
   symbol: z.string(),
   decimals: z.number().int().nonnegative(),
   logoURI: z.string().optional(),
-  source: z.enum(['user', 'dapp']),
+  /*
+    `learned` is not a token the user added. It is a decimals memo: the answer
+    `decimals()` gave for a contract no list carries, kept so the same call is
+    not made on every request that touches it (ES-BV-086). It lives in this
+    store because a decimals cache IS token metadata and deserves no store of
+    its own — but it is filtered out of `universe()` and out of what syncs, so
+    it never becomes a token in the wallet's UI or on a paired device.
+  */
+  source: z.enum(['user', 'dapp', 'learned']),
   origin: z.string().optional(),
 })
 
@@ -89,8 +97,6 @@ export class TokensService {
     /** User-added tokens and pin/hide preferences, sealed under the DEK. */
     private readonly customTokens: SealedMap<CustomToken[]>,
     private readonly tokenPrefs: SealedMap<{ pinned: string[]; hidden: string[] }>,
-    /** Decimals learned from a contract, for tokens no list carries. */
-    private readonly tokenDecimals: SealedMap<Record<string, number>>,
   ) {}
 
   /*
@@ -108,26 +114,47 @@ export class TokensService {
     firewall a contract *is* USDC, and a number read off an unknown contract is
     not an identity. This is a formatting aid and nothing more.
   */
-  private static readonly DECIMALS_ID = 'all'
-
   /** Everything learned for a chain, as `address -> decimals`, lowercased. */
   async learnedDecimals(chainId: number): Promise<Record<string, number>> {
-    const all = (await this.tokenDecimals.get(TokensService.DECIMALS_ID)) ?? {}
-    const prefix = `${chainId}:`
     const out: Record<string, number> = {}
-    for (const [k, v] of Object.entries(all)) if (k.startsWith(prefix)) out[k.slice(prefix.length)] = v
+    for (const c of await this.custom())
+      if (c.source === 'learned' && c.chainId === chainId) out[c.address.toLowerCase()] = c.decimals
     return out
   }
 
-  /** Remember what a contract said about itself. */
+  /**
+   * Remember what a contract said its decimals are.
+   *
+   * Never over a real entry: if the user or a dApp has added this token
+   * properly, that record has a name and a symbol and a memo must not replace
+   * it. `addCustom` filters by key before it pushes, so the upgrade in the
+   * other direction happens on its own.
+   */
   async rememberDecimals(chainId: number, address: string, decimals: number): Promise<void> {
     if (!isAddress(address)) return
     // The same ceiling `toRawUnits` enforces; anything else is not an answer.
     if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) return
-    const all = (await this.tokenDecimals.get(TokensService.DECIMALS_ID)) ?? {}
-    const k = key(chainId, address)
-    if (all[k] === decimals) return
-    await this.tokenDecimals.set(TokensService.DECIMALS_ID, { ...all, [k]: decimals })
+    const checksummed = getAddress(address)
+    const custom = await this.custom()
+    const k = key(chainId, checksummed)
+    const existing = custom.find((c) => key(c.chainId, c.address) === k)
+    if (existing && existing.source !== 'learned') return
+    if (existing?.decimals === decimals) return
+    const next = custom.filter((c) => key(c.chainId, c.address) !== k)
+    /*
+      No ticker is invented, for the reason `learnTokenDecimals` gives: a wrong
+      symbol on a money statement is worse than none, so the entry names itself
+      by address the way `label()` names any unknown contract.
+    */
+    next.push({
+      chainId,
+      address: checksummed,
+      name: checksummed.slice(0, 10),
+      symbol: `${checksummed.slice(0, 6)}…${checksummed.slice(-4)}`,
+      decimals,
+      source: 'learned',
+    })
+    await this.customTokens.set(CUSTOM_ID, next)
   }
 
   /** The pinned public list for a chain, refreshed at most every 6 h; last-good on failure. */
@@ -191,7 +218,25 @@ export class TokensService {
       { chainId, address: 'native', symbol: def.nativeCurrency.symbol, name: def.nativeCurrency.name, decimals: def.nativeCurrency.decimals, logoUri: this.logoFor(chainId, 'native'), source: 'native', pinned: pinned.has(key(chainId, 'native')), hidden: false, tags: [] },
     ]
     const seen = new Set<string>()
-    for (const c of custom.filter((x) => x.chainId === chainId)) {
+    /*
+      `learned` entries are skipped, and this is the whole reason they are
+      distinguishable at all.
+
+      `universe()` is the DISPLAYED token list: portfolio, the Send, Receive
+      and Swap pickers, Explore, limit orders and the approvals screen all read
+      it. A learned entry is a decimals memo for a contract the user once sent
+      a transfer to — possibly an airdropped scam token they were tricked into
+      moving — and it carries no symbol, on purpose. Folding it in here would
+      put `0x1234…abcd` in someone's portfolio and in three pickers, which is
+      the wallet adding tokens to their list without being asked.
+
+      They are not filtered out of `tokenInfo`, which is what the firewall
+      reads: there, more known decimals is strictly better.
+    */
+    const displayable = custom.filter(
+      (x): x is CustomToken & { source: 'user' | 'dapp' } => x.chainId === chainId && x.source !== 'learned',
+    )
+    for (const c of displayable) {
       const k = key(chainId, c.address)
       seen.add(k)
       out.push({ chainId, address: getAddress(c.address), symbol: c.symbol, name: c.name, decimals: c.decimals, logoUri: this.logoFor(chainId, c.address, c.logoURI), source: c.source, pinned: pinned.has(k), hidden: hidden.has(k), tags: [] })
@@ -319,9 +364,17 @@ export class TokensService {
     return view
   }
 
-  /** The user-added tokens themselves. Sync reads these as the §6 "custom tokens" family. */
+  /**
+   * The user-added tokens themselves. Sync reads these as the §6 "custom
+   * tokens" family — which is why the decimals memos are not among them.
+   *
+   * A synced token arrives on the far device as unconfirmed and is held out of
+   * `tokenInfo` until someone confirms it there. Sending a memo across would
+   * therefore ask the user to vouch for a token they never added, in order to
+   * restore a cache entry that device can rebuild for itself in one call.
+   */
   async customList(): Promise<CustomToken[]> {
-    return this.custom()
+    return (await this.custom()).filter((c) => c.source !== 'learned')
   }
 
   /**

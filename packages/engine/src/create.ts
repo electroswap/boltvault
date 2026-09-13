@@ -415,11 +415,29 @@ export function createEngine(deps: EngineDeps): Engine {
         tells the firewall a contract *is* USDC, so a token still waiting in
         `sync.incoming()` is left out of it — it is visible in the wallet,
         with its provenance, but it is nobody's idea of a known token.
+
+        **Only where the sync entry is what put it here (ES-BV-087).** The
+        filter used to run over every token in `universe()`, so an unconfirmed
+        entry for a token that is ALSO on the signed public list withheld the
+        list's own answer. PDY is listed and served by the API, and a tester
+        still met it as an unknown contract: `Allowances` reads `universe()`
+        directly and named it, while this map — one filter later — did not, so
+        the statement path fell through to reading `decimals()` off the
+        contract and naming the token by its address.
+
+        A token on the list was not "sent by a paired device" in any sense §6
+        is about. Its identity comes from a source this device fetched and
+        trusts on its own, and no unconfirmed entry can subtract from that.
+        Held back now only when the token's presence depends on the sync: a
+        custom one, `user` or `dapp`.
       */
       const unconfirmed = new Set(await sync.unconfirmedTokens().catch(() => [] as string[]))
-      for (const t of await tokens.universe(chainId))
-        if (t.address !== 'native' && !unconfirmed.has(`${chainId}:${t.address.toLowerCase()}`))
-          out[t.address.toLowerCase()] = { symbol: t.symbol, decimals: t.decimals, name: t.name }
+      for (const t of await tokens.universe(chainId)) {
+        if (t.address === 'native') continue
+        const waiting = t.source !== 'list' && unconfirmed.has(`${chainId}:${t.address.toLowerCase()}`)
+        if (waiting) continue
+        out[t.address.toLowerCase()] = { symbol: t.symbol, decimals: t.decimals, name: t.name }
+      }
       return out
     },
     clientVersion: deps.clientVersion ?? 'BoltVault/0.1.0',
@@ -438,7 +456,6 @@ export function createEngine(deps: EngineDeps): Engine {
     fetchImpl,
     sealed.tokensCustom,
     sealed.tokenPrefs,
-    sealed.tokenDecimals,
   )
   /*
     Sync reads six of the nine §6 families out of these stores, so it is built
