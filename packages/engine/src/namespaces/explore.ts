@@ -70,7 +70,7 @@ export class ExploreService {
           .filter((r) => !r.spam)
           .map((r): ExploreToken => {
             const u = universe.find((x) => x.address.toLowerCase() === r.address.toLowerCase())
-            return { chainId, address: r.address, symbol: r.symbol, name: r.name, decimals: r.decimals, logoUri: u?.logoUri ?? r.logoUrl, price: r.price, change24h: r.change24h, change7d: r.change7d, volume24h: r.volume24h, tvl: r.tvl, marketCap: r.marketCap, safety: r.safety, pinned: false }
+            return { chainId, address: r.address, symbol: r.symbol, name: r.name, decimals: r.decimals, logoUri: u?.logoUri ?? r.logoUrl, price: r.price, change24h: r.change24h, change7d: r.change7d, volume24h: r.volume24h, tvl: r.tvl, marketCap: r.marketCap, safety: r.safety, pinned: false, starred: false }
           })
       })
       return this.withPins(chainId, hit.value)
@@ -85,10 +85,15 @@ export class ExploreService {
     return hit ? { ...hit, value: await this.withPins(chainId, hit.value) } : null
   }
 
-  /** Pins are read at serve time (`tokens.prefs`), so a cached list never shows a stale star. */
+  /**
+   * Pin and watch are read at serve time, so a cached list never shows either
+   * one stale — and they are two different marks. Pin puts the row at the top
+   * of Portfolio; watch tells the wallet to say when the price moves.
+   */
   private async withPins(chainId: number, rows: ExploreToken[]): Promise<ExploreToken[]> {
     const pinned = new Set((await this.deps.tokens.prefs()).pinned)
-    return rows.map((r) => ({ ...r, pinned: pinned.has(`${chainId}:${r.address.toLowerCase()}`) }))
+    const starred = new Set(this.deps.watchlist.cached().filter((w) => w.kind === 'token').map((w) => `${w.chainId}:${w.address.toLowerCase()}`))
+    return rows.map((r) => ({ ...r, pinned: pinned.has(`${chainId}:${r.address.toLowerCase()}`), starred: starred.has(`${chainId}:${r.address.toLowerCase()}`) }))
   }
 
   async tokenDetail(chainId: number, address: string): Promise<TokenDetailView | null> {

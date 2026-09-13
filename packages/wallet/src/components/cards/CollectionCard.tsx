@@ -34,7 +34,7 @@ export function CollectionCard({ collection, onPress, onStar }: { collection: Co
             {line}
           </Body>
         </Column>
-        {onStar && !collection.custom ? <IconButton icon="star" label={collection.starred ? t({ id: 'watch.unstar', message: 'Stop alerts' }) : t({ id: 'watch.alerts.on', message: 'Alert me' })} active={collection.starred} onPress={onStar} testID={`star-collection-${collection.address}`} /> : null}
+        {onStar && !collection.custom ? <IconButton icon="star" activeTone="ember" activeFilled label={collection.starred ? t({ id: 'watch.unstar', message: 'Stop alerts' }) : t({ id: 'watch.alerts.on', message: 'Alert me' })} active={collection.starred} onPress={onStar} testID={`star-collection-${collection.address}`} /> : null}
       </Row>
     </Plate>
   )

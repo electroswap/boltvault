@@ -223,7 +223,9 @@ export class PortfolioService {
     */
     const held = universe.filter((t) => {
       const b = balances.get(t.address.toLowerCase())
-      return b === null || (b ?? 0n) > 0n || t.source === 'user' || t.source === 'dapp' || t.pinned
+      // Native is always held, whether or not anyone pinned it — its place in
+      // the list is not a preference (the dust rule below says the same).
+      return b === null || (b ?? 0n) > 0n || t.source === 'user' || t.source === 'dapp' || t.pinned || t.address === 'native'
     })
     const prices = await Promise.race([this.prices(chainId, owner, held), new Promise<Map<string, PriceRow>>((resolve) => setTimeout(() => resolve(new Map()), PRICE_BUDGET_MS))])
     for (const t of held) {
@@ -330,16 +332,40 @@ export class PortfolioService {
       highest value balances to always show at the top in the portfolio view
       (descending order)."
 
-      Unpriced rows still sink below priced ones (`?? -1`), and among rows that
-      tie — every row on a chain we have no prices for — `pinned` brings the
-      native coin back to the top, which is where it belongs when nothing has
-      a value to compare.
+      Unpriced rows still sink below priced ones (`?? -1`).
+
+      What changed (ES-BV-081): a pin the *user* placed now sorts above value.
+      That is not a walk-back of the instruction above — it is the difference
+      between a default and an override. "Pin" means "to the top" in every
+      other product, and here it meant only "stay visible at zero balance", so
+      a tester pinned a token, watched it not move, and reported the control as
+      broken: "The pin function isnt doing anything. It doesnt pin the token on
+      top of the list also."
+
+      The reason this is safe to do now is that native is no longer pinned by
+      construction. It used to be hard-coded `pinned: true` in `tokens.universe`,
+      so promoting pinned rows would have dragged the native coin back over
+      larger holdings — exactly the bug the instruction above was given about.
+      Native's place in the list was never a preference: it is held
+      unconditionally by the filter above and exempt from the dust rule below,
+      both by address. So `pinned` now means one thing only, which is that
+      somebody pressed the pin.
     */
     withShare.sort((a, b) => {
+      // A pin the user placed themselves outranks value — that is the whole
+      // meaning of the word, and it is an override they asked for rather than
+      // a default that argues with the rule above.
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
       const fa = a.fiat ?? -1
       const fb = b.fiat ?? -1
       if (fb !== fa) return fb - fa
-      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+      // Among rows that tie — every row on a chain we have no prices for — the
+      // native coin leads. That used to fall out of native being hard-coded
+      // `pinned`, which is exactly what stopped a user's own pin from meaning
+      // anything, so it is stated here instead of smuggled through a flag.
+      const na = a.address === 'native'
+      const nb = b.address === 'native'
+      if (na !== nb) return na ? -1 : 1
       return Number(b.quantity) - Number(a.quantity)
     })
     const observedAt = d.platform.now()

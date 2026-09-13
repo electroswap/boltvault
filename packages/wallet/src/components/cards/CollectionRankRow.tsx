@@ -13,7 +13,7 @@
  * are left aligned." The artwork is now the first thing in the row, so it
  * starts exactly where the screen's own inset does.
  */
-import { Artwork, Body, Column, Icon, Pressable, Row, paint } from '@boltvault/ui'
+import { Artwork, Body, Column, Icon, IconButton, Pressable, Row, paint } from '@boltvault/ui'
 import type { CollectionView } from '@boltvault/engine'
 import { t } from '../../i18n'
 
@@ -40,7 +40,7 @@ function compact(n: number | null): string {
   return n >= 1e6 ? `${trim((n / 1e6).toFixed(1))}M` : n >= 1e4 ? `${trim((n / 1e3).toFixed(1))}K` : n.toLocaleString('en-US')
 }
 
-export function CollectionRankRow({ collection: c, currency, etnUsd, onPress, last = false }: { collection: CollectionView; currency: CollectionCurrency; etnUsd: number | null; onPress: () => void; last?: boolean }) {
+export function CollectionRankRow({ collection: c, currency, etnUsd, onPress, onWatch, last = false }: { collection: CollectionView; currency: CollectionCurrency; etnUsd: number | null; onPress: () => void; onWatch?: () => void; last?: boolean }) {
   const change = c.volumeChangePct
   const changeTone: 'surge' | 'burn' | 'mute' = change === null || change === 0 ? 'mute' : change > 0 ? 'surge' : 'burn'
   const line = [
@@ -82,6 +82,23 @@ export function CollectionRankRow({ collection: c, currency, etnUsd, onPress, la
             {change === null ? t({ id: 'collections.volume', message: 'volume' }) : `${change > 0 ? '▲' : change < 0 ? '▼' : ''} ${Math.abs(change).toFixed(change !== 0 && Math.abs(change) < 10 ? 1 : 0)}%`}
           </Body>
         </Column>
+        {/*
+          The watch star lives on this row too now (ES-BV-081). It existed only
+          on search hits and the collection page, so the list people actually
+          browse — Explore › Collectibles — was the one place you could not
+          start watching something from.
+        */}
+        {onWatch && !c.custom ? (
+          <IconButton
+            icon="star"
+            activeTone="ember"
+            activeFilled
+            active={c.starred}
+            label={c.starred ? t({ id: 'watch.off', message: 'Stop watching {s}', values: { s: c.name } }) : t({ id: 'watch.on', message: 'Watch {s} for price moves', values: { s: c.name } })}
+            onPress={onWatch}
+            testID={`watch-collection-${c.address}`}
+          />
+        ) : null}
       </Row>
     </Pressable>
   )

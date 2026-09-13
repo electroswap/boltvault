@@ -247,6 +247,8 @@ export function Collection({
     collection && !collection.custom ? (
       <IconButton
         icon="star"
+        activeTone="ember"
+        activeFilled
         label={
           collection.starred
             ? t({ id: 'watch.unstar', message: 'Stop alerts' })

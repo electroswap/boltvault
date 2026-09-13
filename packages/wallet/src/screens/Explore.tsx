@@ -117,6 +117,23 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
       setCollecting(null)
     }
   }
+  /*
+    The door that was missing (ES-BV-081).
+
+    `watchlist.check()` has always evaluated `kind: 'token'`, and the
+    Notifications screen has always drawn "Above $" / "Below $" for one — but
+    nothing in the product ever called `star({ kind: 'token' })`, so the whole
+    path was unreachable. A tester went looking for it: "what happens with the
+    'pinned' tokens? They doesnt appear in the bell tab. Maybe a price range
+    notification?" That is exactly the feature, and this is the button.
+  */
+  const watchToken = async (token: ExploreToken): Promise<void> => {
+    if (token.starred) await engine.watchlist.unstar({ kind: 'token', chainId: ETN, address: token.address })
+    else await engine.watchlist.star({ kind: 'token', chainId: ETN, address: token.address, label: token.symbol })
+    tokens.refresh()
+    setFound((f) => (f ? { ...f, tokens: f.tokens.map((x) => (x.address === token.address ? { ...x, starred: !token.starred } : x)) } : f))
+  }
+
   const star = async (kind: 'collection' | 'campaign', address: string, label: string, starred: boolean): Promise<void> => {
     if (starred) await engine.watchlist.unstar({ kind, chainId: ETN, address })
     else await engine.watchlist.star({ kind, chainId: ETN, address, label })
@@ -154,7 +171,7 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
       {found ? (
         <Column gap="$2" testID="explore-results">
           {found.tokens.map((x) => (
-            <TokenRow key={x.address} token={x} onPress={() => router.navigate('token', { chainId: ETN, address: x.address })} onPin={() => pin(x.address, x.pinned)} />
+            <TokenRow key={x.address} token={x} onPress={() => router.navigate('token', { chainId: ETN, address: x.address })} onPin={() => pin(x.address, x.pinned)} onWatch={() => void watchToken(x)} />
           ))}
           {found.collections.map((c) => (
             <CollectionCard key={c.address} collection={c} onPress={() => router.navigate('collection', { chainId: ETN, address: c.address })} onStar={() => void star('collection', c.address, c.name, c.starred)} />
@@ -176,7 +193,7 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
           ) : segment === 'tokens' ? (
             <Column gap="$1" testID="explore-token-list">
               {(tokens.value ?? []).map((x) => (
-                <TokenRow key={x.address} token={x} onPress={() => router.navigate('token', { chainId: ETN, address: x.address })} onPin={() => pin(x.address, x.pinned)} />
+                <TokenRow key={x.address} token={x} onPress={() => router.navigate('token', { chainId: ETN, address: x.address })} onPin={() => pin(x.address, x.pinned)} onWatch={() => void watchToken(x)} />
               ))}
               {(tokens.value ?? []).length === 0 ? (
                 <Body tone="mute" size="caption">
@@ -222,7 +239,7 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
               </Row>
               <Column testID="collections-list">
                 {(collections.value ?? []).map((c, i, arr) => (
-                  <CollectionRankRow key={c.address} collection={c} currency={ccy} etnUsd={etnUsd} onPress={() => router.navigate('collection', { chainId: ETN, address: c.address })} last={i === arr.length - 1} />
+                  <CollectionRankRow key={c.address} collection={c} currency={ccy} etnUsd={etnUsd} onPress={() => router.navigate('collection', { chainId: ETN, address: c.address })} onWatch={() => void star('collection', c.address, c.name, c.starred)} last={i === arr.length - 1} />
                 ))}
               </Column>
               {(collections.value ?? []).length === 0 ? (
@@ -263,7 +280,7 @@ export function Explore({ body, segment: initial = 'tokens', search = false }: {
   )
 }
 
-export function TokenRow({ token, onPress, onPin }: { token: ExploreToken; onPress: () => void; onPin: () => void }) {
+export function TokenRow({ token, onPress, onPin, onWatch }: { token: ExploreToken; onPress: () => void; onPin: () => void; onWatch?: () => void }) {
   const change = formatChange(token.change24h === null ? null : token.change24h / 100)
   return (
     // The row and the dossier's header are the same token (§7.7); the pin is
@@ -290,7 +307,13 @@ export function TokenRow({ token, onPress, onPin }: { token: ExploreToken; onPre
             ) : null}
           </Column>
         </Row>
-        <IconButton icon="pin" label={token.pinned ? t({ id: 'pin.off', message: 'Unpin from Home' }) : t({ id: 'pin.on', message: 'Pin to Home' })} active={token.pinned} onPress={onPin} testID={`star-token-${token.symbol}`} />
+        {/*
+          Two marks, two jobs (ES-BV-081). Pin puts the row at the top of
+          Portfolio; the star watches the price. They were conflated because
+          only one of them existed for tokens and it was named after the other.
+        */}
+        <IconButton icon="pin" label={token.pinned ? t({ id: 'pin.off.v2', message: 'Unpin from Portfolio' }) : t({ id: 'pin.on.v2', message: 'Pin to the top of Portfolio' })} active={token.pinned} onPress={onPin} testID={`pin-token-${token.symbol}`} />
+        {onWatch ? <IconButton icon="star" activeTone="ember" activeFilled label={token.starred ? t({ id: 'watch.off', message: 'Stop watching {s}', values: { s: token.symbol } }) : t({ id: 'watch.on', message: 'Watch {s} for price moves', values: { s: token.symbol } })} active={!!token.starred} onPress={onWatch} testID={`watch-token-${token.symbol}`} /> : null}
       </Row>
     </SharedElement>
   )

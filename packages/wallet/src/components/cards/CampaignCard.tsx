@@ -84,7 +84,7 @@ export function CampaignCard({ campaign: c, onPress, onStar }: { campaign: Campa
               {phaseLabel(c)}
             </Body>
           </Column>
-          {onStar && alertable(c) ? <IconButton icon="star" label={c.starred ? t({ id: 'watch.unstar', message: 'Stop alerts' }) : t({ id: 'campaign.star.short', message: 'Tell me when it goes live' })} active={c.starred} onPress={onStar} testID={`star-campaign-${c.pool}`} /> : null}
+          {onStar && alertable(c) ? <IconButton icon="star" activeTone="ember" activeFilled label={c.starred ? t({ id: 'watch.unstar', message: 'Stop alerts' }) : t({ id: 'campaign.star.short', message: 'Tell me when it goes live' })} active={c.starred} onPress={onStar} testID={`star-campaign-${c.pool}`} /> : null}
         </Row>
         <Row gap="$2" alignItems="center">
           <Column flex={1}>

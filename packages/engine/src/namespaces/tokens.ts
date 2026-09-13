@@ -149,7 +149,7 @@ export class TokensService {
     const pinned = new Set(prefs.pinned)
     const hidden = new Set(prefs.hidden)
     const out: TokenView[] = [
-      { chainId, address: 'native', symbol: def.nativeCurrency.symbol, name: def.nativeCurrency.name, decimals: def.nativeCurrency.decimals, logoUri: this.logoFor(chainId, 'native'), source: 'native', pinned: true, hidden: false, tags: [] },
+      { chainId, address: 'native', symbol: def.nativeCurrency.symbol, name: def.nativeCurrency.name, decimals: def.nativeCurrency.decimals, logoUri: this.logoFor(chainId, 'native'), source: 'native', pinned: pinned.has(key(chainId, 'native')), hidden: false, tags: [] },
     ]
     const seen = new Set<string>()
     for (const c of custom.filter((x) => x.chainId === chainId)) {

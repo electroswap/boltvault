@@ -23,14 +23,32 @@ export interface IconButtonProps {
   readonly onPress?: () => void
   /** Lit rim and an arc glyph: the pinned state, the open filter. */
   readonly active?: boolean
-  readonly tone?: 'mute' | 'ink' | 'arc' | 'burn'
+  /**
+   * Tone for the glyph. `activeTone` overrides it while `active`, which is how
+   * a watch star goes gold rather than blue.
+   */
+  readonly tone?: 'mute' | 'ink' | 'arc' | 'ember' | 'burn'
+  /**
+   * The colour of the *on* state, when arc is not the right answer for it.
+   *
+   * A star that means "I am watching this" is a thing you have, not a control
+   * that is open, and the set already draws those in `ember` — the tier mark,
+   * the dividends star on Activity. Rendered filled as well as tinted, because
+   * an outline of a star reads as the absence of one. Owner's tester, on the
+   * blue outline: "the visibility when you mark a nft collection isnt that
+   * good i think. maybe change the inner part of the star to be golden."
+   */
+  readonly activeTone?: 'arc' | 'ember'
+  /** Fill the glyph while active. Only closed paths (star, shield, bell) fill sensibly. */
+  readonly activeFilled?: boolean
   readonly badge?: number | string | null
   readonly disabled?: boolean
   readonly testID?: string
 }
 
-export function IconButton({ icon, label, onPress, active = false, tone = 'mute', badge = null, disabled = false, testID }: IconButtonProps) {
-  const color = active ? paint.arc : tone === 'ink' ? paint.ink : tone === 'arc' ? paint.arc : tone === 'burn' ? paint.burn : paint.mute
+export function IconButton({ icon, label, onPress, active = false, tone = 'mute', activeTone = 'arc', activeFilled = false, badge = null, disabled = false, testID }: IconButtonProps) {
+  const restTone = tone === 'ink' ? paint.ink : tone === 'arc' ? paint.arc : tone === 'ember' ? paint.ember : tone === 'burn' ? paint.burn : paint.mute
+  const color = active ? (activeTone === 'ember' ? paint.ember : paint.arc) : restTone
   const showBadge = badge !== null && badge !== undefined && badge !== 0 && badge !== ''
   return (
     <Pressable
@@ -44,7 +62,7 @@ export function IconButton({ icon, label, onPress, active = false, tone = 'mute'
     >
       <View style={{ width: metrics.disc, height: metrics.disc, borderRadius: metrics.disc / 2, backgroundColor: paint.glassRaised, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
         <View style={{ zIndex: 1 }}>
-          <Icon name={icon} size={18} color={color} />
+          <Icon name={icon} size={18} color={color} filled={active && activeFilled} />
         </View>
         <Rim radius={metrics.disc / 2} opacity={active ? 0.7 : 0.35} />
       </View>

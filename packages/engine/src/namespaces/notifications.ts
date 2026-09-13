@@ -121,6 +121,22 @@ export class NotificationsService {
     await this.persist(items.map((n) => (!set || set.has(n.id) ? { ...n, read: true } : n)))
   }
 
+  /**
+   * Drop one note.
+   *
+   * The inbox was all-or-nothing: `clear()` in a section header, and no way to
+   * get rid of a single row you had read and dealt with. Scoped the same way
+   * `clear` is — you can only remove what this account can see, so one account
+   * cannot reach into another's inbox by guessing an id.
+   */
+  async remove(id: string): Promise<void> {
+    const accountId = await this.activeAccountId()
+    const items = await this.hydrate()
+    const mine = (n: NotificationView): boolean => n.accountId === null || n.accountId === accountId
+    if (!items.some((n) => n.id === id && mine(n))) return
+    await this.persist(items.filter((n) => !(n.id === id && mine(n))))
+  }
+
   /** Clears only what this account can see; another account's inbox is not ours to empty. */
   async clear(): Promise<void> {
     const accountId = await this.activeAccountId()
@@ -164,6 +180,7 @@ export function notificationsNamespace(n: NotificationsService): NamespaceSpec {
     list: { handler: () => n.list() },
     unread: { handler: () => n.unread() },
     markRead: { input: z.object({ ids: z.array(z.string()).optional() }).optional(), handler: (arg) => n.markRead((arg as { ids?: string[] } | undefined)?.ids) },
+    remove: { input: z.object({ id: z.string().min(1) }), handler: (arg) => n.remove((arg as { id: string }).id) },
     clear: { handler: () => n.clear() },
   }
 }

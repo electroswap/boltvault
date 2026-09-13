@@ -798,8 +798,10 @@ export const ExploreTokenSchema = z.object({
   tvl: Fiat,
   marketCap: Fiat,
   safety: z.enum(['VERIFIED', 'MEDIUM_WARNING', 'STRONG_WARNING', 'BLOCKED']).nullable(),
-  /** On a token list the star is the pin (`tokens.setPrefs`): a pinned token stays on Home at any balance. */
+  /** `tokens.setPrefs`: a pinned token sorts to the top of Portfolio and stays there at any balance. */
   pinned: z.boolean(),
+  /** `watchlist.star`: the wallet is watching this price and will say when it moves. Distinct from `pinned`. */
+  starred: z.boolean().optional(),
 })
 export type ExploreToken = z.infer<typeof ExploreTokenSchema>
 

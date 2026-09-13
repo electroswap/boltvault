@@ -911,6 +911,8 @@ export interface NotificationsNamespace {
   list(): Promise<NotificationView[]>
   unread(): Promise<number>
   markRead(input?: { ids?: string[] }): Promise<void>
+  /** Drop one note. Scoped to what the active account can see, like `clear`. */
+  remove(input: { id: string }): Promise<void>
   clear(): Promise<void>
 }
 

@@ -57,7 +57,7 @@ export function Alerts({ body }: { body: BodyKind }) {
   const engine = useEngine()
   const router = useRouter()
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
-  const { items: notes, markRead, clear: clearNotes } = useNotifications()
+  const { items: notes, markRead, remove: removeNote, clear: clearNotes } = useNotifications()
   const [items, setItems] = useState<WatchItem[]>([])
   const [drafts, setDrafts] = useState<Record<string, { above: string; below: string }>>({})
   const [checked, setChecked] = useState<string[] | null>(null)
@@ -124,7 +124,7 @@ export function Alerts({ body }: { body: BodyKind }) {
             <Key label={t({ id: 'alerts.clear', message: 'Clear' })} kind="secondary" size="compact" onPress={clearNotes} testID="alerts-clear" />
           </Row>
           {notes.map((n) => (
-            <NoteRow key={n.id} note={n} onOpen={() => openTarget(n.target)} />
+            <NoteRow key={n.id} note={n} onOpen={() => openTarget(n.target)} onRemove={() => removeNote(n.id)} />
           ))}
         </Column>
       ) : null}
@@ -211,7 +211,7 @@ export function Alerts({ body }: { body: BodyKind }) {
 }
 
 /** One note: what happened, and a way to go and deal with it. */
-function NoteRow({ note, onOpen }: { note: NotificationView; onOpen: () => void }) {
+function NoteRow({ note, onOpen, onRemove }: { note: NotificationView; onOpen: () => void; onRemove: () => void }) {
   const tappable = note.target !== null
   return (
     <Pressable onPress={tappable ? onOpen : undefined} disabled={!tappable} accessibilityRole={tappable ? 'button' : undefined} accessibilityLabel={`${note.title}. ${note.body}`} testID={`alert-note-${note.kind}`}>
@@ -227,6 +227,12 @@ function NoteRow({ note, onOpen }: { note: NotificationView; onOpen: () => void 
             </Body>
           </Column>
           {tappable ? <Icon name="chevronRight" size={14} color={paint.mute} /> : null}
+          {/*
+            A note you have dealt with can go (ES-BV-082). The inbox was
+            all-or-nothing — `clear` in the section header — so the only way to
+            tidy one row was to throw the rest away with it.
+          */}
+          <IconButton icon="close" label={t({ id: 'alerts.dismiss', message: 'Dismiss {n}', values: { n: note.title } })} onPress={onRemove} testID={`alert-dismiss-${note.id}`} />
         </Row>
       </Plate>
     </Pressable>

@@ -381,10 +381,17 @@ export function Token({
               {!isNative ? (
                 <IconButton
                   icon="pin"
+                  /*
+                    Named for where it puts things (ES-BV-081). It said "Pin to
+                    Home", and Home has no token list — the rows are on
+                    Portfolio. It also now does what "pin" means everywhere
+                    else: the row sorts to the top, rather than only staying
+                    visible at a zero balance.
+                  */
                   label={
                     token?.pinned
-                      ? t({ id: 'pin.off', message: 'Unpin from Home' })
-                      : t({ id: 'pin.on', message: 'Pin to Home' })
+                      ? t({ id: 'pin.off.v2', message: 'Unpin from Portfolio' })
+                      : t({ id: 'pin.on.v2', message: 'Pin to the top of Portfolio' })
                   }
                   active={!!token?.pinned}
                   onPress={() =>
