@@ -154,6 +154,9 @@ export interface ProviderDeps {
   /** Receipt polling cadence; defaults to the chain's block time. */
   readonly receiptPollMs?: number
   /** `wallet_watchAsset` (plan A3): the chain's word on a token for the sheet, and the add once approved. */
+  /** Decimals learned from a contract for tokens no list carries (ES-BV-086). */
+  readonly learnedDecimals?: (chainId: number) => Promise<Record<string, number>>
+  readonly rememberDecimals?: (chainId: number, address: string, decimals: number) => Promise<void>
   readonly tokenMetadata?: (
     chainId: number,
     address: string,
@@ -1776,6 +1779,27 @@ export class ProviderService {
     if (!to || !request.tx.data.startsWith('0xa9059cbb')) return
     const key = to.toLowerCase()
     if (tokens[key]) return
+
+    /*
+      The catalog first, then what we already learned, and only then the chain
+      (ES-BV-086).
+
+      `tokens` above is `tokens.universe` — the API-sourced list plus the user's
+      own additions — so a listed token never reaches this line at all. What
+      does reach it is a token no list carries, and the answer used to be
+      thrown away with the assessment: the same `eth_call` on every request
+      that touched it, for ever. It is remembered now, so the cost is once.
+    */
+    const stub = { symbol: `${to.slice(0, 6)}…${to.slice(-4)}` }
+    const learned = this.deps.learnedDecimals
+      ? await this.deps.learnedDecimals(chainId).catch(() => ({}) as Record<string, number>)
+      : {}
+    const remembered = learned[key]
+    if (remembered !== undefined) {
+      tokens[key] = { ...stub, decimals: remembered }
+      return
+    }
+
     const raw = (await this.deps.chains
       .rpc(chainId, 'eth_call', [{ to, data: DECIMALS_SELECTOR }, 'latest'])
       .catch(() => null)) as string | null
@@ -1787,7 +1811,10 @@ export class ProviderService {
       statement is worse than none — so the token names itself the way `label()`
       names any unknown contract, six and six.
     */
-    tokens[key] = { symbol: `${to.slice(0, 6)}…${to.slice(-4)}`, decimals }
+    tokens[key] = { ...stub, decimals }
+    // Best effort: a statement that is already correct must not fail to be made
+    // because remembering it did.
+    if (this.deps.rememberDecimals) await this.deps.rememberDecimals(chainId, to, decimals).catch(() => undefined)
   }
 
   private async nameCounterparties(

@@ -123,6 +123,14 @@ export interface SealedStores {
   /** Pinned/hidden tokens and user-added tokens — what the user is interested in. */
   readonly tokenPrefs: SealedMap<{ pinned: string[]; hidden: string[] }>
   readonly tokensCustom: SealedMap<CustomToken[]>
+  /**
+   * Decimals learned from a contract for tokens the catalog does not carry
+   * (one entry, id `all`), so the same `decimals()` call is not made again.
+   *
+   * Sealed, though decimals are public: the KEYS are tokens this person has
+   * moved, and a plaintext list of those at rest says what they hold and trade.
+   */
+  readonly tokenDecimals: SealedMap<Record<string, number>>
   /** Custom collections per chain, and NFT metadata per `<chain>.<address>.<tokenId>`. */
   readonly nftCustom: SealedMap<CustomCollection[]>
   readonly nftMeta: SealedMap<NftMetadata | null>
@@ -326,6 +334,12 @@ export function createSealedStores(
     aad: 'boltvault.tokens.custom.v1',
     schema: z.array(CustomTokenSchema) as unknown as z.ZodType<CustomToken[]>,
   })
+  const tokenDecimals = new SealedMap<Record<string, number>>(platform, dek, {
+    key: 'tokens.decimals.blob',
+    info: 'bv/tokens/decimals',
+    aad: 'boltvault.tokens.decimals.v1',
+    schema: z.record(z.string(), z.number().int().min(0).max(36)) as unknown as z.ZodType<Record<string, number>>,
+  })
   const nftCustom = new SealedMap<CustomCollection[]>(platform, dek, {
     key: 'nft.custom.blob',
     info: 'bv/nft/custom',
@@ -387,6 +401,7 @@ export function createSealedStores(
     watchlist,
     tokenPrefs,
     tokensCustom,
+    tokenDecimals,
     nftCustom,
     nftMeta,
     syncIdentity,
@@ -411,6 +426,7 @@ export function createSealedStores(
     watchlist,
     tokenPrefs,
     tokensCustom,
+    tokenDecimals,
     nftCustom,
     nftMeta,
     syncIdentity,
