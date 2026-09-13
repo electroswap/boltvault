@@ -72,9 +72,23 @@ export interface FarmDeps {
 
 /** A farm list is good for a minute. */
 const LIST_TTL_MS = 60_000
+/*
+  One farm is good for a block.
+
+  §8.8 has the position ticking with the head — rewards really do accrue per
+  block — so this cannot carry the list's minute. What it buys instead is a
+  document to paint from on the way back into the screen, and a floor under the
+  re-read burst when several things change at once.
+*/
+const FARM_TTL_MS = 5_000
 const listSpec = (chainId: number, accountId: string | undefined) => ({
   key: cacheKey('farm', 'list', chainId, accountId ?? '-'),
   schema: z.array(FarmViewSchema),
+})
+/** One farm, so the detail screen has something to paint before the chain answers. */
+const farmSpec = (chainId: number, farmId: number, accountId: string | undefined) => ({
+  key: cacheKey('farm', 'one', chainId, farmId, accountId ?? '-'),
+  schema: FarmViewSchema,
 })
 
 interface FarmTuple {
@@ -344,6 +358,60 @@ export class FarmService {
     return { sqrtPriceX96: (slot.value as [bigint])[0] }
   }
 
+  /**
+   * A farm described from the index alone, for when the chain does not answer.
+   *
+   * Everything here is something the API computed or relayed: the pair, the
+   * TVL, both APYs, the sponsor token, and the allocation that says whether a
+   * boost can pay. The screen renders instead of going blank, which is what it
+   * used to do — `farm()` returned `null` on a failed chain read.
+   *
+   * `position` stays null on purpose. `FarmIndexView.farmer` is documented as
+   * "a sanity companion to the chain read, never the quantity source", and a
+   * degraded read is the last place to promote it: telling someone they hold
+   * 12.4 DYNO on an indexer's word, while the chain is unreachable and cannot
+   * contradict it, is the one number here worth being silent about. The farm
+   * renders; the position fills in when the chain answers.
+   *
+   * `boosted` is false when the API did not say. Unknown must not offer a
+   * boost — the whole point of ES-BV-088 is not showing one that cannot pay.
+   */
+  private async viewFromIndex(
+    chainId: 52014 | 5201420,
+    index: FarmIndexView,
+    owner: Hex | null,
+  ): Promise<FarmView> {
+    const [t0, t1] = await Promise.all([
+      this.deps.tokens.get(chainId, index.token0),
+      this.deps.tokens.get(chainId, index.token1),
+    ])
+    const wetn = ELECTRONEUM_ADDRESSES[chainId].wetn
+    const sym = (addr: string, t: { symbol: string } | null): string =>
+      t ? t.symbol : same(addr, wetn) ? 'ETN' : `${addr.slice(0, 6)}…`
+    void owner
+    return {
+      chainId,
+      id: index.id,
+      version: index.version,
+      name: index.name || `Farm #${String(index.id)}`,
+      poolAddr: index.poolAddr,
+      token0: index.token0,
+      token1: index.token1,
+      symbol0: sym(index.token0, t0),
+      symbol1: sym(index.token1, t1),
+      decimals0: t0?.decimals ?? 18,
+      decimals1: t1?.decimals ?? 18,
+      active: index.active,
+      tvlUsd: index.tvlUsd,
+      baseApy: index.baseApy,
+      thirdPartyApy: index.thirdPartyApy,
+      thirdParty: index.thirdParty ? { token: index.thirdParty.token, symbol: index.thirdParty.symbol } : null,
+      farmerCount: index.farmerCount,
+      boosted: index.allocation !== null && index.allocation > 0,
+      position: null,
+    }
+  }
+
   private async view(
     chainId: 52014 | 5201420,
     tuple: FarmTuple,
@@ -440,26 +508,84 @@ export class FarmService {
     return (await this.deps.cache?.read(listSpec(chainId, accountId))) ?? null
   }
 
+  /**
+   * One farm. The API and the chain are asked at the same time, and the answer
+   * is cached so a second visit paints before either of them replies.
+   *
+   * This used to read the chain, wait, and only then ask the API — two round
+   * trips nose to tail in front of the first paint, on a screen that re-runs
+   * the whole thing on every new block. Worse, a failed chain read returned
+   * `null`: no farm at all, on a farm the API could have described completely.
+   *
+   * Now: both in flight together, and the index alone is enough to render if
+   * the chain does not answer. The chain still wins wherever it does — `view`
+   * takes its quantities from the tuple and the position read, and the index
+   * only fills what the chain cannot price (TVL, APY, the sponsor token).
+   */
   async farm(chainId: number, farmId: number, accountId?: string): Promise<FarmView | null> {
     if (!isEtn(chainId)) return null
+    const build = (): Promise<FarmView | null> => this.readFarm(chainId, farmId, accountId)
+    if (!this.deps.cache) return build()
+    /*
+      Cached with the same TTL as the list, and for the same reason the list
+      has one: this screen re-reads on every block, and without a cache each
+      of those is a fresh multicall. `cache.through` also writes on success,
+      and that write emits `cache.changed` — which is what lets the UI hold
+      the last good farm on screen while the next read happens behind it.
+    */
+    const hit = await this.deps.cache.through(farmSpec(chainId, farmId, accountId), FARM_TTL_MS, async () => {
+      const v = await build()
+      if (!v) throw new EngineError('not_found', 'no such farm')
+      return v
+    }).catch(() => null)
+    return hit?.value ?? null
+  }
+
+  /**
+   * The farm as the sources say it is right now, with no cache in the way.
+   *
+   * Every write path reads through this rather than `farm()`: `deposit`,
+   * `withdraw` and `collect` decide from it whether there is a position at all
+   * and what it holds, and a block-old answer is not what a transaction should
+   * be built on. Same split as `legends.readStatus`.
+   */
+  private async readFarm(chainId: number, farmId: number, accountId?: string): Promise<FarmView | null> {
+    if (!isEtn(chainId)) return null
     const owner = accountId ? (await this.account(accountId)).address : null
-    const [r] = await readMany(this.deps.chains, chainId, [
-      {
-        address: this.farmAddress(chainId),
-        abi: YIELD_FARM_ABI,
-        functionName: 'getFarmById',
-        args: [BigInt(farmId)],
-      },
+    const [chain, index] = await Promise.all([
+      readMany(this.deps.chains, chainId, [
+        {
+          address: this.farmAddress(chainId),
+          abi: YIELD_FARM_ABI,
+          functionName: 'getFarmById',
+          args: [BigInt(farmId)],
+        },
+      ]).catch(() => []),
+      this.deps.electroswap
+        ? fetchFarms(this.deps.electroswap, chainId, owner ?? undefined)
+            .then((all) => all.find((x) => x.id === farmId) ?? null)
+            .catch(() => null)
+        : Promise.resolve(null),
     ])
-    const tuple = r?.ok ? farmTuple(r.value) : null
-    if (!tuple) return null
-    let index: FarmIndexView | null = null
-    if (this.deps.electroswap)
-      index =
-        (await fetchFarms(this.deps.electroswap, chainId, owner ?? undefined).catch(() => [])).find(
-          (x) => x.id === farmId,
-        ) ?? null
+    const tuple = chain[0]?.ok ? farmTuple(chain[0]?.value) : null
+    if (!tuple) return index ? this.viewFromIndex(chainId, index, owner) : null
     return this.view(chainId, tuple, index, owner, await this.head(chainId))
+  }
+
+  /*
+    No explicit invalidation after deposit / withdraw / collect, on purpose.
+
+    `FARM_TTL_MS` is five seconds and every one of those actions has to be
+    mined and have its receipt read, so by the time a flow reports itself done
+    the document is already past its TTL and the screen's refresh gets a real
+    read. Legends needs the opposite treatment because its claim writes a
+    LOCAL value (`legendsBest`) the instant the flow settles, with no block to
+    wait for — a test caught that one showing the pre-claim ceiling.
+  */
+
+  /** The last farm this screen showed, for painting before the reads return. */
+  async cachedFarm(chainId: number, farmId: number, accountId?: string): Promise<Cached<FarmView> | null> {
+    return (await this.deps.cache?.read(farmSpec(chainId, farmId, accountId))) ?? null
   }
 
   /** The deposit plate: the other side from the pool's ratio, the BOLT stair, the dilution, the sheets it takes. */
@@ -491,7 +617,7 @@ export class FarmService {
     if (!isEtn(input.chainId)) return { ...empty, problems: ['Farms live on Electroneum.'] }
     const chainId = input.chainId
     const account = await this.account(input.accountId)
-    const view = await this.farm(chainId, input.farmId, input.accountId)
+    const view = await this.readFarm(chainId, input.farmId, input.accountId)
     if (!view) return { ...empty, problems: ['No such farm.'] }
     if (!view.active) problems.push('This farm is closed to deposits.')
     if (account.kind === 'watch')
@@ -775,7 +901,7 @@ export class FarmService {
       problems,
     }
     if (!isEtn(input.chainId)) return { ...base, problems: ['Farms live on Electroneum.'] }
-    const view = await this.farm(input.chainId, input.farmId, input.accountId)
+    const view = await this.readFarm(input.chainId, input.farmId, input.accountId)
     if (!view?.position) return { ...base, problems: ['You have nothing in this farm.'] }
     const pct = Math.max(0, Math.min(100, input.percent))
     const liquidity = (BigInt(view.position.liquidity) * BigInt(Math.round(pct * 100))) / 10_000n
@@ -858,7 +984,7 @@ export class FarmService {
       throw new EngineError('invalid_argument', 'Farms live on Electroneum.')
     const chainId = input.chainId
     const account = await this.account(input.accountId)
-    const view = await this.farm(chainId, input.farmId, input.accountId)
+    const view = await this.readFarm(chainId, input.farmId, input.accountId)
     if (!view?.position) throw new EngineError('invalid_argument', 'You have nothing in this farm.')
     const flow = await this.deps.flows.start({
       kind: 'farm',
@@ -911,6 +1037,19 @@ export function farmNamespace(farm: FarmService): NamespaceSpec {
       handler: (arg) =>
         farm.cachedList(
           (arg as { chainId: number }).chainId,
+          (arg as { accountId?: string }).accountId,
+        ),
+    },
+    cachedFarm: {
+      input: z.object({
+        chainId: z.number().int().positive(),
+        farmId: z.number().int().nonnegative(),
+        accountId: AccountIdSchema.optional(),
+      }),
+      handler: (arg) =>
+        farm.cachedFarm(
+          (arg as { chainId: number }).chainId,
+          (arg as { farmId: number }).farmId,
           (arg as { accountId?: string }).accountId,
         ),
     },

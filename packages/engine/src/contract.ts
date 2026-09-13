@@ -669,6 +669,7 @@ export interface NftNamespace {
 /** Electric Legends dividends (§8.10). */
 export interface LegendsNamespace {
   status(input: { accountId: AccountId; chainId: number }): Promise<LegendsStatus | null>
+  cachedStatus(input: { accountId: AccountId; chainId: number }): Promise<Cached<LegendsStatus> | null>
   activate(input: {
     accountId: AccountId
     chainId: number
@@ -713,6 +714,7 @@ export interface BridgeNamespace {
 export interface FarmNamespace {
   list(input: { chainId: number; accountId?: AccountId }): Promise<FarmView[]>
   cachedList(input: { chainId: number; accountId?: AccountId }): Promise<Cached<FarmView[]> | null>
+  cachedFarm(input: { chainId: number; farmId: number; accountId?: AccountId }): Promise<Cached<FarmView> | null>
   farm(input: { chainId: number; farmId: number; accountId?: AccountId }): Promise<FarmView | null>
   quoteDeposit(input: {
     accountId: AccountId

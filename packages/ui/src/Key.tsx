@@ -69,7 +69,15 @@ export function Key({ label, onPress, kind = 'primary', size = 'regular', disabl
       {/* A positioned layer: on the web an absolute SVG paints above in-flow text whatever the order. */}
       <Row flexDirection={stacked ? 'column' : 'row'} alignItems="center" justifyContent="center" gap={stacked ? 2 : compact ? 6 : 8} zIndex={1}>
         {icon}
-        <KeyLabel fontSize={stacked || compact ? '$2' : loud ? '$5' : '$3'}>{label}</KeyLabel>
+        {/*
+          One line, always. A key is a fixed shape with a verb in it, and a verb
+          that breaks mid-word ("Withdra / w", as a tester found on the farm
+          screen) reads as a rendering fault rather than a narrow button. If the
+          room is genuinely not there the label shrinks into its padding first,
+          and ellipsis is the last resort — all three are better than a
+          hyphenless break.
+        */}
+        <KeyLabel numberOfLines={1} flexShrink={1} fontSize={stacked || compact ? '$2' : loud ? '$5' : '$3'}>{label}</KeyLabel>
       </Row>
     </KeyFrame>
   )
