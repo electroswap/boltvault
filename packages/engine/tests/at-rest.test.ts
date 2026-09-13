@@ -117,6 +117,13 @@ async function useTheWallet(): Promise<{ dump: Record<string, string>; accountId
   // Caches (F2): prices, history, inventories, positions.
   await eng.cache.write({ key: 'explore.tokens.52014', schema: z.array(z.string()) }, ['BOLT', 'DYNO'])
   await eng.cache.write({ key: `nft.inventory.52014.${accountId}`, schema: z.array(z.string()) }, ['collection-a'])
+  /*
+    A token's trade feed says which token this wallet was reading about, and
+    the subject's address is part of the logical key — so this family is also
+    the sharding's own test: the stored key is `cache.explore.tokentx.blob`,
+    and the address must not survive anywhere in the dump.
+  */
+  await eng.cache.write({ key: 'explore.tokentx.52014.0xfeedfacefeedfacefeedfacefeedfacefeedface', schema: z.array(z.string()) }, ['TRADEFEED'])
   // The families the audit never saw, because that profile had not used them.
   // Not swallowed: a silent failure here would make the leak assertions below
   // pass because nothing was ever written.
@@ -165,6 +172,7 @@ describe('at rest, with the vault locked', () => {
     expect(all).not.toContain('collection-a')
     // Families the audit's dump never contained, so its key list never named them.
     expect(all).not.toContain('0xfeedface')
+    expect(all).not.toContain('TRADEFEED')
     expect(all).not.toContain('WATCHED')
     expect(all).not.toContain('0x1111111111111111111111111111111111111111')
   })
@@ -173,7 +181,7 @@ describe('at rest, with the vault locked', () => {
     const { dump } = await useTheWallet()
     // Without this, a swallowed error upstream would make the leak assertions
     // pass because the code path never ran (as `setChain` once did).
-    for (const blob of ['portfolio.blob', 'sites.blob', 'watchlist.blob', 'tokens.prefs.blob', 'launchpad.ref.blob', 'cache.explore.tokens.blob', 'cache.nft.inventory.blob']) {
+    for (const blob of ['portfolio.blob', 'sites.blob', 'watchlist.blob', 'tokens.prefs.blob', 'launchpad.ref.blob', 'cache.explore.tokens.blob', 'cache.explore.tokentx.blob', 'cache.nft.inventory.blob']) {
       expect(Object.keys(dump)).toContain(blob)
     }
   })

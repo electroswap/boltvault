@@ -38,11 +38,13 @@ import {
   type LiquidityView,
   type PriceHistoryView,
   type TokenDetailView,
+  type TokenTransactionsView,
   type TokenView,
 } from '@boltvault/engine'
 import { useEffect, useMemo, useState } from 'react'
 import { ChainCaption } from '../components/ChainSelect'
 import { PageHeader } from '../components/PageHeader'
+import { TokenTransactions } from '../components/TokenTransactions'
 import { useEngine } from '../engine/EngineProvider'
 import { formatChange, formatFiat, formatPrice, formatQuantity, formatAmount } from '../format'
 import { useHost } from '../host'
@@ -60,6 +62,10 @@ import { useWalletState } from '../state/useWalletState'
 
 const DURATIONS: readonly ChartDuration[] = ['1D', '1W', '1M', '1Y']
 const isEtn = (chainId: number): boolean => chainId === 52014 || chainId === 5201420
+
+/** Info is everything the dossier already said; Transactions is the market's, not yours. */
+export type TokenTab = 'info' | 'transactions'
+export const isTokenTab = (v: unknown): v is TokenTab => v === 'info' || v === 'transactions'
 
 /** The price without its currency sign, for a caption that sits beside a priced hero. */
 const plainPrice = (v: number): string =>
@@ -85,10 +91,13 @@ export function Token({
   chainId,
   address,
   body,
+  initialTab,
 }: {
   chainId: number
   address: string
   body: 'extension-popup' | 'extension-tab' | 'mobile'
+  /** Deep links and the screenshot harness open straight onto a tab; the screen otherwise starts on Info. */
+  initialTab?: TokenTab
 }) {
   // Every outward link passes the same gate (ES-BV-035).
   const openSafely = useSafeOpen()
@@ -107,10 +116,27 @@ export function Token({
   const [bridgeable, setBridgeable] = useState(false)
   const [copied, setCopied] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const [tab, setTab] = useState<TokenTab>(initialTab ?? 'info')
+  /*
+    Whether Transactions has EVER been opened, which is what gates the fetch.
+
+    Sticky on purpose, and this is the one subtle thing on the screen. Nothing
+    is fetched until the tab is first pressed, because `useCached` does nothing
+    at all while its key is null — the same rule Explore states for its
+    segments. But the key must not swing back to null on the way to Info: the
+    hook resets to its empty state when the key goes away, and on the way back
+    in it seeds `refreshing` and then short-circuits on `maxAgeMs` without ever
+    clearing it, leaving a loader sweeping over a list that is not loading.
+    Once opened, stay opened — it costs nothing, because the hook only reads on
+    mount and when the cache says the key changed.
+  */
+  const [txOpened, setTxOpened] = useState(initialTab === 'transactions')
   const inset = body === 'extension-popup' ? metrics.inset : metrics.insetWide
   const wide = body === 'extension-tab'
   const chartWidth = Math.min(width, wide ? 640 : width) - inset * 2
   const market = isEtn(chainId)
+  // Off Electroneum there is no indexer and so no tab control; Info is the whole screen.
+  const showTransactions = market && tab === 'transactions'
   const duration = prefs.chartDuration
 
   useEffect(() => {
@@ -154,6 +180,18 @@ export function Token({
         return v
       }),
     maxAgeMs: 5 * 60_000,
+  })
+  // The market's trades in this token, and only once the tab has been opened.
+  const transactions = useCached<TokenTransactionsView>({
+    key: market && txOpened ? cacheKey('explore', 'tokentx', chainId, address) : null,
+    cached: (e) => e.explore.cachedTokenTransactions({ chainId, address }),
+    fresh: (e) =>
+      e.explore.tokenTransactions({ chainId, address }).then((v) => {
+        // Null is "we could not ask"; `rows: []` is "nobody has traded it".
+        if (!v) throw new Error('no transactions')
+        return v
+      }),
+    maxAgeMs: 60_000,
   })
   const liquidity = useCached<LiquidityView>({
     key: market && address !== 'native' ? cacheKey('explore', 'liquidity', chainId, address) : null,
@@ -485,15 +523,56 @@ export function Token({
           </Row>
         </Column>
 
-        {/* Yours */}
-        <Plate role="raised" paddingVertical={10} paddingHorizontal="$3" testID="token-balance">
-          <Row justifyContent="space-between" alignItems="center">
-            <Column>
-              <Body tone="mute" size="caption">
-                {t({ id: 'token.yours', message: 'Yours' })}
-              </Body>
-              <Body size="title">
-                {/*
+        {/*
+          Info · Transactions (owner ask 2026-09-13), directly under the chart:
+          everything the dossier said is Info, and Transactions is the market's
+          trades in this token rather than yours.
+
+          `regular` rather than `compact`, deliberately, even though a compact
+          track sits forty pixels above it: two controls in the same idiom,
+          stacked, read as one control with eight options. The timeframe strip
+          parameterises the chart; this one changes what the page is about.
+        */}
+        {market ? (
+          <Segmented
+            options={[
+              { id: 'info', label: t({ id: 'token.tab.info', message: 'Info' }) },
+              {
+                id: 'transactions',
+                label: t({ id: 'token.tab.transactions', message: 'Transactions' }),
+              },
+            ]}
+            value={tab}
+            onChange={(id) => {
+              if (!isTokenTab(id)) return
+              setTab(id)
+              // One-way: see `txOpened`.
+              if (id === 'transactions') setTxOpened(true)
+            }}
+            testID="token-tabs"
+          />
+        ) : null}
+
+        {showTransactions ? (
+          <TokenTransactions
+            state={transactions}
+            wide={wide}
+            explorerUrl={chain?.explorerUrl ?? null}
+            chainId={chainId}
+            address={address}
+            reducedMotion={reducedMotion}
+          />
+        ) : (
+          <>
+            {/* Yours */}
+            <Plate role="raised" paddingVertical={10} paddingHorizontal="$3" testID="token-balance">
+              <Row justifyContent="space-between" alignItems="center">
+                <Column>
+                  <Body tone="mute" size="caption">
+                    {t({ id: 'token.yours', message: 'Yours' })}
+                  </Body>
+                  <Body size="title">
+                    {/*
                   A snapshot that has not arrived is not a balance of zero
                   (ES-BV-047). This screen used to read the home chain's
                   portfolio whatever chain the token was on, so every
@@ -501,29 +580,29 @@ export function Token({
                   nothing. The read is scoped now, and until it lands the
                   screen says it does not know yet.
                 */}
-                {row
-                  ? `${formatQuantity(row.quantity)} ${symbol}`
-                  : portfolio.snapshot
-                    ? `0 ${symbol}`
-                    : '…'}
-              </Body>
-            </Column>
-            <Column alignItems="flex-end">
-              <Body>{row && row.fiat !== null ? formatFiat(row.fiat, currency) : '—'}</Body>
-              {row && formatChange(row.change24h) ? (
-                <Body tone={(row.change24h ?? 0) >= 0 ? 'surge' : 'burn'} size="caption">
-                  {formatChange(row.change24h)} {t({ id: 'home.today', message: 'today' })}
-                </Body>
-              ) : (
-                <Body tone="mute" size="caption">
-                  {row ? t({ id: 'token.unpriced', message: 'No price' }) : ''}
-                </Body>
-              )}
-            </Column>
-          </Row>
-        </Plate>
+                    {row
+                      ? `${formatQuantity(row.quantity)} ${symbol}`
+                      : portfolio.snapshot
+                        ? `0 ${symbol}`
+                        : '…'}
+                  </Body>
+                </Column>
+                <Column alignItems="flex-end">
+                  <Body>{row && row.fiat !== null ? formatFiat(row.fiat, currency) : '—'}</Body>
+                  {row && formatChange(row.change24h) ? (
+                    <Body tone={(row.change24h ?? 0) >= 0 ? 'surge' : 'burn'} size="caption">
+                      {formatChange(row.change24h)} {t({ id: 'home.today', message: 'today' })}
+                    </Body>
+                  ) : (
+                    <Body tone="mute" size="caption">
+                      {row ? t({ id: 'token.unpriced', message: 'No price' }) : ''}
+                    </Body>
+                  )}
+                </Column>
+              </Row>
+            </Plate>
 
-        {/*
+            {/*
           Three verbs, not four.
 
           A fourth key took the row below the width a label needs: on a narrow
@@ -533,225 +612,230 @@ export function Token({
           a line of its own below, where there is room to name the bridge that
           carries it.
         */}
-        <Row gap="$2" testID="token-keys">
-          <Column flex={1}>
-            <Key
-              label={t({ id: 'key.send', message: 'Send' })}
-              kind="secondary"
-              size="compact"
-              onPress={() => router.navigate('send', { token: address, chainId })}
-              testID="token-send"
-            />
-          </Column>
-          <Column flex={1}>
-            <Key
-              label={t({ id: 'key.receive', message: 'Receive' })}
-              kind="secondary"
-              size="compact"
-              onPress={() => router.navigate('receive', { token: address, chainId })}
-              testID="token-receive"
-            />
-          </Column>
-          {market ? (
-            <Column flex={1}>
-              <Key
-                label={t({ id: 'key.swap', message: 'Swap' })}
-                kind="secondary"
-                size="compact"
-                onPress={() =>
-                  router.setTab(
-                    'swap',
-                    isNative ? undefined : { tokenIn: 'native', tokenOut: address },
-                  )
-                }
-                testID="token-swap"
-              />
-            </Column>
-          ) : null}
-        </Row>
+            <Row gap="$2" testID="token-keys">
+              <Column flex={1}>
+                <Key
+                  label={t({ id: 'key.send', message: 'Send' })}
+                  kind="secondary"
+                  size="compact"
+                  onPress={() => router.navigate('send', { token: address, chainId })}
+                  testID="token-send"
+                />
+              </Column>
+              <Column flex={1}>
+                <Key
+                  label={t({ id: 'key.receive', message: 'Receive' })}
+                  kind="secondary"
+                  size="compact"
+                  onPress={() => router.navigate('receive', { token: address, chainId })}
+                  testID="token-receive"
+                />
+              </Column>
+              {market ? (
+                <Column flex={1}>
+                  <Key
+                    label={t({ id: 'key.swap', message: 'Swap' })}
+                    kind="secondary"
+                    size="compact"
+                    onPress={() =>
+                      router.setTab(
+                        'swap',
+                        isNative ? undefined : { tokenIn: 'native', tokenOut: address },
+                      )
+                    }
+                    testID="token-swap"
+                  />
+                </Column>
+              ) : null}
+            </Row>
 
-        {bridgeable ? (
-          <Plate
-            role="recessed"
-            paddingVertical={6}
-            paddingHorizontal="$3"
-            testID="token-bridgeline"
-          >
-            <Row alignItems="center" gap="$2">
-              <Column flex={1} minWidth={0}>
+            {bridgeable ? (
+              <Plate
+                role="recessed"
+                paddingVertical={6}
+                paddingHorizontal="$3"
+                testID="token-bridgeline"
+              >
+                <Row alignItems="center" gap="$2">
+                  <Column flex={1} minWidth={0}>
+                    <Body tone="mute" size="caption">
+                      {t({
+                        id: 'token.bridge.note',
+                        message: 'The same asset on other chains, over the Hyperlane Nexus bridge.',
+                      })}
+                    </Body>
+                  </Column>
+                  <Key
+                    label={t({ id: 'key.bridge', message: 'Bridge' })}
+                    kind="secondary"
+                    size="compact"
+                    onPress={() => router.navigate('bridge', { chainId, token: address })}
+                    testID="token-bridge"
+                  />
+                </Row>
+              </Plate>
+            ) : null}
+
+            {/* Market */}
+            <Column gap="$2" testID="token-market">
+              <StatStrip cells={stats} columns={3} small />
+              {market && !d && detail.freshness !== 'loading' ? (
                 <Body tone="mute" size="caption">
                   {t({
-                    id: 'token.bridge.note',
-                    message: 'The same asset on other chains, over the Hyperlane Nexus bridge.',
+                    id: 'token.market.none',
+                    message:
+                      'Market data arrives from ElectroSwap once the wallet key is enabled on the API.',
                   })}
                 </Body>
-              </Column>
-              <Key
-                label={t({ id: 'key.bridge', message: 'Bridge' })}
-                kind="secondary"
-                size="compact"
-                onPress={() => router.navigate('bridge', { chainId, token: address })}
-                testID="token-bridge"
-              />
-            </Row>
-          </Plate>
-        ) : null}
-
-        {/* Market */}
-        <Column gap="$2" testID="token-market">
-          <StatStrip cells={stats} columns={3} small />
-          {market && !d && detail.freshness !== 'loading' ? (
-            <Body tone="mute" size="caption">
-              {t({
-                id: 'token.market.none',
-                message:
-                  'Market data arrives from ElectroSwap once the wallet key is enabled on the API.',
-              })}
-            </Body>
-          ) : null}
-          {safety || lockText ? (
-            <Row gap="$2" alignItems="center" flexWrap="wrap" testID="token-safety">
-              {safety ? (
-                <Pill
-                  label={safety.label}
-                  tone={safety.tone}
-                  size="sm"
-                  icon={<IconGlyph name={safety.icon} tone={safety.tone} />}
-                />
               ) : null}
-              {lockText ? (
-                <Body
-                  tone={liquidity.value && liquidity.value.lockedPct >= 50 ? 'surge' : 'mute'}
-                  size="caption"
-                >
-                  {lockText}
-                </Body>
-              ) : null}
-            </Row>
-          ) : null}
-        </Column>
-
-        {/* About */}
-        {d?.description || links.length ? (
-          <Column gap="$2" testID="token-about">
-            {d?.description ? (
-              <Column gap={2}>
-                <Body tone="mute" size="caption" numberOfLines={expanded ? undefined : 4}>
-                  {d.description}
-                </Body>
-                {d.description.length > 180 ? (
-                  <Pressable
-                    onPress={() => setExpanded((v) => !v)}
-                    accessibilityRole="button"
-                    style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}
-                    testID="token-readmore"
-                  >
-                    <Body tone="arc" size="caption">
-                      {expanded
-                        ? t({ id: 'less', message: 'Less' })
-                        : t({ id: 'readmore', message: 'Read more' })}
+              {safety || lockText ? (
+                <Row gap="$2" alignItems="center" flexWrap="wrap" testID="token-safety">
+                  {safety ? (
+                    <Pill
+                      label={safety.label}
+                      tone={safety.tone}
+                      size="sm"
+                      icon={<IconGlyph name={safety.icon} tone={safety.tone} />}
+                    />
+                  ) : null}
+                  {lockText ? (
+                    <Body
+                      tone={liquidity.value && liquidity.value.lockedPct >= 50 ? 'surge' : 'mute'}
+                      size="caption"
+                    >
+                      {lockText}
                     </Body>
-                  </Pressable>
+                  ) : null}
+                </Row>
+              ) : null}
+            </Column>
+
+            {/* About */}
+            {d?.description || links.length ? (
+              <Column gap="$2" testID="token-about">
+                {d?.description ? (
+                  <Column gap={2}>
+                    <Body tone="mute" size="caption" numberOfLines={expanded ? undefined : 4}>
+                      {d.description}
+                    </Body>
+                    {d.description.length > 180 ? (
+                      <Pressable
+                        onPress={() => setExpanded((v) => !v)}
+                        accessibilityRole="button"
+                        style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}
+                        testID="token-readmore"
+                      >
+                        <Body tone="arc" size="caption">
+                          {expanded
+                            ? t({ id: 'less', message: 'Less' })
+                            : t({ id: 'readmore', message: 'Read more' })}
+                        </Body>
+                      </Pressable>
+                    ) : null}
+                  </Column>
+                ) : null}
+                {links.length ? (
+                  <Row gap="$2" flexWrap="wrap">
+                    {links.map((l) => (
+                      <Pill
+                        key={l.url}
+                        label={l.label}
+                        // The X pill shows only its mark, so it still needs a name.
+                        {...(l.a11y ? { accessibilityLabel: l.a11y } : {})}
+                        icon={<IconGlyph name={l.icon} tone="mute" />}
+                        size="sm"
+                        onPress={() => openSafely(l.url)}
+                        testID={`token-link-${l.icon}`}
+                      />
+                    ))}
+                  </Row>
                 ) : null}
               </Column>
             ) : null}
-            {links.length ? (
-              <Row gap="$2" flexWrap="wrap">
-                {links.map((l) => (
-                  <Pill
-                    key={l.url}
-                    label={l.label}
-                    // The X pill shows only its mark, so it still needs a name.
-                    {...(l.a11y ? { accessibilityLabel: l.a11y } : {})}
-                    icon={<IconGlyph name={l.icon} tone="mute" />}
-                    size="sm"
-                    onPress={() => openSafely(l.url)}
-                    testID={`token-link-${l.icon}`}
-                  />
-                ))}
-              </Row>
-            ) : null}
-          </Column>
-        ) : null}
 
-        {/* The contract, in one row (owner item T2). */}
-        {!isNative ? (
-          <Plate role="recessed" paddingVertical={4} paddingHorizontal="$3" testID="token-contract">
-            <Row alignItems="center" gap="$2">
-              <Column flex={1}>
-                <Body size="caption" numberOfLines={1}>
-                  {shortAddress(address)}
-                </Body>
-                <Body tone="mute" size="caption">
-                  {t({
-                    id: 'token.decimals',
-                    message: '{n} decimals',
-                    values: { n: token?.decimals ?? row?.decimals ?? d?.decimals ?? 18 },
-                  })}
-                </Body>
-              </Column>
-              <IconButton
-                icon={copied ? 'check' : 'copy'}
-                label={
-                  copied
-                    ? t({ id: 'copied', message: 'Copied' })
-                    : t({ id: 'token.copyAddress', message: 'Copy address' })
-                }
-                active={copied}
-                onPress={() => void copy()}
-                testID="token-copy"
-              />
-              {explorer && host.openUrl ? (
-                <IconButton
-                  icon="external"
-                  label={t({ id: 'token.explorer', message: 'Open in explorer' })}
-                  onPress={() => openSafely(explorer)}
-                  testID="token-explorer"
-                />
-              ) : null}
-              <Pill
-                label={
-                  token?.hidden
-                    ? t({ id: 'token.hidden', message: 'Hidden' })
-                    : t({ id: 'token.hide', message: 'Hide' })
-                }
-                selected={!!token?.hidden}
-                size="sm"
-                onPress={() =>
-                  void engine.tokens.setPrefs({ chainId, address, hidden: !token?.hidden })
-                }
-                testID="token-hide"
-              />
-            </Row>
-            {custom ? (
-              <Key
-                label={t({ id: 'token.remove', message: 'Remove' })}
-                kind="danger"
-                size="compact"
-                onPress={() =>
-                  engine.tokens.removeCustom({ chainId, address }).then(() => router.back())
-                }
-                testID="token-remove"
-              />
-            ) : null}
-          </Plate>
-        ) : null}
-
-        {allowances.length ? (
-          <Plate gap={4} testID="token-allowances">
-            <Body tone="mute" size="caption">
-              {t({ id: 'token.allowances', message: 'Allowances' })}
-            </Body>
-            {allowances.map((a) => (
-              <Row
-                key={`${a.spender}:${a.standard}`}
-                justifyContent="space-between"
-                minHeight={24}
-                alignItems="center"
+            {/* The contract, in one row (owner item T2). */}
+            {!isNative ? (
+              <Plate
+                role="recessed"
+                paddingVertical={4}
+                paddingHorizontal="$3"
+                testID="token-contract"
               >
-                <Body size="caption">{a.spenderName ?? shortAddress(a.spender)}</Body>
-                <Body tone={a.amount === 'unlimited' ? 'burn' : 'mute'} size="caption">
-                  {/*
+                <Row alignItems="center" gap="$2">
+                  <Column flex={1}>
+                    <Body size="caption" numberOfLines={1}>
+                      {shortAddress(address)}
+                    </Body>
+                    <Body tone="mute" size="caption">
+                      {t({
+                        id: 'token.decimals',
+                        message: '{n} decimals',
+                        values: { n: token?.decimals ?? row?.decimals ?? d?.decimals ?? 18 },
+                      })}
+                    </Body>
+                  </Column>
+                  <IconButton
+                    icon={copied ? 'check' : 'copy'}
+                    label={
+                      copied
+                        ? t({ id: 'copied', message: 'Copied' })
+                        : t({ id: 'token.copyAddress', message: 'Copy address' })
+                    }
+                    active={copied}
+                    onPress={() => void copy()}
+                    testID="token-copy"
+                  />
+                  {explorer && host.openUrl ? (
+                    <IconButton
+                      icon="external"
+                      label={t({ id: 'token.explorer', message: 'Open in explorer' })}
+                      onPress={() => openSafely(explorer)}
+                      testID="token-explorer"
+                    />
+                  ) : null}
+                  <Pill
+                    label={
+                      token?.hidden
+                        ? t({ id: 'token.hidden', message: 'Hidden' })
+                        : t({ id: 'token.hide', message: 'Hide' })
+                    }
+                    selected={!!token?.hidden}
+                    size="sm"
+                    onPress={() =>
+                      void engine.tokens.setPrefs({ chainId, address, hidden: !token?.hidden })
+                    }
+                    testID="token-hide"
+                  />
+                </Row>
+                {custom ? (
+                  <Key
+                    label={t({ id: 'token.remove', message: 'Remove' })}
+                    kind="danger"
+                    size="compact"
+                    onPress={() =>
+                      engine.tokens.removeCustom({ chainId, address }).then(() => router.back())
+                    }
+                    testID="token-remove"
+                  />
+                ) : null}
+              </Plate>
+            ) : null}
+
+            {allowances.length ? (
+              <Plate gap={4} testID="token-allowances">
+                <Body tone="mute" size="caption">
+                  {t({ id: 'token.allowances', message: 'Allowances' })}
+                </Body>
+                {allowances.map((a) => (
+                  <Row
+                    key={`${a.spender}:${a.standard}`}
+                    justifyContent="space-between"
+                    minHeight={24}
+                    alignItems="center"
+                  >
+                    <Body size="caption">{a.spenderName ?? shortAddress(a.spender)}</Body>
+                    <Body tone={a.amount === 'unlimited' ? 'burn' : 'mute'} size="caption">
+                      {/*
                     `amount` is a raw uint256, exactly as on the Allowances
                     screen — and `formatQuantity` reads it as a quantity, so
                     1 000 USDC of allowance rendered as "1.00B" on the one
@@ -759,59 +843,65 @@ export function Token({
                     Scaled here the same way, and when the scale is unknown it
                     says so rather than inventing one.
                   */}
-                  {a.amount === 'unlimited'
-                    ? t({ id: 'allow.unlimited', message: 'Unlimited' })
-                    : a.amount === 'all'
-                      ? t({ id: 'allow.all', message: 'Every item' })
-                      : a.decimals === null
-                        ? t({ id: 'allow.raw', message: '{n} base units', values: { n: a.amount } })
-                        : formatAmount(a.amount, a.decimals)}
-                </Body>
-              </Row>
-            ))}
-            <Pressable
-              onPress={() => router.navigate('allowances')}
-              accessibilityRole="button"
-              style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}
-              testID="token-allowances-manage"
-            >
-              <Body tone="arc" size="caption">
-                {t({ id: 'token.allowances.manage', message: 'Manage approvals' })}
-              </Body>
-            </Pressable>
-          </Plate>
-        ) : null}
-
-        <Column gap={4} testID="token-activity">
-          <Body tone="mute" size="caption">
-            {t({ id: 'token.activity', message: 'Your activity' })}
-          </Body>
-          {tokenActivity.length === 0 ? (
-            <Body tone="mute" size="caption">
-              {t({ id: 'token.activity.none', message: 'Nothing yet with this token.' })}
-            </Body>
-          ) : (
-            tokenActivity.slice(0, 5).map((e) => (
-              <Plate
-                key={e.id}
-                role="card"
-                paddingVertical={8}
-                paddingHorizontal="$3"
-                onPress={() => router.setTab('activity')}
-                cursor="pointer"
-              >
-                <Row justifyContent="space-between" gap="$2">
-                  <Body size="caption" numberOfLines={1} flexShrink={1}>
-                    {e.statements[0] ?? e.category}
+                      {a.amount === 'unlimited'
+                        ? t({ id: 'allow.unlimited', message: 'Unlimited' })
+                        : a.amount === 'all'
+                          ? t({ id: 'allow.all', message: 'Every item' })
+                          : a.decimals === null
+                            ? t({
+                                id: 'allow.raw',
+                                message: '{n} base units',
+                                values: { n: a.amount },
+                              })
+                            : formatAmount(a.amount, a.decimals)}
+                    </Body>
+                  </Row>
+                ))}
+                <Pressable
+                  onPress={() => router.navigate('allowances')}
+                  accessibilityRole="button"
+                  style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}
+                  testID="token-allowances-manage"
+                >
+                  <Body tone="arc" size="caption">
+                    {t({ id: 'token.allowances.manage', message: 'Manage approvals' })}
                   </Body>
-                  <Body tone="mute" size="caption">
-                    {e.status}
-                  </Body>
-                </Row>
+                </Pressable>
               </Plate>
-            ))
-          )}
-        </Column>
+            ) : null}
+
+            <Column gap={4} testID="token-activity">
+              <Body tone="mute" size="caption">
+                {t({ id: 'token.activity', message: 'Your activity' })}
+              </Body>
+              {tokenActivity.length === 0 ? (
+                <Body tone="mute" size="caption">
+                  {t({ id: 'token.activity.none', message: 'Nothing yet with this token.' })}
+                </Body>
+              ) : (
+                tokenActivity.slice(0, 5).map((e) => (
+                  <Plate
+                    key={e.id}
+                    role="card"
+                    paddingVertical={8}
+                    paddingHorizontal="$3"
+                    onPress={() => router.setTab('activity')}
+                    cursor="pointer"
+                  >
+                    <Row justifyContent="space-between" gap="$2">
+                      <Body size="caption" numberOfLines={1} flexShrink={1}>
+                        {e.statements[0] ?? e.category}
+                      </Body>
+                      <Body tone="mute" size="caption">
+                        {e.status}
+                      </Body>
+                    </Row>
+                  </Plate>
+                ))
+              )}
+            </Column>
+          </>
+        )}
       </ScrollView>
     </Column>
   )

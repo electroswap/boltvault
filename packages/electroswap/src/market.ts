@@ -6,7 +6,7 @@
  */
 import { z } from 'zod'
 import type { ElectroSwapClient } from './client'
-import { chainEnum, NFT_ACTIVITY, NFT_ASSETS, NFT_ASSET_DETAILS, NFT_BALANCES, NFT_BID_OBLIGATION, NFT_BIDS, NFT_COLLECTION_BALANCES, NFT_COLLECTIONS, PRESALE, PRESALES, PRICE_HISTORY, TOKEN_DETAIL, TOP_COLLECTIONS, TOP_TOKENS, YIELD_FARMS } from './queries'
+import { chainEnum, NFT_ACTIVITY, NFT_ASSETS, NFT_ASSET_DETAILS, NFT_BALANCES, NFT_BID_OBLIGATION, NFT_BIDS, NFT_COLLECTION_BALANCES, NFT_COLLECTIONS, PRESALE, PRESALES, PRICE_HISTORY, TOKEN_DETAIL, TOKEN_TRANSACTIONS, TOP_COLLECTIONS, TOP_TOKENS, YIELD_FARMS } from './queries'
 
 const amount = z.object({ value: z.number().nullable().optional() }).nullable().optional()
 const num = (a: z.infer<typeof amount>): number | null => (a && typeof a.value === 'number' && Number.isFinite(a.value) ? a.value : null)
@@ -127,6 +127,106 @@ export async function fetchPriceHistory(client: ElectroSwapClient, chainId: numb
   const points = (m.priceHistory ?? []).filter((p): p is { timestamp: number; value: number } => p !== null && Number.isFinite(p.value)).map((p) => ({ t: p.timestamp, v: p.value }))
   points.sort((a, b) => a.t - b.t)
   return { points, high: num(m.high), low: num(m.low) }
+}
+
+// ---- one token's trades ----------------------------------------------------------------------
+
+export type PoolTxDirection = 'buy' | 'sell'
+
+/**
+ * One trade in the subject token, already oriented around it.
+ *
+ * The API answers in pool order — `token0` sold, `token1` bought — and carries
+ * no direction field, so the subject's POSITION is the direction. Resolving it
+ * here means the screen never does financial reasoning, and there is exactly
+ * one place in the codebase where it can be got backwards.
+ */
+export interface PoolTxRow {
+  readonly hash: string
+  /** Unix SECONDS, from the chain. */
+  readonly timestamp: number
+  readonly account: string
+  /** The verified `.etn` name the API already had for `account`; no second lookup. */
+  readonly accountName: string | null
+  /** The subject as `token1` was bought; as `token0`, sold. */
+  readonly direction: PoolTxDirection
+  /** WHOLE units as a decimal string — display only, never spent. */
+  readonly subjectAmount: string
+  readonly subjectSymbol: string
+  readonly counterAmount: string
+  readonly counterSymbol: string
+  readonly valueUsd: number | null
+  /** The SUBJECT token's unit price for this trade, as the API reports it. */
+  readonly unitPriceUsd: number | null
+}
+
+export interface PoolTxPage {
+  /** Newest first. */
+  readonly rows: readonly PoolTxRow[]
+  /** The block to resume from; null when the feed is exhausted. */
+  readonly cursor: number | null
+}
+
+const TxTokenSchema = z.object({ address: z.string().nullable().optional(), symbol: z.string().nullable().optional() }).nullable().optional()
+const PoolTxSchema = z.object({ hash: z.string().nullable().optional(), timestamp: z.number().nullable().optional(), account: z.string().nullable().optional(), ensName: z.string().nullable().optional(), token0: TxTokenSchema, token1: TxTokenSchema, token0Quantity: z.string().nullable().optional(), token1Quantity: z.string().nullable().optional(), usdValue: amount, usdPrice: amount })
+const PoolTxPageSchema = z.object({ transactions: z.object({ cursor: z.number().nullable().optional(), transactions: z.array(PoolTxSchema.nullable()).nullable().optional() }).nullable().optional() })
+
+/** One row oriented around `subject`, or null when it cannot be read as a trade in it. */
+function poolTxRow(node: z.infer<typeof PoolTxSchema>, subject: string): PoolTxRow | null {
+  const bought = node.token1?.address?.toLowerCase() === subject
+  const sold = node.token0?.address?.toLowerCase() === subject
+  /*
+    Exactly one side must be the subject. Neither means the row is about some
+    other pair; both means it is unreadable. Guessing a side in either case
+    would invert Buy and Sell for that row, which is the one mistake this
+    table must never make.
+  */
+  if (bought === sold) return null
+  const q0 = node.token0Quantity
+  const q1 = node.token1Quantity
+  if (!node.hash || typeof node.timestamp !== 'number' || !node.account || !q0 || !q1) return null
+  return {
+    hash: node.hash,
+    timestamp: node.timestamp,
+    account: node.account,
+    accountName: node.ensName ?? null,
+    direction: bought ? 'buy' : 'sell',
+    subjectAmount: bought ? q1 : q0,
+    subjectSymbol: (bought ? node.token1?.symbol : node.token0?.symbol) ?? '',
+    counterAmount: bought ? q0 : q1,
+    counterSymbol: (bought ? node.token0?.symbol : node.token1?.symbol) ?? '',
+    valueUsd: num(node.usdValue),
+    unitPriceUsd: num(node.usdPrice),
+  }
+}
+
+/**
+ * Recent trades in one token (§8.3 › Transactions).
+ *
+ * The envelope is parsed with `.parse`, which THROWS — deliberately unlike
+ * `fetchWalletActivity`, which swallows a bad body into `[]` because activity
+ * is enrichment and must never be the reason a screen fails to paint. Here the
+ * table is the whole of what its tab shows, so an empty list standing in for a
+ * body we could not read would be a lie the user acts on: "nobody trades this"
+ * and "we could not ask" are different answers. An individual row we cannot
+ * read is still only a dropped row.
+ */
+export async function fetchTokenTransactions(client: ElectroSwapClient, chainId: number, subject: string, blockCursor: number | null = null): Promise<PoolTxPage> {
+  // `typeFilter` is non-null in the schema and ignored by the resolver, which
+  // hardcodes `type: SWAP`; asking for the other two would not produce them.
+  // `transactionSearch` is only meaningful beside a cursor, and `BEFORE` walks
+  // back down the chain from it.
+  const data = await client.query<unknown>(TOKEN_TRANSACTIONS, { chain: chainEnum(chainId), address: subject, typeFilter: ['SWAP'], blockCursor, transactionSearch: blockCursor === null ? null : 'BEFORE' })
+  const page = PoolTxPageSchema.parse(data).transactions
+  // A token with no pool is an answer, not a failure.
+  if (!page) return { rows: [], cursor: null }
+  const want = subject.toLowerCase()
+  const rows: PoolTxRow[] = []
+  for (const node of page.transactions ?? []) {
+    const row = node ? poolTxRow(node, want) : null
+    if (row) rows.push(row)
+  }
+  return { rows, cursor: typeof page.cursor === 'number' ? page.cursor : null }
 }
 
 // ---- collections and assets ------------------------------------------------------------------

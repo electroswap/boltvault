@@ -72,6 +72,7 @@ import type {
   SwapQuote,
   SyncStatus,
   TokenDetailView,
+  TokenTransactionsView,
   LiquidityView,
   ChartDuration,
   PriceHistoryView,
@@ -541,6 +542,24 @@ export interface ExploreNamespace {
     chainId: number
     address: string
   }): Promise<Cached<LiquidityView> | null>
+  /**
+   * A token's recent trades (§8.3 › Transactions), newest first. Null means we
+   * could not ask; `rows: []` means nobody has traded it. There is no on-chain
+   * fallback — the screen says so rather than showing part of a feed.
+   */
+  tokenTransactions(input: {
+    chainId: number
+    address: string
+  }): Promise<TokenTransactionsView | null>
+  cachedTokenTransactions(input: {
+    chainId: number
+    address: string
+  }): Promise<Cached<TokenTransactionsView> | null>
+  /** The next page, merged into the cached document — which is what notifies open pages. Null when it could not be fetched. */
+  moreTokenTransactions(input: {
+    chainId: number
+    address: string
+  }): Promise<TokenTransactionsView | null>
   /** Listed collections by default (verified, traded, listed or owned) plus the user's own; `all` for the whole index (plan C3). */
   collections(input: {
     chainId: number

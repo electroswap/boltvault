@@ -39,7 +39,7 @@ export interface ScreenParams {
   unlock: undefined
   receive: { token?: string; chainId?: number } | undefined
   send: { token?: string; to?: string; requestId?: string; chainId?: number } | undefined
-  token: { chainId: number; address: string }
+  token: { chainId: number; address: string; tab?: 'info' | 'transactions' }
   sign: { requestId: string } | undefined
   /**
    * The popup renders no secrets, so it hands the whole choice to `tab.html`

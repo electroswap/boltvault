@@ -78,7 +78,13 @@ createFixtureEngine(scenario, { art }).then((engine) => {
     baseline still shows BOLT.
   */
   const address = q.get('address')
-  const initialParams = screen === 'onboarding' ? { ...(step ? { step } : {}), ...(path === 'create' || path === 'import' || path === 'watch' ? { path } : {}) } : screen === 'token' ? { chainId: 52014, address: address ?? '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1' } : screen === 'collection' ? { chainId: 52014, address: LEGENDS } : screen === 'nft' ? { chainId: 52014, address: LEGENDS, tokenId: '12' } : screen === 'farm' ? { chainId: 52014, farmId: 0 } : screen === 'campaign' ? { chainId: 52014, pool: '0x9999999999999999999999999999999999999999' } : screen === 'explore' && (segment === 'tokens' || segment === 'collectibles' || segment === 'launch' || segment === 'farms') ? { segment } : undefined
+  /*
+    `tab` opens the token screen straight onto Transactions, which is the only
+    way that half of the screen can be photographed — the control is a press,
+    and a baseline run does not press anything.
+  */
+  const tokenTab = q.get('tab')
+  const initialParams = screen === 'onboarding' ? { ...(step ? { step } : {}), ...(path === 'create' || path === 'import' || path === 'watch' ? { path } : {}) } : screen === 'token' ? { chainId: 52014, address: address ?? '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1', ...(tokenTab === 'info' || tokenTab === 'transactions' ? { tab: tokenTab } : {}) } : screen === 'collection' ? { chainId: 52014, address: LEGENDS } : screen === 'nft' ? { chainId: 52014, address: LEGENDS, tokenId: '12' } : screen === 'farm' ? { chainId: 52014, farmId: 0 } : screen === 'campaign' ? { chainId: 52014, pool: '0x9999999999999999999999999999999999999999' } : screen === 'explore' && (segment === 'tokens' || segment === 'collectibles' || segment === 'launch' || segment === 'farms') ? { segment } : undefined
   createRoot(root).render(<App engine={engine.engine} body={body} initialTab={initialTab} initialScreen={screen} {...(initialParams ? { initialParams } : {})} reducedMotion={reducedMotion} host={harnessHost} />)
   document.documentElement.dataset['ready'] = '1'
 })
