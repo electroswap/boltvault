@@ -90,10 +90,13 @@ function git(args, whatFailed) {
  * a release commit.
  */
 function assertNothingInProgress() {
-  const dirty = git(['status', '--porcelain', '--', ...WRITES], 'could not read git status').trim()
+  // `trimEnd`, not `trim`: a porcelain line for an unstaged change begins with
+  // a space, and trimming the front ate it off the first one only — so the
+  // list came out with its first entry half a column left of the others.
+  const dirty = git(['status', '--porcelain', '--', ...WRITES], 'could not read git status').trimEnd()
   if (dirty === '') return
   console.error('Already modified, so a bump commit would carry more than the bump:')
-  for (const line of dirty.split('\n')) console.error(`  ${line}`)
+  for (const line of dirty.split('\n')) console.error(`  ${line.trim()}`)
   console.error('Commit or revert those first, or pass --no-commit to write the numbers and stop.')
   process.exit(2)
 }
