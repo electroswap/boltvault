@@ -5,7 +5,8 @@
  *   node tools/version.mjs            # check: everything agrees with version.json
  *   node tools/version.mjs 1.0.0      # set: rewrite version.json and the copies
  *   node tools/version.mjs 1.0.0 --code 7   # ...and the Android versionCode
- *   node tools/version.mjs --bump     # next patch, and the next versionCode
+ *   node tools/version.mjs --bump     # next patch and versionCode, committed
+ *   node tools/version.mjs --bump --no-commit   # ...written but left in the tree
  *
  * `version.json` at the repo root is the source. Two build configs read it
  * directly and need nothing from this tool — `apps/extension/wxt.config.ts`
@@ -23,12 +24,14 @@
  * goes unused, and the extension ships a number nothing else in the repo
  * agrees with. A grep is a cheap way to never have that conversation.
  */
+import { execFileSync } from 'node:child_process'
 import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const SOURCE = join(root, 'version.json')
+const SOURCE_REL = 'version.json'
 
 /** The private package.json files that keep a copy for the package manager. */
 const COPIES = ['apps/extension/package.json', 'apps/mobile/package.json']
@@ -65,6 +68,50 @@ function nextPatch(version) {
   return `${parts[1]}.${parts[2]}.${Number(parts[3]) + 1}`
 }
 
+/** Every file a set/bump rewrites — and so exactly what its commit may contain. */
+const WRITES = [SOURCE_REL, ...COPIES]
+
+function git(args, whatFailed) {
+  try {
+    return execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  } catch (err) {
+    console.error(`${whatFailed}: ${err instanceof Error ? err.message.trim() : String(err)}`)
+    process.exit(1)
+  }
+}
+
+/**
+ * Refuse to bump over an edit already in progress in one of these files.
+ *
+ * The commit below names its paths, so it cannot sweep up the rest of a dirty
+ * tree — but it would still carry whatever was already uncommitted in THESE
+ * files, under a message that says only "version". Someone mid-edit in
+ * version.json deserves to be stopped rather than to find their change inside
+ * a release commit.
+ */
+function assertNothingInProgress() {
+  const dirty = git(['status', '--porcelain', '--', ...WRITES], 'could not read git status').trim()
+  if (dirty === '') return
+  console.error('Already modified, so a bump commit would carry more than the bump:')
+  for (const line of dirty.split('\n')) console.error(`  ${line}`)
+  console.error('Commit or revert those first, or pass --no-commit to write the numbers and stop.')
+  process.exit(2)
+}
+
+/**
+ * Commit the numbers, and nothing else.
+ *
+ * The paths are passed to `git commit` itself rather than staged first, so what
+ * lands is these files and only these files whatever else is dirty or already
+ * in the index. Nothing is pushed and nothing is tagged: the commit is local,
+ * and where it goes next is the release's decision, not this tool's.
+ */
+function commitWrites(version, code) {
+  git(['commit', '-q', '-m', `chore(version): ${version} (androidVersionCode ${code})`, '--', ...WRITES], 'could not commit the version')
+  const at = git(['rev-parse', '--short', 'HEAD'], 'could not read the new commit').trim()
+  console.log(`committed ${at} — not pushed`)
+}
+
 async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'))
 }
@@ -81,6 +128,13 @@ const argv = process.argv.slice(2)
 const source = await readJson(SOURCE)
 
 const bump = argv.includes('--bump')
+/*
+  A bump is a release step, so it lands as a commit by default — the numbers
+  and their commit are one action, and a tree left dirty by a tool is a tree
+  someone commits by hand with `-a` on a bad day. `--no-commit` is for the
+  caller who is scripting around it.
+*/
+const commit = bump && !argv.includes('--no-commit')
 const codeAt = argv.indexOf('--code')
 // The value after `--code` is a number, not a version, so it must not be read
 // as the positional argument.
@@ -124,6 +178,9 @@ if (target !== undefined) {
     process.exit(2)
   }
 
+  // Before anything is written, so a refusal leaves the tree as it was.
+  if (commit) assertNothingInProgress()
+
   const text = await readFile(SOURCE, 'utf8')
   const next = text
     .replace(/("version":\s*")[^"]*(")/, `$1${arg}$2`)
@@ -135,6 +192,7 @@ if (target !== undefined) {
   if (code !== source.androidVersionCode) console.log(`androidVersionCode ${source.androidVersionCode} → ${code}`)
   console.log(`wrote version.json, ${COPIES.join(', ')}`)
   console.log('The extension and app manifests read version.json directly; nothing else to change.')
+  if (commit) commitWrites(arg, code)
   process.exit(0)
 }
 
