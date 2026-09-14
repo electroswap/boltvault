@@ -13,9 +13,30 @@
 import { App, isTabId, type ScreenId } from '@boltvault/wallet'
 // The harness is the only thing that builds a scripted engine, so it is the
 // only thing that imports one (ES-BV-044).
-import { createFixtureEngine, type FixtureScenario } from '@boltvault/wallet/fixtures'
+import { createFixtureEngine, FIXTURE_NOW, type FixtureScenario } from '@boltvault/wallet/fixtures'
 import '../../src/chrome.css'
 import { createRoot } from 'react-dom/client'
+
+/*
+  One clock for the page and the engine it renders.
+
+  `createFixtureEngine` pins the engine's clock to `FIXTURE_NOW` so every screen
+  is reproducible, but the page kept the browser's real one — and the shell asks
+  `vaultRequiresUnlock(vault, Date.now())`, which compares an engine-issued
+  `lockAt` against the page's clock. Those were a year apart, so every scenario
+  read as already auto-locked and all eighty baselines photographed the Unlock
+  screen instead of the screen they name.
+
+  Only `Date.now` is redirected, and it still ADVANCES from that instant rather
+  than freezing: timers, transitions and debounces behave exactly as they would
+  otherwise. Nothing in `packages/wallet` or `packages/ui` constructs a bare
+  `new Date()`, so this is the whole of the page's clock.
+
+  Harness-only. The page is stripped from a release build (wxt.config.ts
+  `filterEntrypoints`), so no product code is touched by it.
+*/
+const startedAt = performance.now()
+Date.now = () => FIXTURE_NOW + Math.round(performance.now() - startedAt)
 
 const q = new URLSearchParams(location.search)
 const scenario = (q.get('scenario') ?? 'funded') as FixtureScenario
@@ -78,7 +99,13 @@ createFixtureEngine(scenario, { art }).then((engine) => {
     baseline still shows BOLT.
   */
   const address = q.get('address')
-  const initialParams = screen === 'onboarding' ? { ...(step ? { step } : {}), ...(path === 'create' || path === 'import' || path === 'watch' ? { path } : {}) } : screen === 'token' ? { chainId: 52014, address: address ?? '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1' } : screen === 'collection' ? { chainId: 52014, address: LEGENDS } : screen === 'nft' ? { chainId: 52014, address: LEGENDS, tokenId: '12' } : screen === 'farm' ? { chainId: 52014, farmId: 0 } : screen === 'campaign' ? { chainId: 52014, pool: '0x9999999999999999999999999999999999999999' } : screen === 'explore' && (segment === 'tokens' || segment === 'collectibles' || segment === 'launch' || segment === 'farms') ? { segment } : undefined
+  /*
+    `tab` opens the token screen straight onto Transactions, which is the only
+    way that half of the screen can be photographed — the control is a press,
+    and a baseline run does not press anything.
+  */
+  const tokenTab = q.get('tab')
+  const initialParams = screen === 'onboarding' ? { ...(step ? { step } : {}), ...(path === 'create' || path === 'import' || path === 'watch' ? { path } : {}) } : screen === 'token' ? { chainId: 52014, address: address ?? '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1', ...(tokenTab === 'info' || tokenTab === 'transactions' ? { tab: tokenTab } : {}) } : screen === 'collection' ? { chainId: 52014, address: LEGENDS } : screen === 'nft' ? { chainId: 52014, address: LEGENDS, tokenId: '12' } : screen === 'farm' ? { chainId: 52014, farmId: 0 } : screen === 'campaign' ? { chainId: 52014, pool: '0x9999999999999999999999999999999999999999' } : screen === 'explore' && (segment === 'tokens' || segment === 'collectibles' || segment === 'launch' || segment === 'farms') ? { segment } : undefined
   createRoot(root).render(<App engine={engine.engine} body={body} initialTab={initialTab} initialScreen={screen} {...(initialParams ? { initialParams } : {})} reducedMotion={reducedMotion} host={harnessHost} />)
   document.documentElement.dataset['ready'] = '1'
 })

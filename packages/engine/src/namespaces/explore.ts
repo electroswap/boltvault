@@ -6,12 +6,12 @@
  * everywhere else.
  */
 import { ELECTRONEUM_ADDRESSES } from '@boltvault/chains'
-import { fetchCollectionBalances, fetchCollections, fetchPriceHistory, fetchTokenDetail, fetchTopCollections, fetchTopTokens, type CollectionView as EsCollection, type ElectroSwapClient, type HistoryDuration } from '@boltvault/electroswap'
+import { fetchCollectionBalances, fetchCollections, fetchPriceHistory, fetchTokenDetail, fetchTokenTransactions, fetchTopCollections, fetchTopTokens, type CollectionView as EsCollection, type ElectroSwapClient, type HistoryDuration } from '@boltvault/electroswap'
 import type { Platform } from '@boltvault/platform'
 import { z } from 'zod'
 import { cacheKey, type Cached, type DocCache } from '../cache'
 import type { EventBus, NamespaceSpec } from '../host'
-import { CollectionWindowSchema, type CollectionWindow, AccountIdSchema, ChartDurationSchema, CollectionViewSchema, ExploreTokenSchema, LiquidityViewSchema, PriceHistoryViewSchema, TokenDetailViewSchema, type ChartDuration, type CollectionView, type ExploreToken, type LiquidityView, type PriceHistoryView, type TokenDetailView } from '../schema'
+import { CollectionWindowSchema, type CollectionWindow, AccountIdSchema, ChartDurationSchema, CollectionViewSchema, ExploreTokenSchema, LiquidityViewSchema, PriceHistoryViewSchema, TokenDetailViewSchema, TokenTransactionsViewSchema, type ChartDuration, type CollectionView, type ExploreToken, type LiquidityView, type PriceHistoryView, type TokenDetailView, type TokenTransactionRow, type TokenTransactionsView } from '../schema'
 import type { TokensService } from './tokens'
 import type { VaultManager } from './vault'
 import type { WatchlistService } from './watchlist'
@@ -61,6 +61,19 @@ const COLLECTION_SPEC = (chainId: number, address: string, accountId: string | u
 })
 const LIQUIDITY_TTL_MS = 10 * 60_000
 const LIQUIDITY_SPEC = (chainId: number, address: string) => ({ key: cacheKey('explore', 'liquidity', chainId, address), schema: LiquidityViewSchema })
+/*
+  A token's trade feed is good for a minute.
+
+  The same figure as the dossier above it, and the same as `FreshnessLine`'s own
+  staleness threshold: a list older than the point at which this app starts
+  calling data stale is a list worth re-reading, and anything younger is not.
+  Matching the screen's `maxAgeMs` to it means flipping between Info and
+  Transactions inside the window costs nothing at all.
+*/
+const TOKEN_TX_TTL_MS = 60_000
+/** Eight pages. A cache document is a document, not a log. */
+const TOKEN_TX_MAX_ROWS = 200
+const TOKEN_TX_SPEC = (chainId: number, address: string) => ({ key: cacheKey('explore', 'tokentx', chainId, address), schema: TokenTransactionsViewSchema })
 const isEtn = (chainId: number): chainId is 52014 | 5201420 => chainId === 52014 || chainId === 5201420
 
 export class ExploreService {
@@ -188,6 +201,91 @@ export class ExploreService {
 
   async cachedLiquidity(chainId: number, address: string): Promise<Cached<LiquidityView> | null> {
     return this.deps.cache.read(LIQUIDITY_SPEC(chainId, address))
+  }
+
+  /** ETN itself has no pool, so its trades are WETN's — the same reading `liquidity` takes. */
+  private txSubject(chainId: 52014 | 5201420, address: string): string {
+    return address === 'native' ? ELECTRONEUM_ADDRESSES[chainId].wetn : address
+  }
+
+  /**
+   * Recent trades in one token (§8.3 › Transactions; owner ask 2026-09-13,
+   * parity with the web token page).
+   *
+   * Null means we could not ask — no API client, not Electroneum, or the
+   * request failed — and the screen says exactly that. Zero rows is an ANSWER:
+   * a token nobody has traded, which reads as an honest empty list. Those are
+   * different sentences and the caller must be able to tell them apart, which
+   * is why the view is an object and not an array.
+   *
+   * Nothing here falls back to the chain. A pool scan is not a transaction
+   * feed, and half a feed presented as the whole one is worse than saying we
+   * do not have it.
+   */
+  async tokenTransactions(chainId: number, address: string): Promise<TokenTransactionsView | null> {
+    const d = this.deps
+    if (!d.electroswap || !isEtn(chainId)) return null
+    const client = d.electroswap
+    const subject = this.txSubject(chainId, address)
+    try {
+      return (
+        await d.cache.through(TOKEN_TX_SPEC(chainId, address), TOKEN_TX_TTL_MS, async () => {
+          const page = await fetchTokenTransactions(client, chainId, subject)
+          const rows = [...page.rows]
+          return { chainId, address, subject, rows, cursor: page.cursor, complete: page.cursor === null || rows.length >= TOKEN_TX_MAX_ROWS }
+        })
+      ).value
+    } catch {
+      return null
+    }
+  }
+
+  async cachedTokenTransactions(chainId: number, address: string): Promise<Cached<TokenTransactionsView> | null> {
+    return this.deps.cache.read(TOKEN_TX_SPEC(chainId, address))
+  }
+
+  /**
+   * The next page of trades, merged into the document the screen already shows
+   * (owner decision 2026-09-13: twenty-five rows and a Load more key).
+   *
+   * The merge is written back through the cache rather than merely returned,
+   * so the `cache.changed` event carries the growth to every open page and the
+   * screen's existing `useCached` subscription does the rest — loading more
+   * needs no second channel.
+   *
+   * Note what a TTL refresh then does: it reloads page one and the list returns
+   * to its newest twenty-five. That is the honest reading of a refresh, and it
+   * is what keeps one document bounded; the alternative is a cache entry that
+   * only ever grows and never drops a trade from last week.
+   *
+   * Null means this page could not be fetched. The stored document is left
+   * exactly as it was, so the rows already on screen survive the failure.
+   */
+  async moreTokenTransactions(chainId: number, address: string): Promise<TokenTransactionsView | null> {
+    const d = this.deps
+    if (!d.electroswap || !isEtn(chainId)) return null
+    const client = d.electroswap
+    const spec = TOKEN_TX_SPEC(chainId, address)
+    const hit = await d.cache.read(spec)
+    // Nothing to extend: the first page has not been asked for yet.
+    if (!hit) return null
+    const current = hit.value
+    if (current.complete || current.cursor === null) return current
+    try {
+      const page = await fetchTokenTransactions(client, chainId, current.subject, current.cursor)
+      const seen = new Set(current.rows.map((r) => r.hash))
+      const added = page.rows.filter((r) => !seen.has(r.hash))
+      const rows: TokenTransactionRow[] = [...current.rows, ...added].sort((a, b) => b.timestamp - a.timestamp).slice(0, TOKEN_TX_MAX_ROWS)
+      /*
+        A page that adds nothing is the end of the feed however the cursor
+        reads — otherwise a Load more key that no longer loads anything stays
+        on screen for the user to press again.
+      */
+      const complete = page.cursor === null || added.length === 0 || rows.length >= TOKEN_TX_MAX_ROWS
+      return (await d.cache.write(spec, { ...current, rows, cursor: page.cursor, complete })).value
+    } catch {
+      return null
+    }
   }
 
   /** Explore › Collections (§8.10; owner ask 2026-09-06): verified collections by default, ranked by the window's volume — the whole index with `all`; the user's custom collections join either way. */
@@ -390,6 +488,9 @@ export function exploreNamespace(explore: ExploreService): NamespaceSpec {
     cachedPriceHistory: { input: Chain.extend({ address: z.string(), duration: ChartDurationSchema }), handler: (arg) => explore.cachedPriceHistory((arg as { chainId: number }).chainId, (arg as { address: string }).address, (arg as { duration: ChartDuration }).duration) },
     liquidity: { input: Chain.extend({ address: z.string() }), handler: (arg) => explore.liquidity((arg as { chainId: number }).chainId, (arg as { address: string }).address) },
     cachedLiquidity: { input: Chain.extend({ address: z.string() }), handler: (arg) => explore.cachedLiquidity((arg as { chainId: number }).chainId, (arg as { address: string }).address) },
+    tokenTransactions: { input: Chain.extend({ address: z.string() }), handler: (arg) => explore.tokenTransactions((arg as { chainId: number }).chainId, (arg as { address: string }).address) },
+    cachedTokenTransactions: { input: Chain.extend({ address: z.string() }), handler: (arg) => explore.cachedTokenTransactions((arg as { chainId: number }).chainId, (arg as { address: string }).address) },
+    moreTokenTransactions: { input: Chain.extend({ address: z.string() }), handler: (arg) => explore.moreTokenTransactions((arg as { chainId: number }).chainId, (arg as { address: string }).address) },
     collections: { input: Chain.extend({ accountId: AccountIdSchema.optional(), window: CollectionWindowSchema.optional() }), handler: (arg) => explore.collections((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId, (arg as { window?: CollectionWindow }).window ?? 'DAY') },
     cachedCollections: { input: Chain.extend({ accountId: AccountIdSchema.optional(), window: CollectionWindowSchema.optional() }), handler: (arg) => explore.cachedCollections((arg as { chainId: number }).chainId, (arg as { accountId?: string }).accountId, (arg as { window?: CollectionWindow }).window ?? 'DAY') },
     collection: { input: Chain.extend({ address: z.string(), accountId: AccountIdSchema.optional() }), handler: (arg) => explore.collection((arg as { chainId: number }).chainId, (arg as { address: string }).address, (arg as { accountId?: string }).accountId) },

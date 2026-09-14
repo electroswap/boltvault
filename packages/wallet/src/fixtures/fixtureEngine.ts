@@ -4,7 +4,7 @@
  * `funded` scenario) a portfolio namespace answering from fixture rows. No
  * network, no service worker, byte-identical output run to run.
  */
-import { createEngine, type ActivityEntry, type AllowanceView, type Engine, type FeeScheduleView, type HeadSource, type HolderTier, type PortfolioSnapshot, type SwapQuote, type TokenView, type AssetView, type CollectionView, type ExploreToken, type FarmView, type CampaignView, type LegendsStatus, type Positions, type WatchItem, type Inventory, type OffersInbox, type BridgeRoute, type BridgeStatus } from '@boltvault/engine'
+import { createEngine, type ActivityEntry, type AllowanceView, type Engine, type FeeScheduleView, type HeadSource, type HolderTier, type PortfolioSnapshot, type SwapQuote, type TokenView, type AssetView, type CollectionView, type ExploreToken, type FarmView, type CampaignView, type LegendsStatus, type Positions, type WatchItem, type Inventory, type OffersInbox, type BridgeRoute, type BridgeStatus, type TokenTransactionRow, type TokenTransactionsView } from '@boltvault/engine'
 import { createMemoryPlatform } from '@boltvault/platform/memory'
 import { z } from 'zod'
 
@@ -16,7 +16,19 @@ import { z } from 'zod'
  */
 export type FixtureScenario = 'fresh' | 'locked' | 'unlocked' | 'funded' | 'empty' | 'connect' | 'sign' | 'keystone'
 
-const FIXED_NOW = 1_757_000_000_000
+/**
+ * The instant every fixture is dated from, and the instant the harness page
+ * sets its own clock to (`FIXTURE_NOW` in the harness entrypoint).
+ *
+ * Exported because the page and the engine MUST agree on it. The engine's
+ * clock is pinned here for reproducibility, and the shell asks
+ * `vaultRequiresUnlock(vault, Date.now())` — comparing an engine-issued
+ * `lockAt` against the page's clock. While those were two different clocks a
+ * year apart, every scenario read as already auto-locked and every screen
+ * photographed as the Unlock screen (ES-BV: screens.spec red on main).
+ */
+export const FIXTURE_NOW = 1_757_000_000_000
+const FIXED_NOW = FIXTURE_NOW
 const PASSWORD = 'fixture password'
 const MNEMONIC = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
 const SITE = 'https://app.electroswap.io'
@@ -53,6 +65,24 @@ const LEGENDS_ART = {
 export interface FixtureOptions {
   /** Load the collection's real images from the CDN. Off by default; see LEGENDS_ART. */
   readonly art?: boolean
+}
+
+/**
+ * A token's trade feed for the harness. BOLT only — every other token answers
+ * null, which the screen renders as the honest "we cannot fetch that" state,
+ * so both halves of the contract are photographable.
+ */
+function fixtureTokenTransactions(address: string): TokenTransactionsView | null {
+  const BOLT_ADDR = '0x043fAa1b5C5FC9a7dc35171f290c29ECDE0cCff1'
+  if (address.toLowerCase() !== BOLT_ADDR.toLowerCase()) return null
+  const now = Math.floor(Date.now() / 1000)
+  const rows: TokenTransactionRow[] = [
+    { hash: `0x${'a1'.repeat(32)}`, timestamp: now - 150, account: '0x4e420Ec6B6303817Bf6fC3f4485473AA83Ce7A72', accountName: 'zypto.etn', direction: 'sell', subjectAmount: '4788.176787801483820858', subjectSymbol: 'BOLT', counterAmount: '745.614583294848584673', counterSymbol: 'USDC', valueUsd: 909.75, unitPriceUsd: 0.19 },
+    { hash: `0x${'b2'.repeat(32)}`, timestamp: now - 1_080, account: '0xf2a718B44b1E96ad52FF1Bd06253375a336AD618', accountName: null, direction: 'buy', subjectAmount: '184.890647466872042670', subjectSymbol: 'BOLT', counterAmount: '500.0', counterSymbol: 'ETN', valueUsd: 35.13, unitPriceUsd: 0.19 },
+    { hash: `0x${'c3'.repeat(32)}`, timestamp: now - 10_800, account: '0x9C4bC2a1eF7bE9b8fD3a1c2D4e5F60718293A4b5', accountName: 'og2017.etn', direction: 'buy', subjectAmount: '21262.887312', subjectSymbol: 'BOLT', counterAmount: '3248.0', counterSymbol: 'USDC', valueUsd: 4039.94, unitPriceUsd: 0.19 },
+    { hash: `0x${'d4'.repeat(32)}`, timestamp: now - 90_000, account: '0x2222222222222222222222222222222222222222', accountName: null, direction: 'sell', subjectAmount: '1200.5', subjectSymbol: 'BOLT', counterAmount: '228.095', counterSymbol: 'USDC', valueUsd: 228.1, unitPriceUsd: 0.19 },
+  ]
+  return { chainId: 52014, address: BOLT_ADDR, subject: BOLT_ADDR, rows, cursor: null, complete: true }
 }
 
 export async function createFixtureEngine(scenario: FixtureScenario, options: FixtureOptions = {}): Promise<Engine> {
@@ -326,6 +356,19 @@ export async function createFixtureEngine(scenario: FixtureScenario, options: Fi
         },
       },
       priceHistory: { input: Any, handler: async (arg) => ((arg as { address: string }).address.toLowerCase() === BOLT.toLowerCase() ? fixturePrices((arg as { duration: '1D' | '1W' | '1M' | '1Y' }).duration) : null) },
+      /*
+        Token details > Transactions.
+
+        Offsets from `Date.now()` rather than from `FIXED_NOW` directly, because
+        these render as "2m ago" and must move with the clock that renders them.
+        On the harness page those are the same instant (see `FIXTURE_NOW`), so
+        the labels are reproducible; the distances are far from a unit boundary
+        so a second shot moments later still reads the same.
+      */
+      tokenTransactions: { input: Any, handler: async (arg) => fixtureTokenTransactions((arg as { address: string }).address) },
+      cachedTokenTransactions: { input: Any, handler: async (arg) => { const v = fixtureTokenTransactions((arg as { address: string }).address); return v ? { value: v, observedAt: Date.now() } : null } },
+      // The fixture feed is one page, so there is nothing further to load.
+      moreTokenTransactions: { input: Any, handler: async (arg) => fixtureTokenTransactions((arg as { address: string }).address) },
       liquidity: { input: Any, handler: async (arg) => ((arg as { address: string }).address.toLowerCase() === BOLT.toLowerCase() ? { chainId: 52014, address: BOLT, lockedPct: 87, lockCount: 2 } : null) },
       collections: { input: Any, handler: async () => [legendsCollection, voltsCollection] },
       collection: { input: Any, handler: async (arg) => ((arg as { address: string }).address.toLowerCase() === LEGENDS.toLowerCase() ? legendsCollection : voltsCollection) },

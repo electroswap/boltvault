@@ -373,8 +373,19 @@ export function TabShell({ body, reducedMotionOverride }: TabShellProps) {
       break
     }
     case 'token': {
-      const p = current.params as { chainId: number; address: string } | undefined
-      screen = <Token body={body} chainId={p?.chainId ?? 52014} address={p?.address ?? 'native'} />
+      const p = current.params as
+        | { chainId: number; address: string; tab?: 'info' | 'transactions' }
+        | undefined
+      // The tab is compared inline rather than through the screen's own guard:
+      // importing that would pull the lazily-loaded screen in eagerly.
+      screen = (
+        <Token
+          body={body}
+          chainId={p?.chainId ?? 52014}
+          address={p?.address ?? 'native'}
+          {...(p?.tab === 'info' || p?.tab === 'transactions' ? { initialTab: p.tab } : {})}
+        />
+      )
       break
     }
     }

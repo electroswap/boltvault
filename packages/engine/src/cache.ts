@@ -182,6 +182,7 @@ const KNOWN_SHARDS = [
   'explore.tokendetail',
   'explore.history',
   'explore.liquidity',
+  'explore.tokentx',
   'explore.collections',
   'farm.list',
   'launchpad.list',

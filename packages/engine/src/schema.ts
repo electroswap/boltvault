@@ -856,6 +856,49 @@ export const LiquidityViewSchema = z.object({
 })
 export type LiquidityView = z.infer<typeof LiquidityViewSchema>
 
+/** One recent trade in a token (§8.3 › Transactions), already oriented around the token whose page this is. Mirrors `PoolTxRow` in @boltvault/electroswap. */
+export const TokenTransactionRowSchema = z.object({
+  hash: z.string(),
+  /** Unix SECONDS. */
+  timestamp: z.number().int().nonnegative(),
+  account: z.string(),
+  /** The verified `.etn` name, when the API had one for this account. */
+  accountName: z.string().nullable(),
+  /** Whether the SUBJECT token was bought or sold in this trade. */
+  direction: z.enum(['buy', 'sell']),
+  /** Whole units as a decimal string — display only, never spent. */
+  subjectAmount: z.string(),
+  subjectSymbol: z.string(),
+  counterAmount: z.string(),
+  counterSymbol: z.string(),
+  valueUsd: Fiat,
+  /** The SUBJECT token's unit price for this trade. */
+  unitPriceUsd: Fiat,
+})
+export type TokenTransactionRow = z.infer<typeof TokenTransactionRowSchema>
+
+/**
+ * A token's recent trades, newest first (§8.3 › Transactions).
+ *
+ * An OBJECT rather than a bare array, and that is load-bearing: `rows: []`
+ * means nobody has traded this token, and a null view means we could not ask.
+ * A bare array would collapse those two into the same value on the way across
+ * the Port, and the screen has to say something different for each.
+ */
+export const TokenTransactionsViewSchema = z.object({
+  chainId: z.number().int().positive(),
+  /** As the screen asked — `native` stays `native`. */
+  address: z.string(),
+  /** The pool-side token the rows were matched against; WETN when the subject is native ETN. */
+  subject: z.string(),
+  rows: z.array(TokenTransactionRowSchema),
+  /** The block to resume from; null when the feed is exhausted. */
+  cursor: z.number().int().nullable(),
+  /** True when no further page will be asked for — exhausted, or at the row cap. */
+  complete: z.boolean(),
+})
+export type TokenTransactionsView = z.infer<typeof TokenTransactionsViewSchema>
+
 /** One entry in the notifications inbox (plan A6). `target` is a route hint: `campaign:<pool>`, `token:<address>`, `collection:<address>`, `legends`, `positions`, `offers`. */
 export const NotificationViewSchema = z.object({
   id: z.string(),

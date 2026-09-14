@@ -90,7 +90,18 @@ export function PortfolioBalance({
             accessibilityRole="button"
             accessibilityLabel={t({ id: 'home.portfolio.a11y', message: 'Open your portfolio' })}
             testID={pressTestID}
-            style={{ flexShrink: 1 }}
+            /*
+              The hit target holds even while the total is still arriving.
+
+              Its width is the readout's, and before a balance lands the
+              readout is a few characters wide — 39 px on a popup, under the
+              44 px law (§7.5). It surfaced as an INTERMITTENT screenshot
+              failure, because whether the shot caught the loading state
+              depended on timing; a floor makes it neither intermittent nor a
+              failure. A funded wallet's total is far wider than this, so
+              nothing moves in the normal case.
+            */
+            style={{ flexShrink: 1, minWidth: metrics.hit, minHeight: metrics.hit, justifyContent: 'center' }}
           >
             {amount}
           </Pressable>

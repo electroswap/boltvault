@@ -44,6 +44,28 @@ export const CONTRACT_FACTS = `query ContractFacts($chain: Chain!, $address: Str
 
 export const TOKEN_DETAIL = `query TokenDetail($address: String, $chain: Chain) { token(address: $address, chain: $chain) { id address symbol name decimals standard ${MARKET} sparkline: market(currency: USD) { priceHistory(duration: DAY) { timestamp value } } project { description homepageUrl twitterUrl telegramUrl safetyLevel isSpam logoUrl } } }`
 
+/**
+ * Token details › Transactions: recent trades in ONE token (§8.3; parity with
+ * the web token page). `address` is the filter that makes this a token's feed
+ * rather than the chain's — the API orients the row around it.
+ *
+ * Three properties of this endpoint are load-bearing and not obvious:
+ *
+ *  - `token0` is the side that was SOLD and `token1` the side BOUGHT, so the
+ *    subject's position IS the direction. There is no direction field to read.
+ *  - `usdPrice` is already the SUBJECT token's unit price, whichever side of
+ *    the pool it sits on (verified against the deployed API across ten rows:
+ *    it equals usdValue / subjectQuantity every time). Do not re-derive it and
+ *    do not assume it prices token0.
+ *  - `typeFilter` is non-null in the schema and ignored by the resolver, which
+ *    hardcodes `type: SWAP`. ADD/REMOVE never appear in this feed, so `type`
+ *    is not selected — there is nothing it could say.
+ *
+ * `timestamp` is Unix SECONDS; the quantities are whole units as decimal
+ * strings, not raw. `cursor` is a block number for the next page.
+ */
+export const TOKEN_TRANSACTIONS = `query TokenTransactions($chain: Chain!, $address: String, $typeFilter: [PoolTransactionType!]!, $blockCursor: Int, $transactionSearch: TransactionSearch) { transactions(chain: $chain, address: $address, typeFilter: $typeFilter, blockCursor: $blockCursor, transactionSearch: $transactionSearch) { cursor transactions { hash timestamp account ensName token0 { address symbol } token1 { address symbol } token0Quantity token1Quantity usdValue { value } usdPrice { value } } } }`
+
 const COLLECTION = `id collectionId name description isVerified numAssets image { url } bannerImage { url } nftContracts { address standard name symbol totalSupply } listingFees { payoutAddress basisPoints } markets(currencies: [ETN]) { floorPrice { value } totalVolume { value } volume(duration: DAY) { value } owners listings { value } percentListed { value } }`
 
 /** Explore › Collections, ranked by the window's volume, with the window's change, floor change and sales beside the day figures. */

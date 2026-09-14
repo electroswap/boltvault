@@ -67,6 +67,12 @@ const CASES: Array<{ screen: string; scenario: string; sizes: Array<keyof typeof
   { screen: 'sites', scenario: 'funded', sizes: ['popup'] },
   // M4: money on Electroneum.
   { screen: 'token', scenario: 'funded', sizes: ['popup', 'tab'] },
+  /*
+    The other half of the token screen. The tab control is a press, and a
+    baseline run presses nothing, so `tab` opens straight onto it — the same
+    trick `address` and `step` use elsewhere in this list.
+  */
+  { screen: 'token', scenario: 'funded', sizes: ['popup', 'tab'], query: 'tab=transactions', name: 'token-transactions' },
   { screen: 'send', scenario: 'funded', sizes: ['popup', 'mobile'] },
   { screen: 'receive', scenario: 'funded', sizes: ['popup', 'mobile'] },
   { screen: 'allowances', scenario: 'funded', sizes: ['popup', 'tab'] },

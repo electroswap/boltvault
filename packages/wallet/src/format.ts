@@ -80,6 +80,39 @@ export function formatPrice(value: number | null, currency: 'USD' | 'ETN'): stri
 }
 
 /**
+ * How long ago, as a unit and a count.
+ *
+ * The words are the screen's — this file is numbers only — but the boundaries
+ * are arithmetic and belong here, where they can be tested without a renderer.
+ *
+ * Coarse on purpose. A trade feed is photographed by the screenshot harness,
+ * and a label that changes every second cannot have a baseline; rounding to
+ * whole minutes, hours and days keeps two shots taken moments apart identical.
+ */
+export function agoParts(fromSec: number, nowMs: number): { unit: 'now' | 'm' | 'h' | 'd'; value: number } {
+  const s = Math.max(0, Math.round(nowMs / 1000 - fromSec))
+  if (s < 60) return { unit: 'now', value: 0 }
+  const m = Math.floor(s / 60)
+  if (m < 60) return { unit: 'm', value: m }
+  const h = Math.floor(m / 60)
+  if (h < 24) return { unit: 'h', value: h }
+  return { unit: 'd', value: Math.floor(h / 24) }
+}
+
+/**
+ * One trade's USD value.
+ *
+ * `formatPrice` below ten thousand, because a $0.42 trade must not read as
+ * "$0" — the small trades are as much the point of a feed as the large — and
+ * compact above it, where the grouped digits stop carrying a decision and
+ * start pushing the row's text column out of shape.
+ */
+export function formatTradeValue(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return '—'
+  return Math.abs(value) >= 10_000 ? formatCompactFiat(value, 'USD') : formatPrice(value, 'USD')
+}
+
+/**
  * A compact magnitude: 12,345,678 -> "12.34M".
  *
  * Owner: "Extremely large balances more than 10,000,000 should use 12.34M
