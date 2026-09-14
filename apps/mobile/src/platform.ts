@@ -76,7 +76,32 @@ const SECRET_STORE_KEY_SERVICE = 'io.electroswap.boltvault.secret-store'
 */
 const SECRET_KEY_SHAPE = /^[A-Za-z0-9+/]{32}$/
 
-async function secretStoreKey(): Promise<string> {
+/*
+  One key per process, minted at most once, shared by everyone who asks.
+
+  `App.tsx` starts the platform and WalletKit CONCURRENTLY, and both need this
+  key: the platform to open the secret store, WalletKit to keep its pairing
+  keys in the same one. Read-then-mint has no single-flight guard, so on a
+  fresh install both reads missed, both minted a random key, and both wrote.
+  The last write won the keychain while each caller went on using the key IT
+  had minted — so the vault was sealed under one key and the keychain
+  remembered the other, and the install did not survive its first restart. The
+  app then found no readable vault and offered to create one, which is how a
+  funded wallet reads as a new install. Two beta testers hit it.
+
+  Memoising the PROMISE is the whole fix: the second caller awaits the first
+  caller's read instead of starting its own. It has to be the promise and not
+  the resolved value, because the gap being closed is the one between starting
+  the read and finishing the write.
+*/
+let secretStoreKeyOnce: Promise<string> | null = null
+
+function secretStoreKey(): Promise<string> {
+  secretStoreKeyOnce ??= readOrMintSecretStoreKey()
+  return secretStoreKeyOnce
+}
+
+async function readOrMintSecretStoreKey(): Promise<string> {
   const existing = await Keychain.getGenericPassword({ service: SECRET_STORE_KEY_SERVICE })
   if (existing && SECRET_KEY_SHAPE.test(existing.password)) return existing.password
   const key = Buffer.from(randomBytes(24)).toString('base64')
@@ -231,15 +256,20 @@ export async function createMobilePlatform(): Promise<Platform> {
  * One instance per process: MMKV keeps its own handle, and two `createMMKV`
  * calls with the same id and key answer the same data.
  */
-let secretOnly: ReturnType<typeof mmkvStore> | null = null
-export async function secretStore(): Promise<ReturnType<typeof mmkvStore>> {
-  if (!secretOnly) {
-    const path = await storeDirectory()
-    secretOnly = mmkvStore(
-      createMMKV({ id: 'bv-secret', ...(path ? { path } : {}), encryptionKey: await secretStoreKey(), encryptionType: 'AES-256' }),
-    )
-  }
+let secretOnly: Promise<ReturnType<typeof mmkvStore>> | null = null
+export function secretStore(): Promise<ReturnType<typeof mmkvStore>> {
+  // The promise, not the value: the old guard checked `secretOnly` and then
+  // awaited twice before assigning it, so two concurrent callers both passed
+  // the check and both built a store.
+  secretOnly ??= openSecretStore()
   return secretOnly
+}
+
+async function openSecretStore(): Promise<ReturnType<typeof mmkvStore>> {
+  const path = await storeDirectory()
+  return mmkvStore(
+    createMMKV({ id: 'bv-secret', ...(path ? { path } : {}), encryptionKey: await secretStoreKey(), encryptionType: 'AES-256' }),
+  )
 }
 
 export const isAndroid = RNPlatform.OS === 'android'
