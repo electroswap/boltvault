@@ -318,7 +318,7 @@ export class ElectroSwapClient {
     return out
   }
 
-  /** Active liquidity locks for a token + aggregated locked %. */
+  /** Active liquidity locks for a token, and the token's locked share of its own pooled supply. */
   async liquidityLocks(
     chainId: number,
     tokenAddress: string,
@@ -330,11 +330,17 @@ export class ElectroSwapClient {
     const chain = chainIdToGraphQLChain(chainId)
     const query = `
       query BoltLocks($address: String!, $chain: Chain!) {
+        token(address: $address, chain: $chain) {
+          market(currency: USD) { percentLiquidityLocked }
+        }
         liquidityLocksByToken(address: $address, chain: $chain) {
           lockId pair owner token0 token1 amountToken0 amountToken1 percentSupply active version
         }
       }`
-    const data = await this.query<{ liquidityLocksByToken: LiquidityLock[] }>(query, {
+    const data = await this.query<{
+      liquidityLocksByToken: LiquidityLock[]
+      token: { market: { percentLiquidityLocked: number | null } | null } | null
+    }>(query, {
       address: resolveTokenAddress(tokenAddress),
       chain,
     })
@@ -342,9 +348,26 @@ export class ElectroSwapClient {
     const active = locks.filter((l) => l.active)
     return {
       locks: active,
-      totalPercent: active.reduce((s, l) => s + (l.percentSupply || 0), 0),
+      totalPercent: lockedSharePercent(active, data.token?.market?.percentLiquidityLocked ?? null),
     }
   }
+}
+
+/**
+ * The share of a token's pooled supply that is locked, 0..100.
+ *
+ * `percentLiquidityLocked` is the API's own figure and the only one that is a share of a single
+ * thing -- the token's own side of every pool it sits in. `percentSupply` is a share of ONE POOL,
+ * so adding it across a token's pools adds fractions with different denominators and the total
+ * means nothing: CLUB's nine locks sum to 102.86% when 64.26% of CLUB is locked, and the clamp
+ * downstream turned that into a confident "100% locked" on a token that is nothing of the kind.
+ *
+ * Without the field, the largest single pool's share is the honest floor: still a share of one
+ * thing, so still never above 100, and never an invented number.
+ */
+function lockedSharePercent(active: readonly LiquidityLock[], apiPercent: number | null): number {
+  if (typeof apiPercent === 'number' && Number.isFinite(apiPercent)) return apiPercent
+  return active.reduce((max, l) => Math.max(max, l.percentSupply || 0), 0)
 }
 
 // ---- helpers -----------------------------------------------------------------

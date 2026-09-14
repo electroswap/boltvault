@@ -174,18 +174,35 @@ describe('ElectroSwapClient portfolio (T4.1)', () => {
 })
 
 describe('ElectroSwapClient liquidity locks (T4.1)', () => {
-  it('filters to active locks and sums the locked %', async () => {
-    const { fn } = mockFetch({
-      liquidityLocksByToken: [
-        { lockId: 1, pair: 'P', owner: OWNER, token0: TOKEN, token1: '0x1', amountToken0: '10', amountToken1: '0', percentSupply: 30, active: true, version: 'v3' },
-        { lockId: 2, pair: 'P', owner: OWNER, token0: TOKEN, token1: '0x1', amountToken0: '5', amountToken1: '0', percentSupply: 20, active: true, version: 'v3' },
-        { lockId: 3, pair: 'P', owner: OWNER, token0: TOKEN, token1: '0x1', amountToken0: '9', amountToken1: '0', percentSupply: 50, active: false, version: 'v3' },
-      ],
-    })
+  const LOCKS = [
+    { lockId: 1, pair: 'P', owner: OWNER, token0: TOKEN, token1: '0x1', amountToken0: '10', amountToken1: '0', percentSupply: 30, active: true, version: 'v3' },
+    { lockId: 2, pair: 'Q', owner: OWNER, token0: TOKEN, token1: '0x1', amountToken0: '5', amountToken1: '0', percentSupply: 20, active: true, version: 'v3' },
+    { lockId: 3, pair: 'P', owner: OWNER, token0: TOKEN, token1: '0x1', amountToken0: '9', amountToken1: '0', percentSupply: 50, active: false, version: 'v3' },
+  ]
+
+  it('filters to active locks and reports the API\'s locked share', async () => {
+    const { fn } = mockFetch({ liquidityLocksByToken: LOCKS, token: { market: { percentLiquidityLocked: 41.5 } } })
     const client = new ElectroSwapClient({ fetchImpl: fn })
     const { locks, totalPercent } = await client.liquidityLocks(ELECTRONEUM_MAINNET, TOKEN)
     expect(locks).toHaveLength(2)
-    expect(totalPercent).toBe(50)
+    // Not 30 + 20: those are shares of pool P and pool Q, and adding them adds different denominators.
+    expect(totalPercent).toBe(41.5)
+  })
+
+  it('never sums per-pool shares, so a token cannot read as more than fully locked', async () => {
+    // The shape that made CLUB read 100%: nine locks over two pools summing to 102.86%.
+    const nine = Array.from({ length: 9 }, (_, i) => ({ ...LOCKS[0], lockId: i + 1, pair: i < 4 ? 'P' : 'Q', percentSupply: [0.35, 0.55, 2.22, 0.56, 94.35, 0.64, 2.5, 1.46, 0.23][i] }))
+    const { fn } = mockFetch({ liquidityLocksByToken: nine, token: { market: { percentLiquidityLocked: 64.26 } } })
+    const client = new ElectroSwapClient({ fetchImpl: fn })
+    const { totalPercent } = await client.liquidityLocks(ELECTRONEUM_MAINNET, TOKEN)
+    expect(totalPercent).toBe(64.26)
+  })
+
+  it('falls back to the largest single pool share, never the sum, when the API omits the field', async () => {
+    const { fn } = mockFetch({ liquidityLocksByToken: LOCKS, token: { market: { percentLiquidityLocked: null } } })
+    const client = new ElectroSwapClient({ fetchImpl: fn })
+    const { totalPercent } = await client.liquidityLocks(ELECTRONEUM_MAINNET, TOKEN)
+    expect(totalPercent).toBe(30)
   })
 })
 
