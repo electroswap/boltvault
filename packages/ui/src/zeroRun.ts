@@ -1,5 +1,6 @@
 /**
- * Zero-run notation — 0.000000000000000001 BOLT reads as 0.0₁₇1 BOLT.
+ * Zero-run notation — 0.000000000000000001 BOLT reads as 0.0₁₇1 BOLT, and
+ * $0.0000023 reads as $0.0₅23.
  *
  * Owner, looking at one wei of BOLT in the token screen's "Yours" plate:
  * "it takes up the entire row". Eighteen decimals is what an ERC-20 holds, not
@@ -8,6 +9,11 @@
  * full they push the symbol off the line and make the row impossible to scan
  * beside its neighbours. Every DEX front end solves it the same way: state the
  * count of zeros once, small, and spend the width on the digits that matter.
+ *
+ * A sub-cent price has exactly the same problem — a token at $0.0000023 is a
+ * real listing, not an edge case — so the rule is about the *shape* of the
+ * number rather than what it counts. Anything the app prints as `0.` followed
+ * by a long run of zeros gets the treatment, dollars included.
  *
  * This module is the *notation* — where the run starts and how long it is. The
  * *precision* (how many digits survive after it) is `packages/wallet/src/format`,
@@ -39,12 +45,13 @@ export type AmountRun = string | number
 
 /*
   The integer part has to be exactly `0`, so the `0.00001` inside `10.00001`
-  is never mistaken for a run of its own, and a leading `$` disqualifies the
-  match: a dollar figure is a price, not a token amount, and the owner asked
-  for this on token amounts only. `−` (U+2212, what `cut` writes) is not a
-  digit, so a negative amount still matches.
+  is never mistaken for a run of its own. Anything else may sit in front of
+  it: `$` (owner, on a sub-cent token price: "I'd also like to apply the same
+  logic to small USD values") and `−` (U+2212, what `cut` writes) both leave
+  the match standing, and both ride along on the head of the run so the figure
+  is never split from its sign or its currency.
 */
-const RUN = new RegExp(`(^|[^\\d.$])0\\.(0{${ZERO_RUN_MIN},})(\\d+)`, 'g')
+const RUN = new RegExp(`(^|[^\\d.])0\\.(0{${ZERO_RUN_MIN},})(\\d+)`, 'g')
 
 /**
  * Split `text` into runs, or `null` when it holds no compressible number —
@@ -62,8 +69,17 @@ export function amountRuns(text: string): readonly AmountRun[] | null {
     const [whole, before = '', zeros = '', digits = ''] = m
     out.push(`${text.slice(last, m.index)}${before}0.0`)
     out.push(zeros.length)
-    // Truncated, never rounded: a shown amount must not exceed the held one.
-    out.push(digits.slice(0, ZERO_RUN_DIGITS))
+    /*
+      Truncated, never rounded: a shown amount must not exceed the held one.
+
+      Trailing zeros go with it. The amount formatters already strip their own,
+      but `formatPrice` pads to two significant figures — so a token priced at
+      exactly 1e-9 arrives as "0.0000000010", and the padding that reads as
+      precision in the long form is only noise next to a subscript. The first
+      kept digit is never a zero (the run above is greedy), so the tail cannot
+      strip away to nothing.
+    */
+    out.push(digits.slice(0, ZERO_RUN_DIGITS).replace(/0+$/, ''))
     last = m.index + whole.length
   }
   if (out.length === 0) return null

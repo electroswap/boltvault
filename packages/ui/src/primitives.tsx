@@ -139,12 +139,15 @@ export function Plate({ role = 'recessed', rim, children, ...rest }: PlateProps)
  * is the last point that still holds the whole string *and* knows how big it
  * is drawing it, which is exactly what the small run needs.
  *
- * Two thirds of the parent's size and a sixth of it below the line: small
+ * Three fifths of the parent's size and a sixth of it below the line: small
  * enough that nobody reads "0.0171" as a number, low enough to say "these are
- * the zeros I am standing in for".
+ * the zeros I am standing in for". Owner, on the first cut at two thirds:
+ * "make the subscript just a little smaller". The floor is what keeps it
+ * legible on the caption face, where three fifths of 13 px would be seven.
  */
 const RUN_TRIGGER = `0.${'0'.repeat(ZERO_RUN_MIN)}`
-const SUB_SCALE = 0.66
+const SUB_SCALE = 0.6
+const SUB_FLOOR = 8
 const SUB_DROP = 0.16
 
 function carriesRun(children: ReactNode): boolean {
@@ -176,13 +179,13 @@ function notate(children: ReactNode, sub: (count: number, key: number) => ReactN
  * baseline shift at all — a nested `Text` carries text attributes and nothing
  * else, and the only way round it, an inline `View` with a transform, misbehaves
  * under the `numberOfLines` that most of these rows set. So the offset is
- * declared only where it does something: on a phone the run is two thirds the
- * size, sitting on the line, which still reads as a count and never as a digit
- * of the number. If a phone ever needs the true drop, this function is the
- * whole of what changes.
+ * declared only where it does something: on a phone the run is three fifths
+ * the size, sitting on the line, which still reads as a count and never as a
+ * digit of the number. If a phone ever needs the true drop, this function is
+ * the whole of what changes.
  */
 export function subRun(base: number): { readonly fontSize: number; readonly position?: 'relative'; readonly top?: number } {
-  const fontSize = Math.max(8, Math.round(base * SUB_SCALE))
+  const fontSize = Math.max(SUB_FLOOR, Math.round(base * SUB_SCALE))
   return Platform.OS === 'web' ? { fontSize, position: 'relative', top: Math.round(base * SUB_DROP) } : { fontSize }
 }
 

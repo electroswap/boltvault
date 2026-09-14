@@ -14,6 +14,11 @@ import { ZERO_RUN_DIGITS, ZERO_RUN_MIN } from '@boltvault/ui/zeroRun'
  *
  * Both sides read the same string and count the same zeros, so the precision
  * and the notation can never disagree.
+ *
+ * `formatPrice` deliberately does not call this. A price is read, not spent,
+ * and four significant figures is the length chosen for it; `ZERO_RUN_DIGITS`
+ * is a ceiling the faces enforce rather than a target, so a price simply
+ * arrives under it.
  */
 function significantBelowOne(zeros: number, floor: number): number {
   return zeros >= ZERO_RUN_MIN ? Math.max(floor, ZERO_RUN_DIGITS) : floor
@@ -68,7 +73,15 @@ export function formatCompactFiat(value: number, currency: 'USD' | 'ETN'): strin
   return currency === 'USD' ? `$${body}` : `${body} ETN`
 }
 
-/** A unit price: two decimals from $1 up, four significant digits below (ETN at $0.00296, not "$0.00"). */
+/**
+ * A unit price: two decimals from $1 up, four significant digits below (ETN at
+ * $0.00296, not "$0.00").
+ *
+ * Below a ten-thousandth the four figures are still four figures, but the
+ * zeros in front of them are drawn as a count rather than printed — a token at
+ * $0.0000023 reads $0.0₅23. That happens in the text faces, so what this
+ * returns stays a plain number.
+ */
 export function formatPrice(value: number | null, currency: 'USD' | 'ETN'): string {
   if (value === null || !Number.isFinite(value)) return '—'
   if (value === 0 || value >= 1) return formatFiat(value, currency)

@@ -6,9 +6,11 @@
  * nineteen say only "keep counting"; the notation says the count once, small
  * and low, and spends the row on the digits that decide something.
  *
- * The rules worth pinning are the ones that would be wrong quietly: a dollar
- * figure is not a token amount, the `0.00001` inside `10.00001` is not a run
- * of its own, and what survives the run is cut rather than rounded.
+ * The rule is about the shape of the number, not what it counts — a sub-cent
+ * price gets the same treatment as a dust balance. The cases worth pinning are
+ * the ones that would be wrong quietly: the `0.00001` inside `10.00001` is not
+ * a run of its own, a sign or a currency mark must not be split from its
+ * figure, and what survives the run is cut rather than rounded.
  */
 import { describe, expect, it } from 'vitest'
 import { amountRuns, ZERO_RUN_DIGITS, ZERO_RUN_MIN } from '../src/zeroRun'
@@ -43,10 +45,18 @@ describe('amountRuns', () => {
     expect(String(amountRuns('0.000001234567891')?.[2]).length).toBe(ZERO_RUN_DIGITS)
   })
 
-  it('leaves a dollar figure as a dollar figure', () => {
-    // The owner asked for this on token amounts, not USD.
-    expect(amountRuns('$0.00001234')).toBeNull()
-    expect(amountRuns('$0.000000001')).toBeNull()
+  it('compresses a sub-cent price too, and keeps the dollar sign in front of it', () => {
+    // Owner: "I'd also like to apply the same logic to small USD values".
+    expect(amountRuns('$0.0000023')).toEqual(['$0.0', 5, '23'])
+    expect(amountRuns('$0.00001234')).toEqual(['$0.0', 4, '1234'])
+    // A price at a ten-thousandth or above is left alone, dollars or not.
+    expect(amountRuns('$0.00296')).toBeNull()
+  })
+
+  it('drops the padding `formatPrice` adds, which is noise beside a subscript', () => {
+    // 1e-9 at two significant figures: "0.0000000010".
+    expect(amountRuns('$0.0000000010')).toEqual(['$0.0', 8, '1'])
+    expect(amountRuns('0.000012300')).toEqual(['0.0', 4, '123'])
   })
 
   it('never reads a run out of the middle of a larger number', () => {
