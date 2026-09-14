@@ -5,6 +5,7 @@
  *   node tools/version.mjs            # check: everything agrees with version.json
  *   node tools/version.mjs 1.0.0      # set: rewrite version.json and the copies
  *   node tools/version.mjs 1.0.0 --code 7   # ...and the Android versionCode
+ *   node tools/version.mjs --bump     # next patch, and the next versionCode
  *
  * `version.json` at the repo root is the source. Two build configs read it
  * directly and need nothing from this tool — `apps/extension/wxt.config.ts`
@@ -47,6 +48,23 @@ const MUST_IMPORT = [
 
 const SEMVER = /^\d+\.\d+\.\d+$/
 
+/**
+ * The next patch release.
+ *
+ * Patch only, deliberately: this is the every-build number, and a tool that
+ * could also move the minor on a flag is a tool that will one day move it by
+ * accident. A minor or a major is a decision, and a decision is worth typing
+ * out in full — `node tools/version.mjs 0.2.0`.
+ */
+function nextPatch(version) {
+  const parts = /^(\d+)\.(\d+)\.(\d+)$/.exec(version)
+  if (!parts) {
+    console.error(`version.json holds "${String(version)}", which is not x.y.z — cannot bump it`)
+    process.exit(2)
+  }
+  return `${parts[1]}.${parts[2]}.${Number(parts[3]) + 1}`
+}
+
 async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'))
 }
@@ -59,18 +77,41 @@ async function setPackageVersion(path, version) {
   await writeFile(path, next)
 }
 
-const [arg, ...rest] = process.argv.slice(2)
+const argv = process.argv.slice(2)
 const source = await readJson(SOURCE)
 
-if (arg && !arg.startsWith('-')) {
+const bump = argv.includes('--bump')
+const codeAt = argv.indexOf('--code')
+// The value after `--code` is a number, not a version, so it must not be read
+// as the positional argument.
+const explicit = argv.find((a, i) => !a.startsWith('-') && i !== codeAt + 1)
+
+/*
+  `--bump` decides BOTH numbers, so it refuses to share the command line with
+  anything that would decide one of them differently. The alternative is a
+  precedence rule nobody can remember at the moment they are shipping.
+*/
+if (bump && explicit !== undefined) {
+  console.error(`--bump takes no version (it moves ${source.version} to the next patch); drop one of them`)
+  process.exit(2)
+}
+if (bump && codeAt >= 0) {
+  console.error('--bump already moves the versionCode; use the explicit form if you need a particular one')
+  process.exit(2)
+}
+
+const target = bump ? nextPatch(String(source.version)) : explicit
+const wanted = bump ? Number(source.androidVersionCode) + 1 : codeAt >= 0 ? Number(argv[codeAt + 1]) : source.androidVersionCode
+
+if (target !== undefined) {
+  const arg = target
   if (!SEMVER.test(arg)) {
     console.error(`Not a version: ${arg} (want x.y.z)`)
     process.exit(2)
   }
-  const codeAt = rest.indexOf('--code')
-  const code = codeAt >= 0 ? Number(rest[codeAt + 1]) : source.androidVersionCode
+  const code = wanted
   if (!Number.isInteger(code) || code < 1) {
-    console.error(`Not an Android versionCode: ${String(rest[codeAt + 1])} (want a positive integer)`)
+    console.error(`Not an Android versionCode: ${String(argv[codeAt + 1])} (want a positive integer)`)
     process.exit(2)
   }
   /*

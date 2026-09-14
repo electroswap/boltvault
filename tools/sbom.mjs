@@ -6,6 +6,7 @@
  *
  *   node tools/sbom.mjs [out.json]
  */
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -34,6 +35,46 @@ for (const [, key, body] of entries) {
 }
 components.sort((a, b) => a.purl.localeCompare(b.purl))
 
+/**
+ * When this bill of materials was true.
+ *
+ * It used to be the wall clock, which made the document different on every
+ * run even when the dependency graph was identical — so regenerating it (a
+ * plain `pnpm sbom`, or the extension build script, which runs one) left
+ * `sbom.cdx.json` modified in the tree with a one-line diff of nothing but the
+ * timestamp, and the file had to be committed again to get a clean tree back.
+ *
+ * The lockfile's own last commit is the honest answer and a stable one. This
+ * document describes `pnpm-lock.yaml` and nothing else: it is true as of the
+ * moment that file last changed, it changes exactly when the components
+ * change, and two people on the same commit now produce byte-identical
+ * output.
+ *
+ * `SOURCE_DATE_EPOCH` still wins where it is set, because a reproducible build
+ * pins every timestamp it produces and this is one of them (`pnpm build:repro`
+ * sets it from HEAD).
+ */
+function bomEpoch() {
+  const pinned = process.env.SOURCE_DATE_EPOCH
+  if (pinned !== undefined && pinned !== '' && Number.isFinite(Number(pinned))) return Number(pinned)
+  try {
+    const at = execFileSync('git', ['log', '-1', '--format=%ct', '--', 'pnpm-lock.yaml'], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+    if (at !== '') return Number(at)
+  } catch {
+    // No git, no history, or an export rather than a checkout.
+  }
+  /*
+    Nothing stable left to date this by, so the clock it is — and the document
+    is then as reproducible as the environment allows, which is not very. A
+    source tarball built twice is the case that lands here.
+  */
+  return Math.floor(Date.now() / 1000)
+}
+
 const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
 const lockHash = createHash('sha256').update(lock).digest('hex')
 const bom = {
@@ -42,7 +83,7 @@ const bom = {
   serialNumber: `urn:uuid:${lockHash.slice(0, 8)}-${lockHash.slice(8, 12)}-4${lockHash.slice(13, 16)}-8${lockHash.slice(17, 20)}-${lockHash.slice(20, 32)}`,
   version: 1,
   metadata: {
-    timestamp: new Date(Number(process.env.SOURCE_DATE_EPOCH ?? Math.floor(Date.now() / 1000)) * 1000).toISOString(),
+    timestamp: new Date(bomEpoch() * 1000).toISOString(),
     tools: [{ vendor: 'ElectroSwap', name: 'boltvault-sbom', version: '1' }],
     component: { type: 'application', name: pkg.name, version: pkg.version, purl: `pkg:npm/${pkg.name}@${pkg.version}` },
     properties: [{ name: 'boltvault:lockfile-sha256', value: lockHash }],
